@@ -3,6 +3,7 @@ package selfupdate
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/Zxilly/cjv/internal/config"
@@ -12,6 +13,9 @@ import (
 )
 
 func TestCleanupOldBinariesRemovesDotOldAndGcFiles(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("cleanup is Windows-only")
+	}
 	home := t.TempDir()
 	t.Setenv(config.EnvHome, home)
 

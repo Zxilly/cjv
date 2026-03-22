@@ -67,7 +67,13 @@ func TestLoadToolchainEnv_CapturesOnDemandWhenEnvTomlMissing(t *testing.T) {
 	require.NoError(t, os.WriteFile(scriptPath, []byte(contents), 0o755))
 
 	cfg := LoadToolchainEnv(context.Background(), tcDir)
-	assert.Equal(t, tcDir, cfg.Vars["CANGJIE_HOME"])
+	// On macOS, $PWD resolves symlinks (e.g. /var -> /private/var),
+	// so compare against the resolved path.
+	wantDir := tcDir
+	if resolved, err := filepath.EvalSymlinks(tcDir); err == nil {
+		wantDir = resolved
+	}
+	assert.Equal(t, wantDir, cfg.Vars["CANGJIE_HOME"])
 }
 
 func TestLoadEnvConfig_NonExistentFileReturnsEmpty(t *testing.T) {

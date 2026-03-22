@@ -31,15 +31,22 @@ jobs:
         with:
           version: latest
 
-  build:
+  cross-build:
+    strategy:
+      matrix:
+        goos: [linux, darwin, windows]
+        goarch: [amd64, arm64]
+        exclude:
+          - goos: windows
+            goarch: arm64
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       - uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
         with:
           go-version: stable
-      - name: Cross-platform build verification
-        run: bash ci/build.sh
+      - name: Build ${{ matrix.goos }}/${{ matrix.goarch }}
+        run: GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} go build -o /dev/null ./cmd/cjv/
 
   mod-check:
     runs-on: ubuntu-latest

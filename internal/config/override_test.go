@@ -25,7 +25,7 @@ func TestResolveOverrideDirectoryOverride(t *testing.T) {
 	tmp := t.TempDir()
 	s := DefaultSettings()
 	s.DefaultToolchain = "lts-1.0.5"
-	s.Overrides[tmp] = "sts-1.1.0-beta.23"
+	s.Overrides[NormalizePath(tmp)] = "sts-1.1.0-beta.23"
 
 	result, source, err := ResolveToolchain(&s, tmp)
 	require.NoError(t, err)

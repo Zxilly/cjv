@@ -11,7 +11,7 @@ func swapInstalledToolchain(stagingDir, destDir string, isReinstall bool, afterS
 	if err != nil {
 		return fmt.Errorf("failed to begin install transaction: %w", err)
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	if isReinstall {
 		if err := tx.RemoveDir(destDir); err != nil {
