@@ -1,0 +1,191 @@
+# === Toolchain management ===
+[ToolchainInstalled]
+other = "Toolchain '{{.Name}}' installed successfully"
+
+[ToolchainAlreadyInstalled]
+other = "Toolchain '{{.Name}}' is already installed"
+
+[ToolchainNotInstalled]
+other = "Toolchain '{{.Name}}' is not installed"
+
+[ToolchainUninstalled]
+other = "Toolchain '{{.Name}}' uninstalled"
+
+[ToolchainSetDefault]
+other = "Default toolchain set to '{{.Name}}'"
+
+[NoToolchainConfigured]
+other = "No toolchain configured. Use 'cjv default <toolchain>' to set one, or create a cangjie-sdk.toml in your project."
+
+[ActiveToolchain]
+other = "Active toolchain: {{.Name}} (from {{.Source}})"
+
+[InstalledToolchains]
+one = "{{.Count}} toolchain installed:"
+other = "{{.Count}} toolchains installed:"
+
+[NoToolchainsInstalled]
+other = "No toolchains installed. Use 'cjv install lts' to install one."
+
+# === Version resolution ===
+[VersionNotFound]
+other = "Version '{{.Version}}' not found in any channel"
+
+[VersionNotAvailable]
+other = "Version {{.Version}} is not available for your platform ({{.Platform}})"
+
+[FetchingManifest]
+other = "Fetching SDK version manifest..."
+
+# === Download and install ===
+[ChecksumMismatch]
+other = "Checksum mismatch: expected {{.Expected}}, got {{.Actual}}"
+
+[Extracting]
+other = "Extracting..."
+
+[CapturingEnv]
+other = "Capturing environment setup..."
+
+# === Proxy ===
+[RecursionLimitExceeded]
+other = "Proxy recursion limit ({{.Max}}) exceeded. Possible infinite loop."
+
+[UnknownTool]
+other = "Unknown tool: {{.Name}}"
+
+[ToolNotInToolchain]
+other = "Tool '{{.Tool}}' not found in toolchain at {{.Path}}"
+
+# === Self-update ===
+[AlreadyUpToDate]
+other = "Already up to date ({{.Version}})"
+
+[UpdateFound]
+other = "Update available: {{.Current}} → {{.Latest}}"
+
+[UpdateApplied]
+other = "Updated to {{.Version}}"
+
+[MirrorNoAutoUpdate]
+other = "Mirror variant does not support auto-update. Please download the latest version manually from GitCode."
+
+# === Override ===
+[OverrideSet]
+other = "Override set: {{.Dir}} → {{.Toolchain}}"
+
+[OverrideUnset]
+other = "Override removed for {{.Dir}}"
+
+[NoOverrides]
+other = "No directory overrides configured"
+
+[NoNonexistentOverrides]
+other = "No overrides for nonexistent directories found"
+
+[RemovedNonexistentOverrides]
+one = "Removed {{.Count}} nonexistent override"
+other = "Removed {{.Count}} nonexistent overrides"
+
+# === self uninstall ===
+[ConfirmUninstall]
+other = "This will remove cjv and all installed toolchains. Continue?"
+
+[UninstallComplete]
+other = "cjv has been uninstalled"
+
+# === Platform ===
+[UnsupportedPlatform]
+other = "Unsupported platform: {{.OS}}/{{.Arch}}"
+
+# === Nightly ===
+[FetchingNightly]
+other = "Fetching latest nightly version..."
+
+[NoNightlyFound]
+other = "No nightly versions found"
+
+[NightlyNoChecksum]
+other = "Note: Nightly builds do not provide SHA256 checksums"
+
+# === Auto-install ===
+[AutoInstalling]
+other = "Toolchain '{{.Name}}' not installed. Auto-installing..."
+
+[AutoInstallFailed]
+other = "Auto-install of toolchain '{{.Name}}' failed: {{.Err}}"
+
+# === Root command ===
+[RootNoToolchains]
+other = "No toolchains installed. Use 'cjv install lts' to install one."
+
+[RootActiveToolchain]
+other = "Active toolchain: {{.Name}}"
+
+[RootInstalledCount]
+one = "Installed toolchains ({{.Count}}):"
+other = "Installed toolchains ({{.Count}}):"
+
+# === Toolchain link ===
+[ToolchainLinked]
+other = "Toolchain '{{.Name}}' linked to {{.Path}}"
+
+# === Channel ===
+[UnknownChannel]
+other = "Unknown channel: {{.Channel}}"
+
+# === Default command ===
+[DefaultCleared]
+other = "Default toolchain cleared"
+
+[NoDefaultToolchain]
+other = "No default toolchain configured"
+
+[CurrentDefault]
+other = "Default toolchain: {{.Name}}"
+
+# === Settings ===
+[SettingUpdated]
+other = "Setting '{{.Key}}' set to '{{.Value}}'"
+
+# === Check ===
+[AllUpToDate]
+other = "All toolchains are up to date"
+
+[UpdateAvailableButNotForPlatform]
+other = "Update available ({{.Current}} → {{.Latest}}) but not for your platform ({{.Platform}})"
+
+# === Settings ===
+[UnknownSettingsField]
+other = "warning: unknown field '{{.Field}}' in settings file"
+
+# === Settings version ===
+[UnsupportedSettingsVersion]
+other = "Settings version {{.Version}} is not supported. Please upgrade cjv."
+
+# === Show ===
+[ShowDefaultHost]
+other = "Default host: {{.Host}}"
+
+[ShowDefaultHostAuto]
+other = "(auto)"
+
+[ShowProfile]
+other = "Profile: {{.Profile}}"
+
+[ShowProfileDefault]
+other = "(default)"
+
+# === Cache ===
+[CacheAlreadyClean]
+other = "Download cache is already clean"
+
+[CacheCleanedCount]
+other = "Removed {{.Count}} cached files"
+
+# === Warnings ===
+[PathConfigWarning]
+other = "Warning: Could not automatically configure PATH. You may need to add {{.BinDir}} to your PATH manually."
+
+[OldToolchainRemoveWarning]
+other = "Warning: Could not remove old toolchain directory {{.Dir}}. You may want to remove it manually to free disk space."

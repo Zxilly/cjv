@@ -1,0 +1,188 @@
+# === 工具链管理 ===
+[ToolchainInstalled]
+other = "工具链 '{{.Name}}' 安装成功"
+
+[ToolchainAlreadyInstalled]
+other = "工具链 '{{.Name}}' 已安装"
+
+[ToolchainNotInstalled]
+other = "工具链 '{{.Name}}' 未安装"
+
+[ToolchainUninstalled]
+other = "工具链 '{{.Name}}' 已卸载"
+
+[ToolchainSetDefault]
+other = "默认工具链已设置为 '{{.Name}}'"
+
+[NoToolchainConfigured]
+other = "未配置工具链。使用 'cjv default <toolchain>' 设置默认工具链，或在项目中创建 cangjie-sdk.toml"
+
+[ActiveToolchain]
+other = "活跃工具链: {{.Name}} (来源: {{.Source}})"
+
+[InstalledToolchains]
+other = "已安装 {{.Count}} 个工具链:"
+
+[NoToolchainsInstalled]
+other = "未安装任何工具链。使用 'cjv install lts' 安装。"
+
+# === 版本解析 ===
+[VersionNotFound]
+other = "版本 '{{.Version}}' 未在任何通道中找到"
+
+[VersionNotAvailable]
+other = "版本 {{.Version}} 在你的平台 ({{.Platform}}) 上不可用"
+
+[FetchingManifest]
+other = "正在获取 SDK 版本清单..."
+
+# === 下载与安装 ===
+[ChecksumMismatch]
+other = "校验和不匹配: 期望 {{.Expected}}, 实际 {{.Actual}}"
+
+[Extracting]
+other = "正在解压..."
+
+[CapturingEnv]
+other = "正在捕获环境配置..."
+
+# === 代理 ===
+[RecursionLimitExceeded]
+other = "代理递归次数超过上限 ({{.Max}})，可能存在无限循环"
+
+[UnknownTool]
+other = "未知工具: {{.Name}}"
+
+[ToolNotInToolchain]
+other = "工具 '{{.Tool}}' 在工具链中不存在: {{.Path}}"
+
+# === 自更新 ===
+[AlreadyUpToDate]
+other = "已是最新版本 ({{.Version}})"
+
+[UpdateFound]
+other = "发现新版本: {{.Current}} → {{.Latest}}"
+
+[UpdateApplied]
+other = "已更新到 {{.Version}}"
+
+[MirrorNoAutoUpdate]
+other = "mirror 变体暂不支持自动更新。请手动从 GitCode 下载最新版本。"
+
+# === 覆盖 ===
+[OverrideSet]
+other = "覆盖已设置: {{.Dir}} → {{.Toolchain}}"
+
+[OverrideUnset]
+other = "已移除 {{.Dir}} 的覆盖"
+
+[NoOverrides]
+other = "未配置目录覆盖"
+
+[NoNonexistentOverrides]
+other = "未找到指向不存在目录的覆盖"
+
+[RemovedNonexistentOverrides]
+other = "已移除 {{.Count}} 个指向不存在目录的覆盖"
+
+# === self uninstall ===
+[ConfirmUninstall]
+other = "这将删除 cjv 和所有已安装的工具链。是否继续？"
+
+[UninstallComplete]
+other = "cjv 已卸载"
+
+# === 平台 ===
+[UnsupportedPlatform]
+other = "不支持的平台: {{.OS}}/{{.Arch}}"
+
+# === Nightly ===
+[FetchingNightly]
+other = "正在获取最新 nightly 版本..."
+
+[NoNightlyFound]
+other = "未找到任何 nightly 版本"
+
+[NightlyNoChecksum]
+other = "注意: Nightly 构建不提供 SHA256 校验和"
+
+# === 自动安装 ===
+[AutoInstalling]
+other = "工具链 '{{.Name}}' 未安装，正在自动安装..."
+
+[AutoInstallFailed]
+other = "自动安装工具链 '{{.Name}}' 失败: {{.Err}}"
+
+# === Root 命令 ===
+[RootNoToolchains]
+other = "未安装任何工具链。使用 'cjv install lts' 安装。"
+
+[RootActiveToolchain]
+other = "活跃工具链: {{.Name}}"
+
+[RootInstalledCount]
+other = "已安装工具链 ({{.Count}}):"
+
+# === 工具链链接 ===
+[ToolchainLinked]
+other = "工具链 '{{.Name}}' 已链接到 {{.Path}}"
+
+# === 通道 ===
+[UnknownChannel]
+other = "未知通道: {{.Channel}}"
+
+# === 默认命令 ===
+[DefaultCleared]
+other = "已清除默认工具链"
+
+[NoDefaultToolchain]
+other = "未配置默认工具链"
+
+[CurrentDefault]
+other = "默认工具链: {{.Name}}"
+
+# === 设置 ===
+[SettingUpdated]
+other = "设置 '{{.Key}}' 已更新为 '{{.Value}}'"
+
+# === 检查 ===
+[AllUpToDate]
+other = "所有工具链均为最新版本"
+
+[UpdateAvailableButNotForPlatform]
+other = "有更新可用 ({{.Current}} → {{.Latest}})，但不支持当前平台 ({{.Platform}})"
+
+# === 设置 ===
+[UnknownSettingsField]
+other = "警告: 设置文件中存在未知字段 '{{.Field}}'"
+
+# === 设置版本 ===
+[UnsupportedSettingsVersion]
+other = "不支持的设置版本 {{.Version}}，请升级 cjv。"
+
+# === 展示 ===
+[ShowDefaultHost]
+other = "默认主机: {{.Host}}"
+
+[ShowDefaultHostAuto]
+other = "(自动)"
+
+[ShowProfile]
+other = "配置: {{.Profile}}"
+
+[ShowProfileDefault]
+other = "(默认)"
+
+# === 缓存 ===
+[CacheAlreadyClean]
+other = "下载缓存已清空"
+
+[CacheCleanedCount]
+other = "已清除 {{.Count}} 个缓存文件"
+
+# === 警告 ===
+[PathConfigWarning]
+other = "警告: 无法自动配置 PATH。你可能需要手动将 {{.BinDir}} 添加到 PATH 中。"
+
+[OldToolchainRemoveWarning]
+other = "警告: 无法删除旧版工具链目录 {{.Dir}}。你可能需要手动删除以释放磁盘空间。"

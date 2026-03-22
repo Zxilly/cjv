@@ -1,0 +1,43 @@
+version: 2
+builds:
+  - id: cjv
+    main: ./cmd/cjv
+    binary: cjv
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
+      - -X main.commit={{.Commit}}
+      - -X main.date={{.Date}}
+      - -X main.updateURL=https://github.com/Zxilly/cjv/releases
+    goos: [linux, darwin, windows]
+    goarch: [amd64, arm64]
+    ignore:
+      - goos: windows
+        goarch: arm64
+
+  - id: cjv-mirror
+    main: ./cmd/cjv
+    binary: cjv-mirror
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
+      - -X main.commit={{.Commit}}
+      - -X main.date={{.Date}}
+      # TODO: Replace with the actual gitcode.com mirror release URL once available.
+      - -X main.updateURL=https://mirror.placeholder.invalid/cjv/releases
+    goos: [linux, darwin, windows]
+    goarch: [amd64, arm64]
+    ignore:
+      - goos: windows
+        goarch: arm64
+
+archives:
+  - id: cjv
+    builds: [cjv]
+    name_template: "cjv_{{ .Os }}_{{ .Arch }}"
+  - id: cjv-mirror
+    builds: [cjv-mirror]
+    name_template: "cjv-mirror_{{ .Os }}_{{ .Arch }}"
+
+checksum:
+  name_template: "checksums.txt"
