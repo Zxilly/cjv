@@ -28,6 +28,10 @@ func BuildProxyEnv(baseEnv []string, ctx ProxyEnvContext) []string {
 	displayKeys := make(map[string]string)
 	pathKey := canonicalEnvKey("PATH")
 	var order []string
+	// Windows uses hidden env vars like "=C:=C:\path" to track per-drive
+	// current directories. They have no normal key so we pass them through
+	// verbatim to the child process.
+	var hiddenEntries []string
 
 	setEnv := func(key, value string) {
 		canonical := canonicalEnvKey(key)
@@ -40,17 +44,17 @@ func BuildProxyEnv(baseEnv []string, ctx ProxyEnvContext) []string {
 
 	for _, e := range baseEnv {
 		k, v, ok := strings.Cut(e, "=")
-		if !ok || k == "" {
+		if !ok {
 			continue
 		}
-		canonical := canonicalEnvKey(k)
-		if _, exists := displayKeys[canonical]; !exists {
-			displayKeys[canonical] = k
-			order = append(order, canonical)
+		if k == "" {
+			// Preserve Windows hidden entries (e.g. "=C:=C:\Users\user")
+			hiddenEntries = append(hiddenEntries, e)
+			continue
 		}
-		envMap[canonical] = v
+		setEnv(k, v)
 		if strings.EqualFold(k, "PATH") {
-			pathKey = canonical
+			pathKey = canonicalEnvKey(k)
 		}
 	}
 
@@ -106,10 +110,11 @@ func BuildProxyEnv(baseEnv []string, ctx ProxyEnvContext) []string {
 	}
 
 	// order is already deduplicated by setEnv
-	result := make([]string, 0, len(order))
+	result := make([]string, 0, len(order)+len(hiddenEntries))
 	for _, k := range order {
 		result = append(result, displayKeys[k]+"="+envMap[k])
 	}
+	result = append(result, hiddenEntries...)
 	return result
 }
 

@@ -136,21 +136,23 @@ func installResolved(ctx context.Context, rt resolvedToolchain, settings *config
 		return err
 	}
 
-	fmt.Println(i18n.T("CapturingEnv", nil))
-	envCfg, err := env.CaptureEnvSetup(ctx, stagingDir)
-	if err != nil {
-		return err
-	}
-	if err := envCfg.Save(filepath.Join(stagingDir, "env.toml")); err != nil {
-		return err
-	}
-
 	if err := validateInstallation(stagingDir); err != nil {
 		return err
 	}
 
 	isFirstInstall := settings.DefaultToolchain == ""
 	if err := swapInstalledToolchain(stagingDir, destDir, isReinstall, func() error {
+		// Capture env after the rename so that $PWD = destDir and all
+		// paths in env.toml naturally point to the final location.
+		fmt.Println(i18n.T("CapturingEnv", nil))
+		envCfg, err := env.CaptureEnvSetup(ctx, destDir)
+		if err != nil {
+			return err
+		}
+		if err := envCfg.Save(filepath.Join(destDir, "env.toml")); err != nil {
+			return err
+		}
+
 		if _, err := selfupdate.EnsureManagedExecutable(); err != nil {
 			return err
 		}

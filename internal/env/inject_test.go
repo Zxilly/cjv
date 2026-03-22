@@ -132,7 +132,6 @@ func TestBuildProxyEnv_EnvTomlOverridesBase(t *testing.T) {
 
 func TestBuildProxyEnv_PathDeduplication(t *testing.T) {
 	// If /cjv/bin is already in the base PATH, it should not appear twice.
-	sep := string(os.PathListSeparator)
 	cfg := NewEnvConfig()
 	baseEnv := []string{"PATH=/cjv/bin" + sep + "/usr/bin"}
 
@@ -170,4 +169,26 @@ func TestBuildProxyEnv_SetsToolchainName(t *testing.T) {
 		}
 	}
 	assert.True(t, found, "CJV_TOOLCHAIN should be set")
+}
+
+func TestBuildProxyEnv_PreservesHiddenWindowsVars(t *testing.T) {
+	// Windows uses hidden env vars like "=C:=C:\Users\user" to track
+	// per-drive current directories. These must be passed through.
+	baseEnv := []string{
+		"=C:=C:\\Users\\user",
+		"=D:=D:\\Projects",
+		"PATH=/usr/bin",
+		"HOME=/home/user",
+	}
+
+	cfg := NewEnvConfig()
+	result := BuildProxyEnv(baseEnv, ProxyEnvContext{
+		Cfg: cfg, CjvBinDir: "/cjv/bin", ToolchainBinDir: "/tc/bin",
+	})
+
+	assert.Contains(t, result, "=C:=C:\\Users\\user",
+		"hidden =C: variable should be preserved")
+	assert.Contains(t, result, "=D:=D:\\Projects",
+		"hidden =D: variable should be preserved")
+	assertEnvContains(t, result, "HOME=/home/user")
 }

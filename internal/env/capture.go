@@ -91,6 +91,9 @@ func captureWindows(ctx context.Context, sdkDir string, baseEnv []string) (map[s
 	return envMapFromSlice(entries), nil
 }
 
+// envMapFromSlice parses "KEY=VALUE" entries into a map.
+// Entries with an empty key (Windows hidden drive-CWD vars like "=C:=...")
+// are intentionally skipped — they are volatile and irrelevant to env diffs.
 func envMapFromSlice(envSlice []string) map[string]string {
 	m := make(map[string]string, len(envSlice))
 	for _, e := range envSlice {
