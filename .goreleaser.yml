@@ -23,8 +23,8 @@ builds:
       - -X main.version={{.Version}}
       - -X main.commit={{.Commit}}
       - -X main.date={{.Date}}
-      # Self-update disabled: go-selfupdate hardcodes GitHub API, incompatible with gitcode.com.
-      # TODO: implement a custom go-selfupdate Source for gitcode.com to enable mirror self-update.
+      - -X main.updateURL=https://github.com/Zxilly/cjv/releases
+      - -X github.com/Zxilly/cjv/internal/config.DefaultManifestURL=https://raw.gitcode.com/Zxilly/setup-cangjie/raw/master/sdk-versions.json
     goos: [linux, darwin, windows]
     goarch: [amd64, arm64]
     ignore:

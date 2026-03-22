@@ -14,7 +14,9 @@ import (
 	"github.com/Zxilly/cjv/internal/utils"
 )
 
-const DefaultManifestURL = "https://raw.githubusercontent.com/Zxilly/setup-cangjie/master/sdk-versions.json"
+// DefaultManifestURL is the default SDK manifest URL.
+// It can be overridden at build time via ldflags for mirror variants.
+var DefaultManifestURL = "https://raw.githubusercontent.com/Zxilly/setup-cangjie/master/sdk-versions.json"
 
 // AutoSelfUpdate controls self-update behavior.
 const (
