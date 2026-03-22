@@ -23,8 +23,8 @@ builds:
       - -X main.version={{.Version}}
       - -X main.commit={{.Commit}}
       - -X main.date={{.Date}}
-      # TODO: Replace with the actual gitcode.com mirror release URL once available.
-      - -X main.updateURL=https://mirror.placeholder.invalid/cjv/releases
+      # Self-update disabled: go-selfupdate hardcodes GitHub API, incompatible with gitcode.com.
+      # TODO: implement a custom go-selfupdate Source for gitcode.com to enable mirror self-update.
     goos: [linux, darwin, windows]
     goarch: [amd64, arm64]
     ignore:
