@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -18,43 +17,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// buildCJV builds the cjv binary and returns its path.
-func buildCJV(t *testing.T) string {
-	t.Helper()
-	tmpDir := t.TempDir()
-	binary := filepath.Join(tmpDir, "cjv")
-	if runtime.GOOS == "windows" {
-		binary += ".exe"
-	}
-
-	cmd := exec.Command("go", "build", "-o", binary, "./cmd/cjv")
-	cmd.Dir = filepath.Join("..", "..")
-	out, err := cmd.CombinedOutput()
-	require.NoError(t, err, "failed to build cjv: %s", string(out))
-	return binary
-}
-
-// runCJV runs the cjv binary with the given args and environment.
+// runCJV runs the cjv binary with CJV_NO_PATH_SETUP=1 to prevent PATH side-effects.
 func runCJV(t *testing.T, binary string, cjvHome string, args ...string) (string, string, error) {
-	t.Helper()
-	cmd := exec.Command(binary, args...)
-	cmd.Env = append(os.Environ(),
-		"CJV_HOME="+cjvHome,
-		"CJV_LANG=en",
-		// Clear CJV_TOOLCHAIN to avoid interference from the host environment
-		"CJV_TOOLCHAIN=",
-		// Prevent tests from writing to the real system PATH (Windows
-		// registry / shell rc files). Without this, every test run
-		// appends a unique temp-dir entry that is never cleaned up.
-		"CJV_NO_PATH_SETUP=1",
-	)
-
-	var stdout, stderr strings.Builder
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-
-	err := cmd.Run()
-	return stdout.String(), stderr.String(), err
+	return runCJVEnv(t, binary, cjvHome, []string{"CJV_NO_PATH_SETUP=1"}, args...)
 }
 
 // setupIntegrationEnv creates an isolated CJV_HOME with the mock server's

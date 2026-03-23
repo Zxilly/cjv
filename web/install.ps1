@@ -34,10 +34,10 @@ if ($env:CJV_MIRROR -eq "1") {
 $CjvUpdateRoot = if ($env:CJV_UPDATE_ROOT) { $env:CJV_UPDATE_ROOT } else { "https://github.com/Zxilly/cjv/releases/latest/download" }
 
 function Get-Architecture {
-    $arch = [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture
+    $arch = if ($env:PROCESSOR_ARCHITEW6432) { $env:PROCESSOR_ARCHITEW6432 } else { $env:PROCESSOR_ARCHITECTURE }
     switch ($arch) {
-        "X64"   { return "amd64" }
-        "Arm64" { Write-Error "Windows arm64 is not currently supported"; exit 1 }
+        "AMD64" { return "amd64" }
+        "ARM64" { Write-Error "Windows ARM64 is not currently supported"; exit 1 }
         default { Write-Error "Unsupported architecture: $arch"; exit 1 }
     }
 }
