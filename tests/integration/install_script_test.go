@@ -17,7 +17,7 @@ import (
 // scriptPath returns the absolute path to a file in the web/ directory.
 func scriptPath(t *testing.T, name string) string {
 	t.Helper()
-	p, err := filepath.Abs(filepath.Join("..", "..", "web", name))
+	p, err := filepath.Abs(filepath.Join("..", "..", "web", "public", name))
 	require.NoError(t, err)
 	return p
 }

@@ -26,3 +26,7 @@ Thumbs.db
 # Claude Code
 .claude/
 .playwright-mcp/
+
+# Web frontend
+web/node_modules/
+web/dist/

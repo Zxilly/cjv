@@ -1,0 +1,88 @@
+@import "tailwindcss";
+
+@import "@fontsource-variable/noto-sans-sc";
+@import "@fontsource-variable/jetbrains-mono";
+@import "@fontsource/patua-one";
+
+
+@theme {
+  --color-cj: #0fa968;
+  --color-cj-light: #34d399;
+
+  --font-sans: "Noto Sans SC Variable", system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono Variable", "Fira Code", ui-monospace, monospace;
+}
+
+.cj-gradient {
+  background: linear-gradient(135deg, #0fa968 0%, #0891b2 50%, #6366f1 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+@media (prefers-color-scheme: dark) {
+  .cj-gradient {
+    background: linear-gradient(135deg, #34d399 0%, #22d3ee 50%, #a78bfa 100%);
+  }
+}
+
+.install-box code {
+  user-select: all;
+}
+
+.install-box::-webkit-scrollbar {
+  height: 4px;
+}
+
+.install-box::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.install-box::-webkit-scrollbar-thumb {
+  background: #d1d5db;
+  border-radius: 2px;
+}
+
+.install-box::-webkit-scrollbar-thumb:hover {
+  background: #9ca3af;
+}
+
+.install-box {
+  scrollbar-width: thin;
+  scrollbar-color: #d1d5db transparent;
+}
+
+@media (prefers-color-scheme: dark) {
+  .install-box::-webkit-scrollbar-thumb {
+    background: #374151;
+  }
+
+  .install-box::-webkit-scrollbar-thumb:hover {
+    background: #4b5563;
+  }
+
+  .install-box {
+    scrollbar-color: #374151 transparent;
+  }
+}
+
+.slide-enter-active,
+.slide-leave-active {
+  transition: grid-template-rows 0.3s ease;
+  display: grid;
+}
+
+.slide-enter-from,
+.slide-leave-to {
+  grid-template-rows: 0fr;
+}
+
+.slide-enter-to,
+.slide-leave-from {
+  grid-template-rows: 1fr;
+}
+
+.slide-enter-active > *,
+.slide-leave-active > * {
+  overflow: hidden;
+}
