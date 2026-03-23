@@ -35,9 +35,15 @@ archives:
   - id: cjv
     builds: [cjv]
     name_template: "cjv_{{ .Os }}_{{ .Arch }}"
+    format_overrides:
+      - goos: windows
+        format: zip
   - id: cjv-mirror
     builds: [cjv-mirror]
     name_template: "cjv-mirror_{{ .Os }}_{{ .Arch }}"
+    format_overrides:
+      - goos: windows
+        format: zip
 
 checksum:
   name_template: "checksums.txt"
