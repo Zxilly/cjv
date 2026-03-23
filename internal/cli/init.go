@@ -149,8 +149,10 @@ func runInit(cmd *cobra.Command, _ []string) error {
 
 	if initDefaultToolchain != "none" {
 		// Prevent install from re-configuring PATH — init already did it
-		os.Setenv("CJV_NO_PATH_SETUP", "1")
-		defer os.Unsetenv("CJV_NO_PATH_SETUP")
+		if err := os.Setenv("CJV_NO_PATH_SETUP", "1"); err != nil {
+			return err
+		}
+		defer os.Unsetenv("CJV_NO_PATH_SETUP") //nolint:errcheck // best-effort cleanup
 		if err := InstallToolchainWithOptions(ctx, initDefaultToolchain, false); err != nil {
 			fmt.Fprintf(os.Stderr, "\n%s\n", i18n.T("InitToolchainFailed", i18n.MsgData{
 				"Name": initDefaultToolchain,

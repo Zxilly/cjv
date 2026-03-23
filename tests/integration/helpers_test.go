@@ -197,8 +197,13 @@ func createExecutableMockSDKZip(t *testing.T, stubBinaryPath string) ([]byte, st
 	buf := new(bytes.Buffer)
 	w := zip.NewWriter(buf)
 
-	writeEntry := func(name string, data []byte) {
-		f, err := w.Create(name)
+	writeEntry := func(name string, data []byte, mode os.FileMode) {
+		hdr := &zip.FileHeader{
+			Name:   name,
+			Method: zip.Deflate,
+		}
+		hdr.SetMode(mode)
+		f, err := w.CreateHeader(hdr)
 		require.NoError(t, err, "zip create %s", name)
 		_, err = f.Write(data)
 		require.NoError(t, err, "zip write %s", name)
@@ -208,10 +213,10 @@ func createExecutableMockSDKZip(t *testing.T, stubBinaryPath string) ([]byte, st
 	if runtime.GOOS == "windows" {
 		ext = ".exe"
 	}
-	writeEntry("cangjie/bin/cjc"+ext, stubData)
-	writeEntry("cangjie/tools/bin/cjpm"+ext, stubData)
-	writeEntry("cangjie/envsetup.sh", []byte("export CANGJIE_HOME=\"$PWD\"\n"))
-	writeEntry("cangjie/envsetup.ps1", []byte("$env:CANGJIE_HOME = $PWD.Path\n"))
+	writeEntry("cangjie/bin/cjc"+ext, stubData, 0o755)
+	writeEntry("cangjie/tools/bin/cjpm"+ext, stubData, 0o755)
+	writeEntry("cangjie/envsetup.sh", []byte("export CANGJIE_HOME=\"$PWD\"\n"), 0o644)
+	writeEntry("cangjie/envsetup.ps1", []byte("$env:CANGJIE_HOME = $PWD.Path\n"), 0o644)
 
 	require.NoError(t, w.Close())
 
