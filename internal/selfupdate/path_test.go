@@ -64,3 +64,32 @@ func TestManagedExecutablePath_ErrorWhenMissing(t *testing.T) {
 	_, err := ManagedExecutablePath()
 	assert.Error(t, err, "should fail when managed binary doesn't exist")
 }
+
+func TestForceUpdateManagedExecutable(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv(config.EnvHome, home)
+
+	// First call: managed binary does not exist yet; should install it
+	got, err := ForceUpdateManagedExecutable()
+	require.NoError(t, err)
+
+	expected := filepath.Join(home, "bin", proxy.CjvBinaryName())
+	assert.Equal(t, expected, got)
+
+	info, err := os.Stat(got)
+	require.NoError(t, err)
+	originalSize := info.Size()
+
+	// Overwrite the managed binary with dummy content
+	require.NoError(t, os.WriteFile(got, []byte("old"), 0o755))
+
+	// Second call: should overwrite the dummy content with the real binary
+	got2, err := ForceUpdateManagedExecutable()
+	require.NoError(t, err)
+	assert.Equal(t, expected, got2)
+
+	info2, err := os.Stat(got2)
+	require.NoError(t, err)
+	assert.Equal(t, originalSize, info2.Size(), "managed binary should be restored to original size")
+	assert.NotEqual(t, int64(3), info2.Size(), "managed binary should not still be the 3-byte dummy")
+}

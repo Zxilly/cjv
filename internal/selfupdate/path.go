@@ -46,6 +46,38 @@ func EnsureManagedExecutable() (string, error) {
 		return "", fmt.Errorf("failed to access managed cjv binary %s: %w", managed, err)
 	}
 
+	return copyCurrentExeTo(binDir, managed)
+}
+
+// ForceUpdateManagedExecutable copies the currently running executable to
+// CJV_HOME/bin, overwriting any existing binary. Used by `cjv init` to
+// ensure the managed binary is up-to-date during (re)installation.
+func ForceUpdateManagedExecutable() (string, error) {
+	binDir, err := config.BinDir()
+	if err != nil {
+		return "", err
+	}
+
+	managed := filepath.Join(binDir, proxy.CjvBinaryName())
+
+	// If managed binary already exists and is the same file we're running
+	// from, skip the copy to avoid overwriting ourselves.
+	if _, err := os.Stat(managed); err == nil {
+		currentExe, err := os.Executable()
+		if err == nil {
+			resolvedCurrent, _ := filepath.EvalSymlinks(currentExe)
+			resolvedManaged, _ := filepath.EvalSymlinks(managed)
+			if resolvedCurrent == resolvedManaged {
+				return managed, nil
+			}
+		}
+	}
+
+	return copyCurrentExeTo(binDir, managed)
+}
+
+// copyCurrentExeTo copies the currently running executable to the given path.
+func copyCurrentExeTo(binDir, dst string) (string, error) {
 	currentExe, err := os.Executable()
 	if err != nil {
 		return "", fmt.Errorf("failed to locate current cjv executable: %w", err)
@@ -57,8 +89,8 @@ func EnsureManagedExecutable() (string, error) {
 	if err := os.MkdirAll(binDir, 0o755); err != nil {
 		return "", err
 	}
-	if err := utils.CopyFile(currentExe, managed, info.Mode().Perm()); err != nil {
-		return "", fmt.Errorf("failed to bootstrap managed cjv binary %s: %w", managed, err)
+	if err := utils.CopyFile(currentExe, dst, info.Mode().Perm()); err != nil {
+		return "", fmt.Errorf("failed to install managed cjv binary %s: %w", dst, err)
 	}
-	return managed, nil
+	return dst, nil
 }

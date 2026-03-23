@@ -189,3 +189,49 @@ other = "Warning: Could not automatically configure PATH. You may need to add {{
 
 [OldToolchainRemoveWarning]
 other = "Warning: Could not remove old toolchain directory {{.Dir}}. You may want to remove it manually to free disk space."
+
+# === Init ===
+[InitWelcome]
+other = "cjv - Cangjie Version Manager"
+
+[InitSummary]
+other = "This will install cjv and configure your environment:"
+
+[InitCjvHome]
+other = "  CJV_HOME:         {{.Path}}"
+
+[InitBinDir]
+other = "  bin directory:     {{.Path}}"
+
+[InitDefaultToolchain]
+other = "  default toolchain: {{.Name}}"
+
+[InitShellConfigs]
+other = "The following shell configs will be modified:"
+
+[InitRegistryPath]
+other = "Windows PATH will be modified (HKCU\\Environment)"
+
+[InitConfirm]
+other = "Proceed with installation?"
+
+[InitAlreadyInstalled]
+other = "cjv is already installed at {{.Path}}"
+
+[InitReinstallConfirm]
+other = "Do you want to reinstall/update?"
+
+[InitComplete]
+other = "cjv is installed!"
+
+[InitSourceHint]
+other = "To get started, you may need to restart your shell or run:"
+
+[InitInstallHint]
+other = "To install a specific toolchain:"
+
+[InitToolchainFailed]
+other = "Warning: Failed to install default toolchain '{{.Name}}': {{.Err}}. You can install it later with 'cjv install {{.Name}}'."
+
+[InitNoModifyPath]
+other = "PATH was not modified (--no-modify-path). Add {{.BinDir}} to your PATH manually."

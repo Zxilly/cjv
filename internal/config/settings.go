@@ -18,6 +18,10 @@ import (
 // It can be overridden at build time via ldflags for mirror variants.
 var DefaultManifestURL = "https://raw.githubusercontent.com/Zxilly/setup-cangjie/master/sdk-versions.json"
 
+// MirrorManifestURL is the mirror SDK manifest URL (gitcode.com).
+// Used by `cjv init --mirror` to configure the mirror source.
+var MirrorManifestURL = "https://raw.gitcode.com/Zxilly/setup-cangjie/raw/master/sdk-versions.json"
+
 // AutoSelfUpdate controls self-update behavior.
 const (
 	AutoSelfUpdateEnable  = "enable"
