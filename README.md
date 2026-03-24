@@ -57,6 +57,7 @@ cjv run sts cjc --version
 | `cjv toolchain uninstall <name>`                    | 卸载工具链                         |
 | `cjv set auto-self-update <enable\|disable\|check>` | 设置自动自更新行为                 |
 | `cjv set auto-install <true\|false>`                | 设置代理模式下缺失工具链的自动安装 |
+| `cjv set gitcode-api-key <key>`                     | 设置 GitCode API 访问令牌（nightly 构建需要） |
 | `cjv self update`                                   | 更新 cjv 到最新版本                |
 | `cjv self uninstall`                                | 卸载 cjv 及所有已安装的工具链      |
 | `cjv self clean-cache`                              | 清理下载缓存                       |
@@ -85,6 +86,7 @@ cjv 按以下优先级顺序解析活跃工具链（从高到低）：
 | `CJV_LOG`              | 设置日志级别: `debug`、`info`、`warn`（默认）、`error` |
 | `CJV_MAX_RETRIES`      | 下载失败最大重试次数（默认: `3`）                      |
 | `CJV_DOWNLOAD_TIMEOUT` | HTTP 下载超时秒数（默认: `180`）                       |
+| `CJV_GITCODE_API_KEY`  | GitCode API 访问令牌，用于查询和下载 nightly 工具链    |
 | `CJV_NO_PATH_SETUP`    | 设为 `1` 跳过首次安装时的 PATH 自动配置                |
 
 ## 目录结构

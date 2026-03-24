@@ -57,6 +57,7 @@ cjv run sts cjc --version
 | `cjv toolchain uninstall <name>`                    | Uninstall a toolchain                                   |
 | `cjv set auto-self-update <enable\|disable\|check>` | Set auto-self-update behavior                           |
 | `cjv set auto-install <true\|false>`                | Set auto-install for missing toolchains in proxy mode   |
+| `cjv set gitcode-api-key <key>`                     | Set GitCode API access token (required for nightly builds) |
 | `cjv self update`                                   | Update cjv to the latest version                        |
 | `cjv self uninstall`                                | Uninstall cjv and all installed toolchains              |
 | `cjv self clean-cache`                              | Clean the download cache                                |
@@ -85,6 +86,7 @@ If `auto_install` is enabled in settings and the resolved toolchain is not insta
 | `CJV_LOG`               | Set log verbosity: `debug`, `info`, `warn` (default), `error` |
 | `CJV_MAX_RETRIES`       | Max download retry attempts (default: `3`)                    |
 | `CJV_DOWNLOAD_TIMEOUT`  | HTTP download timeout in seconds (default: `180`)             |
+| `CJV_GITCODE_API_KEY`   | GitCode API access token for querying and downloading nightly toolchains |
 | `CJV_NO_PATH_SETUP`     | Set to `1` to skip PATH configuration on first install        |
 
 ## Directory Structure
