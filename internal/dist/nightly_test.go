@@ -10,28 +10,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestNightlyProbeExists(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}))
-	defer server.Close()
-
-	exists, err := ProbeNightlyVersion(context.Background(), server.URL, "1.1.0-alpha.20260306010001", "windows", "amd64")
-	require.NoError(t, err)
-	assert.True(t, exists)
-}
-
-func TestNightlyProbeNotFound(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusNotFound)
-	}))
-	defer server.Close()
-
-	exists, err := ProbeNightlyVersion(context.Background(), server.URL, "99.99.99", "windows", "amd64")
-	require.NoError(t, err)
-	assert.False(t, exists)
-}
-
 func TestNightlyDownloadURL(t *testing.T) {
 	url, err := NightlyDownloadURL("https://example.com/releases/download", "1.1.0-alpha.20260306010001", "windows", "amd64")
 	require.NoError(t, err)
@@ -108,14 +86,3 @@ func TestExtractNightlyTimestamp(t *testing.T) {
 	}
 }
 
-// --- Tests merged from nightly_probe_test.go ---
-
-func TestNightlyProbeServerError(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusTooManyRequests)
-	}))
-	defer server.Close()
-
-	_, err := ProbeNightlyVersion(context.Background(), server.URL, "1.1.0-alpha.20260306010001", "windows", "amd64")
-	require.Error(t, err)
-}

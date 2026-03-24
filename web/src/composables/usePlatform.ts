@@ -49,22 +49,22 @@ function detectPlatform() {
 
 function getInstallInfo(os: string, arch: string): InstallInfo {
   if (UNSUPPORTED[os]) return { label: UNSUPPORTED[os] }
-  if (os === 'windows') return { label: 'Windows x86_64', hint: '在 PowerShell 中运行：', command: `irm ${BASE}/install.ps1 | iex` }
-  if (os === 'darwin' || os === 'linux') {
-    const ol = os === 'darwin' ? 'macOS' : 'Linux'
-    return { label: `${ol} ${arch === 'arm64' ? 'ARM64' : 'x86_64'}`, hint: '在终端中运行：', command: `curl -sSf ${BASE}/install.sh | sh` }
+  if (os === 'darwin') {
+    return arch === 'arm64'
+      ? { label: 'macOS ARM64', hint: '在终端中运行：', command: `curl -sSf ${BASE}/install.sh | sh` }
+      : { label: 'macOS x86_64' }
   }
+  if (os === 'windows') return { label: 'Windows x86_64', hint: '在 PowerShell 中运行：', command: `irm ${BASE}/install.ps1 | iex` }
+  if (os === 'linux') return { label: `Linux ${arch === 'arm64' ? 'ARM64' : 'x86_64'}`, hint: '在终端中运行：', command: `curl -sSf ${BASE}/install.sh | sh` }
   return { label: '未知平台' }
 }
 
 export function usePlatform() {
   const { os, arch } = detectPlatform()
   const info = getInstallInfo(os, arch)
-  const state: PlatformState = UNSUPPORTED[os]
-    ? 'unsupported'
-    : os === 'unknown'
-      ? 'unknown'
-      : 'ready'
+  const state: PlatformState = !info.command
+    ? (os === 'unknown' ? 'unknown' : 'unsupported')
+    : 'ready'
 
   const methods: InstallMethod[] = [
     { label: 'Linux / macOS', command: `curl -sSf ${BASE}/install.sh | sh` },

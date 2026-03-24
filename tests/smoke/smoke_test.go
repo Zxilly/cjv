@@ -75,25 +75,3 @@ func TestSmokeNightlyFetchLatest(t *testing.T) {
 		"latest nightly version %q should end with a numeric timestamp", latestNightlyVersion)
 }
 
-func TestSmokeNightlyProbeAllPlatforms(t *testing.T) {
-	platforms := []struct {
-		goos   string
-		goarch string
-	}{
-		{"windows", "amd64"},
-		{"darwin", "amd64"},
-		{"darwin", "arm64"},
-		{"linux", "amd64"},
-		{"linux", "arm64"},
-	}
-
-	for _, p := range platforms {
-		t.Run(p.goos+"-"+p.goarch, func(t *testing.T) {
-			t.Parallel()
-			ctx := testContext(t)
-			exists, err := dist.ProbeNightlyVersion(ctx, dist.DefaultNightlyBaseURL, latestNightlyVersion, p.goos, p.goarch)
-			require.NoError(t, err, "probe should not error")
-			assert.True(t, exists, "nightly %s should be available for %s-%s", latestNightlyVersion, p.goos, p.goarch)
-		})
-	}
-}

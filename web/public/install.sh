@@ -15,6 +15,11 @@ main() {
 
     detect_platform
     detect_arch
+
+    if [ "$PLATFORM" = "darwin" ] && [ "$ARCH" = "amd64" ]; then
+        err "macOS x86_64 is not supported; Cangjie only supports macOS ARM64 (Apple Silicon)"
+    fi
+
     download_and_install "$@"
 }
 

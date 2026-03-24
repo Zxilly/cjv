@@ -21,7 +21,6 @@ jobs:
           - os: ubuntu-latest       # linux-amd64
           - os: ubuntu-24.04-arm    # linux-arm64
           - os: macos-latest        # darwin-arm64
-          - os: macos-15-intel      # darwin-amd64
           - os: windows-latest      # windows-amd64
     runs-on: ${{ matrix.os }}
     steps:

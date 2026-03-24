@@ -13,7 +13,6 @@ func TestPlatformKeyFromGo(t *testing.T) {
 		expected     string
 	}{
 		{"windows", "amd64", "win32-x64"},
-		{"darwin", "amd64", "darwin-x64"},
 		{"darwin", "arm64", "darwin-arm64"},
 		{"linux", "amd64", "linux-x64"},
 		{"linux", "arm64", "linux-arm64"},

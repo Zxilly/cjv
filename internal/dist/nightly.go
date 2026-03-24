@@ -92,32 +92,6 @@ func NightlyDownloadURL(baseURL, version, goos, goarch string) (string, error) {
 	return base.String(), nil
 }
 
-func ProbeNightlyVersion(ctx context.Context, baseURL, version, goos, goarch string) (bool, error) {
-	url, err := NightlyDownloadURL(baseURL, version, goos, goarch)
-	if err != nil {
-		return false, err
-	}
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodHead, url, nil)
-	if err != nil {
-		return false, err
-	}
-	resp, err := HTTPClient().Do(req)
-	if err != nil {
-		return false, err
-	}
-	defer resp.Body.Close() //nolint:errcheck // best-effort cleanup
-
-	switch resp.StatusCode {
-	case http.StatusOK:
-		return true, nil
-	case http.StatusNotFound:
-		return false, nil
-	default:
-		return false, fmt.Errorf("failed to probe nightly version: HTTP %d", resp.StatusCode)
-	}
-}
-
 type gitCodeRelease struct {
 	TagName string `json:"tag_name"`
 }

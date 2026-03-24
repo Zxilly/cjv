@@ -10,6 +10,5 @@
     "esModuleInterop": true,
     "noEmit": true
   },
-  "include": ["src/**/*.ts", "src/**/*.vue"],
-  "references": [{ "path": "./tsconfig.node.json" }]
+  "include": ["src/**/*.ts", "src/**/*.vue"]
 }
