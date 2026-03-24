@@ -89,8 +89,8 @@ func TestIntegrationInstallScriptPs1(t *testing.T) {
 	for _, tool := range []string{"cjc", "cjpm"} {
 		assert.FileExists(t, filepath.Join(cjvHome, "bin", tool+".exe"))
 	}
-	assert.FileExists(t, filepath.Join(cjvHome, "env"))
 	assert.FileExists(t, filepath.Join(cjvHome, "env.ps1"))
+	assert.FileExists(t, filepath.Join(cjvHome, "env.bat"))
 }
 
 func TestIntegrationInstallScriptPs1WithToolchain(t *testing.T) {
