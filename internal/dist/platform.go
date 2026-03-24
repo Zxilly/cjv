@@ -17,6 +17,7 @@ type platformMapping struct {
 var platformMap = map[string]platformMapping{
 	"windows-amd64": {JSONKey: "win32-x64", NightlyOS: "windows", NightlyArch: "x64"},
 	"darwin-arm64":  {JSONKey: "darwin-arm64", NightlyOS: "mac", NightlyArch: "aarch64"},
+	"darwin-amd64":  {JSONKey: "darwin-x64", NightlyOS: "mac", NightlyArch: "x64"}, // not all channels provide darwin-x64 builds
 	"linux-amd64":   {JSONKey: "linux-x64", NightlyOS: "linux", NightlyArch: "x64"},
 	"linux-arm64":   {JSONKey: "linux-arm64", NightlyOS: "linux", NightlyArch: "aarch64"},
 }

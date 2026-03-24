@@ -14,6 +14,7 @@ func TestPlatformKeyFromGo(t *testing.T) {
 	}{
 		{"windows", "amd64", "win32-x64"},
 		{"darwin", "arm64", "darwin-arm64"},
+		{"darwin", "amd64", "darwin-x64"},
 		{"linux", "amd64", "linux-x64"},
 		{"linux", "arm64", "linux-arm64"},
 	}
@@ -39,6 +40,7 @@ func TestNightlyFilename(t *testing.T) {
 	}{
 		{"windows", "amd64", "1.1.0-alpha.20260306010001", "cangjie-sdk-windows-x64-1.1.0-alpha.20260306010001.zip"},
 		{"darwin", "arm64", "1.1.0-alpha.20260306010001", "cangjie-sdk-mac-aarch64-1.1.0-alpha.20260306010001.tar.gz"},
+		{"darwin", "amd64", "1.1.0-alpha.20260306010001", "cangjie-sdk-mac-x64-1.1.0-alpha.20260306010001.tar.gz"},
 		{"linux", "amd64", "1.1.0-alpha.20260306010001", "cangjie-sdk-linux-x64-1.1.0-alpha.20260306010001.tar.gz"},
 	}
 	for _, tt := range tests {

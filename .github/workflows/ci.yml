@@ -46,8 +46,6 @@ jobs:
         exclude:
           - goos: windows
             goarch: arm64
-          - goos: darwin
-            goarch: amd64
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository

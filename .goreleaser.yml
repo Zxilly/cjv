@@ -14,8 +14,6 @@ builds:
     ignore:
       - goos: windows
         goarch: arm64
-      - goos: darwin
-        goarch: amd64
 
   - id: cjv-mirror
     main: ./cmd/cjv
@@ -32,8 +30,6 @@ builds:
     ignore:
       - goos: windows
         goarch: arm64
-      - goos: darwin
-        goarch: amd64
 
 archives:
   - id: cjv
