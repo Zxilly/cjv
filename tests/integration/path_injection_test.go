@@ -77,8 +77,8 @@ func TestIntegrationInitPathSetupUnixIdempotent(t *testing.T) {
 		".bashrc should contain the marker block exactly once")
 }
 
-// TestIntegrationInitEnvScripts verifies that cjv init writes env and env.ps1
-// scripts to CJV_HOME.
+// TestIntegrationInitEnvScripts verifies that cjv init writes the POSIX env
+// script to CJV_HOME on non-Windows platforms.
 func TestIntegrationInitEnvScripts(t *testing.T) {
 	binary := buildCJV(t)
 	cjvHome := t.TempDir()
@@ -96,12 +96,6 @@ func TestIntegrationInitEnvScripts(t *testing.T) {
 	require.NoError(t, err, "env script should exist")
 	assert.Contains(t, string(envContent), expectedBinDir)
 	assert.Contains(t, string(envContent), "export PATH=")
-
-	// Check PowerShell env script
-	ps1Content, err := os.ReadFile(filepath.Join(cjvHome, "env.ps1"))
-	require.NoError(t, err, "env.ps1 script should exist")
-	assert.Contains(t, string(ps1Content), expectedBinDir)
-	assert.Contains(t, string(ps1Content), "$env:PATH")
 }
 
 // TestIntegrationInitNoModifyPathSkips verifies that --no-modify-path
@@ -130,5 +124,4 @@ func TestIntegrationInitNoModifyPathSkips(t *testing.T) {
 
 	// Env scripts should still be written regardless of --no-modify-path
 	assert.FileExists(t, filepath.Join(cjvHome, "env"))
-	assert.FileExists(t, filepath.Join(cjvHome, "env.ps1"))
 }
