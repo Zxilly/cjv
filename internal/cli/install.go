@@ -140,7 +140,7 @@ func installResolved(ctx context.Context, rt resolvedToolchain, settings *config
 		return err
 	}
 
-	isFirstInstall := settings.DefaultToolchain == ""
+	isFirstInstall := settings.DefaultToolchain == "" || !defaultToolchainExists(settings.DefaultToolchain)
 	if err := swapInstalledToolchain(stagingDir, destDir, isReinstall, func() error {
 		// Capture env after the rename so that $PWD = destDir and all
 		// paths in env.toml naturally point to the final location.
@@ -325,6 +325,16 @@ func fetchManifest(ctx context.Context, manifestURL string) (*dist.Manifest, err
 	}
 
 	return dist.ParseManifest(data)
+}
+
+// defaultToolchainExists checks whether the configured default toolchain is still installed.
+func defaultToolchainExists(name string) bool {
+	parsed, err := toolchain.ParseToolchainName(name)
+	if err != nil {
+		return false
+	}
+	_, err = toolchain.FindInstalled(parsed)
+	return err == nil
 }
 
 // validateInstallation checks that the installed SDK has essential binaries.

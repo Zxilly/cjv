@@ -5,6 +5,7 @@ package selfmgmt
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -18,11 +19,11 @@ import (
 var currentExecutablePath = os.Executable
 
 var startDetachedUninstallCleanup = func(home string) error {
-	script := `timeout /t 3 /nobreak >nul & rd /s /q "%CJV_UNINSTALL_DIR%"`
-	cmd := exec.Command("cmd.exe", "/C", script)
+	script := `Start-Sleep -Seconds 3; Remove-Item -LiteralPath $env:CJV_UNINSTALL_DIR -Recurse -Force`
+	cmd := exec.Command("powershell.exe", "-NoProfile", "-NonInteractive", "-Command", script)
 	cmd.Env = append(os.Environ(), "CJV_UNINSTALL_DIR="+home)
 	cmd.SysProcAttr = &syscall.SysProcAttr{
-		CreationFlags: windows.DETACHED_PROCESS,
+		CreationFlags: windows.CREATE_NEW_PROCESS_GROUP,
 	}
 	return cmd.Start()
 }
@@ -56,12 +57,9 @@ func removeHomeDir(home, managedExe string) error {
 		return nil
 	}
 
-	// Guard against cmd.exe metacharacters in the path. The cleanup script
-	// passes the path via the %CJV_UNINSTALL_DIR% environment variable,
-	// which handles Unicode/CJK characters correctly, but shell metacharacters
-	// would still break the `rd /s /q` invocation.
-	if strings.ContainsAny(home, `"&|<>^%`) {
-		return fmt.Errorf("cannot safely uninstall cjv home with special characters in path while running from managed binary: %s", home)
+	// Remove symlinks first — Remove-Item -Recurse can fail on them.
+	if err := removeSymlinks(filepath.Join(home, "bin")); err != nil {
+		return fmt.Errorf("failed to remove symlinks in bin directory: %w", err)
 	}
 
 	b := make([]byte, 4)
@@ -82,5 +80,23 @@ func removeHomeDir(home, managedExe string) error {
 		return fmt.Errorf("failed to start detached uninstall cleanup: %w", err)
 	}
 
+	return nil
+}
+
+func removeSymlinks(dir string) error {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil
+		}
+		return err
+	}
+	for _, e := range entries {
+		if e.Type()&os.ModeSymlink != 0 {
+			if err := os.Remove(filepath.Join(dir, e.Name())); err != nil {
+				return err
+			}
+		}
+	}
 	return nil
 }
