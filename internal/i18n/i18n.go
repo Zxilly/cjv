@@ -83,8 +83,12 @@ func TP(messageID string, data MsgData, count int) string {
 	return msg
 }
 
+// envLang mirrors config.EnvLang; duplicated here to avoid a circular
+// dependency (config imports i18n).
+const envLang = "CJV_LANG"
+
 func detectLanguage() string {
-	if lang := os.Getenv("CJV_LANG"); lang != "" {
+	if lang := os.Getenv(envLang); lang != "" {
 		return lang
 	}
 

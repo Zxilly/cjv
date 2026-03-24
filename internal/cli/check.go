@@ -41,7 +41,7 @@ func runCheck(cmd *cobra.Command, args []string) error {
 	for _, name := range installed {
 		parsed, parseErr := toolchain.ParseToolchainName(name)
 		if parseErr == nil && parsed.Channel == toolchain.Nightly {
-			latestNightly, nightlyErr = dist.FetchLatestNightly(ctx, dist.DefaultNightlyAPIURL)
+			latestNightly, nightlyErr = dist.FetchLatestNightly(ctx, dist.DefaultNightlyAPIURL, settings.GitCodeAPIKey)
 			break
 		}
 	}

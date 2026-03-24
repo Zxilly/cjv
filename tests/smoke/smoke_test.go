@@ -12,18 +12,22 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/dist"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-var latestNightlyVersion string
+var (
+	latestNightlyVersion string
+	gitCodeAPIKey        = os.Getenv(config.EnvGitCodeAPIKey)
+)
 
 func TestMain(m *testing.M) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	v, err := dist.FetchLatestNightly(ctx, dist.DefaultNightlyAPIURL)
+	v, err := dist.FetchLatestNightly(ctx, dist.DefaultNightlyAPIURL, gitCodeAPIKey)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to fetch latest nightly version: %v\n", err)
 		os.Exit(1)
@@ -43,8 +47,11 @@ func testContext(t *testing.T) context.Context {
 func TestSmokeNightlyAPIReturnsJSON(t *testing.T) {
 	ctx := testContext(t)
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, dist.DefaultNightlyAPIURL+"?limit=1", nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, dist.DefaultNightlyAPIURL+"?per_page=1", nil)
 	require.NoError(t, err)
+	if gitCodeAPIKey != "" {
+		req.Header.Set(dist.GitCodeTokenHeader, gitCodeAPIKey)
+	}
 
 	resp, err := dist.HTTPClient().Do(req)
 	require.NoError(t, err)

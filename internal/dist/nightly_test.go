@@ -45,7 +45,7 @@ func TestFetchLatestNightly(t *testing.T) {
 	}))
 	defer server.Close()
 
-	latest, err := FetchLatestNightly(context.Background(), server.URL)
+	latest, err := FetchLatestNightly(context.Background(), server.URL, "test-token")
 	require.NoError(t, err)
 	assert.Equal(t, "1.1.0-alpha.20260306010001", latest)
 }
@@ -56,7 +56,7 @@ func TestFetchLatestNightlyEmpty(t *testing.T) {
 	}))
 	defer server.Close()
 
-	_, err := FetchLatestNightly(context.Background(), server.URL)
+	_, err := FetchLatestNightly(context.Background(), server.URL, "test-token")
 	assert.Error(t, err)
 }
 
@@ -67,7 +67,7 @@ func TestFetchLatestNightlyUnsorted(t *testing.T) {
 	}))
 	defer server.Close()
 
-	latest, err := FetchLatestNightly(context.Background(), server.URL)
+	latest, err := FetchLatestNightly(context.Background(), server.URL, "test-token")
 	require.NoError(t, err)
 	assert.Equal(t, "1.1.0-alpha.20260310010001", latest)
 }
@@ -86,7 +86,7 @@ func TestFetchLatestNightlyCrossVersion(t *testing.T) {
 	}))
 	defer server.Close()
 
-	latest, err := FetchLatestNightly(context.Background(), server.URL)
+	latest, err := FetchLatestNightly(context.Background(), server.URL, "test-token")
 	require.NoError(t, err)
 	assert.Equal(t, "1.1.0-alpha.20260315010001", latest)
 }

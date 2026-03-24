@@ -99,6 +99,9 @@ other = "cjv has been uninstalled"
 other = "Unsupported platform: {{.OS}}/{{.Arch}}"
 
 # === Nightly ===
+[GitCodeAPIKeyRequired]
+other = "GitCode API key is required to query nightly versions. Set it with: cjv set gitcode-api-key <your-token>"
+
 [FetchingNightly]
 other = "Fetching latest nightly version..."
 

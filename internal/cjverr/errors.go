@@ -118,6 +118,13 @@ func (e *UnknownChannelError) Error() string {
 	return i18n.T("UnknownChannel", i18n.MsgData{"Channel": e.Channel})
 }
 
+// GitCodeAPIKeyRequiredError indicates the GitCode API key is not configured.
+type GitCodeAPIKeyRequiredError struct{}
+
+func (e *GitCodeAPIKeyRequiredError) Error() string {
+	return i18n.T("GitCodeAPIKeyRequired", nil)
+}
+
 // ExitCodeError carries a process exit code so callers can propagate it
 // without calling os.Exit directly (which would skip deferred cleanup).
 type ExitCodeError struct {

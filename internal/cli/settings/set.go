@@ -88,3 +88,19 @@ var setProfileCmd = &cobra.Command{
 		})
 	},
 }
+
+var setGitCodeAPIKeyCmd = &cobra.Command{
+	Use:   "gitcode-api-key <key>",
+	Short: "Set the GitCode API access token for nightly builds",
+	Args:  cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		val := args[0]
+		return updateSetting("gitcode-api-key", val, func(s *config.Settings) bool {
+			if s.GitCodeAPIKey == val {
+				return false
+			}
+			s.GitCodeAPIKey = val
+			return true
+		})
+	},
+}

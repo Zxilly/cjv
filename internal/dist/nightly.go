@@ -15,13 +15,18 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Zxilly/cjv/internal/cjverr"
+	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/utils"
 )
 
 const DefaultNightlyBaseURL = "https://gitcode.com/Cangjie/nightly_build/releases/download"
 
+// GitCodeTokenHeader is the HTTP header used for GitCode API authentication.
+const GitCodeTokenHeader = "PRIVATE-TOKEN"
+
 // DefaultNightlyAPIURL is the releases API endpoint for querying nightly versions.
-const DefaultNightlyAPIURL = "https://gitcode.com/api/v1/repos/Cangjie/nightly_build/releases"
+const DefaultNightlyAPIURL = "https://api.gitcode.com/api/v5/repos/Cangjie/nightly_build/releases"
 
 // MaxResponseSize limits HTTP response body reads to prevent memory exhaustion.
 const MaxResponseSize = 10 << 20 // 10 MB
@@ -43,7 +48,7 @@ func HTTPClient() *http.Client {
 
 func newHTTPClient() *http.Client {
 	timeout := 180 * time.Second
-	if s := os.Getenv("CJV_DOWNLOAD_TIMEOUT"); s != "" {
+	if s := os.Getenv(config.EnvDownloadTimeout); s != "" {
 		if n, err := strconv.Atoi(s); err == nil && n > 0 {
 			timeout = time.Duration(n) * time.Second
 		}
@@ -136,19 +141,24 @@ func extractNightlyTimestamp(tag string) int64 {
 // FetchLatestNightly queries the GitCode releases API and returns the
 // latest nightly version tag, sorted descending by the embedded timestamp.
 // apiURL should be the releases API base (e.g. DefaultNightlyAPIURL).
-func FetchLatestNightly(ctx context.Context, apiURL string) (string, error) {
+// apiKey is the GitCode API access token; required for authentication.
+func FetchLatestNightly(ctx context.Context, apiURL, apiKey string) (string, error) {
+	if apiKey == "" {
+		return "", &cjverr.GitCodeAPIKeyRequiredError{}
+	}
 	u, err := url.Parse(apiURL)
 	if err != nil {
 		return "", fmt.Errorf("invalid nightly API URL: %w", err)
 	}
 	q := u.Query()
-	q.Set("limit", "50")
+	q.Set("per_page", "50")
 	u.RawQuery = q.Encode()
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
 	if err != nil {
 		return "", fmt.Errorf("failed to create nightly request: %w", err)
 	}
+	req.Header.Set(GitCodeTokenHeader, apiKey)
 	resp, err := HTTPClient().Do(req)
 	if err != nil {
 		return "", fmt.Errorf("failed to query nightly versions: %w", err)

@@ -10,8 +10,6 @@ import (
 	"github.com/BurntSushi/toml"
 )
 
-const EnvFallbackSettings = "CJV_FALLBACK_SETTINGS"
-
 // DefaultFallbackPath returns the platform-specific fallback settings path.
 // The CJV_FALLBACK_SETTINGS environment variable overrides the default.
 func DefaultFallbackPath() string {
@@ -83,5 +81,8 @@ func mergeFromFallback(user, fallback *Settings, meta toml.MetaData) {
 	}
 	if !meta.IsDefined("profile") && fallback.Profile != "" {
 		user.Profile = fallback.Profile
+	}
+	if !meta.IsDefined("gitcode_api_key") && fallback.GitCodeAPIKey != "" {
+		user.GitCodeAPIKey = fallback.GitCodeAPIKey
 	}
 }

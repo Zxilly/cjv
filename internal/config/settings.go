@@ -45,6 +45,7 @@ type Settings struct {
 	AutoInstall      bool              `toml:"auto_install"`
 	DefaultHost      string            `toml:"default_host,omitempty"`
 	Profile          string            `toml:"profile,omitempty"`
+	GitCodeAPIKey    string            `toml:"gitcode_api_key,omitempty"`
 	Overrides        map[string]string `toml:"overrides,omitempty"`
 }
 
@@ -100,6 +101,11 @@ func loadSettingsWithMeta(path string) (*Settings, toml.MetaData, error) {
 		}))
 	}
 	migrateSettings(&s)
+	// Environment variable fallback so CI/deployment can inject credentials
+	// without modifying settings files.
+	if s.GitCodeAPIKey == "" {
+		s.GitCodeAPIKey = os.Getenv(EnvGitCodeAPIKey)
+	}
 	return &s, md, nil
 }
 

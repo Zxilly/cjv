@@ -7,9 +7,16 @@ import (
 )
 
 const (
-	EnvHome           = "CJV_HOME"
-	EnvToolchain      = "CJV_TOOLCHAIN"
-	EnvRecursionCount = "CJV_RECURSION_COUNT"
+	EnvHome             = "CJV_HOME"
+	EnvToolchain        = "CJV_TOOLCHAIN"
+	EnvRecursionCount   = "CJV_RECURSION_COUNT"
+	EnvLog              = "CJV_LOG"
+	EnvLang             = "CJV_LANG"
+	EnvMaxRetries       = "CJV_MAX_RETRIES"
+	EnvDownloadTimeout  = "CJV_DOWNLOAD_TIMEOUT"
+	EnvNoPathSetup      = "CJV_NO_PATH_SETUP"
+	EnvGitCodeAPIKey    = "CJV_GITCODE_API_KEY"
+	EnvFallbackSettings = "CJV_FALLBACK_SETTINGS"
 )
 
 var (

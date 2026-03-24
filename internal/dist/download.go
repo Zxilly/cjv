@@ -16,6 +16,7 @@ import (
 	"strings"
 
 	"github.com/Zxilly/cjv/internal/cjverr"
+	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/utils"
 	"github.com/mattn/go-isatty"
 	"github.com/schollz/progressbar/v3"
@@ -32,7 +33,7 @@ func (e *nonRetriableError) Unwrap() error { return e.err }
 // getMaxDownloadRetries returns the number of download retry attempts.
 // Reads CJV_MAX_RETRIES at call time so tests can override via t.Setenv.
 func getMaxDownloadRetries() int {
-	if s := os.Getenv("CJV_MAX_RETRIES"); s != "" {
+	if s := os.Getenv(config.EnvMaxRetries); s != "" {
 		if n, err := strconv.Atoi(s); err == nil && n >= 0 {
 			return n
 		}

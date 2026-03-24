@@ -183,7 +183,7 @@ func installResolved(ctx context.Context, rt resolvedToolchain, settings *config
 // Set CJV_NO_PATH_SETUP=1 to skip PATH modification (useful for CI
 // environments and integration tests).
 func ensurePathConfigured() {
-	if os.Getenv("CJV_NO_PATH_SETUP") == "1" {
+	if os.Getenv(config.EnvNoPathSetup) == "1" {
 		return
 	}
 
@@ -222,7 +222,7 @@ func ensurePathConfigured() {
 
 func resolveAndLocate(ctx context.Context, name toolchain.ToolchainName, settings *config.Settings, manifest *dist.Manifest) (resolvedToolchain, error) {
 	if name.Channel == toolchain.Nightly {
-		return resolveNightly(ctx, name)
+		return resolveNightly(ctx, name, settings)
 	}
 
 	platformKey, err := dist.CurrentPlatformKey(settings.DefaultHost)
@@ -269,12 +269,12 @@ func resolveAndLocate(ctx context.Context, name toolchain.ToolchainName, setting
 	return resolvedToolchain{Name: resolved.String(), URL: info.URL, SHA256: info.SHA256}, nil
 }
 
-func resolveNightly(ctx context.Context, name toolchain.ToolchainName) (resolvedToolchain, error) {
+func resolveNightly(ctx context.Context, name toolchain.ToolchainName, settings *config.Settings) (resolvedToolchain, error) {
 	version := name.Version
 
 	if version == "" {
 		fmt.Println(i18n.T("FetchingNightly", nil))
-		v, err := dist.FetchLatestNightly(ctx, dist.DefaultNightlyAPIURL)
+		v, err := dist.FetchLatestNightly(ctx, dist.DefaultNightlyAPIURL, settings.GitCodeAPIKey)
 		if err != nil {
 			return resolvedToolchain{}, err
 		}
