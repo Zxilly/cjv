@@ -31,8 +31,8 @@ func TestIntegrationInitPathSetupWindowsRegistry(t *testing.T) {
 		"registry PATH should contain CJV_HOME\\bin after init")
 
 	// Env scripts should also exist
-	assert.FileExists(t, filepath.Join(cjvHome, "env"))
 	assert.FileExists(t, filepath.Join(cjvHome, "env.ps1"))
+	assert.FileExists(t, filepath.Join(cjvHome, "env.bat"))
 }
 
 // TestIntegrationInitPathSetupWindowsIdempotent verifies that running init
@@ -85,12 +85,12 @@ func TestIntegrationInitNoModifyPathSkipsWindows(t *testing.T) {
 		"registry PATH should be unchanged with --no-modify-path")
 
 	// Env scripts should still be written
-	assert.FileExists(t, filepath.Join(cjvHome, "env"))
 	assert.FileExists(t, filepath.Join(cjvHome, "env.ps1"))
+	assert.FileExists(t, filepath.Join(cjvHome, "env.bat"))
 }
 
-// TestIntegrationInitEnvScriptsWindows verifies that cjv init writes env and
-// env.ps1 scripts on Windows.
+// TestIntegrationInitEnvScriptsWindows verifies that cjv init writes env.ps1
+// and env.bat scripts on Windows.
 func TestIntegrationInitEnvScriptsWindows(t *testing.T) {
 	binary := buildCJV(t)
 	cjvHome := t.TempDir()
@@ -101,12 +101,12 @@ func TestIntegrationInitEnvScriptsWindows(t *testing.T) {
 
 	expectedBinDir := filepath.Join(cjvHome, "bin")
 
-	envContent, err := os.ReadFile(filepath.Join(cjvHome, "env"))
-	require.NoError(t, err, "env script should exist")
-	assert.Contains(t, string(envContent), expectedBinDir)
-
 	ps1Content, err := os.ReadFile(filepath.Join(cjvHome, "env.ps1"))
 	require.NoError(t, err, "env.ps1 script should exist")
 	assert.Contains(t, string(ps1Content), expectedBinDir)
 	assert.Contains(t, string(ps1Content), "$env:PATH")
+
+	batContent, err := os.ReadFile(filepath.Join(cjvHome, "env.bat"))
+	require.NoError(t, err, "env.bat script should exist")
+	assert.Contains(t, string(batContent), expectedBinDir)
 }
