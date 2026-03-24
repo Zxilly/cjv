@@ -23,6 +23,7 @@ const { state, info, methods, mirrorMethods } = usePlatform()
         <p class="text-base text-gray-500 dark:text-gray-400 mb-4">{{ info.hint }}</p>
         <CodeBlock :command="info.command!" primary />
         <p class="mt-4 text-sm text-gray-400 dark:text-gray-500">检测到你的平台：{{ info.label }}</p>
+        <p v-if="info.warning" class="mt-3 text-sm text-amber-600 dark:text-amber-400">⚠ {{ info.warning }}</p>
       </div>
 
       <!-- Unsupported mobile -->

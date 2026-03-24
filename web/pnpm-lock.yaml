@@ -8,6 +8,9 @@ importers:
 
   .:
     dependencies:
+      ua-parser-modern:
+        specifier: ^0.1.1
+        version: 0.1.1
       vue:
         specifier: ^3.5.30
         version: 3.5.30(typescript@6.0.2)
@@ -496,6 +499,10 @@ packages:
     engines: {node: '>=14.17'}
     hasBin: true
 
+  ua-parser-modern@0.1.1:
+    resolution: {integrity: sha512-7w/roxPc8S0HCZi8JvmZsg5rAdjLi6Tiw1Qs5bXJkZRpSiKhEP3HObm8F/oNGB9oOaQAIGZ27p8tO82mtMcOyA==}
+    engines: {node: '>=20.19.0'}
+
   vite@8.0.2:
     resolution: {integrity: sha512-1gFhNi+bHhRE/qKZOJXACm6tX4bA3Isy9KuKF15AgSRuRazNBOJfdDemPBU16/mpMxApDPrWvZ08DcLPEoRnuA==}
     engines: {node: ^20.19.0 || >=22.12.0}
@@ -923,6 +930,8 @@ snapshots:
     optional: true
 
   typescript@6.0.2: {}
+
+  ua-parser-modern@0.1.1: {}
 
   vite@8.0.2(jiti@2.6.1):
     dependencies:

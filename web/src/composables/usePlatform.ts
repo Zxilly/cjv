@@ -1,15 +1,14 @@
+import { parseCPU, parseOS } from 'ua-parser-modern'
+
 const BASE = 'https://cjv.zxilly.dev'
 
-const UNSUPPORTED: Record<string, string> = {
-  ios: 'iOS',
-  android: 'Android',
-  harmonyos: 'HarmonyOS',
-}
+const UNSUPPORTED = new Set(['iOS', 'Android', 'HarmonyOS'])
 
 interface InstallInfo {
   label: string
   hint?: string
   command?: string
+  warning?: string
 }
 
 interface InstallMethod {
@@ -20,42 +19,20 @@ interface InstallMethod {
 type PlatformState = 'ready' | 'unsupported' | 'unknown'
 
 function detectPlatform() {
-  const ua = navigator.userAgent.toLowerCase()
-  const platform = (navigator.platform || '').toLowerCase()
-
-  if (/iphone|ipad|ipod/.test(ua)) return { os: 'ios', arch: 'arm64' }
-  if (/harmonyos|hmos|openharmony|arkweb|huaweibrowser/.test(ua)) return { os: 'harmonyos', arch: 'arm64' }
-  if (/android/.test(ua)) return { os: 'android', arch: 'arm64' }
-
-  let os = 'unknown'
-  if (ua.includes('win') || platform.includes('win')) os = 'windows'
-  else if (ua.includes('mac') || platform.includes('mac')) os = 'darwin'
-  else if (ua.includes('linux') || platform.includes('linux')) os = 'linux'
-
-  if (os === 'unknown') {
-    const av = (navigator.appVersion || '').toLowerCase()
-    const oc = ((navigator as Record<string, unknown>).oscpu as string || '').toLowerCase()
-    if (av.includes('win') || oc.includes('win')) os = 'windows'
-    else if (av.includes('mac') || oc.includes('mac')) os = 'darwin'
-    else if (av.includes('linux') || oc.includes('linux')) os = 'linux'
-  }
-
-  let arch = 'amd64'
-  if (navigator.userAgentData?.architecture?.toLowerCase() === 'arm') arch = 'arm64'
-  else if (/arm64|aarch64/.test(ua) || platform.includes('arm')) arch = 'arm64'
-
+  const os = parseOS().name || ''
+  const arch = parseCPU().architecture || 'amd64'
   return { os, arch }
 }
 
 function getInstallInfo(os: string, arch: string): InstallInfo {
-  if (UNSUPPORTED[os]) return { label: UNSUPPORTED[os] }
-  if (os === 'darwin') {
+  if (UNSUPPORTED.has(os)) return { label: os }
+  if (os === 'Mac OS' || os === 'macOS') {
     return arch === 'arm64'
       ? { label: 'macOS ARM64', hint: '在终端中运行：', command: `curl -sSf ${BASE}/install.sh | sh` }
-      : { label: 'macOS x86_64' }
+      : { label: 'macOS x86_64', hint: '在终端中运行：', command: `curl -sSf ${BASE}/install.sh | sh`, warning: '部分 LTS 和 STS 版本可能不包含 macOS x86_64 的预编译 SDK。' }
   }
-  if (os === 'windows') return { label: 'Windows x86_64', hint: '在 PowerShell 中运行：', command: `irm ${BASE}/install.ps1 | iex` }
-  if (os === 'linux') return { label: `Linux ${arch === 'arm64' ? 'ARM64' : 'x86_64'}`, hint: '在终端中运行：', command: `curl -sSf ${BASE}/install.sh | sh` }
+  if (os === 'Windows') return { label: 'Windows x86_64', hint: '在 PowerShell 中运行：', command: `irm ${BASE}/install.ps1 | iex` }
+  if (os === 'Linux') return { label: `Linux ${arch === 'arm64' ? 'ARM64' : 'x86_64'}`, hint: '在终端中运行：', command: `curl -sSf ${BASE}/install.sh | sh` }
   return { label: '未知平台' }
 }
 
@@ -63,7 +40,7 @@ export function usePlatform() {
   const { os, arch } = detectPlatform()
   const info = getInstallInfo(os, arch)
   const state: PlatformState = !info.command
-    ? (os === 'unknown' ? 'unknown' : 'unsupported')
+    ? (UNSUPPORTED.has(os) ? 'unsupported' : 'unknown')
     : 'ready'
 
   const methods: InstallMethod[] = [
