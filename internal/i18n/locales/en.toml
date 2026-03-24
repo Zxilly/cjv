@@ -197,26 +197,65 @@ other = "Warning: Could not remove old toolchain directory {{.Dir}}. You may wan
 [InitWelcome]
 other = "cjv - Cangjie Version Manager"
 
-[InitSummary]
-other = "This will install cjv and configure your environment:"
+[InitDescription]
+other = "This will download and install the version manager for the Cangjie programming language, and configure proxy commands for its toolchain."
 
-[InitCjvHome]
-other = "  CJV_HOME:         {{.Path}}"
+[InitDataDir]
+other = "cjv metadata and toolchains will be installed into the cjv home directory, located at:"
 
-[InitBinDir]
-other = "  bin directory:     {{.Path}}"
+[InitDataDirEnvHint]
+other = "This can be modified with the CJV_HOME environment variable."
 
-[InitDefaultToolchain]
-other = "  default toolchain: {{.Name}}"
+[InitCommandsAvailable]
+other = "The `cjc`, `cjpm`, `cjfmt`, `cjlint` and other commands will be added to cjv's bin directory, located at:"
 
 [InitShellConfigs]
-other = "The following shell configs will be modified:"
+other = "This path will then be added to your PATH environment variable by modifying the profile files located at:"
 
 [InitRegistryPath]
-other = "Windows PATH will be modified (HKCU\\Environment)"
+other = "This path will then be added to your PATH environment variable by modifying the HKCU\\Environment registry key."
 
-[InitConfirm]
-other = "Proceed with installation?"
+[InitPathNeedManual]
+other = "This path needs to be in your PATH environment variable, but will not be added automatically."
+
+[InitUninstallHint]
+other = "You can uninstall at any time with `cjv self uninstall` and these changes will be reverted."
+
+[InitCurrentOptions]
+other = "Current installation options:"
+
+[InitOptToolchain]
+other = "default toolchain:"
+
+[InitOptModifyPath]
+other = "modify PATH variable:"
+
+[InitOptMirror]
+other = "use mirror:"
+
+[InitProceedStandard]
+other = "Proceed with standard installation (default)"
+
+[InitProceedSelected]
+other = "Proceed with selected options (default)"
+
+[InitCustomize]
+other = "Customize installation"
+
+[InitCancelInstall]
+other = "Cancel installation"
+
+[InitToolchainQuestion]
+other = "Default toolchain?"
+
+[InitToolchainNone]
+other = "none (install no toolchain)"
+
+[InitModifyPathQuestion]
+other = "Modify PATH variable?"
+
+[InitMirrorQuestion]
+other = "Use mirror for downloads?"
 
 [InitAlreadyInstalled]
 other = "cjv is already installed at {{.Path}}"
@@ -225,10 +264,13 @@ other = "cjv is already installed at {{.Path}}"
 other = "Do you want to reinstall/update?"
 
 [InitComplete]
-other = "cjv is installed!"
+other = "cjv is installed now. Great!"
 
 [InitSourceHint]
-other = "To get started, you may need to restart your shell or run:"
+other = "To get started you may need to restart your current shell. This would reload your PATH environment variable to include cjv's bin directory."
+
+[InitSourceHintRun]
+other = "To configure your current shell, run:"
 
 [InitInstallHint]
 other = "To install a specific toolchain:"
@@ -238,3 +280,9 @@ other = "Warning: Failed to install default toolchain '{{.Name}}': {{.Err}}. You
 
 [InitNoModifyPath]
 other = "PATH was not modified (--no-modify-path). Add {{.BinDir}} to your PATH manually."
+
+[Yes]
+other = "yes"
+
+[No]
+other = "no"

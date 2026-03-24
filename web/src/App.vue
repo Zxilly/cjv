@@ -13,7 +13,7 @@ const { state, info, methods, mirrorMethods } = usePlatform()
       <span class="cj-gradient" style="padding-bottom: 0.15em; display: inline-block">cjv</span>
     </h1>
     <p class="mt-6 text-lg md:text-2xl text-gray-500 dark:text-gray-400">
-      <a href="https://cangjie-lang.cn/" class="text-cj dark:text-cj-light hover:underline">仓颉</a>编程语言 SDK 工具链管理器
+      <a href="https://cangjie-lang.cn/" class="text-cj dark:text-cj-light hover:underline" style="font-family: 'Zhi Mang Xing', cursive; font-size: 1.4em; vertical-align: -0.1em; margin-right: 0.15em">仓颉</a>编程语言 SDK 工具链管理器
     </p>
 
     <!-- Install Card -->

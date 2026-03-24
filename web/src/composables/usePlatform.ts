@@ -24,8 +24,8 @@ function detectPlatform() {
   const platform = (navigator.platform || '').toLowerCase()
 
   if (/iphone|ipad|ipod/.test(ua)) return { os: 'ios', arch: 'arm64' }
+  if (/harmonyos|hmos|openharmony|arkweb|huaweibrowser/.test(ua)) return { os: 'harmonyos', arch: 'arm64' }
   if (/android/.test(ua)) return { os: 'android', arch: 'arm64' }
-  if (/harmonyos|hmos/.test(ua)) return { os: 'harmonyos', arch: 'arm64' }
 
   let os = 'unknown'
   if (ua.includes('win') || platform.includes('win')) os = 'windows'

@@ -12,6 +12,9 @@ importers:
         specifier: ^3.5.30
         version: 3.5.30(typescript@6.0.2)
     devDependencies:
+      '@chinese-fonts/zqzmxs':
+        specifier: ^3.0.0
+        version: 3.0.0
       '@fontsource-variable/jetbrains-mono':
         specifier: ^5.2.8
         version: 5.2.8
@@ -55,6 +58,9 @@ packages:
   '@babel/types@7.29.0':
     resolution: {integrity: sha512-LwdZHpScM4Qz8Xw2iKSzS+cfglZzJGvofQICy7W7v4caru4EaAmyUuO6BGrbyQ2mYV11W0U8j5mBhd14dd3B0A==}
     engines: {node: '>=6.9.0'}
+
+  '@chinese-fonts/zqzmxs@3.0.0':
+    resolution: {integrity: sha512-coJ1T2wbmj96OhWReD0JWPFSK9Xi3AZuyTToebZpvsIjStrs0fCL2Roi13j2O3l0PWJPfz5aF6PogwaICB6l/A==}
 
   '@emnapi/core@1.9.1':
     resolution: {integrity: sha512-mukuNALVsoix/w1BJwFzwXBN/dHeejQtuVzcDsfOEsdpCumXb/E9j8w11h5S54tT1xhifGfbbSm/ICrObRb3KA==}
@@ -555,6 +561,8 @@ snapshots:
     dependencies:
       '@babel/helper-string-parser': 7.27.1
       '@babel/helper-validator-identifier': 7.28.5
+
+  '@chinese-fonts/zqzmxs@3.0.0': {}
 
   '@emnapi/core@1.9.1':
     dependencies:

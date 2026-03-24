@@ -42,6 +42,19 @@ var initCmd = &cobra.Command{
 	RunE:  runInit,
 }
 
+const (
+	menuProceed   = "proceed"
+	menuCustomize = "customize"
+	menuCancel    = "cancel"
+)
+
+func yesNoStr(b bool) string {
+	if b {
+		return i18n.T("Yes", nil)
+	}
+	return i18n.T("No", nil)
+}
+
 func runInit(cmd *cobra.Command, _ []string) error {
 	selfmgmt.CheckSudoSafety()
 
@@ -55,9 +68,7 @@ func runInit(cmd *cobra.Command, _ []string) error {
 	}
 
 	managedPath := filepath.Join(binDir, proxy.CjvBinaryName())
-	alreadyInstalled := false
 	if _, err := os.Stat(managedPath); err == nil {
-		alreadyInstalled = true
 		fmt.Println(i18n.T("InitAlreadyInstalled", i18n.MsgData{"Path": managedPath}))
 
 		if !initYes {
@@ -74,44 +85,111 @@ func runInit(cmd *cobra.Command, _ []string) error {
 		}
 	}
 
+	// Effective options — initialized from CLI flags, may be modified by interactive menu
+	toolchain := initDefaultToolchain
+	modifyPath := !initNoModifyPath
+	useMirror := initMirror
+
 	fmt.Println()
 	color.Cyan(i18n.T("InitWelcome", nil))
 	fmt.Println()
-	fmt.Println(i18n.T("InitSummary", nil))
-	fmt.Println()
-	fmt.Println(i18n.T("InitCjvHome", i18n.MsgData{"Path": home}))
-	fmt.Println(i18n.T("InitBinDir", i18n.MsgData{"Path": binDir}))
-	if initDefaultToolchain != "none" {
-		fmt.Println(i18n.T("InitDefaultToolchain", i18n.MsgData{"Name": initDefaultToolchain}))
-	}
+	fmt.Println(i18n.T("InitDescription", nil))
 	fmt.Println()
 
-	if !initNoModifyPath {
-		if runtime.GOOS == "windows" {
-			fmt.Println(i18n.T("InitRegistryPath", nil))
-		} else {
-			fmt.Println(i18n.T("InitShellConfigs", nil))
-			posix, fish := env.ShellConfigPaths()
-			for _, rc := range posix {
-				fmt.Printf("  %s\n", rc)
-			}
-			if fish != "" {
-				fmt.Printf("  %s\n", fish)
-			}
-		}
+	fmt.Println(i18n.T("InitDataDir", nil))
+	fmt.Println()
+	fmt.Printf("    %s\n", home)
+	fmt.Println()
+	fmt.Println(i18n.T("InitDataDirEnvHint", nil))
+	fmt.Println()
+
+	fmt.Println(i18n.T("InitCommandsAvailable", nil))
+	fmt.Println()
+	fmt.Printf("    %s\n", binDir)
+	fmt.Println()
+
+	if !modifyPath {
+		fmt.Println(i18n.T("InitPathNeedManual", nil))
+	} else if runtime.GOOS == "windows" {
+		fmt.Println(i18n.T("InitRegistryPath", nil))
+	} else {
+		fmt.Println(i18n.T("InitShellConfigs", nil))
 		fmt.Println()
-	}
-
-	if !initYes && !alreadyInstalled {
-		confirm := true
-		if err := huh.NewConfirm().
-			Title(i18n.T("InitConfirm", nil)).
-			Value(&confirm).
-			Run(); err != nil {
-			return err
+		posix, fish := env.ShellConfigPaths()
+		for _, rc := range posix {
+			fmt.Printf("    %s\n", rc)
 		}
-		if !confirm {
-			return nil
+		if fish != "" {
+			fmt.Printf("    %s\n", fish)
+		}
+	}
+	fmt.Println()
+
+	fmt.Println(i18n.T("InitUninstallHint", nil))
+
+	if !initYes {
+		customized := false
+	menuLoop:
+		for {
+			fmt.Println()
+			fmt.Println(i18n.T("InitCurrentOptions", nil))
+			fmt.Println()
+			fmt.Printf("   %s %s\n", i18n.T("InitOptToolchain", nil), toolchain)
+			fmt.Printf("   %s %s\n", i18n.T("InitOptModifyPath", nil), yesNoStr(modifyPath))
+			fmt.Printf("   %s %s\n", i18n.T("InitOptMirror", nil), yesNoStr(useMirror))
+			fmt.Println()
+
+			proceedLabel := i18n.T("InitProceedStandard", nil)
+			if customized {
+				proceedLabel = i18n.T("InitProceedSelected", nil)
+			}
+
+			var choice string
+			if err := huh.NewSelect[string]().
+				Options(
+					huh.NewOption(proceedLabel, menuProceed),
+					huh.NewOption(i18n.T("InitCustomize", nil), menuCustomize),
+					huh.NewOption(i18n.T("InitCancelInstall", nil), menuCancel),
+				).
+				Value(&choice).
+				Run(); err != nil {
+				return err
+			}
+
+			switch choice {
+			case menuCancel:
+				return nil
+			case menuProceed:
+				break menuLoop
+			case menuCustomize:
+				customized = true
+
+				if err := huh.NewSelect[string]().
+					Title(i18n.T("InitToolchainQuestion", nil)).
+					Options(
+						huh.NewOption("lts", "lts"),
+						huh.NewOption("nightly", "nightly"),
+						huh.NewOption(i18n.T("InitToolchainNone", nil), "none"),
+					).
+					Value(&toolchain).
+					Run(); err != nil {
+					return err
+				}
+
+				if err := huh.NewConfirm().
+					Title(i18n.T("InitModifyPathQuestion", nil)).
+					Value(&modifyPath).
+					Run(); err != nil {
+					return err
+				}
+
+				if err := huh.NewConfirm().
+					Title(i18n.T("InitMirrorQuestion", nil)).
+					Value(&useMirror).
+					Run(); err != nil {
+					return err
+				}
+			}
 		}
 	}
 
@@ -129,14 +207,14 @@ func runInit(cmd *cobra.Command, _ []string) error {
 	if err := proxy.CreateAllProxyLinks(); err != nil {
 		return err
 	}
-	if !initNoModifyPath {
+	if modifyPath {
 		ensurePathConfiguredFn()
 	}
 	if err := env.WriteEnvScripts(home, binDir); err != nil {
 		slog.Warn("failed to write env scripts", "error", err)
 	}
 
-	if initMirror {
+	if useMirror {
 		sf, settings, err := clisettings.LoadSettings()
 		if err != nil {
 			return err
@@ -147,18 +225,17 @@ func runInit(cmd *cobra.Command, _ []string) error {
 		}
 	}
 
-	if initDefaultToolchain != "none" {
+	if toolchain != "none" {
 		// Prevent install from re-configuring PATH — init already did it
 		if err := os.Setenv(config.EnvNoPathSetup, "1"); err != nil {
 			return err
 		}
 		defer os.Unsetenv(config.EnvNoPathSetup) //nolint:errcheck // best-effort cleanup
-		if err := InstallToolchainWithOptions(ctx, initDefaultToolchain, false); err != nil {
+		if err := InstallToolchainWithOptions(ctx, toolchain, false); err != nil {
 			fmt.Fprintf(os.Stderr, "\n%s\n", i18n.T("InitToolchainFailed", i18n.MsgData{
-				"Name": initDefaultToolchain,
+				"Name": toolchain,
 				"Err":  err.Error(),
 			}))
-			// Don't return error — cjv itself is installed successfully
 		}
 	}
 
@@ -166,22 +243,27 @@ func runInit(cmd *cobra.Command, _ []string) error {
 	color.Green(i18n.T("InitComplete", nil))
 	fmt.Println()
 	fmt.Println(i18n.T("InitSourceHint", nil))
+	fmt.Println()
+	fmt.Println(i18n.T("InitSourceHintRun", nil))
+	fmt.Println()
 	if runtime.GOOS != "windows" {
 		envPath := filepath.Join(home, "env")
-		fmt.Printf("\n  source %s\n\n", envPath)
+		fmt.Printf("    source \"%s\"\n", envPath)
 	} else {
 		ps1Path := filepath.Join(home, "env.ps1")
 		batPath := filepath.Join(home, "env.bat")
-		fmt.Printf("\n  PowerShell: . \"%s\"\n", ps1Path)
-		fmt.Printf("  CMD:        \"%s\"\n\n", batPath)
+		fmt.Printf("    PowerShell: . \"%s\"\n", ps1Path)
+		fmt.Printf("    CMD:        \"%s\"\n", batPath)
 	}
-	if initDefaultToolchain == "none" {
+	fmt.Println()
+
+	if toolchain == "none" {
 		fmt.Println(i18n.T("InitInstallHint", nil))
 		fmt.Println()
-		fmt.Println("  cjv install <toolchain>")
+		fmt.Println("    cjv install <toolchain>")
 		fmt.Println()
 	}
-	if initNoModifyPath {
+	if !modifyPath {
 		fmt.Println(i18n.T("InitNoModifyPath", i18n.MsgData{"BinDir": binDir}))
 	}
 

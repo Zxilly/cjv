@@ -11,6 +11,7 @@
     "vue": "^3.5.30"
   },
   "devDependencies": {
+    "@chinese-fonts/zqzmxs": "^3.0.0",
     "@fontsource-variable/jetbrains-mono": "^5.2.8",
     "@fontsource-variable/noto-sans-sc": "^5.2.10",
     "@fontsource/patua-one": "^5.2.8",
