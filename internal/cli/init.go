@@ -165,13 +165,15 @@ func runInit(cmd *cobra.Command, _ []string) error {
 	fmt.Println()
 	color.Green(i18n.T("InitComplete", nil))
 	fmt.Println()
+	fmt.Println(i18n.T("InitSourceHint", nil))
 	if runtime.GOOS != "windows" {
-		fmt.Println(i18n.T("InitSourceHint", nil))
 		envPath := filepath.Join(home, "env")
 		fmt.Printf("\n  source %s\n\n", envPath)
 	} else {
-		fmt.Println(i18n.T("InitSourceHint", nil))
-		fmt.Println()
+		ps1Path := filepath.Join(home, "env.ps1")
+		batPath := filepath.Join(home, "env.bat")
+		fmt.Printf("\n  PowerShell: . \"%s\"\n", ps1Path)
+		fmt.Printf("  CMD:        \"%s\"\n\n", batPath)
 	}
 	if initDefaultToolchain == "none" {
 		fmt.Println(i18n.T("InitInstallHint", nil))

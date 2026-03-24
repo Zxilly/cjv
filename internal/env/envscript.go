@@ -3,6 +3,7 @@ package env
 import (
 	"fmt"
 	"path/filepath"
+	"runtime"
 
 	"github.com/Zxilly/cjv/internal/utils"
 )
@@ -33,11 +34,27 @@ if (-not ($env:PATH -split [IO.Path]::PathSeparator | Where-Object { $_ -eq $cjv
 	return utils.WriteFileAtomic(path, []byte(content), 0o644)
 }
 
-// WriteEnvScripts writes both env and env.ps1 scripts to the given directory.
+// WriteBatEnvScript writes a CMD batch env script that adds binDir to PATH.
+func WriteBatEnvScript(path, binDir string) error {
+	content := fmt.Sprintf(`@echo off
+rem cjv shell setup (managed by cjv, do not edit)
+echo %%PATH%% | find /I "%s" >nul
+if errorlevel 1 (
+    set "PATH=%s;%%PATH%%"
+)
+`, binDir, binDir)
+	return utils.WriteFileAtomic(path, []byte(content), 0o644)
+}
+
+// WriteEnvScripts writes platform-appropriate env scripts to the given directory.
+// On Windows it generates env.ps1 and env.bat; on other platforms it generates env (POSIX).
 // The caller must ensure homeDir exists (e.g. via config.EnsureDirs).
 func WriteEnvScripts(homeDir, binDir string) error {
-	if err := WritePosixEnvScript(filepath.Join(homeDir, "env"), binDir); err != nil {
-		return err
+	if runtime.GOOS == "windows" {
+		if err := WritePowerShellEnvScript(filepath.Join(homeDir, "env.ps1"), binDir); err != nil {
+			return err
+		}
+		return WriteBatEnvScript(filepath.Join(homeDir, "env.bat"), binDir)
 	}
-	return WritePowerShellEnvScript(filepath.Join(homeDir, "env.ps1"), binDir)
+	return WritePosixEnvScript(filepath.Join(homeDir, "env"), binDir)
 }
