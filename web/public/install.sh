@@ -17,7 +17,7 @@ main() {
     detect_arch
 
     if [ "$PLATFORM" = "darwin" ] && [ "$ARCH" = "amd64" ]; then
-        err "macOS x86_64 is not supported; Cangjie only supports macOS ARM64 (Apple Silicon)"
+        warn "macOS x86_64 has limited support; some LTS and STS releases may not include prebuilt SDK for macOS x86_64."
     fi
 
     download_and_install "$@"
@@ -65,6 +65,10 @@ download_and_install() {
 
 say() {
     printf "cjv-install: %s\n" "$1"
+}
+
+warn() {
+    say "warning: $1" >&2
 }
 
 err() {
