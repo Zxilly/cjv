@@ -24,7 +24,7 @@ builds:
       - -X main.commit={{.Commit}}
       - -X main.date={{.Date}}
       - -X main.updateURL=https://github.com/Zxilly/cjv/releases
-      - -X github.com/Zxilly/cjv/internal/config.DefaultManifestURL=https://raw.gitcode.com/Zxilly/setup-cangjie/raw/master/sdk-versions.json
+      - -X github.com/Zxilly/cjv/internal/config.DefaultManifestURL=https://raw.gitcode.com/Zxilly/cangjie-version-manifest/raw/master/versions.json
     goos: [linux, darwin, windows]
     goarch: [amd64, arm64]
     ignore:
