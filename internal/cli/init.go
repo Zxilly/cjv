@@ -168,6 +168,7 @@ func runInit(cmd *cobra.Command, _ []string) error {
 					Title(i18n.T("InitToolchainQuestion", nil)).
 					Options(
 						huh.NewOption("lts", "lts"),
+						huh.NewOption("sts", "sts"),
 						huh.NewOption("nightly", "nightly"),
 						huh.NewOption(i18n.T("InitToolchainNone", nil), "none"),
 					).
