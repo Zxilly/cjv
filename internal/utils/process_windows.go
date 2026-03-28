@@ -16,7 +16,7 @@ func ProcessName(pid int) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer windows.CloseHandle(h)
+	defer func() { _ = windows.CloseHandle(h) }()
 
 	var pe windows.ProcessEntry32
 	pe.Size = uint32(unsafe.Sizeof(pe))

@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/Zxilly/cjv/internal/config"
@@ -12,6 +13,24 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+// findEnvValue searches for a key in a []string{"KEY=val"} slice (case-insensitive on Windows).
+func findEnvValue(envList []string, key string) (string, bool) {
+	for _, e := range envList {
+		k, v, ok := strings.Cut(e, "=")
+		if !ok {
+			continue
+		}
+		if runtime.GOOS == "windows" {
+			if strings.EqualFold(k, key) {
+				return v, true
+			}
+		} else if k == key {
+			return v, true
+		}
+	}
+	return "", false
+}
 
 func setupFakeToolchain(t *testing.T, home, name string) string {
 	t.Helper()
@@ -44,15 +63,10 @@ func TestResolveRuntimeEnv_DefaultToolchain(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotEmpty(t, result)
 
-	found := false
-	for _, e := range result {
-		if len(e) > 5 && e[:5] == "PATH=" || (runtime.GOOS == "windows" && len(e) > 5 && (e[:5] == "Path=" || e[:5] == "path=")) {
-			assert.Contains(t, e, "lts-1.0.5")
-			found = true
-			break
-		}
-	}
-	assert.True(t, found, "PATH should contain toolchain directory")
+	// BuildProxyEnv always sets CJV_TOOLCHAIN to the resolved toolchain name
+	val, ok := findEnvValue(result, "CJV_TOOLCHAIN")
+	assert.True(t, ok, "CJV_TOOLCHAIN should be set")
+	assert.Contains(t, val, "lts-1.0.5")
 }
 
 func TestResolveRuntimeEnv_WithOverride(t *testing.T) {
@@ -71,15 +85,10 @@ func TestResolveRuntimeEnv_WithOverride(t *testing.T) {
 	result, err := env.ResolveRuntimeEnv(context.Background(), "sts-1.0.3")
 	require.NoError(t, err)
 
-	found := false
-	for _, e := range result {
-		if len(e) > 5 && e[:5] == "PATH=" || (runtime.GOOS == "windows" && len(e) > 5 && (e[:5] == "Path=" || e[:5] == "path=")) {
-			assert.Contains(t, e, "sts-1.0.3")
-			found = true
-			break
-		}
-	}
-	assert.True(t, found, "PATH should contain overridden toolchain directory")
+	// Should use sts-1.0.3, not the default lts-1.0.5
+	val, ok := findEnvValue(result, "CJV_TOOLCHAIN")
+	assert.True(t, ok, "CJV_TOOLCHAIN should be set")
+	assert.Contains(t, val, "sts-1.0.3")
 }
 
 func TestResolveRuntimeEnv_NoToolchain(t *testing.T) {

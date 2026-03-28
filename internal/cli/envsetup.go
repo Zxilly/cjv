@@ -78,7 +78,7 @@ func envsetupRunWithShell(cmd *cobra.Command, args []string, shellFlag string) e
 	}
 
 	output := env.FormatEnvDiff(diff, shellType)
-	fmt.Fprint(cmd.OutOrStdout(), output)
+	_, _ = fmt.Fprint(cmd.OutOrStdout(), output)
 	return nil
 }
 
