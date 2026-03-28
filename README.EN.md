@@ -47,6 +47,8 @@ cjv run sts cjc --version
 | `cjv show installed`                                | List installed toolchains                               |
 | `cjv show home`                                     | Show CJV_HOME path                                      |
 | `cjv run <toolchain> <command> [args...]`           | Run a command with a specific toolchain                 |
+| `cjv exec [+toolchain] <command> [args...]`         | Run a command with Cangjie runtime environment          |
+| `cjv envsetup [+toolchain] [--shell=TYPE]`          | Print shell commands to configure Cangjie runtime environment |
 | `cjv which <command>`                               | Show the path of an SDK tool for the active toolchain   |
 | `cjv check`                                         | Check for available updates without installing          |
 | `cjv override set <toolchain>`                      | Set a toolchain override for the current directory      |
@@ -76,6 +78,34 @@ cjv resolves the active toolchain in the following order (highest priority first
 When SDK tools (e.g., `cjc`, `cjpm`) are invoked directly, cjv transparently proxies the call to the appropriate toolchain. Proxy symlinks are created in the cjv bin directory during installation.
 
 If `auto_install` is enabled in settings and the resolved toolchain is not installed, cjv will automatically install it before proxying.
+
+## Runtime Environment
+
+Cangjie-compiled binaries dynamically link against runtime libraries (e.g., `libcangjie-runtime`) and require the correct library search paths to run. cjv provides two ways to configure the runtime environment:
+
+**One-shot execution**: Use `cjv exec` to run a command with the correct runtime environment without affecting the current shell:
+
+```bash
+cjv exec ./my_binary arg1 arg2
+
+# Specify a toolchain
+cjv exec +nightly ./my_binary
+```
+
+**Configure the current shell session**: Use `cjv envsetup` to output environment configuration scripts, then run compiled binaries directly:
+
+```bash
+# Bash/Zsh
+eval "$(cjv envsetup)"
+
+# Fish
+cjv envsetup | source
+
+# PowerShell
+cjv envsetup | Invoke-Expression
+```
+
+Both commands use the same toolchain resolution priority as proxy mode and support `+toolchain` syntax to specify a toolchain. `cjv envsetup` auto-detects the current shell type, or you can override it with `--shell=TYPE` (supported: `bash`, `fish`, `powershell`, `cmd`).
 
 ## Environment Variables
 

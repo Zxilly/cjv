@@ -47,6 +47,8 @@ cjv run sts cjc --version
 | `cjv show installed`                                | 列出已安装的工具链                 |
 | `cjv show home`                                     | 显示 CJV_HOME 路径                 |
 | `cjv run <toolchain> <command> [args...]`           | 使用指定工具链运行命令             |
+| `cjv exec [+toolchain] <command> [args...]`         | 使用仓颉运行时环境执行命令         |
+| `cjv envsetup [+toolchain] [--shell=TYPE]`          | 输出配置仓颉运行时环境的 shell 命令 |
 | `cjv which <command>`                               | 显示活跃工具链中 SDK 工具的路径    |
 | `cjv check`                                         | 检查可用更新（不安装）             |
 | `cjv override set <toolchain>`                      | 为当前目录设置工具链覆盖           |
@@ -76,6 +78,34 @@ cjv 按以下优先级顺序解析活跃工具链（从高到低）：
 当直接调用 SDK 工具（如 `cjc`、`cjpm`）时，cjv 会透明地将调用代理到相应的工具链。代理符号链接在安装时创建在 cjv 的 bin 目录中。
 
 如果设置中启用了 `auto_install` 且解析到的工具链未安装，cjv 会在代理前自动安装它。
+
+## 运行时环境
+
+仓颉编译出的二进制文件动态链接运行时库（如 `libcangjie-runtime`），需要正确的库搜索路径才能运行。cjv 提供两种方式来配置运行时环境：
+
+**一次性执行**：使用 `cjv exec` 在正确的运行时环境中执行命令，不影响当前 shell：
+
+```bash
+cjv exec ./my_binary arg1 arg2
+
+# 指定工具链
+cjv exec +nightly ./my_binary
+```
+
+**配置当前 shell 会话**：使用 `cjv envsetup` 输出环境变量配置脚本，之后可以直接运行编译产物：
+
+```bash
+# Bash/Zsh
+eval "$(cjv envsetup)"
+
+# Fish
+cjv envsetup | source
+
+# PowerShell
+cjv envsetup | Invoke-Expression
+```
+
+两个命令都使用与代理模式相同的工具链解析优先级，支持 `+toolchain` 语法指定工具链。`cjv envsetup` 会自动检测当前 shell 类型，也可通过 `--shell=TYPE` 手动指定（支持 `bash`、`fish`、`powershell`、`cmd`）。
 
 ## 环境变量
 
