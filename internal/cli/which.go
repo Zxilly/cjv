@@ -7,21 +7,25 @@ import (
 )
 
 var whichCmd = &cobra.Command{
-	Use:   "which <command>",
+	Use:   "which [command]",
 	Short: "Show the path of an SDK tool for the active toolchain",
-	Args:  cobra.ExactArgs(1),
+	Long:  "Show the path of an SDK tool for the active toolchain.\nIf no command is given, print the toolchain root directory.",
+	Args:  cobra.MaximumNArgs(1),
 	RunE:  runWhich,
 }
 
 func runWhich(cmd *cobra.Command, args []string) error {
-	toolName := args[0]
-
 	tcDir, _, _, err := toolchain.ResolveActiveToolchain()
 	if err != nil {
 		return err
 	}
 
-	toolPath, err := proxy.ResolveInstalledToolBinary(tcDir, toolName)
+	if len(args) == 0 {
+		cmd.Println(tcDir)
+		return nil
+	}
+
+	toolPath, err := proxy.ResolveInstalledToolBinary(tcDir, args[0])
 	if err != nil {
 		return err
 	}
