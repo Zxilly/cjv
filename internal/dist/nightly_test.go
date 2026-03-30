@@ -17,20 +17,25 @@ func TestNightlyDownloadURL(t *testing.T) {
 }
 
 func TestFetchLatestNightly(t *testing.T) {
-	releases := `[{"tag_name":"1.1.0-alpha.20260306010001"},{"tag_name":"1.1.0-alpha.20260305010001"}]`
+	const tag = "1.1.0-alpha.20260306010001"
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte(releases))
+		if r.URL.Path != "/" {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"tag_name":"` + tag + `"}`))
 	}))
 	defer server.Close()
 
 	latest, err := FetchLatestNightly(context.Background(), server.URL, "test-token")
 	require.NoError(t, err)
-	assert.Equal(t, "1.1.0-alpha.20260306010001", latest)
+	assert.Equal(t, tag, latest)
 }
 
-func TestFetchLatestNightlyEmpty(t *testing.T) {
+func TestFetchLatestNightlyEmptyTag(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("[]"))
+		w.Write([]byte(`{"tag_name":""}`))
 	}))
 	defer server.Close()
 
@@ -38,51 +43,14 @@ func TestFetchLatestNightlyEmpty(t *testing.T) {
 	assert.Error(t, err)
 }
 
-func TestFetchLatestNightlyUnsorted(t *testing.T) {
-	releases := `[{"tag_name":"1.1.0-alpha.20260301010001"},{"tag_name":"1.1.0-alpha.20260310010001"},{"tag_name":"1.1.0-alpha.20260305010001"}]`
+func TestFetchLatestNightlyInvalidJSON(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte(releases))
+		w.Write([]byte(`[]`))
 	}))
 	defer server.Close()
 
-	latest, err := FetchLatestNightly(context.Background(), server.URL, "test-token")
-	require.NoError(t, err)
-	assert.Equal(t, "1.1.0-alpha.20260310010001", latest)
+	_, err := FetchLatestNightly(context.Background(), server.URL, "test-token")
+	assert.Error(t, err)
 }
 
-func TestFetchLatestNightlyCrossVersion(t *testing.T) {
-	// When the version prefix changes (1.1.0 -> 1.2.0), lexicographic
-	// ordering would pick 1.2.0 even if its timestamp is older.
-	// Timestamp-based sorting must pick the newest timestamp regardless of version prefix.
-	releases := `[
-		{"tag_name":"1.2.0-alpha.20260301010001"},
-		{"tag_name":"1.1.0-alpha.20260315010001"},
-		{"tag_name":"1.1.0-alpha.20260310010001"}
-	]`
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte(releases))
-	}))
-	defer server.Close()
-
-	latest, err := FetchLatestNightly(context.Background(), server.URL, "test-token")
-	require.NoError(t, err)
-	assert.Equal(t, "1.1.0-alpha.20260315010001", latest)
-}
-
-func TestExtractNightlyTimestamp(t *testing.T) {
-	tests := []struct {
-		tag  string
-		want int64
-	}{
-		{"1.1.0-alpha.20260306010001", 20260306010001},
-		{"1.2.0-beta.20260315120000", 20260315120000},
-		{"no-timestamp", 0},
-		{"trailing-dot.", 0},
-		{"", 0},
-	}
-	for _, tt := range tests {
-		got := extractNightlyTimestamp(tt.tag)
-		assert.Equal(t, tt.want, got, "extractNightlyTimestamp(%q)", tt.tag)
-	}
-}
 

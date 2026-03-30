@@ -47,7 +47,7 @@ func testContext(t *testing.T) context.Context {
 func TestSmokeNightlyAPIReturnsJSON(t *testing.T) {
 	ctx := testContext(t)
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, dist.DefaultNightlyAPIURL+"?per_page=1", nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, dist.DefaultNightlyAPIURL, nil)
 	require.NoError(t, err)
 	if gitCodeAPIKey != "" {
 		req.Header.Set(dist.GitCodeTokenHeader, gitCodeAPIKey)

@@ -1,7 +1,6 @@
 package dist
 
 import (
-	"cmp"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -9,9 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"slices"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -25,8 +22,8 @@ const DefaultNightlyBaseURL = "https://gitcode.com/Cangjie/nightly_build/release
 // GitCodeTokenHeader is the HTTP header used for GitCode API authentication.
 const GitCodeTokenHeader = "PRIVATE-TOKEN"
 
-// DefaultNightlyAPIURL is the releases API endpoint for querying nightly versions.
-const DefaultNightlyAPIURL = "https://api.gitcode.com/api/v5/repos/Cangjie/nightly_build/releases"
+// DefaultNightlyAPIURL is the GitCode GET .../releases/latest endpoint for the nightly_build repo.
+const DefaultNightlyAPIURL = "https://api.gitcode.com/api/v5/repos/Cangjie/nightly_build/releases/latest"
 
 // MaxResponseSize limits HTTP response body reads to prevent memory exhaustion.
 const MaxResponseSize = 10 << 20 // 10 MB
@@ -92,29 +89,38 @@ func NightlyDownloadURL(baseURL, version, goos, goarch string) (string, error) {
 	return base.String(), nil
 }
 
+// gitCodeRelease matches the JSON object returned by GitCode GET .../releases/latest
+// (nightly_build responses include many assets; only tag_name is required for cjv).
 type gitCodeRelease struct {
-	TagName string `json:"tag_name"`
+	TagName         string                `json:"tag_name"`
+	TargetCommitish string                `json:"target_commitish"`
+	Prerelease      bool                  `json:"prerelease"`
+	Name            string                `json:"name"`
+	Body            string                `json:"body"`
+	Author          gitCodeReleaseAuthor  `json:"author"`
+	CreatedAt       string                `json:"created_at"`
+	Assets          []gitCodeReleaseAsset `json:"assets"`
 }
 
-// extractNightlyTimestamp returns the numeric timestamp from a nightly tag
-// name like "1.1.0-alpha.20260306010001". It extracts the substring after
-// the last "." and parses it as an integer. Returns 0 if the tag does not
-// contain a valid numeric timestamp suffix.
-func extractNightlyTimestamp(tag string) int64 {
-	idx := strings.LastIndex(tag, ".")
-	if idx < 0 || idx == len(tag)-1 {
-		return 0
-	}
-	ts, err := strconv.ParseInt(tag[idx+1:], 10, 64)
-	if err != nil {
-		return 0
-	}
-	return ts
+type gitCodeReleaseAuthor struct {
+	ID        string `json:"id"`
+	Login     string `json:"login"`
+	Name      string `json:"name"`
+	AvatarURL string `json:"avatar_url"`
+	HTMLURL   string `json:"html_url"`
+	Type      string `json:"type"`
+	URL       string `json:"url"`
 }
 
-// FetchLatestNightly queries the GitCode releases API and returns the
-// latest nightly version tag, sorted descending by the embedded timestamp.
-// apiURL should be the releases API base (e.g. DefaultNightlyAPIURL).
+type gitCodeReleaseAsset struct {
+	BrowserDownloadURL string `json:"browser_download_url"`
+	Name               string `json:"name"`
+	Type               string `json:"type"` // e.g. "source", "attach"
+}
+
+// FetchLatestNightly queries the GitCode releases/latest API and returns the
+// tag_name of the repository's latest release.
+// apiURL should be the full latest endpoint URL (e.g. DefaultNightlyAPIURL).
 // apiKey is the GitCode API access token; required for authentication.
 func FetchLatestNightly(ctx context.Context, apiURL, apiKey string) (string, error) {
 	if apiKey == "" {
@@ -124,9 +130,6 @@ func FetchLatestNightly(ctx context.Context, apiURL, apiKey string) (string, err
 	if err != nil {
 		return "", fmt.Errorf("invalid nightly API URL: %w", err)
 	}
-	q := u.Query()
-	q.Set("per_page", "50")
-	u.RawQuery = q.Encode()
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
 	if err != nil {
@@ -148,36 +151,13 @@ func FetchLatestNightly(ctx context.Context, apiURL, apiKey string) (string, err
 		return "", err
 	}
 
-	var releases []gitCodeRelease
-	if err := json.Unmarshal(body, &releases); err != nil {
-		return "", fmt.Errorf("failed to parse nightly version list: %w", err)
+	var release gitCodeRelease
+	if err := json.Unmarshal(body, &release); err != nil {
+		return "", fmt.Errorf("failed to parse nightly release: %w", err)
+	}
+	if release.TagName == "" {
+		return "", fmt.Errorf("nightly release has empty tag_name")
 	}
 
-	if len(releases) == 0 {
-		return "", fmt.Errorf("no nightly versions found")
-	}
-
-	// Pre-compute timestamps so MaxFunc doesn't re-parse on every comparison.
-	type tagged struct {
-		tag string
-		ts  int64
-	}
-	items := make([]tagged, len(releases))
-	for i, r := range releases {
-		items[i] = tagged{r.TagName, extractNightlyTimestamp(r.TagName)}
-	}
-	best := slices.MaxFunc(items, func(a, b tagged) int {
-		switch {
-		case a.ts != 0 && b.ts != 0:
-			return cmp.Compare(a.ts, b.ts)
-		case a.ts != 0:
-			return 1
-		case b.ts != 0:
-			return -1
-		default:
-			return cmp.Compare(a.tag, b.tag)
-		}
-	})
-
-	return best.tag, nil
+	return release.TagName, nil
 }
