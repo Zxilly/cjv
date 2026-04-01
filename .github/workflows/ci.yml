@@ -124,3 +124,144 @@ jobs:
           go-version: stable
       - name: Run integration tests
         run: go test -race -v -tags integration -count=1 ./tests/integration/
+
+  central-repo-bundle:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Set up Cangjie
+        uses: Zxilly/setup-cangjie@ff94aa01f985321ddfa5cd0973bb26b4c37e6010 # v2.1.1
+        with:
+          channel: sts
+          version: latest
+      - name: Resolve latest release
+        run: |
+          TAG=$(gh release view --repo Zxilly/cjv --json tagName -q '.tagName')
+          echo "CJV_TAG=$TAG" >> "$GITHUB_ENV"
+          echo "CJV_VERSION=${TAG#v}" >> "$GITHUB_ENV"
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - name: Build central repository bundle
+        run: |
+          set -euo pipefail
+          repo_root="$(pwd)"
+          packaging_dir="$repo_root/packaging/cjv"
+          version="$CJV_VERSION"
+          tag="$CJV_TAG"
+          tmp_root="$(mktemp -d)"
+          pkg_dir="$tmp_root/package"
+          archive_dir="$repo_root/artifacts/central-repo"
+          trap 'rm -rf "$tmp_root"' EXIT
+
+          mkdir -p "$pkg_dir" "$archive_dir"
+          cp -r "$packaging_dir/"* "$pkg_dir/"
+          sed -i "s/version = \"X.Y.Z\"/version = \"$version\"/" "$pkg_dir/cjpm.toml"
+          sed -i "s/CJV_VERSION=X.Y.Z/CJV_VERSION=$version/" "$pkg_dir/release.env"
+          sed -i "s/CJV_TAG=vX.Y.Z/CJV_TAG=$tag/" "$pkg_dir/release.env"
+
+          cd "$pkg_dir"
+          cjpm bundle
+
+          bundle_path="$pkg_dir/target/cjv-$version.cjp"
+          if [ ! -f "$bundle_path" ]; then
+            echo "::error::bundle output missing: $bundle_path"
+            exit 1
+          fi
+          if tar -tf "$bundle_path" | grep -qE '(^|/)(cjv(\.exe)?|.*\.(dll|dylib|exe|o|obj|so))$'; then
+            echo "::error::bundle unexpectedly contains a binary payload"
+            exit 1
+          fi
+          cp "$bundle_path" "$archive_dir/cjv-$version.cjp"
+      - name: Upload central repository bundle
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: central-repo-cjp
+          path: artifacts/central-repo/*.cjp
+          if-no-files-found: error
+
+  central-repo-install:
+    needs: central-repo-bundle
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest       # linux-amd64
+          - os: ubuntu-24.04-arm    # linux-arm64
+          - os: macos-latest        # darwin-arm64
+          - os: windows-latest      # windows-amd64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Set up Cangjie
+        uses: Zxilly/setup-cangjie@ff94aa01f985321ddfa5cd0973bb26b4c37e6010 # v2.1.1
+        with:
+          channel: sts
+          version: latest
+      - name: Download central repository bundle
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: central-repo-cjp
+          path: artifacts/central-repo
+      - name: Install central repository bundle in clean environment
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          bundle_path="$(ls ./artifacts/central-repo/*.cjp | head -n1)"
+          if [ -z "$bundle_path" ]; then
+            echo "::error::bundle artifact missing"
+            exit 1
+          fi
+
+          tmp_root="$(mktemp -d)"
+          extract_root="$tmp_root/extract"
+          fake_home="$tmp_root/home"
+          trap 'rm -rf "$tmp_root"' EXIT
+
+          mkdir -p "$extract_root" "$fake_home"
+          tar -xzf "$bundle_path" -C "$extract_root"
+
+          manifest="$(find "$extract_root" -name cjpm.toml -print -quit)"
+          if [ -z "$manifest" ]; then
+            echo "::error::failed to locate cjpm.toml under extracted artifact"
+            exit 1
+          fi
+
+          pkg_dir="$(dirname "$manifest")"
+          version="$(grep '^CJV_VERSION=' "$pkg_dir/release.env" | head -n1 | cut -d= -f2-)"
+          if [ -z "$version" ]; then
+            echo "::error::missing CJV_VERSION in release.env"
+            exit 1
+          fi
+
+          real_cjv_home="${CJV_HOME:-}"
+          if [ -z "$real_cjv_home" ] && [ -n "${HOME:-}" ]; then
+            real_cjv_home="$HOME/.cjv"
+          fi
+
+          export HOME="$fake_home"
+          export USERPROFILE="$fake_home"
+          if [ -n "$real_cjv_home" ]; then
+            export CJV_HOME="$real_cjv_home"
+          fi
+
+          cd "$pkg_dir"
+          cjpm install --path "$pkg_dir"
+
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            installed="$fake_home/.cjpm/bin/cjv.exe"
+          else
+            installed="$fake_home/.cjpm/bin/cjv"
+          fi
+
+          if [ ! -f "$installed" ]; then
+            echo "::error::installed binary missing: $installed"
+            exit 1
+          fi
+
+          version_output="$("$installed" --version)"
+          echo "Installed version: $version_output"
+          if ! echo "$version_output" | grep -qF "$version"; then
+            echo "::error::installed version mismatch: expected $version, got $version_output"
+            exit 1
+          fi
