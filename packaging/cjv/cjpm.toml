@@ -1,0 +1,23 @@
+[package]
+cjc-version = "1.0.0"
+name = "cjv"
+description = "Install the cjv binary from GitHub Releases through cjpm."
+version = "X.Y.Z"
+output-type = "executable"
+repository = "https://github.com/Zxilly/cjv"
+homepage = "https://github.com/Zxilly/cjv"
+documentation = "https://github.com/Zxilly/cjv#readme"
+license = ["Apache-2.0"]
+tag = ["cangjie", "sdk", "toolchain", "version-manager"]
+include = [
+  "build.cj",
+  "release.env",
+  "scripts",
+  "src",
+  "README.md",
+  "README_zh.md",
+]
+exclude = [
+  "build-script-cache",
+  "target",
+]

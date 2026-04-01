@@ -10,12 +10,18 @@ jobs:
   release:
     runs-on: ubuntu-latest
     steps:
+      - name: Ensure stable tag
+        run: |
+          if ! [[ "${GITHUB_REF_NAME}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Only stable tags are published to the Cangjie central repository"
+            exit 1
+          fi
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           fetch-depth: 0
       - name: Set up Go
-        uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
         with:
           go-version: stable
       - name: Run GoReleaser
@@ -24,3 +30,40 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Set up Cangjie
+        uses: Zxilly/setup-cangjie@ff94aa01f985321ddfa5cd0973bb26b4c37e6010 # v2.1.1
+        with:
+          channel: sts
+          version: latest
+          repo-token: ${{ secrets.CANGJIE_REPO_TOKEN }}
+      - name: Prepare central repository package
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          PACKAGE_DIR="$RUNNER_TEMP/packaging-cjv"
+          mkdir -p "$PACKAGE_DIR"
+          cp -R packaging/cjv/. "$PACKAGE_DIR/"
+          sed -i "s/version = \"X.Y.Z\"/version = \"${VERSION}\"/" "$PACKAGE_DIR/cjpm.toml"
+          cat > "$PACKAGE_DIR/release.env" <<EOF
+CJV_VERSION=${VERSION}
+CJV_TAG=${GITHUB_REF_NAME}
+CJV_REPOSITORY=Zxilly/cjv
+CJV_RELEASE_BASE_URL=https://github.com/Zxilly/cjv/releases/download
+EOF
+          echo "PACKAGE_DIR=$PACKAGE_DIR" >> "$GITHUB_ENV"
+      - name: Bundle central repository package
+        working-directory: ${{ env.PACKAGE_DIR }}
+        run: |
+          cjpm bundle
+      - name: Verify bundle contains source only
+        working-directory: ${{ env.PACKAGE_DIR }}
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          tar -tzf "target/cjv-${VERSION}.cjp" > bundle-contents.txt
+          if grep -E '(^|/)(cjv(\.exe)?|.*\.(dll|dylib|exe|o|obj|so))$' bundle-contents.txt; then
+            echo "bundle unexpectedly contains a binary payload"
+            exit 1
+          fi
+      - name: Publish central repository package
+        working-directory: ${{ env.PACKAGE_DIR }}
+        run: |
+          cjpm publish
