@@ -2,7 +2,7 @@
 cjc-version = "1.0.0"
 name = "cjv"
 description = "Install the cjv binary from GitHub Releases through cjpm."
-version = "X.Y.Z"
+version = "0.1.8"
 output-type = "executable"
 repository = "https://github.com/Zxilly/cjv"
 homepage = "https://github.com/Zxilly/cjv"

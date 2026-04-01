@@ -20,7 +20,7 @@ jobs:
       - name: Build all packages
         run: go build ./...
       - name: Run tests
-        run: bash ci/test.sh
+        run: go test -race -count=1 -timeout 300s ./...
       - name: Run go vet
         run: go vet ./...
 
@@ -130,25 +130,18 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Set up uv
+        uses: astral-sh/setup-uv@cec208311dfd045dd5311c1add060b2062131d57 # v8.0.0
       - name: Set up Cangjie
         uses: Zxilly/setup-cangjie@ff94aa01f985321ddfa5cd0973bb26b4c37e6010 # v2.1.1
         with:
           channel: sts
           version: latest
-      - name: Resolve latest release
-        run: |
-          TAG=$(gh release view --repo Zxilly/cjv --json tagName -q '.tagName')
-          echo "CJV_TAG=$TAG" >> "$GITHUB_ENV"
-          echo "CJV_VERSION=${TAG#v}" >> "$GITHUB_ENV"
-        env:
-          GH_TOKEN: ${{ github.token }}
       - name: Build central repository bundle
         run: |
           set -euo pipefail
           repo_root="$(pwd)"
           packaging_dir="$repo_root/packaging/cjv"
-          version="$CJV_VERSION"
-          tag="$CJV_TAG"
           tmp_root="$(mktemp -d)"
           pkg_dir="$tmp_root/package"
           archive_dir="$repo_root/artifacts/central-repo"
@@ -156,9 +149,9 @@ jobs:
 
           mkdir -p "$pkg_dir" "$archive_dir"
           cp -r "$packaging_dir/"* "$pkg_dir/"
-          sed -i "s/version = \"X.Y.Z\"/version = \"$version\"/" "$pkg_dir/cjpm.toml"
-          sed -i "s/CJV_VERSION=X.Y.Z/CJV_VERSION=$version/" "$pkg_dir/release.env"
-          sed -i "s/CJV_TAG=vX.Y.Z/CJV_TAG=$tag/" "$pkg_dir/release.env"
+          uv run "$repo_root/scripts/update_release.py" --dir "$pkg_dir"
+
+          version="$(grep '^CJV_VERSION=' "$pkg_dir/release.env" | cut -d= -f2-)"
 
           cd "$pkg_dir"
           cjpm bundle
@@ -173,6 +166,8 @@ jobs:
             exit 1
           fi
           cp "$bundle_path" "$archive_dir/cjv-$version.cjp"
+        env:
+          GH_TOKEN: ${{ github.token }}
       - name: Upload central repository bundle
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
