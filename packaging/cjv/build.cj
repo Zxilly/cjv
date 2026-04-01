@@ -55,7 +55,8 @@ func stagePreBuild(): Int64 {
 }
 
 func stagePostBuild(): Int64 {
-    return runInstaller("build")
+    logHook("post-build")
+    return 0
 }
 
 func stagePreInstall(): Int64 {

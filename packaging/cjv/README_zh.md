@@ -2,7 +2,7 @@
 
 该模块用于把 `cjv` 作为源码包发布到仓颉中心仓。
 
-执行 `cjpm install --path <module>` 或 `cjpm install cjv-X.Y.Z` 时，`cjpm` 会先编译一个占位可执行文件，然后由构建脚本在 `post-build` / `post-install` 阶段从 GitHub Releases 下载对应平台的 `cjv` 二进制并替换占位产物。
+执行 `cjpm install --path <module>` 或 `cjpm install cjv-X.Y.Z` 时，`cjpm` 会先编译占位可执行文件，随后在 `post-install` 阶段由构建脚本从 GitHub Releases 下载对应平台的 `cjv` 二进制并安装到 `cjpm` 默认二进制目录。仅执行 `cjpm build` 不会下载真实二进制。
 
 说明：
 

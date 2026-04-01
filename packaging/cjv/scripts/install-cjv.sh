@@ -58,9 +58,6 @@ case "$OS_NAME/$ARCH_NAME" in
 esac
 
 case "$MODE" in
-  build)
-    DEST="$MODULE_DIR/target/release/bin/main"
-    ;;
   install)
     HOME_DIR="${HOME:-}"
     if [ -z "$HOME_DIR" ]; then
@@ -70,7 +67,7 @@ case "$MODE" in
     DEST="$HOME_DIR/.cjpm/bin/cjv"
     ;;
   *)
-    echo "unsupported mode: $MODE" >&2
+    echo "unsupported mode: $MODE (only install is supported)" >&2
     exit 1
     ;;
 esac

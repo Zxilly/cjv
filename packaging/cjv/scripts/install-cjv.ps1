@@ -71,9 +71,6 @@ switch ($arch) {
 }
 
 switch ($Mode) {
-    "build" {
-        $destination = Join-Path $moduleDir "target\release\bin\main.exe"
-    }
     "install" {
         if ([string]::IsNullOrWhiteSpace($env:USERPROFILE)) {
             throw "USERPROFILE is not set; cannot resolve install destination"
@@ -81,7 +78,7 @@ switch ($Mode) {
         $destination = Join-Path $env:USERPROFILE ".cjpm\bin\cjv.exe"
     }
     default {
-        throw "unsupported mode: $Mode"
+        throw "unsupported mode: $Mode (only install is supported)"
     }
 }
 
