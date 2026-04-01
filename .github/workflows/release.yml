@@ -43,12 +43,12 @@ jobs:
           mkdir -p "$PACKAGE_DIR"
           cp -R packaging/cjv/. "$PACKAGE_DIR/"
           sed -i "s/version = \"X.Y.Z\"/version = \"${VERSION}\"/" "$PACKAGE_DIR/cjpm.toml"
-          cat > "$PACKAGE_DIR/release.env" <<EOF
-CJV_VERSION=${VERSION}
-CJV_TAG=${GITHUB_REF_NAME}
-CJV_REPOSITORY=Zxilly/cjv
-CJV_RELEASE_BASE_URL=https://github.com/Zxilly/cjv/releases/download
-EOF
+          printf '%s\n' \
+            "CJV_VERSION=${VERSION}" \
+            "CJV_TAG=${GITHUB_REF_NAME}" \
+            "CJV_REPOSITORY=Zxilly/cjv" \
+            "CJV_RELEASE_BASE_URL=https://github.com/Zxilly/cjv/releases/download" \
+            > "$PACKAGE_DIR/release.env"
           echo "PACKAGE_DIR=$PACKAGE_DIR" >> "$GITHUB_ENV"
       - name: Bundle central repository package
         working-directory: ${{ env.PACKAGE_DIR }}
