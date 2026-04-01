@@ -65,7 +65,7 @@ jobs:
           $packagingDir = Join-Path $repoRoot "packaging/cjv"
           $version = $env:CJV_VERSION
           $tag = $env:CJV_TAG
-          $tmpRoot = Join-Path $env:TEMP ("cjv-central-bundle-" + [Guid]::NewGuid().ToString("N"))
+          $tmpRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("cjv-central-bundle-" + [Guid]::NewGuid().ToString("N"))
           $pkgDir = Join-Path $tmpRoot "package"
           $archiveDir = Join-Path $repoRoot "artifacts/central-repo"
           try {
@@ -122,7 +122,7 @@ jobs:
           $ErrorActionPreference = "Stop"
           $bundlePath = Get-ChildItem ./artifacts/central-repo/*.cjp | Select-Object -First 1 -ExpandProperty FullName
           if (-not $bundlePath) { throw "bundle artifact missing" }
-          $tmpRoot = Join-Path $env:TEMP ("cjv-central-smoke-" + [Guid]::NewGuid().ToString("N"))
+          $tmpRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("cjv-central-smoke-" + [Guid]::NewGuid().ToString("N"))
           $extractRoot = Join-Path $tmpRoot "extract"
           $fakeHome = Join-Path $tmpRoot "home"
           try {
