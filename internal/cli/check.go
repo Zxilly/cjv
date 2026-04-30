@@ -67,7 +67,11 @@ func runCheck(cmd *cobra.Command, args []string) error {
 				fmt.Printf("  %s: %s\n", name, nightlyErr)
 				continue
 			}
-			latestName := toolchain.ToolchainName{Channel: toolchain.Nightly, Version: latestNightly}.String()
+			latestName := toolchain.ToolchainName{
+				Channel:     toolchain.Nightly,
+				Version:     latestNightly,
+				PlatformKey: parsed.PlatformKey,
+			}.String()
 			if latestName != name {
 				color.Yellow("  %s → %s", name, latestName)
 				hasUpdates = true
@@ -90,15 +94,20 @@ func runCheck(cmd *cobra.Command, args []string) error {
 		}
 
 		latestName := toolchain.ToolchainName{Channel: parsed.Channel, Version: latest}.String()
+		infoPlatformKey := platformKey
+		if parsed.PlatformKey != "" {
+			latestName = toolchain.ToolchainName{Channel: parsed.Channel, Version: latest, PlatformKey: parsed.PlatformKey}.String()
+			infoPlatformKey = parsed.PlatformKey
+		}
 		if latestName != name {
-			_, err = manifest.GetDownloadInfo(parsed.Channel, latest, platformKey)
+			_, err = manifest.GetDownloadInfo(parsed.Channel, latest, infoPlatformKey)
 			if err != nil {
 				var vnaErr *cjverr.VersionNotAvailableError
 				if errors.As(err, &vnaErr) {
 					fmt.Printf("  %s: %s\n", name, i18n.T("UpdateAvailableButNotForPlatform", i18n.MsgData{
 						"Current":  name,
 						"Latest":   latestName,
-						"Platform": platformKey,
+						"Platform": infoPlatformKey,
 					}))
 				}
 				continue

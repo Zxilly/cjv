@@ -62,6 +62,24 @@ func TestResolveActiveToolchain_EnvVarOverridesDefault(t *testing.T) {
 	assert.Equal(t, config.SourceEnv, source)
 }
 
+func TestResolveActiveToolchain_RejectsTargetVariant(t *testing.T) {
+	home := t.TempDir()
+	cwd := t.TempDir()
+	t.Setenv("CJV_HOME", home)
+	t.Chdir(cwd)
+
+	name := "sts-2.0.0-win32-x64-ohos"
+	require.NoError(t, os.MkdirAll(filepath.Join(home, "toolchains", name), 0o755))
+	settings := config.DefaultSettings()
+	settings.DefaultToolchain = name
+	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, "settings.toml")))
+	t.Setenv("CJV_TOOLCHAIN", name)
+
+	_, _, _, err := ResolveActiveToolchain()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "target variant")
+}
+
 func TestResolveActiveToolchain_NoConfig(t *testing.T) {
 	home := t.TempDir()
 	cwd := t.TempDir()

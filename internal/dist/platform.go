@@ -1,34 +1,31 @@
 package dist
 
-import (
-	"fmt"
-	"runtime"
-	"strings"
-
-	"github.com/Zxilly/cjv/internal/cjverr"
-)
+import sdktarget "github.com/Zxilly/cjv/internal/target"
 
 type platformMapping struct {
-	JSONKey      string // platform key used in sdk-versions.json
+	JSONKey     string // platform key used in sdk-versions.json
 	NightlyOS   string // OS segment in nightly filenames
 	NightlyArch string // arch segment in nightly filenames
 }
 
-var platformMap = map[string]platformMapping{
-	"windows-amd64": {JSONKey: "win32-x64", NightlyOS: "windows", NightlyArch: "x64"},
-	"darwin-arm64":  {JSONKey: "darwin-arm64", NightlyOS: "mac", NightlyArch: "aarch64"},
-	"darwin-amd64":  {JSONKey: "darwin-x64", NightlyOS: "mac", NightlyArch: "x64"}, // not all channels provide darwin-x64 builds
-	"linux-amd64":   {JSONKey: "linux-x64", NightlyOS: "linux", NightlyArch: "x64"},
-	"linux-arm64":   {JSONKey: "linux-arm64", NightlyOS: "linux", NightlyArch: "aarch64"},
+func lookup(goos, goarch string) (platformMapping, error) {
+	hostKey, err := sdktarget.HostKey(goos, goarch)
+	if err != nil {
+		return platformMapping{}, err
+	}
+	return lookupPlatformKey(hostKey)
 }
 
-func lookup(goos, goarch string) (platformMapping, error) {
-	key := goos + "-" + goarch
-	m, ok := platformMap[key]
-	if !ok {
-		return platformMapping{}, &cjverr.UnsupportedPlatformError{OS: goos, Arch: goarch}
+func lookupPlatformKey(platformKey string) (platformMapping, error) {
+	parts, err := sdktarget.ParseToolchainKey(platformKey)
+	if err != nil {
+		return platformMapping{}, err
 	}
-	return m, nil
+	return platformMapping{
+		JSONKey:     platformKey,
+		NightlyOS:   parts.NightlyOS,
+		NightlyArch: parts.NightlyArch,
+	}, nil
 }
 
 func PlatformKey(goos, goarch string) (string, error) {
@@ -42,14 +39,15 @@ func PlatformKey(goos, goarch string) (string, error) {
 // CurrentPlatformKey returns the platform key. If defaultHost is non-empty,
 // it is used directly (format: "goos-goarch"); otherwise runtime values are used.
 func CurrentPlatformKey(defaultHost string) (string, error) {
-	if defaultHost != "" {
-		parts := strings.SplitN(defaultHost, "-", 2)
-		if len(parts) != 2 {
-			return "", fmt.Errorf("invalid default_host format: %q (expected goos-goarch)", defaultHost)
-		}
-		return PlatformKey(parts[0], parts[1])
+	return sdktarget.CurrentHostKey(defaultHost)
+}
+
+func CurrentPlatformKeyWithTarget(defaultHost, target string) (string, error) {
+	hostKey, err := CurrentPlatformKey(defaultHost)
+	if err != nil {
+		return "", err
 	}
-	return PlatformKey(runtime.GOOS, runtime.GOARCH)
+	return sdktarget.ToolchainKey(hostKey, target)
 }
 
 func NightlyFilename(goos, goarch, version string) (string, error) {
@@ -59,6 +57,33 @@ func NightlyFilename(goos, goarch, version string) (string, error) {
 	}
 	ext := ArchiveExt(goos)
 	return "cangjie-sdk-" + m.NightlyOS + "-" + m.NightlyArch + "-" + version + ext, nil
+}
+
+func NightlyFilenameForPlatform(platformKey, version string) (string, error) {
+	m, err := lookupPlatformKey(platformKey)
+	if err != nil {
+		return "", err
+	}
+	parts, err := sdktarget.ParseToolchainKey(platformKey)
+	if err != nil {
+		return "", err
+	}
+	targetPart := ""
+	if parts.Target != "" {
+		targetPart = "-" + parts.Target
+	}
+	ext := ArchiveExt(nightlyGOOS(m.NightlyOS))
+	return "cangjie-sdk-" + m.NightlyOS + "-" + m.NightlyArch + targetPart + "-" + version + ext, nil
+}
+
+func nightlyGOOS(nightlyOS string) string {
+	if nightlyOS == "windows" {
+		return "windows"
+	}
+	if nightlyOS == "mac" {
+		return "darwin"
+	}
+	return nightlyOS
 }
 
 func ArchiveExt(goos string) string {

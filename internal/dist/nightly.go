@@ -2,6 +2,7 @@ package dist
 
 import (
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -9,6 +10,7 @@ import (
 	"net/url"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -81,12 +83,57 @@ func NightlyDownloadURL(baseURL, version, goos, goarch string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	return nightlyDownloadURL(baseURL, version, filename)
+}
+
+func NightlyDownloadURLForPlatform(baseURL, version, platformKey string) (string, error) {
+	filename, err := NightlyFilenameForPlatform(platformKey, version)
+	if err != nil {
+		return "", err
+	}
+	return nightlyDownloadURL(baseURL, version, filename)
+}
+
+func nightlyDownloadURL(baseURL, version, filename string) (string, error) {
 	base, err := url.Parse(baseURL)
 	if err != nil {
 		return "", fmt.Errorf("invalid nightly base URL: %w", err)
 	}
 	base = base.JoinPath(version, filename)
 	return base.String(), nil
+}
+
+func parseSHA256(content string) string {
+	digest := strings.TrimSpace(content)
+	if len(digest) != 64 {
+		return ""
+	}
+	if _, err := hex.DecodeString(digest); err != nil {
+		return ""
+	}
+	return strings.ToLower(digest)
+}
+
+func FetchNightlySHA256(ctx context.Context, assetURL string) string {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, assetURL+".sha256", nil)
+	if err != nil {
+		return ""
+	}
+	resp, err := HTTPClient().Do(req)
+	if err != nil {
+		return ""
+	}
+	defer resp.Body.Close() //nolint:errcheck // best-effort cleanup
+
+	if resp.StatusCode != http.StatusOK {
+		return ""
+	}
+
+	body, err := io.ReadAll(io.LimitReader(resp.Body, MaxResponseSize))
+	if err != nil {
+		return ""
+	}
+	return parseSHA256(string(body))
 }
 
 // gitCodeRelease matches the JSON object returned by GitCode GET .../releases/latest

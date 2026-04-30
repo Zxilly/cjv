@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log/slog"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -14,15 +13,10 @@ import (
 	"github.com/Zxilly/cjv/internal/cjverr"
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/env"
-	"github.com/Zxilly/cjv/internal/i18n"
-	"github.com/Zxilly/cjv/internal/toolchain"
+	"github.com/Zxilly/cjv/internal/resolve"
 )
 
 const maxRecursion = 20
-
-// AutoInstallFunc is a hook for the CLI layer to provide auto-install functionality.
-// It is set by the cli package to avoid circular imports.
-var AutoInstallFunc func(ctx context.Context, input string) error
 
 // ExtractToolName extracts the tool name from argv[0], stripping directory and .exe suffix.
 func ExtractToolName(argv0 string) string {
@@ -101,74 +95,17 @@ func Run(ctx context.Context, toolName string, args []string) error {
 		return err
 	}
 
-	// Load settings once for both resolution and auto-install decisions.
-	// Failure is non-fatal for env/arg overrides (auto-install just won't trigger).
-	var settings *config.Settings
-	var settingsErr error
-	sf, sfErr := config.DefaultSettingsFile()
-	if sfErr != nil {
-		settingsErr = sfErr
-	} else {
-		settings, settingsErr = sf.Load()
-	}
-
-	var tcName string
-	if tcOverride != "" {
-		tcName = tcOverride
-	} else if envTC := os.Getenv(config.EnvToolchain); envTC != "" {
-		tcName = envTC
-	} else {
-		if settingsErr != nil {
-			return settingsErr
-		}
-		cwd, err := os.Getwd()
-		if err != nil {
-			return fmt.Errorf("failed to get working directory: %w", err)
-		}
-		resolved, _, err := config.ResolveToolchain(settings, cwd)
-		if err != nil {
-			return err
-		}
-		tcName = resolved
-	}
-	// The else branch returns settingsErr directly; if we reach here via
-	// an override path, surface a warning so the user knows settings are broken.
-	if settingsErr != nil {
-		slog.Warn("failed to load settings", "error", settingsErr)
-	}
-
-	parsed, err := toolchain.ParseToolchainName(tcName)
-	if err != nil {
-		return err
-	}
-	tcDir, findErr := toolchain.FindInstalled(parsed)
-	if findErr != nil {
-		// Auto-install if enabled (not for custom/linked toolchains)
-		if !parsed.IsCustom() && shouldAutoInstall(settings) && AutoInstallFunc != nil {
-			fmt.Fprintln(os.Stderr, i18n.T("AutoInstalling", i18n.MsgData{"Name": tcName}))
-			if installErr := AutoInstallFunc(ctx, tcName); installErr != nil {
-				fmt.Fprintf(os.Stderr, "%s\n", i18n.T("AutoInstallFailed", i18n.MsgData{
-					"Name": tcName,
-					"Err":  installErr.Error(),
-				}))
-				return &cjverr.ToolchainNotInstalledError{Name: tcName}
-			}
-			// Retry finding after install
-			tcDir, findErr = toolchain.FindInstalled(parsed)
-			if findErr != nil {
-				return &cjverr.ToolchainNotInstalledError{Name: tcName}
-			}
-		} else {
-			return &cjverr.ToolchainNotInstalledError{Name: tcName}
-		}
-	}
-
-	binary, err := ResolveInstalledToolBinary(tcDir, toolName)
+	active, err := resolve.Active(ctx, tcOverride)
 	if err != nil {
 		return err
 	}
 
-	envCfg := env.LoadToolchainEnv(ctx, tcDir)
+	binary, err := ResolveInstalledToolBinary(active.Dir, toolName)
+	if err != nil {
+		return err
+	}
+
+	envCfg := env.LoadToolchainEnv(ctx, active.Dir)
 
 	binDir, err := config.BinDir()
 	if err != nil {
@@ -177,15 +114,10 @@ func Run(ctx context.Context, toolName string, args []string) error {
 	proxyEnv := env.BuildProxyEnv(os.Environ(), env.ProxyEnvContext{
 		Cfg:             envCfg,
 		CjvBinDir:       binDir,
-		ToolchainBinDir: filepath.Join(tcDir, "bin"),
+		ToolchainBinDir: filepath.Join(active.Dir, "bin"),
 		Recursion:       count,
-		ToolchainName:   filepath.Base(tcDir),
+		ToolchainName:   active.Name,
 	})
 
 	return execTool(ctx, binary, remainingArgs, proxyEnv)
 }
-
-func shouldAutoInstall(settings *config.Settings) bool {
-	return settings != nil && settings.AutoInstall
-}
-

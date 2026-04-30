@@ -29,6 +29,25 @@ func TestRunDefault_SetsDefault(t *testing.T) {
 	assert.Equal(t, "lts-1.0.5", reloaded.DefaultToolchain)
 }
 
+func TestRunDefault_RejectsTargetVariant(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("CJV_HOME", home)
+
+	name := "sts-2.0.0-win32-x64-ohos"
+	require.NoError(t, os.MkdirAll(filepath.Join(home, "toolchains", name), 0o755))
+	settings := config.DefaultSettings()
+	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, "settings.toml")))
+
+	cmd := &cobra.Command{}
+	err := runDefault(cmd, []string{name})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "target variant")
+
+	reloaded, err := config.LoadSettings(filepath.Join(home, "settings.toml"))
+	require.NoError(t, err)
+	assert.Empty(t, reloaded.DefaultToolchain)
+}
+
 func TestRunDefault_ClearsDefault(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("CJV_HOME", home)

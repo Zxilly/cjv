@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	"github.com/Zxilly/cjv/internal/cjverr"
-	"github.com/Zxilly/cjv/internal/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -84,24 +83,6 @@ func TestResolveInstalledToolBinaryPreservesUnknownToolError(t *testing.T) {
 	_, err := ResolveInstalledToolBinary(t.TempDir(), "not-a-proxy")
 	var unknown *cjverr.UnknownToolError
 	require.True(t, errors.As(err, &unknown))
-}
-
-func TestShouldAutoInstall_RespectsExplicitSetting(t *testing.T) {
-	s := config.DefaultSettings()
-
-	s.AutoInstall = true
-	assert.True(t, shouldAutoInstall(&s), "should auto-install when explicitly enabled")
-
-	s.AutoInstall = false
-	assert.False(t, shouldAutoInstall(&s), "should not auto-install when explicitly disabled")
-}
-
-func TestShouldAutoInstall_NilSettingsReturnsFalse(t *testing.T) {
-	// When settings is nil (e.g., settings loading failed), shouldAutoInstall
-	// returns false as a safe default. The caller (Run) is responsible for
-	// loading settings upfront.
-	assert.False(t, shouldAutoInstall(nil),
-		"should return false when settings is nil")
 }
 
 func TestGetRecursionCount_ValidInteger(t *testing.T) {

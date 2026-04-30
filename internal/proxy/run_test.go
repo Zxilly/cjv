@@ -15,6 +15,8 @@ import (
 
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/dist"
+	"github.com/Zxilly/cjv/internal/resolve"
+	"github.com/Zxilly/cjv/internal/toolchain"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -225,4 +227,73 @@ func TestRun_AutoInstallPath(t *testing.T) {
 	// but the auto-install decision path in proxy.Run is exercised either way.
 	_ = Run(context.Background(), "cjc", nil)
 	// Not asserting success — the goal is to exercise the auto-install code path
+}
+
+func TestRun_ToolchainFileTargetsTriggerAutoInstall(t *testing.T) {
+	home := t.TempDir()
+	cwd := t.TempDir()
+	t.Setenv("CJV_HOME", home)
+	t.Setenv("CJV_TOOLCHAIN", "")
+	t.Setenv("CJV_RECURSION_COUNT", "")
+	t.Chdir(cwd)
+
+	hostDir := filepath.Join(home, "toolchains", "sts-2.0.0")
+	cjcPath := PlatformBinaryName(filepath.Join(hostDir, ToolRelativePath("cjc")))
+	require.NoError(t, os.MkdirAll(filepath.Dir(cjcPath), 0o755))
+	require.NoError(t, os.WriteFile(cjcPath, []byte("stub"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(cwd, config.ToolchainFileName), []byte(`[toolchain]
+channel = "sts"
+targets = ["ohos", "android"]
+`), 0o644))
+
+	settings := config.DefaultSettings()
+	settings.AutoInstall = true
+	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, "settings.toml")))
+
+	var gotInput string
+	var gotTargets []string
+	oldAutoInstall := resolve.AutoInstallFunc
+	resolve.AutoInstallFunc = func(ctx context.Context, input string, targets []string) error {
+		gotInput = input
+		gotTargets = append([]string(nil), targets...)
+		for _, target := range targets {
+			key, err := dist.CurrentPlatformKeyWithTarget(settings.DefaultHost, target)
+			require.NoError(t, err)
+			name := toolchain.ToolchainName{Channel: toolchain.STS, Version: "2.0.0", PlatformKey: key}.String()
+			require.NoError(t, os.MkdirAll(filepath.Join(home, "toolchains", name), 0o755))
+		}
+		return nil
+	}
+	t.Cleanup(func() { resolve.AutoInstallFunc = oldAutoInstall })
+
+	_ = Run(context.Background(), "cjc", nil)
+
+	assert.Equal(t, "sts-2.0.0", gotInput)
+	assert.Equal(t, []string{"ohos", "android"}, gotTargets)
+}
+
+func TestRun_ToolchainFileTargetsMissingWithoutAutoInstallErrors(t *testing.T) {
+	home := t.TempDir()
+	cwd := t.TempDir()
+	t.Setenv("CJV_HOME", home)
+	t.Setenv("CJV_TOOLCHAIN", "")
+	t.Setenv("CJV_RECURSION_COUNT", "")
+	t.Chdir(cwd)
+
+	hostDir := filepath.Join(home, "toolchains", "sts-2.0.0")
+	cjcPath := PlatformBinaryName(filepath.Join(hostDir, ToolRelativePath("cjc")))
+	require.NoError(t, os.MkdirAll(filepath.Dir(cjcPath), 0o755))
+	require.NoError(t, os.WriteFile(cjcPath, []byte("stub"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(cwd, config.ToolchainFileName), []byte(`[toolchain]
+channel = "sts"
+targets = ["ohos"]
+`), 0o644))
+
+	settings := config.DefaultSettings()
+	settings.AutoInstall = false
+	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, "settings.toml")))
+
+	err := Run(context.Background(), "cjc", nil)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "sts-2.0.0-")
 }

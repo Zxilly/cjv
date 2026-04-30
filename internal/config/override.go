@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/Zxilly/cjv/internal/cjverr"
+	sdktarget "github.com/Zxilly/cjv/internal/target"
 )
 
 // NormalizePath returns a canonical absolute path for consistent comparison.
@@ -56,15 +57,31 @@ func (s OverrideSource) String() string {
 	}
 }
 
+type ToolchainConfig struct {
+	Name    string
+	Source  OverrideSource
+	Targets []string
+}
+
 // ResolveToolchain resolves the active toolchain by priority chain.
 // The search walks up the directory tree and at each level checks both
 // directory overrides and cangjie-sdk.toml (override takes precedence
 // at the same level). A closer toolchain file wins over a farther
 // directory override.
 func ResolveToolchain(settings *Settings, cwd string) (string, OverrideSource, error) {
+	resolved, err := ResolveToolchainConfig(settings, cwd)
+	if err != nil {
+		return "", SourceUnknown, err
+	}
+	return resolved.Name, resolved.Source, nil
+}
+
+// ResolveToolchainConfig resolves the active toolchain and any additive targets
+// from cangjie-sdk.toml.
+func ResolveToolchainConfig(settings *Settings, cwd string) (ToolchainConfig, error) {
 	// 1. Environment variable
 	if env := os.Getenv(EnvToolchain); env != "" {
-		return env, SourceEnv, nil
+		return ToolchainConfig{Name: env, Source: SourceEnv}, nil
 	}
 
 	// Override keys are already stored in normalized form by "override set",
@@ -76,23 +93,31 @@ func ResolveToolchain(settings *Settings, cwd string) (string, OverrideSource, e
 	for {
 		// 2a. Check directory override at this level
 		if tc, ok := settings.Overrides[dir]; ok {
-			return tc, SourceOverride, nil
+			return ToolchainConfig{Name: tc, Source: SourceOverride}, nil
 		}
 
 		// 2b. Check cangjie-sdk.toml at this level
 		candidate := filepath.Join(dir, ToolchainFileName)
 		tc, parseErr := ParseToolchainFile(candidate)
 		if parseErr != nil && !errors.Is(parseErr, os.ErrNotExist) {
-			return "", SourceUnknown, fmt.Errorf("failed to parse %s: %w", candidate, parseErr)
+			return ToolchainConfig{}, fmt.Errorf("failed to parse %s: %w", candidate, parseErr)
 		}
 		if parseErr == nil {
 			if tc.Toolchain.Channel != "" {
-				return tc.Toolchain.Channel, SourceToolchainFile, nil
+				targets, err := sdktarget.NormalizeList(tc.Toolchain.Targets)
+				if err != nil {
+					return ToolchainConfig{}, fmt.Errorf("%s: %w", candidate, err)
+				}
+				return ToolchainConfig{
+					Name:    tc.Toolchain.Channel,
+					Source:  SourceToolchainFile,
+					Targets: targets,
+				}, nil
 			}
 			// File exists but channel is empty — report an error so users
 			// know their toolchain file is incomplete rather than silently
 			// falling through to a different toolchain.
-			return "", SourceUnknown, fmt.Errorf("%s: toolchain.channel is empty; please specify a channel (e.g. lts, sts, nightly)", candidate)
+			return ToolchainConfig{}, fmt.Errorf("%s: toolchain.channel is empty; please specify a channel (e.g. lts, sts, nightly)", candidate)
 		}
 
 		parent := filepath.Dir(dir)
@@ -104,8 +129,8 @@ func ResolveToolchain(settings *Settings, cwd string) (string, OverrideSource, e
 
 	// 3. Default toolchain
 	if settings.DefaultToolchain != "" {
-		return settings.DefaultToolchain, SourceDefault, nil
+		return ToolchainConfig{Name: settings.DefaultToolchain, Source: SourceDefault}, nil
 	}
 
-	return "", SourceUnknown, &cjverr.NoToolchainConfiguredError{}
+	return ToolchainConfig{}, &cjverr.NoToolchainConfiguredError{}
 }

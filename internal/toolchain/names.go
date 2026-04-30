@@ -3,6 +3,8 @@ package toolchain
 import (
 	"fmt"
 	"strings"
+
+	"github.com/Zxilly/cjv/internal/target"
 )
 
 type Channel int
@@ -42,9 +44,10 @@ func ParseChannel(s string) (Channel, bool) {
 
 // ToolchainName represents a parsed toolchain identifier.
 type ToolchainName struct {
-	Channel Channel
-	Version string // empty means "latest"
-	Custom  string // non-empty for custom/linked toolchain names (e.g. "my-sdk")
+	Channel     Channel
+	Version     string // empty means "latest"
+	PlatformKey string // non-empty for installed target SDK variants (e.g. linux-x64-ohos)
+	Custom      string // non-empty for custom/linked toolchain names (e.g. "my-sdk")
 }
 
 // IsCustom returns true if this is a custom/linked toolchain name.
@@ -62,11 +65,15 @@ func (n ToolchainName) String() string {
 	if n.Version == "" {
 		return n.Channel.String()
 	}
-	return n.Channel.String() + "-" + n.Version
+	name := n.Channel.String() + "-" + n.Version
+	if n.PlatformKey != "" {
+		name += "-" + n.PlatformKey
+	}
+	return name
 }
 
 func (n ToolchainName) IsChannelOnly() bool {
-	return n.Custom == "" && n.Version == ""
+	return n.Custom == "" && n.Version == "" && n.PlatformKey == ""
 }
 
 // ParseToolchainName parses user input into a ToolchainName.
@@ -96,7 +103,8 @@ func ParseToolchainName(input string) (ToolchainName, error) {
 			if version == "" {
 				return ToolchainName{}, fmt.Errorf("empty version in toolchain name '%s'", input)
 			}
-			return ToolchainName{Channel: ch, Version: version}, nil
+			version, platformKey := target.SplitVariantSuffix(version)
+			return ToolchainName{Channel: ch, Version: version, PlatformKey: platformKey}, nil
 		}
 	}
 

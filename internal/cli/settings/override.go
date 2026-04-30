@@ -32,6 +32,9 @@ var overrideSetCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
+		if err := ensureActiveToolchainName(tc, parsed); err != nil {
+			return err
+		}
 		// Normalize standard names; accept custom names as-is
 		if parsed.Channel != toolchain.UnknownChannel {
 			tc = parsed.String()

@@ -38,7 +38,7 @@ cjv run sts cjc --version
 
 | Command                                             | Description                                             |
 | --------------------------------------------------- | ------------------------------------------------------- |
-| `cjv install <toolchain>`                           | Install a Cangjie SDK toolchain                         |
+| `cjv install <toolchain> [-t target]`                | Install a Cangjie SDK toolchain, optionally with cross targets |
 | `cjv uninstall <toolchain>`                         | Uninstall a toolchain                                   |
 | `cjv update [toolchain]`                            | Update installed toolchains                             |
 | `cjv default [toolchain]`                           | Set or show the default toolchain                       |
@@ -72,6 +72,29 @@ cjv resolves the active toolchain in the following order (highest priority first
 2. Directory override (set via `cjv override set`)
 3. Toolchain file (`cangjie-sdk.toml` in the current or parent directories)
 4. Default toolchain (set via `cjv default`)
+
+## Cross-Compilation SDKs
+
+cjv follows rustup-style `targets` semantics: target SDKs are additive installs for the host toolchain and do not change the active toolchain. Proxy execution of `cjc` and `cjpm` still uses the host SDK.
+
+```bash
+# Install the host STS SDK and the OHOS cross SDK for the current host
+cjv install sts -t ohos
+
+# Targets can be repeated or comma-separated
+cjv install sts -t ohos -t android
+cjv install sts --target ohos,android
+```
+
+Projects can also declare additive targets in `cangjie-sdk.toml`. When `auto_install` is enabled, proxy execution ensures missing target SDKs are installed:
+
+```toml
+[toolchain]
+channel = "sts"
+targets = ["ohos", "android", "ohos-arm32"]
+```
+
+`targets` accepts suffixes such as `ohos`, `android`, and `ohos-arm32`; do not use full platform keys such as `linux-x64-ohos`.
 
 ## Proxy Mode
 

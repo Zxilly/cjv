@@ -11,6 +11,7 @@ import (
 	"github.com/Zxilly/cjv/internal/cli"
 	"github.com/Zxilly/cjv/internal/logging"
 	"github.com/Zxilly/cjv/internal/proxy"
+	"github.com/Zxilly/cjv/internal/resolve"
 	"github.com/Zxilly/cjv/internal/utils"
 )
 
@@ -25,8 +26,8 @@ func main() {
 	utils.AppVersion = version
 
 	// Break circular import: proxy cannot import cli, so we wire the callback here.
-	proxy.AutoInstallFunc = func(ctx context.Context, input string) error {
-		return cli.InstallToolchainWithOptions(ctx, input, false)
+	resolve.AutoInstallFunc = func(ctx context.Context, input string, targets []string) error {
+		return cli.InstallToolchainWithTargets(ctx, input, targets, false)
 	}
 
 	toolName := proxy.ExtractToolName(os.Args[0])

@@ -61,6 +61,9 @@ func TestToolchainNameString(t *testing.T) {
 
 	n2 := ToolchainName{Channel: Nightly, Version: ""}
 	assert.Equal(t, "nightly", n2.String())
+
+	n3 := ToolchainName{Channel: STS, Version: "1.1.0", PlatformKey: "linux-x64-ohos"}
+	assert.Equal(t, "sts-1.1.0-linux-x64-ohos", n3.String())
 }
 
 func TestIsChannelOnly(t *testing.T) {
@@ -77,6 +80,15 @@ func TestParseVersionOnly(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, UnknownChannel, name.Channel)
 	assert.Equal(t, "1.0.5", name.Version)
+}
+
+func TestParseToolchainTargetVariantName(t *testing.T) {
+	name, err := ParseToolchainName("sts-1.1.0-beta.23-linux-x64-ohos")
+	require.NoError(t, err)
+	assert.Equal(t, STS, name.Channel)
+	assert.Equal(t, "1.1.0-beta.23", name.Version)
+	assert.Equal(t, "linux-x64-ohos", name.PlatformKey)
+	assert.False(t, name.IsChannelOnly())
 }
 
 // --- Tests merged from parse_channel_test.go ---

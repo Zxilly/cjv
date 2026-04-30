@@ -9,7 +9,10 @@ import (
 	"testing"
 
 	"github.com/Zxilly/cjv/internal/config"
+	"github.com/Zxilly/cjv/internal/dist"
 	"github.com/Zxilly/cjv/internal/env"
+	"github.com/Zxilly/cjv/internal/resolve"
+	"github.com/Zxilly/cjv/internal/toolchain"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -103,4 +106,43 @@ func TestResolveRuntimeEnv_NoToolchain(t *testing.T) {
 
 	_, err := env.ResolveRuntimeEnv(context.Background(), "")
 	assert.Error(t, err)
+}
+
+func TestResolveRuntimeEnv_ToolchainFileTargetsTriggerAutoInstall(t *testing.T) {
+	home := t.TempDir()
+	cwd := t.TempDir()
+	t.Setenv("CJV_HOME", home)
+	t.Setenv("CJV_TOOLCHAIN", "")
+	config.ResetDefaultSettingsFileCache()
+	config.ResetCachedUserHomeDir()
+	t.Chdir(cwd)
+
+	setupFakeToolchain(t, home, "sts-2.0.0")
+	require.NoError(t, os.WriteFile(filepath.Join(cwd, config.ToolchainFileName), []byte(`[toolchain]
+channel = "sts"
+targets = ["ohos"]
+`), 0o644))
+
+	settings := config.DefaultSettings()
+	settings.AutoInstall = true
+	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, "settings.toml")))
+
+	oldAutoInstall := resolve.AutoInstallFunc
+	var gotInput string
+	var gotTargets []string
+	resolve.AutoInstallFunc = func(ctx context.Context, input string, targets []string) error {
+		gotInput = input
+		gotTargets = append([]string(nil), targets...)
+		key, err := dist.CurrentPlatformKeyWithTarget(settings.DefaultHost, "ohos")
+		require.NoError(t, err)
+		name := toolchain.ToolchainName{Channel: toolchain.STS, Version: "2.0.0", PlatformKey: key}.String()
+		require.NoError(t, os.MkdirAll(filepath.Join(home, "toolchains", name), 0o755))
+		return nil
+	}
+	t.Cleanup(func() { resolve.AutoInstallFunc = oldAutoInstall })
+
+	_, err := env.ResolveRuntimeEnv(context.Background(), "")
+	require.NoError(t, err)
+	assert.Equal(t, "sts-2.0.0", gotInput)
+	assert.Equal(t, []string{"ohos"}, gotTargets)
 }

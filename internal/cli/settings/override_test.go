@@ -28,6 +28,26 @@ func TestOverrideSetPreservesBareVersion(t *testing.T) {
 	assert.Equal(t, "1.0.5", settings.Overrides[config.NormalizePath(dir)])
 }
 
+func TestOverrideSetRejectsTargetVariant(t *testing.T) {
+	home := t.TempDir()
+	dir := t.TempDir()
+	t.Setenv(config.EnvHome, home)
+
+	prev := overrideSetPath
+	overrideSetPath = dir
+	defer func() {
+		overrideSetPath = prev
+	}()
+
+	err := overrideSetCmd.RunE(overrideSetCmd, []string{"sts-2.0.0-win32-x64-ohos"})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "target variant")
+
+	settings, err := config.LoadSettings(filepath.Join(home, "settings.toml"))
+	require.NoError(t, err)
+	assert.Empty(t, settings.Overrides)
+}
+
 func TestResolveOverrideDir_WithExplicitPath(t *testing.T) {
 	dir := t.TempDir()
 	resolved, err := resolveOverrideDir(dir)

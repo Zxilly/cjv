@@ -36,6 +36,10 @@ func ResolveActiveToolchain() (tcDir string, tcName string, source config.Overri
 	if err != nil {
 		return "", rawName, source, fmt.Errorf("invalid toolchain name '%s' (from %s): %w", rawName, source, err)
 	}
+	if parsed.PlatformKey != "" {
+		hostName := ToolchainName{Channel: parsed.Channel, Version: parsed.Version}.String()
+		return "", rawName, source, fmt.Errorf("target variant %q cannot be used as the active toolchain; use host toolchain %q and configure targets instead", rawName, hostName)
+	}
 
 	dir, findErr := FindInstalled(parsed)
 	if findErr != nil {

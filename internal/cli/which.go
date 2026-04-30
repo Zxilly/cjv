@@ -2,7 +2,7 @@ package cli
 
 import (
 	"github.com/Zxilly/cjv/internal/proxy"
-	"github.com/Zxilly/cjv/internal/toolchain"
+	"github.com/Zxilly/cjv/internal/resolve"
 	"github.com/spf13/cobra"
 )
 
@@ -15,17 +15,17 @@ var whichCmd = &cobra.Command{
 }
 
 func runWhich(cmd *cobra.Command, args []string) error {
-	tcDir, _, _, err := toolchain.ResolveActiveToolchain()
+	active, err := resolve.Active(cmd.Context(), "")
 	if err != nil {
 		return err
 	}
 
 	if len(args) == 0 {
-		cmd.Println(tcDir)
+		cmd.Println(active.Dir)
 		return nil
 	}
 
-	toolPath, err := proxy.ResolveInstalledToolBinary(tcDir, args[0])
+	toolPath, err := proxy.ResolveInstalledToolBinary(active.Dir, args[0])
 	if err != nil {
 		return err
 	}

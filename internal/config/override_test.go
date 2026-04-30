@@ -49,6 +49,24 @@ channel = "nightly-1.1.0-alpha.20260306010001"
 	assert.Equal(t, SourceToolchainFile, source)
 }
 
+func TestResolveToolchainConfigIncludesToolchainFileTargets(t *testing.T) {
+	t.Setenv(EnvToolchain, "")
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, ToolchainFileName), []byte(`[toolchain]
+channel = "sts"
+targets = ["ohos", "android"]
+`), 0o644)
+
+	s := DefaultSettings()
+	s.DefaultToolchain = "lts-1.0.5"
+
+	result, err := ResolveToolchainConfig(&s, dir)
+	require.NoError(t, err)
+	assert.Equal(t, "sts", result.Name)
+	assert.Equal(t, SourceToolchainFile, result.Source)
+	assert.Equal(t, []string{"ohos", "android"}, result.Targets)
+}
+
 func TestResolveOverrideDefault(t *testing.T) {
 	t.Setenv(EnvToolchain, "")
 	tmp := t.TempDir()

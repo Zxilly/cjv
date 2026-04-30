@@ -150,6 +150,81 @@ func mockServerWithSDK(t *testing.T, sdkData []byte, sha string) *httptest.Serve
 	return server
 }
 
+func mockServerWithTargetSDKs(t *testing.T, channel toolchain.Channel, version string, targets ...string) *httptest.Server {
+	t.Helper()
+	sdkData, sha := createMockSDK()
+	hostKey, err := dist.CurrentPlatformKey("")
+	require.NoError(t, err)
+
+	platforms := map[string]dist.DownloadInfo{
+		hostKey: {
+			Name:   "cangjie-sdk-" + version + ".zip",
+			SHA256: sha,
+			URL:    "",
+		},
+	}
+	for _, target := range targets {
+		key, err := dist.CurrentPlatformKeyWithTarget("", target)
+		require.NoError(t, err)
+		platforms[key] = dist.DownloadInfo{
+			Name:   "cangjie-sdk-" + key + "-" + version + ".zip",
+			SHA256: sha,
+			URL:    "",
+		}
+	}
+
+	mux := http.NewServeMux()
+	server := httptest.NewServer(mux)
+	t.Cleanup(server.Close)
+
+	for key, info := range platforms {
+		info.URL = server.URL + "/download/" + info.Name
+		platforms[key] = info
+	}
+
+	var manifest dist.Manifest
+	if channel == toolchain.LTS {
+		manifest.Channels.LTS = dist.ChannelInfo{
+			Latest:   version,
+			Versions: map[string]map[string]dist.DownloadInfo{version: platforms},
+		}
+		manifest.Channels.STS = dist.ChannelInfo{
+			Latest: "2.0.0",
+			Versions: map[string]map[string]dist.DownloadInfo{
+				"2.0.0": {
+					hostKey: {Name: "cangjie-sdk-2.0.0.zip", SHA256: sha, URL: server.URL + "/download/cangjie-sdk-2.0.0.zip"},
+				},
+			},
+		}
+	} else {
+		manifest.Channels.LTS = dist.ChannelInfo{
+			Latest: "1.0.5",
+			Versions: map[string]map[string]dist.DownloadInfo{
+				"1.0.5": {
+					hostKey: {Name: "cangjie-sdk-1.0.5.zip", SHA256: sha, URL: server.URL + "/download/cangjie-sdk-1.0.5.zip"},
+				},
+			},
+		}
+		manifest.Channels.STS = dist.ChannelInfo{
+			Latest:   version,
+			Versions: map[string]map[string]dist.DownloadInfo{version: platforms},
+		}
+	}
+
+	mux.HandleFunc("/download/", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/octet-stream")
+		_, _ = w.Write(sdkData)
+	})
+	mux.HandleFunc("/sdk-versions.json", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if err := json.NewEncoder(w).Encode(manifest); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+	})
+
+	return server
+}
+
 // Integration-style tests for the install flow.
 // These test the full pipeline: resolve -> download -> extract -> validate -> swap.
 
@@ -170,6 +245,97 @@ func TestInstallToolchainWithOptions_InstallsLTS(t *testing.T) {
 	installed, err := toolchain.ListInstalled()
 	require.NoError(t, err)
 	assert.NotEmpty(t, installed, "should have at least one installed toolchain")
+}
+
+func TestInstallToolchainWithTargets_InstallsHostAndTargets(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("CJV_HOME", home)
+	require.NoError(t, config.EnsureDirs())
+
+	server := mockServerWithTargetSDKs(t, toolchain.STS, "2.0.0", "ohos", "android")
+	settings := config.DefaultSettings()
+	settings.ManifestURL = server.URL + "/sdk-versions.json"
+	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, "settings.toml")))
+
+	err := InstallToolchainWithTargets(context.Background(), "sts", []string{"ohos", "android"}, false)
+	require.NoError(t, err)
+
+	hostKey, err := dist.CurrentPlatformKey("")
+	require.NoError(t, err)
+	ohosKey, err := dist.CurrentPlatformKeyWithTarget("", "ohos")
+	require.NoError(t, err)
+	androidKey, err := dist.CurrentPlatformKeyWithTarget("", "android")
+	require.NoError(t, err)
+
+	installed, err := toolchain.ListInstalled()
+	require.NoError(t, err)
+	assert.Contains(t, installed, "sts-2.0.0")
+	assert.NotContains(t, installed, "sts-2.0.0-"+hostKey)
+	assert.Contains(t, installed, "sts-2.0.0-"+ohosKey)
+	assert.Contains(t, installed, "sts-2.0.0-"+androidKey)
+
+	reloaded, err := config.LoadSettings(filepath.Join(home, "settings.toml"))
+	require.NoError(t, err)
+	assert.Equal(t, "sts-2.0.0", reloaded.DefaultToolchain)
+}
+
+func TestInstallToolchainWithTargets_BareVersionResolvesChannel(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("CJV_HOME", home)
+	require.NoError(t, config.EnsureDirs())
+
+	server := mockServerWithTargetSDKs(t, toolchain.STS, "2.0.0", "ohos")
+	settings := config.DefaultSettings()
+	settings.ManifestURL = server.URL + "/sdk-versions.json"
+	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, "settings.toml")))
+
+	require.NoError(t, InstallToolchainWithTargets(context.Background(), "2.0.0", []string{"ohos"}, false))
+
+	ohosKey, err := dist.CurrentPlatformKeyWithTarget("", "ohos")
+	require.NoError(t, err)
+	installed, err := toolchain.ListInstalled()
+	require.NoError(t, err)
+	assert.Contains(t, installed, "sts-2.0.0")
+	assert.Contains(t, installed, "sts-2.0.0-"+ohosKey)
+}
+
+func TestInstallToolchainWithTargets_ExplicitVariantDoesNotSetDefault(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("CJV_HOME", home)
+	require.NoError(t, config.EnsureDirs())
+
+	server := mockServerWithTargetSDKs(t, toolchain.STS, "2.0.0", "ohos")
+	settings := config.DefaultSettings()
+	settings.ManifestURL = server.URL + "/sdk-versions.json"
+	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, "settings.toml")))
+
+	ohosKey, err := dist.CurrentPlatformKeyWithTarget("", "ohos")
+	require.NoError(t, err)
+	require.NoError(t, InstallToolchainWithTargets(context.Background(), "sts-2.0.0-"+ohosKey, nil, false))
+
+	installed, err := toolchain.ListInstalled()
+	require.NoError(t, err)
+	assert.Contains(t, installed, "sts-2.0.0-"+ohosKey)
+	assert.NotContains(t, installed, "sts-2.0.0")
+
+	reloaded, err := config.LoadSettings(filepath.Join(home, "settings.toml"))
+	require.NoError(t, err)
+	assert.Empty(t, reloaded.DefaultToolchain)
+}
+
+func TestInstallToolchainWithTargets_RejectsVariantPlusTargets(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("CJV_HOME", home)
+	require.NoError(t, config.EnsureDirs())
+
+	settings := config.DefaultSettings()
+	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, "settings.toml")))
+
+	ohosKey, err := dist.CurrentPlatformKeyWithTarget("", "ohos")
+	require.NoError(t, err)
+	err = InstallToolchainWithTargets(context.Background(), "sts-2.0.0-"+ohosKey, []string{"android"}, false)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "cannot combine target variant")
 }
 
 func TestInstallToolchainWithOptions_AlreadyInstalled(t *testing.T) {

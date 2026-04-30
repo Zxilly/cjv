@@ -95,6 +95,20 @@ func updateSingle(ctx context.Context, input string) error {
 	if name.IsCustom() {
 		return fmt.Errorf("cannot update custom toolchain '%s'", input)
 	}
+	if name.PlatformKey != "" {
+		currentName := name.String()
+		if _, err := toolchain.FindInstalled(name); err != nil {
+			if errors.Is(err, os.ErrNotExist) {
+				return &cjverr.ToolchainNotInstalledError{Name: currentName}
+			}
+			return err
+		}
+		sf, settings, err := clisettings.LoadSettings()
+		if err != nil {
+			return err
+		}
+		return reinstallChannelForPlatform(ctx, name.Channel, currentName, settings, sf, nil, name.PlatformKey)
+	}
 
 	// If channel-only (e.g. "lts"), find the installed version for that channel
 	if name.IsChannelOnly() {
@@ -165,7 +179,7 @@ func updateAll(ctx context.Context) (*config.SettingsFile, *config.Settings, err
 			continue
 		}
 
-		if err := reinstallChannel(ctx, parsed.Channel, name, settings, sf, manifest); err != nil {
+		if err := reinstallChannelForPlatform(ctx, parsed.Channel, name, settings, sf, manifest, parsed.PlatformKey); err != nil {
 			slog.Warn("failed to update toolchain", "name", name, "error", err)
 			errs = append(errs, err)
 		}
@@ -174,7 +188,11 @@ func updateAll(ctx context.Context) (*config.SettingsFile, *config.Settings, err
 }
 
 func reinstallChannel(ctx context.Context, channel toolchain.Channel, currentName string, settings *config.Settings, sf *config.SettingsFile, manifest *dist.Manifest) error {
-	resolved, err := resolveAndLocate(ctx, toolchain.ToolchainName{Channel: channel}, settings, manifest)
+	return reinstallChannelForPlatform(ctx, channel, currentName, settings, sf, manifest, "")
+}
+
+func reinstallChannelForPlatform(ctx context.Context, channel toolchain.Channel, currentName string, settings *config.Settings, sf *config.SettingsFile, manifest *dist.Manifest, platformKey string) error {
+	resolved, err := resolveAndLocateWithPlatformKey(ctx, toolchain.ToolchainName{Channel: channel}, settings, manifest, platformKey)
 	if err != nil {
 		return err
 	}
@@ -191,19 +209,27 @@ func reinstallChannel(ctx context.Context, channel toolchain.Channel, currentNam
 		"Latest":  resolved.Name,
 	}))
 
-	if err := installResolved(ctx, resolved, settings, sf, false); err != nil {
-		return err
+	if platformKey == "" {
+		if err := installResolved(ctx, resolved, settings, sf, false); err != nil {
+			return err
+		}
+	} else {
+		if err := installResolvedNoDefault(ctx, resolved, settings, sf, false); err != nil {
+			return err
+		}
 	}
 
-	// Update default if it pointed to the old version
-	if settings.DefaultToolchain == currentName {
-		settings.DefaultToolchain = resolved.Name
-	}
+	if platformKey == "" {
+		// Update default if it pointed to the old version
+		if settings.DefaultToolchain == currentName {
+			settings.DefaultToolchain = resolved.Name
+		}
 
-	// Update any overrides that referenced the old version
-	for dir, tc := range settings.Overrides {
-		if tc == currentName {
-			settings.Overrides[dir] = resolved.Name
+		// Update any overrides that referenced the old version
+		for dir, tc := range settings.Overrides {
+			if tc == currentName {
+				settings.Overrides[dir] = resolved.Name
+			}
 		}
 	}
 
@@ -236,4 +262,3 @@ func findInstalledForChannel(channel toolchain.Channel) (string, error) {
 	}
 	return filepath.Base(dir), nil
 }
-

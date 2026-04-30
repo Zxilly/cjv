@@ -19,6 +19,7 @@ import (
 	"github.com/Zxilly/cjv/internal/i18n"
 	"github.com/Zxilly/cjv/internal/proxy"
 	"github.com/Zxilly/cjv/internal/selfupdate"
+	sdktarget "github.com/Zxilly/cjv/internal/target"
 	"github.com/Zxilly/cjv/internal/toolchain"
 	"github.com/Zxilly/cjv/internal/utils"
 	"github.com/fatih/color"
@@ -26,7 +27,8 @@ import (
 )
 
 var (
-	forceInstall bool
+	forceInstall   bool
+	installTargets []string
 
 	// ensurePathConfiguredFn is called during first install to add cjv's bin
 	// directory to the user's PATH. Tests override this to avoid writing to
@@ -36,6 +38,7 @@ var (
 
 func init() {
 	installCmd.Flags().BoolVar(&forceInstall, "force", false, "Force re-download and re-install even if already installed")
+	installCmd.Flags().StringSliceVarP(&installTargets, "target", "t", nil, "Cross-compilation target suffix to install (repeatable, comma-separated)")
 	rootCmd.AddCommand(installCmd)
 }
 
@@ -49,11 +52,16 @@ var installCmd = &cobra.Command{
 func runInstall(cmd *cobra.Command, args []string) error {
 	selfmgmt.CheckSudoSafety()
 	toolchain.CleanupStagingDirs()
-	return InstallToolchainWithOptions(cmd.Context(), args[0], forceInstall)
+	return InstallToolchainWithTargets(cmd.Context(), args[0], installTargets, forceInstall)
 }
 
 // InstallToolchainWithOptions installs a toolchain with optional force re-install.
 func InstallToolchainWithOptions(ctx context.Context, input string, force bool) error {
+	return InstallToolchainWithTargets(ctx, input, nil, force)
+}
+
+// InstallToolchainWithTargets installs the host toolchain plus optional cross SDK target variants.
+func InstallToolchainWithTargets(ctx context.Context, input string, targets []string, force bool) error {
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -70,12 +78,39 @@ func InstallToolchainWithOptions(ctx context.Context, input string, force bool) 
 		return err
 	}
 
+	normalizedTargets, err := sdktarget.NormalizeList(targets)
+	if err != nil {
+		return err
+	}
+	if name.PlatformKey != "" && len(normalizedTargets) > 0 {
+		return fmt.Errorf("cannot combine target variant toolchain name %q with --target; pass the host toolchain name and --target instead", input)
+	}
+
 	resolved, err := resolveAndLocate(ctx, name, settings, nil)
 	if err != nil {
 		return err
 	}
 
-	return installResolved(ctx, resolved, settings, sf, force)
+	if name.PlatformKey != "" {
+		if err := installResolvedNoDefault(ctx, resolved, settings, sf, force); err != nil {
+			return err
+		}
+	} else {
+		if err := installResolved(ctx, resolved, settings, sf, force); err != nil {
+			return err
+		}
+	}
+
+	for _, target := range normalizedTargets {
+		resolvedTarget, err := resolveAndLocateWithTarget(ctx, name, settings, nil, target)
+		if err != nil {
+			return err
+		}
+		if err := installResolvedNoDefault(ctx, resolvedTarget, settings, sf, force); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // resolvedToolchain holds the result of toolchain resolution.
@@ -86,6 +121,14 @@ type resolvedToolchain struct {
 }
 
 func installResolved(ctx context.Context, rt resolvedToolchain, settings *config.Settings, sf *config.SettingsFile, force bool) (retErr error) {
+	return installResolvedWithDefault(ctx, rt, settings, sf, force, true)
+}
+
+func installResolvedNoDefault(ctx context.Context, rt resolvedToolchain, settings *config.Settings, sf *config.SettingsFile, force bool) (retErr error) {
+	return installResolvedWithDefault(ctx, rt, settings, sf, force, false)
+}
+
+func installResolvedWithDefault(ctx context.Context, rt resolvedToolchain, settings *config.Settings, sf *config.SettingsFile, force bool, allowDefault bool) (retErr error) {
 	resolvedName := rt.Name
 	tcDir, err := config.ToolchainsDir()
 	if err != nil {
@@ -140,7 +183,7 @@ func installResolved(ctx context.Context, rt resolvedToolchain, settings *config
 		return err
 	}
 
-	isFirstInstall := settings.DefaultToolchain == "" || !defaultToolchainExists(settings.DefaultToolchain)
+	isFirstInstall := allowDefault && (settings.DefaultToolchain == "" || !defaultToolchainExists(settings.DefaultToolchain))
 	if err := swapInstalledToolchain(stagingDir, destDir, isReinstall, func() error {
 		// Capture env after the rename so that $PWD = destDir and all
 		// paths in env.toml naturally point to the final location.
@@ -221,13 +264,31 @@ func ensurePathConfigured() {
 }
 
 func resolveAndLocate(ctx context.Context, name toolchain.ToolchainName, settings *config.Settings, manifest *dist.Manifest) (resolvedToolchain, error) {
-	if name.Channel == toolchain.Nightly {
-		return resolveNightly(ctx, name, settings)
-	}
+	return resolveAndLocateWithTarget(ctx, name, settings, manifest, "")
+}
 
-	platformKey, err := dist.CurrentPlatformKey(settings.DefaultHost)
-	if err != nil {
-		return resolvedToolchain{}, err
+func resolveAndLocateWithTarget(ctx context.Context, name toolchain.ToolchainName, settings *config.Settings, manifest *dist.Manifest, target string) (resolvedToolchain, error) {
+	platformKey := name.PlatformKey
+	if platformKey == "" {
+		var err error
+		platformKey, err = dist.CurrentPlatformKeyWithTarget(settings.DefaultHost, target)
+		if err != nil {
+			return resolvedToolchain{}, err
+		}
+	}
+	return resolveAndLocateWithPlatformKey(ctx, name, settings, manifest, platformKey)
+}
+
+func resolveAndLocateWithPlatformKey(ctx context.Context, name toolchain.ToolchainName, settings *config.Settings, manifest *dist.Manifest, platformKey string) (resolvedToolchain, error) {
+	if platformKey == "" {
+		var err error
+		platformKey, err = dist.CurrentPlatformKey(settings.DefaultHost)
+		if err != nil {
+			return resolvedToolchain{}, err
+		}
+	}
+	if name.Channel == toolchain.Nightly {
+		return resolveNightlyWithPlatformKey(ctx, name, settings, platformKey)
 	}
 
 	if manifest == nil {
@@ -260,6 +321,9 @@ func resolveAndLocate(ctx context.Context, name toolchain.ToolchainName, setting
 	}
 
 	resolved := toolchain.ToolchainName{Channel: channel, Version: version}
+	if parts, err := sdktarget.ParseToolchainKey(platformKey); err == nil && parts.Target != "" {
+		resolved.PlatformKey = platformKey
+	}
 
 	info, err := manifest.GetDownloadInfo(channel, version, platformKey)
 	if err != nil {
@@ -270,6 +334,29 @@ func resolveAndLocate(ctx context.Context, name toolchain.ToolchainName, setting
 }
 
 func resolveNightly(ctx context.Context, name toolchain.ToolchainName, settings *config.Settings) (resolvedToolchain, error) {
+	return resolveNightlyWithTarget(ctx, name, settings, "")
+}
+
+func resolveNightlyWithTarget(ctx context.Context, name toolchain.ToolchainName, settings *config.Settings, target string) (resolvedToolchain, error) {
+	platformKey := name.PlatformKey
+	if platformKey == "" {
+		var err error
+		platformKey, err = dist.CurrentPlatformKeyWithTarget(settings.DefaultHost, target)
+		if err != nil {
+			return resolvedToolchain{}, err
+		}
+	}
+	return resolveNightlyWithPlatformKey(ctx, name, settings, platformKey)
+}
+
+func resolveNightlyWithPlatformKey(ctx context.Context, name toolchain.ToolchainName, settings *config.Settings, platformKey string) (resolvedToolchain, error) {
+	if platformKey == "" {
+		var err error
+		platformKey, err = dist.CurrentPlatformKey(settings.DefaultHost)
+		if err != nil {
+			return resolvedToolchain{}, err
+		}
+	}
 	version := name.Version
 
 	if version == "" {
@@ -282,14 +369,20 @@ func resolveNightly(ctx context.Context, name toolchain.ToolchainName, settings 
 	}
 
 	resolved := toolchain.ToolchainName{Channel: toolchain.Nightly, Version: version}
+	if parts, err := sdktarget.ParseToolchainKey(platformKey); err == nil && parts.Target != "" {
+		resolved.PlatformKey = platformKey
+	}
 
-	url, err := dist.NightlyDownloadURL(dist.DefaultNightlyBaseURL, version, runtime.GOOS, runtime.GOARCH)
+	url, err := dist.NightlyDownloadURLForPlatform(dist.DefaultNightlyBaseURL, version, platformKey)
 	if err != nil {
 		return resolvedToolchain{}, err
 	}
 
-	fmt.Println(i18n.T("NightlyNoChecksum", nil))
-	return resolvedToolchain{Name: resolved.String(), URL: url}, nil
+	sha256 := dist.FetchNightlySHA256(ctx, url)
+	if sha256 == "" {
+		fmt.Println(i18n.T("NightlyNoChecksum", nil))
+	}
+	return resolvedToolchain{Name: resolved.String(), URL: url, SHA256: sha256}, nil
 }
 
 func fetchManifest(ctx context.Context, manifestURL string) (*dist.Manifest, error) {

@@ -38,7 +38,7 @@ cjv run sts cjc --version
 
 | 命令                                                | 说明                               |
 | --------------------------------------------------- | ---------------------------------- |
-| `cjv install <toolchain>`                           | 安装仓颉 SDK 工具链                |
+| `cjv install <toolchain> [-t target]`               | 安装仓颉 SDK 工具链，可附加交叉编译目标 |
 | `cjv uninstall <toolchain>`                         | 卸载工具链                         |
 | `cjv update [toolchain]`                            | 更新已安装的工具链                 |
 | `cjv default [toolchain]`                           | 设置或显示默认工具链               |
@@ -72,6 +72,29 @@ cjv 按以下优先级顺序解析活跃工具链（从高到低）：
 2. 目录覆盖（通过 `cjv override set` 设置）
 3. 工具链文件（当前目录或父目录中的 `cangjie-sdk.toml`）
 4. 默认工具链（通过 `cjv default` 设置）
+
+## 交叉编译 SDK
+
+cjv 对齐 rustup 的 `targets` 语义：目标 SDK 是宿主工具链的附加安装项，不改变当前活跃工具链。代理执行 `cjc`、`cjpm` 时仍使用宿主 SDK。
+
+```bash
+# 安装宿主 STS SDK，并额外安装当前宿主对应的 OHOS 交叉 SDK
+cjv install sts -t ohos
+
+# target 支持重复或逗号分隔
+cjv install sts -t ohos -t android
+cjv install sts --target ohos,android
+```
+
+项目也可以在 `cangjie-sdk.toml` 中声明附加 targets。开启 `auto_install` 时，代理执行会自动补齐缺失的目标 SDK：
+
+```toml
+[toolchain]
+channel = "sts"
+targets = ["ohos", "android", "ohos-arm32"]
+```
+
+`targets` 只填写目标后缀，例如 `ohos`、`android`、`ohos-arm32`；不要填写完整平台 key，例如 `linux-x64-ohos`。
 
 ## 代理模式
 

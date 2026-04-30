@@ -66,3 +66,15 @@ func TestCurrentPlatformKey_ReturnsValid(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotEmpty(t, key)
 }
+
+func TestCurrentPlatformKeyWithTarget(t *testing.T) {
+	key, err := CurrentPlatformKeyWithTarget("linux-amd64", "ohos")
+	require.NoError(t, err)
+	assert.Equal(t, "linux-x64-ohos", key)
+}
+
+func TestNightlyFilenameForPlatformWithTarget(t *testing.T) {
+	name, err := NightlyFilenameForPlatform("win32-x64-ohos-arm32", "1.1.0-alpha.20260429010057")
+	require.NoError(t, err)
+	assert.Equal(t, "cangjie-sdk-windows-x64-ohos-arm32-1.1.0-alpha.20260429010057.zip", name)
+}

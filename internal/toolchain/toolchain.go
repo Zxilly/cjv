@@ -74,6 +74,10 @@ func FindInstalled(name ToolchainName) (string, error) {
 				if IsTempDir(e.Name()) {
 					continue
 				}
+				parsed, err := ParseToolchainName(e.Name())
+				if err != nil || parsed.PlatformKey != "" {
+					continue
+				}
 				candidates = append(candidates, e.Name())
 			}
 		}

@@ -44,6 +44,9 @@ func runDefault(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
+	if err := ensureActiveToolchainName(name, parsed); err != nil {
+		return err
+	}
 	normalizedName := parsed.String()
 
 	// Warn (but don't block) if the toolchain is not installed
@@ -60,6 +63,17 @@ func runDefault(cmd *cobra.Command, args []string) error {
 		"Name": normalizedName,
 	}))
 	return nil
+}
+
+func ensureActiveToolchainName(input string, parsed toolchain.ToolchainName) error {
+	if parsed.PlatformKey == "" {
+		return nil
+	}
+	hostName := toolchain.ToolchainName{
+		Channel: parsed.Channel,
+		Version: parsed.Version,
+	}.String()
+	return fmt.Errorf("target variant %q cannot be used as an active toolchain; use host toolchain %q and configure targets instead", input, hostName)
 }
 
 func showDefault() error {

@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/Zxilly/cjv/internal/config"
+	"github.com/Zxilly/cjv/internal/dist"
 	"github.com/Zxilly/cjv/internal/toolchain"
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
@@ -77,6 +78,30 @@ func TestUpdateSingle_ChannelName(t *testing.T) {
 	assert.NoError(t, err)
 }
 
+func TestUpdateSingle_TargetVariantUpdatesVariant(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("CJV_HOME", home)
+	require.NoError(t, config.EnsureDirs())
+
+	targetKey, err := dist.CurrentPlatformKeyWithTarget("", "ohos")
+	require.NoError(t, err)
+	oldName := "sts-1.0.0-" + targetKey
+	oldDir := filepath.Join(home, "toolchains", oldName)
+	require.NoError(t, os.MkdirAll(oldDir, 0o755))
+
+	server := mockServerWithTargetSDKs(t, toolchain.STS, "2.0.0", "ohos")
+	settings := config.DefaultSettings()
+	settings.ManifestURL = server.URL + "/sdk-versions.json"
+	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, "settings.toml")))
+
+	require.NoError(t, updateSingle(context.Background(), oldName))
+
+	installed, err := toolchain.ListInstalled()
+	require.NoError(t, err)
+	assert.Contains(t, installed, "sts-2.0.0-"+targetKey)
+	assert.NotContains(t, installed, oldName)
+}
+
 func TestFindInstalledForChannel_Nightly(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("CJV_HOME", home)
@@ -135,6 +160,32 @@ func TestReinstallChannel_UpgradesToNewerVersion(t *testing.T) {
 	// Old version should be removed
 	_, statErr := os.Stat(oldDir)
 	assert.True(t, os.IsNotExist(statErr), "old version directory should be removed")
+}
+
+func TestReinstallChannelForPlatform_UpdatesTargetVariant(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("CJV_HOME", home)
+	require.NoError(t, config.EnsureDirs())
+
+	targetKey, err := dist.CurrentPlatformKeyWithTarget("", "ohos")
+	require.NoError(t, err)
+	oldName := "sts-1.0.0-" + targetKey
+	require.NoError(t, os.MkdirAll(filepath.Join(home, "toolchains", oldName), 0o755))
+
+	server := mockServerWithTargetSDKs(t, toolchain.STS, "2.0.0", "ohos")
+	settings := config.DefaultSettings()
+	settings.ManifestURL = server.URL + "/sdk-versions.json"
+	settingsPath := filepath.Join(home, "settings.toml")
+	require.NoError(t, config.SaveSettings(&settings, settingsPath))
+
+	sf := config.NewSettingsFile(settingsPath)
+	require.NoError(t, reinstallChannelForPlatform(context.Background(), toolchain.STS, oldName, &settings, sf, nil, targetKey))
+
+	installed, err := toolchain.ListInstalled()
+	require.NoError(t, err)
+	assert.Contains(t, installed, "sts-2.0.0-"+targetKey)
+	assert.NotContains(t, installed, "sts-2.0.0")
+	assert.NotContains(t, installed, oldName)
 }
 
 func TestReinstallChannel_UpdatesDefaultToolchain(t *testing.T) {
@@ -271,6 +322,19 @@ func TestFindInstalledForChannel_FindsLatest(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "lts-1.0.5", name,
 		"should return the latest semver version for the channel")
+}
+
+func TestFindInstalledForChannel_IgnoresTargetVariants(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("CJV_HOME", home)
+
+	targetKey, err := dist.CurrentPlatformKeyWithTarget("", "ohos")
+	require.NoError(t, err)
+	require.NoError(t, os.MkdirAll(filepath.Join(home, "toolchains", "lts-1.0.5-"+targetKey), 0o755))
+
+	name, err := findInstalledForChannel(toolchain.LTS)
+	require.NoError(t, err)
+	assert.Empty(t, name)
 }
 
 func TestFindInstalledForChannel_ChannelNotInstalled(t *testing.T) {
