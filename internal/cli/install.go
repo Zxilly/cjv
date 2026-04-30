@@ -333,22 +333,6 @@ func resolveAndLocateWithPlatformKey(ctx context.Context, name toolchain.Toolcha
 	return resolvedToolchain{Name: resolved.String(), URL: info.URL, SHA256: info.SHA256}, nil
 }
 
-func resolveNightly(ctx context.Context, name toolchain.ToolchainName, settings *config.Settings) (resolvedToolchain, error) {
-	return resolveNightlyWithTarget(ctx, name, settings, "")
-}
-
-func resolveNightlyWithTarget(ctx context.Context, name toolchain.ToolchainName, settings *config.Settings, target string) (resolvedToolchain, error) {
-	platformKey := name.PlatformKey
-	if platformKey == "" {
-		var err error
-		platformKey, err = dist.CurrentPlatformKeyWithTarget(settings.DefaultHost, target)
-		if err != nil {
-			return resolvedToolchain{}, err
-		}
-	}
-	return resolveNightlyWithPlatformKey(ctx, name, settings, platformKey)
-}
-
 func resolveNightlyWithPlatformKey(ctx context.Context, name toolchain.ToolchainName, settings *config.Settings, platformKey string) (resolvedToolchain, error) {
 	if platformKey == "" {
 		var err error
