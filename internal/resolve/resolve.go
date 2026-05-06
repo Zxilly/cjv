@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/Zxilly/cjv/internal/cjverr"
+	"github.com/Zxilly/cjv/internal/component"
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/dist"
 	"github.com/Zxilly/cjv/internal/i18n"
@@ -19,11 +20,17 @@ import (
 // AutoInstallFunc is wired by main to avoid importing cli from lower-level packages.
 var AutoInstallFunc func(ctx context.Context, input string, targets []string) error
 
+// AutoInstallComponentsFunc auto-installs missing components on demand. Wired
+// by main; must be safe to leave nil in tests where component installation
+// is not exercised.
+var AutoInstallComponentsFunc func(ctx context.Context, input string, components []string) error
+
 type ActiveToolchain struct {
-	Dir     string
-	Name    string
-	Source  config.OverrideSource
-	Targets []string
+	Dir        string
+	Name       string
+	Source     config.OverrideSource
+	Targets    []string
+	Components []string
 }
 
 func Active(ctx context.Context, tcOverride string) (ActiveToolchain, error) {
@@ -32,7 +39,7 @@ func Active(ctx context.Context, tcOverride string) (ActiveToolchain, error) {
 	}
 
 	settings, settingsErr := loadSettings()
-	tcName, source, targets, err := resolveName(settings, settingsErr, tcOverride)
+	tcName, source, targets, components, err := resolveName(settings, settingsErr, tcOverride)
 	if err != nil {
 		return ActiveToolchain{}, err
 	}
@@ -77,11 +84,16 @@ func Active(ctx context.Context, tcOverride string) (ActiveToolchain, error) {
 		return ActiveToolchain{}, err
 	}
 
+	if err := ensureComponents(ctx, filepath.Base(tcDir), tcDir, settings, components); err != nil {
+		return ActiveToolchain{}, err
+	}
+
 	return ActiveToolchain{
-		Dir:     tcDir,
-		Name:    filepath.Base(tcDir),
-		Source:  source,
-		Targets: targets,
+		Dir:        tcDir,
+		Name:       filepath.Base(tcDir),
+		Source:     source,
+		Targets:    targets,
+		Components: components,
 	}, nil
 }
 
@@ -93,25 +105,25 @@ func loadSettings() (*config.Settings, error) {
 	return sf.Load()
 }
 
-func resolveName(settings *config.Settings, settingsErr error, tcOverride string) (string, config.OverrideSource, []string, error) {
+func resolveName(settings *config.Settings, settingsErr error, tcOverride string) (string, config.OverrideSource, []string, []string, error) {
 	if tcOverride != "" {
-		return tcOverride, config.SourceUnknown, nil, nil
+		return tcOverride, config.SourceUnknown, nil, nil, nil
 	}
 	if envTC := os.Getenv(config.EnvToolchain); envTC != "" {
-		return envTC, config.SourceEnv, nil, nil
+		return envTC, config.SourceEnv, nil, nil, nil
 	}
 	if settingsErr != nil {
-		return "", config.SourceUnknown, nil, settingsErr
+		return "", config.SourceUnknown, nil, nil, settingsErr
 	}
 	cwd, err := os.Getwd()
 	if err != nil {
-		return "", config.SourceUnknown, nil, fmt.Errorf("failed to get working directory: %w", err)
+		return "", config.SourceUnknown, nil, nil, fmt.Errorf("failed to get working directory: %w", err)
 	}
 	resolved, err := config.ResolveToolchainConfig(settings, cwd)
 	if err != nil {
-		return "", config.SourceUnknown, nil, err
+		return "", config.SourceUnknown, nil, nil, err
 	}
-	return resolved.Name, resolved.Source, resolved.Targets, nil
+	return resolved.Name, resolved.Source, resolved.Targets, resolved.Components, nil
 }
 
 func ensureTargets(ctx context.Context, tcInput, tcDir string, settings *config.Settings, targets []string) error {
@@ -178,6 +190,62 @@ func ensureTargets(ctx context.Context, tcInput, tcDir string, settings *config.
 
 func shouldAutoInstall(settings *config.Settings) bool {
 	return settings != nil && settings.AutoInstall
+}
+
+func ensureComponents(ctx context.Context, tcInput, tcDir string, settings *config.Settings, components []string) error {
+	if len(components) == 0 {
+		return nil
+	}
+
+	parsedNames, err := component.NormalizeList(components)
+	if err != nil {
+		return err
+	}
+
+	var missingNames []component.Name
+	for _, n := range parsedNames {
+		if !component.IsInstalled(tcDir, n) {
+			missingNames = append(missingNames, n)
+		}
+	}
+	if len(missingNames) == 0 {
+		return nil
+	}
+
+	asStrings := make([]string, len(missingNames))
+	for i, n := range missingNames {
+		asStrings[i] = string(n)
+	}
+
+	if !shouldAutoInstall(settings) || AutoInstallComponentsFunc == nil {
+		return &cjverr.ComponentNotInstalledError{
+			Toolchain: filepath.Base(tcDir),
+			Component: asStrings[0],
+		}
+	}
+
+	fmt.Fprintln(os.Stderr, i18n.T("AutoInstalling", i18n.MsgData{
+		"Name": strings.Join(asStrings, ", "),
+	}))
+	if err := AutoInstallComponentsFunc(ctx, tcInput, asStrings); err != nil {
+		fmt.Fprintf(os.Stderr, "%s\n", i18n.T("AutoInstallFailed", i18n.MsgData{
+			"Name": strings.Join(asStrings, ", "),
+			"Err":  err.Error(),
+		}))
+		return &cjverr.ComponentNotInstalledError{
+			Toolchain: filepath.Base(tcDir),
+			Component: asStrings[0],
+		}
+	}
+	for _, n := range missingNames {
+		if !component.IsInstalled(tcDir, n) {
+			return &cjverr.ComponentNotInstalledError{
+				Toolchain: filepath.Base(tcDir),
+				Component: string(n),
+			}
+		}
+	}
+	return nil
 }
 
 func targetPlatformKey(settings *config.Settings, target string) (string, error) {

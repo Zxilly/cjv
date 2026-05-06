@@ -147,7 +147,7 @@ func TestBuildProxyEnv_PathDeduplication(t *testing.T) {
 		}
 	}
 	count := 0
-	for _, p := range strings.Split(pathValue, sep) {
+	for p := range strings.SplitSeq(pathValue, sep) {
 		if p == "/cjv/bin" {
 			count++
 		}
@@ -161,14 +161,7 @@ func TestBuildProxyEnv_SetsToolchainName(t *testing.T) {
 		Cfg: cfg, CjvBinDir: "/cjv/bin", ToolchainBinDir: "/tc/bin", ToolchainName: "lts-1.0.5",
 	})
 
-	var found bool
-	for _, e := range result {
-		if e == "CJV_TOOLCHAIN=lts-1.0.5" {
-			found = true
-			break
-		}
-	}
-	assert.True(t, found, "CJV_TOOLCHAIN should be set")
+	assert.Contains(t, result, "CJV_TOOLCHAIN=lts-1.0.5", "CJV_TOOLCHAIN should be set")
 }
 
 func TestBuildProxyEnv_PreservesHiddenWindowsVars(t *testing.T) {

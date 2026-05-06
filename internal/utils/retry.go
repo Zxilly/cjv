@@ -26,7 +26,7 @@ func IsRetryableError(err error) bool {
 // It retries only when shouldRetry returns true for the error.
 func RetryWithBackoff(maxAttempts int, shouldRetry func(error) bool, fn func() error) error {
 	var err error
-	for i := 0; i < maxAttempts; i++ {
+	for i := range maxAttempts {
 		err = fn()
 		if err == nil {
 			return nil
@@ -43,7 +43,7 @@ func RetryWithBackoff(maxAttempts int, shouldRetry func(error) bool, fn func() e
 
 func retryDelay(attempt int) time.Duration {
 	a, b := 10*time.Millisecond, 10*time.Millisecond
-	for i := 0; i < attempt; i++ {
+	for range attempt {
 		a, b = b, a+b
 		if b > time.Second {
 			b = time.Second

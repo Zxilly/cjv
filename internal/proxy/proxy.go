@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/Zxilly/cjv/internal/cjverr"
+	"github.com/Zxilly/cjv/internal/component"
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/env"
 	"github.com/Zxilly/cjv/internal/resolve"
@@ -105,7 +106,7 @@ func Run(ctx context.Context, toolName string, args []string) error {
 		return err
 	}
 
-	envCfg := env.LoadToolchainEnv(ctx, active.Dir)
+	envCfg := env.LoadToolchainEnv(ctx, active.Dir, component.ApplyEnv)
 
 	binDir, err := config.BinDir()
 	if err != nil {

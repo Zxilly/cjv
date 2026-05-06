@@ -57,6 +57,10 @@ cjv run sts cjc --version
 | `cjv toolchain list`                                | 列出已安装的工具链                 |
 | `cjv toolchain link <name> <path>`                  | 将自定义工具链链接到本地目录       |
 | `cjv toolchain uninstall <name>`                    | 卸载工具链                         |
+| `cjv component add <name>... [--toolchain <tc>]`    | 为工具链安装 component（如 stdx）  |
+| `cjv component remove <name>... [--toolchain <tc>]` | 从工具链卸载 component             |
+| `cjv component list [--toolchain <tc>] [--installed]` | 列出 component 的安装与可用情况 |
+| `cjv doc [--path] [--toolchain <tc>] [topic]`       | 在浏览器中打开当前工具链的离线文档 |
 | `cjv set auto-self-update <enable\|disable\|check>` | 设置自动自更新行为                 |
 | `cjv set auto-install <true\|false>`                | 设置代理模式下缺失工具链的自动安装 |
 | `cjv set gitcode-api-key <key>`                     | 设置 GitCode API 访问令牌（nightly 构建需要） |
@@ -75,7 +79,7 @@ cjv 按以下优先级顺序解析活跃工具链（从高到低）：
 
 ## 交叉编译 SDK
 
-cjv 对齐 rustup 的 `targets` 语义：目标 SDK 是宿主工具链的附加安装项，不改变当前活跃工具链。代理执行 `cjc`、`cjpm` 时仍使用宿主 SDK。
+目标 SDK 是宿主工具链的附加安装项，不改变当前活跃工具链；代理执行 `cjc`、`cjpm` 时仍使用宿主 SDK。
 
 ```bash
 # 安装宿主 STS SDK，并额外安装当前宿主对应的 OHOS 交叉 SDK
@@ -95,6 +99,34 @@ targets = ["ohos", "android", "ohos-arm32"]
 ```
 
 `targets` 只填写目标后缀，例如 `ohos`、`android`、`ohos-arm32`；不要填写完整平台 key，例如 `linux-x64-ohos`。
+
+## Components
+
+cjv 通过 component 机制管理与 SDK 一同发布的扩展资源。当前支持：
+
+- `stdx`：Cangjie 扩展库；解压后位于 `<CJV_HOME>/stdx/<tc>/{dynamic,static}`，并在代理执行的环境中自动注入 `CANGJIE_STDX_PATH_DYNAMIC` 与 `CANGJIE_STDX_PATH_STATIC`。LTS / STS 从 [`cangjie_stdx`](https://gitcode.com/Cangjie/cangjie_stdx/releases) 下载，nightly 从 [`nightly_build`](https://gitcode.com/Cangjie/nightly_build/releases) 下载。
+- `docs`：仓颉主体离线文档（dev-guide、libs/std、tools）。LTS / STS 从 [`cangjie-docs-bundle`](https://github.com/Zxilly/cangjie-docs-bundle/releases) GitHub release 下载，nightly 从 [`nightly_build`](https://gitcode.com/Cangjie/nightly_build/releases) 下载。
+- `stdx-docs`：仓颉扩展库离线文档。LTS / STS 从 [`cangjie_stdx`](https://gitcode.com/Cangjie/cangjie_stdx/releases) 下载，nightly 从 [`nightly_build`](https://gitcode.com/Cangjie/nightly_build/releases) 下载。
+
+```bash
+# 安装时顺带装上 component
+cjv install nightly -c stdx,docs
+
+# 单独管理
+cjv component add stdx --toolchain lts
+cjv component remove stdx-docs
+cjv component list --toolchain nightly
+```
+
+`cangjie-sdk.toml` 中的 `components` 字段同样会被识别；当 `auto_install` 开启时，代理执行将按需补齐缺失的 component：
+
+```toml
+[toolchain]
+channel = "nightly"
+components = ["stdx", "docs"]
+```
+
+`cjv doc` 在浏览器中打开当前工具链的本地 HTML（默认根 `index.html`，可用 topic `stdx` / `std` / `dev-guide` / `book` / `tools` 跳子页）。`--path` 只打印路径，不打开浏览器；如果对应工具链尚未安装 docs / stdx-docs，会提示用 `cjv component add` 先安装。
 
 ## 代理模式
 
@@ -141,16 +173,30 @@ cjv envsetup | Invoke-Expression
 | `CJV_DOWNLOAD_TIMEOUT` | HTTP 下载超时秒数（默认: `180`）                       |
 | `CJV_GITCODE_API_KEY`  | GitCode API 访问令牌，用于查询和下载 nightly 工具链    |
 | `CJV_NO_PATH_SETUP`    | 设为 `1` 跳过首次安装时的 PATH 自动配置                |
+| `CANGJIE_STDX_PATH_DYNAMIC` | 由 cjv 自动注入，指向 `<CJV_HOME>/stdx/<tc>/dynamic`（仅当 stdx 已安装） |
+| `CANGJIE_STDX_PATH_STATIC`  | 由 cjv 自动注入，指向 `<CJV_HOME>/stdx/<tc>/static`（仅当 stdx 已安装） |
 
 ## 目录结构
 
 ```
 ~/.cjv/
   bin/            # 代理符号链接和 cjv 二进制文件
-  toolchains/     # 已安装的 SDK 工具链
+  toolchains/     # 已安装的 SDK 工具链（仅 SDK 本体）
+    <tc>/
+      .cjv/components/         # cjv 维护的 component manifest
+  stdx/           # stdx component（按工具链拆分，路径通过 CANGJIE_STDX_PATH_* 暴露）
+    <tc>/
+      dynamic/
+      static/
+  docs/           # 离线文档（与工具链解耦，docs 与 stdx-docs 各自独占子目录）
+    <tc>/
+      main/                    # docs component（dev-guide / libs/std / tools 入口）
+      stdx/                    # stdx-docs component（libs_stdx 入口）
   downloads/      # 下载的 SDK 归档文件（缓存）
   settings.toml   # 用户设置
 ```
+
+注：`cjv toolchain uninstall <tc>` 会一并清掉 `stdx/<tc>/` 与 `docs/<tc>/`。
 
 ## 配置
 
@@ -160,6 +206,3 @@ cjv envsetup | Invoke-Expression
 
 Apache-2.0。详见 [LICENSE](LICENSE)。
 
-## 致谢
-
-cjv 的设计灵感来源于 [rustup](https://github.com/rust-lang/rustup)

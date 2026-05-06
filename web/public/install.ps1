@@ -26,7 +26,6 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-# Support CJV_MIRROR env var
 if ($env:CJV_MIRROR -eq "1") {
     $Mirror = $true
 }
@@ -53,10 +52,20 @@ function Install-Cjv {
 
         Write-Host "cjv-install: downloading cjv from $url"
         [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-        Invoke-WebRequest -Uri $url -OutFile $zipPath -UseBasicParsing
 
-        Write-Host "cjv-install: extracting"
-        Expand-Archive -Path $zipPath -DestinationPath $tmpDir -Force
+        # PS 5.1's Write-Progress slows Invoke-WebRequest / Expand-Archive
+        # ~100x for binary payloads.
+        $savedProgress = $global:ProgressPreference
+        try {
+            $global:ProgressPreference = 'SilentlyContinue'
+            Invoke-WebRequest -Uri $url -OutFile $zipPath -UseBasicParsing
+
+            Write-Host "cjv-install: extracting"
+            Expand-Archive -Path $zipPath -DestinationPath $tmpDir -Force
+        }
+        finally {
+            $global:ProgressPreference = $savedProgress
+        }
 
         $cjvExe = Join-Path $tmpDir "cjv.exe"
         if (-not (Test-Path $cjvExe)) {

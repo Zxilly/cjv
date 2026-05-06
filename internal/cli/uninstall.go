@@ -60,6 +60,15 @@ func runUninstall(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to remove toolchain: %w", err)
 	}
 
+	// Per-toolchain docs and stdx live outside the toolchain directory; nuke
+	// them too so a fresh reinstall doesn't see stale extras.
+	if docsDir, derr := config.DocsDirFor(name); derr == nil {
+		_ = utils.RemoveAllRetry(docsDir) //nolint:errcheck // best-effort cleanup
+	}
+	if stdxDir, serr := config.StdxDirFor(name); serr == nil {
+		_ = utils.RemoveAllRetry(stdxDir) //nolint:errcheck // best-effort cleanup
+	}
+
 	color.Green(i18n.T("ToolchainUninstalled", i18n.MsgData{
 		"Name": name,
 	}))

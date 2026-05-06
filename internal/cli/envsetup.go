@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 
+	componentlib "github.com/Zxilly/cjv/internal/component"
 	"github.com/Zxilly/cjv/internal/env"
 	"github.com/spf13/cobra"
 )
@@ -67,7 +68,7 @@ func envsetupRunWithShell(cmd *cobra.Command, args []string, shellFlag string) e
 
 	baseEnv := os.Environ()
 
-	runtimeEnv, err := env.ResolveRuntimeEnv(ctx, tcOverride)
+	runtimeEnv, err := env.ResolveRuntimeEnv(ctx, tcOverride, componentlib.ApplyEnv)
 	if err != nil {
 		return err
 	}

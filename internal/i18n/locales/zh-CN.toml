@@ -283,3 +283,95 @@ other = "是"
 
 [No]
 other = "否"
+
+# === Components ===
+[UnknownComponent]
+other = "未知 component：'{{.Name}}'"
+
+[ComponentInstalled]
+other = "已为工具链 '{{.Toolchain}}' 安装 component '{{.Component}}'"
+
+[ComponentAlreadyInstalled]
+other = "工具链 '{{.Toolchain}}' 已安装 component '{{.Component}}'"
+
+[ComponentRemoved]
+other = "已从工具链 '{{.Toolchain}}' 移除 component '{{.Component}}'"
+
+[ComponentNotInstalled]
+other = "工具链 '{{.Toolchain}}' 未安装 component '{{.Component}}'。请运行 'cjv component add {{.Component}} --toolchain {{.Toolchain}}'。"
+
+[ComponentRequiresHost]
+other = "Component '{{.Component}}' 不能安装在自定义或 link 的工具链上。"
+
+[ComponentNotAvailableForChannel]
+other = "Component '{{.Component}}' 在 channel '{{.Channel}}' 上没有可下载的离线包。"
+
+[InstalledComponents]
+one = "已安装 {{.Count}} 个 component："
+other = "已安装 {{.Count}} 个 component："
+
+[NoComponentsInstalled]
+other = "未安装任何 component。"
+
+[AvailableComponents]
+other = "可安装"
+
+[DocsNotInstalled]
+other = "工具链 '{{.Toolchain}}' 未安装文档。请运行 'cjv component add docs --toolchain {{.Toolchain}}'（可选 'stdx-docs'）。"
+
+[OpeningDocs]
+other = "正在浏览器中打开文档"
+
+[OpeningDocsBrowserFailed]
+other = "无法打开浏览器，文档位于：{{.Path}}"
+
+[DocsTopicNotFound]
+other = "工具链 '{{.Toolchain}}' 未找到主题 '{{.Topic}}' 的文档。可尝试 'cjv component add {{.Component}}'。"
+
+[FetchingComponent]
+other = "正在为 {{.Toolchain}} 下载 component '{{.Component}}'..."
+
+[InstallingComponent]
+other = "正在安装 component '{{.Component}}'..."
+
+[RemovingComponent]
+other = "正在移除 component '{{.Component}}'..."
+
+[ComponentSubcmdShort]
+other = "管理工具链 component"
+
+[ComponentAddShort]
+other = "为工具链安装 component"
+
+[ComponentRemoveShort]
+other = "从工具链移除 component"
+
+[ComponentListShort]
+other = "列出已安装与可安装的 component"
+
+[ComponentFlagToolchain]
+other = "目标工具链（默认为当前活跃工具链）"
+
+[ComponentFlagInstalled]
+other = "仅列出已安装的 component"
+
+[ComponentFlagQuiet]
+other = "以单列形式输出"
+
+[DocCmdShort]
+other = "打开当前工具链的文档"
+
+[DocFlagPath]
+other = "只打印文档路径或 URL，不打开浏览器"
+
+[DocFlagToolchain]
+other = "要打开文档的工具链（默认为当前活跃工具链）"
+
+[InstallFlagComponent]
+other = "需要附加安装的 component（可重复或逗号分隔）"
+
+[InstallFlagForce]
+other = "强制重新下载并重装，即使已安装"
+
+[StatusInstalled]
+other = "已安装"

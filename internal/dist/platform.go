@@ -72,18 +72,20 @@ func NightlyFilenameForPlatform(platformKey, version string) (string, error) {
 	if parts.Target != "" {
 		targetPart = "-" + parts.Target
 	}
-	ext := ArchiveExt(nightlyGOOS(m.NightlyOS))
+	ext := ArchiveExt(NightlyGOOS(m.NightlyOS))
 	return "cangjie-sdk-" + m.NightlyOS + "-" + m.NightlyArch + targetPart + "-" + version + ext, nil
 }
 
-func nightlyGOOS(nightlyOS string) string {
-	if nightlyOS == "windows" {
+// NightlyGOOS maps the SDK manifest's OS name to Go's GOOS (mac → darwin).
+func NightlyGOOS(nightlyOS string) string {
+	switch nightlyOS {
+	case "windows":
 		return "windows"
-	}
-	if nightlyOS == "mac" {
+	case "mac":
 		return "darwin"
+	default:
+		return nightlyOS
 	}
-	return nightlyOS
 }
 
 func ArchiveExt(goos string) string {

@@ -77,12 +77,10 @@ func TestSettingsFile_ConcurrentAccess(t *testing.T) {
 	sf := NewSettingsFile(path)
 
 	var wg sync.WaitGroup
-	for i := 0; i < 10; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range 10 {
+		wg.Go(func() {
 			sf.Load()
-		}()
+		})
 	}
 	wg.Wait()
 }

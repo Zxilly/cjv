@@ -57,6 +57,10 @@ cjv run sts cjc --version
 | `cjv toolchain list`                                | List installed toolchains                               |
 | `cjv toolchain link <name> <path>`                  | Link a custom toolchain to a local directory            |
 | `cjv toolchain uninstall <name>`                    | Uninstall a toolchain                                   |
+| `cjv component add <name>... [--toolchain <tc>]`    | Install a component (e.g. stdx) onto a toolchain        |
+| `cjv component remove <name>... [--toolchain <tc>]` | Remove a component from a toolchain                     |
+| `cjv component list [--toolchain <tc>] [--installed]` | List installed and available components               |
+| `cjv doc [--path] [--toolchain <tc>] [topic]`       | Open the toolchain's offline documentation in your browser |
 | `cjv set auto-self-update <enable\|disable\|check>` | Set auto-self-update behavior                           |
 | `cjv set auto-install <true\|false>`                | Set auto-install for missing toolchains in proxy mode   |
 | `cjv set gitcode-api-key <key>`                     | Set GitCode API access token (required for nightly builds) |
@@ -75,7 +79,7 @@ cjv resolves the active toolchain in the following order (highest priority first
 
 ## Cross-Compilation SDKs
 
-cjv follows rustup-style `targets` semantics: target SDKs are additive installs for the host toolchain and do not change the active toolchain. Proxy execution of `cjc` and `cjpm` still uses the host SDK.
+Target SDKs are additive installs on top of the host toolchain and do not change the active toolchain. Proxy execution of `cjc` and `cjpm` still uses the host SDK.
 
 ```bash
 # Install the host STS SDK and the OHOS cross SDK for the current host
@@ -95,6 +99,34 @@ targets = ["ohos", "android", "ohos-arm32"]
 ```
 
 `targets` accepts suffixes such as `ohos`, `android`, and `ohos-arm32`; do not use full platform keys such as `linux-x64-ohos`.
+
+## Components
+
+cjv ships a component system to manage SDK extras that release alongside each toolchain. Currently supported:
+
+- `stdx` — Cangjie extension libraries. Installs into `<CJV_HOME>/stdx/<tc>/{dynamic,static}` and exposes `CANGJIE_STDX_PATH_DYNAMIC` / `CANGJIE_STDX_PATH_STATIC` to proxied tools. Downloads from [`cangjie_stdx`](https://gitcode.com/Cangjie/cangjie_stdx/releases) on LTS / STS and from [`nightly_build`](https://gitcode.com/Cangjie/nightly_build/releases) on nightly.
+- `docs` — Cangjie main offline documentation (dev-guide, libs/std, tools). LTS / STS download from the [`cangjie-docs-bundle`](https://github.com/Zxilly/cangjie-docs-bundle/releases) GitHub release; nightly downloads from [`nightly_build`](https://gitcode.com/Cangjie/nightly_build/releases).
+- `stdx-docs` — Cangjie extension library offline docs. LTS / STS download from [`cangjie_stdx`](https://gitcode.com/Cangjie/cangjie_stdx/releases); nightly downloads from [`nightly_build`](https://gitcode.com/Cangjie/nightly_build/releases).
+
+```bash
+# Install components alongside the toolchain
+cjv install nightly -c stdx,docs
+
+# Or manage them independently
+cjv component add stdx --toolchain lts
+cjv component remove stdx-docs
+cjv component list --toolchain nightly
+```
+
+`cangjie-sdk.toml` recognises a `components` field; when `auto_install` is enabled, missing components are installed transparently during proxy execution:
+
+```toml
+[toolchain]
+channel = "nightly"
+components = ["stdx", "docs"]
+```
+
+`cjv doc` opens the local HTML in your browser (defaults to `index.html`; accepts topics like `stdx`, `std`, `dev-guide`, `book`, `tools`). Use `--path` to print the resolved path without launching a browser. If the docs (or stdx-docs) component is not installed for the active toolchain, `cjv doc` prints a hint pointing at `cjv component add`.
 
 ## Proxy Mode
 
@@ -141,16 +173,30 @@ Both commands use the same toolchain resolution priority as proxy mode and suppo
 | `CJV_DOWNLOAD_TIMEOUT`  | HTTP download timeout in seconds (default: `180`)             |
 | `CJV_GITCODE_API_KEY`   | GitCode API access token for querying and downloading nightly toolchains |
 | `CJV_NO_PATH_SETUP`     | Set to `1` to skip PATH configuration on first install        |
+| `CANGJIE_STDX_PATH_DYNAMIC` | Auto-injected by cjv to `<CJV_HOME>/stdx/<tc>/dynamic` (only when stdx is installed) |
+| `CANGJIE_STDX_PATH_STATIC`  | Auto-injected by cjv to `<CJV_HOME>/stdx/<tc>/static` (only when stdx is installed)  |
 
 ## Directory Structure
 
 ```
 ~/.cjv/
   bin/            # Proxy symlinks and the cjv binary
-  toolchains/     # Installed SDK toolchains
+  toolchains/     # Installed SDK toolchains (SDK files only)
+    <tc>/
+      .cjv/components/         # cjv-managed component manifests
+  stdx/           # stdx component, per toolchain (path exposed via CANGJIE_STDX_PATH_*)
+    <tc>/
+      dynamic/
+      static/
+  docs/           # Offline docs, decoupled from the toolchain tree
+    <tc>/
+      main/                    # docs component (dev-guide, libs/std, tools)
+      stdx/                    # stdx-docs component (libs_stdx)
   downloads/      # Downloaded SDK archives (cache)
   settings.toml   # User settings
 ```
+
+`cjv toolchain uninstall <tc>` cleans up `stdx/<tc>/` and `docs/<tc>/` along with the toolchain directory.
 
 ## Configuration
 
@@ -160,6 +206,3 @@ Settings are stored in `~/.cjv/settings.toml` and can be modified via `cjv set` 
 
 Apache-2.0. See [LICENSE](LICENSE) for details.
 
-## Credits
-
-cjv's design is inspired by [rustup](https://github.com/rust-lang/rustup)

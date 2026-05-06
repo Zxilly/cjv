@@ -286,3 +286,95 @@ other = "yes"
 
 [No]
 other = "no"
+
+# === Components ===
+[UnknownComponent]
+other = "Unknown component: '{{.Name}}'"
+
+[ComponentInstalled]
+other = "Component '{{.Component}}' installed for toolchain '{{.Toolchain}}'"
+
+[ComponentAlreadyInstalled]
+other = "Component '{{.Component}}' is already installed for toolchain '{{.Toolchain}}'"
+
+[ComponentRemoved]
+other = "Component '{{.Component}}' removed from toolchain '{{.Toolchain}}'"
+
+[ComponentNotInstalled]
+other = "Component '{{.Component}}' is not installed for toolchain '{{.Toolchain}}'. Run 'cjv component add {{.Component}} --toolchain {{.Toolchain}}'."
+
+[ComponentRequiresHost]
+other = "Component '{{.Component}}' cannot be installed on a custom or linked toolchain."
+
+[ComponentNotAvailableForChannel]
+other = "Component '{{.Component}}' is not available offline on channel '{{.Channel}}'."
+
+[InstalledComponents]
+one = "{{.Count}} component installed:"
+other = "{{.Count}} components installed:"
+
+[NoComponentsInstalled]
+other = "No components installed."
+
+[AvailableComponents]
+other = "available"
+
+[DocsNotInstalled]
+other = "Docs are not installed for toolchain '{{.Toolchain}}'. Run 'cjv component add docs --toolchain {{.Toolchain}}' (and optionally 'stdx-docs')."
+
+[OpeningDocs]
+other = "Opening docs in your browser"
+
+[OpeningDocsBrowserFailed]
+other = "Failed to open browser; documentation is at: {{.Path}}"
+
+[DocsTopicNotFound]
+other = "No documentation found for topic '{{.Topic}}' in toolchain '{{.Toolchain}}'. Try 'cjv component add {{.Component}}'."
+
+[FetchingComponent]
+other = "Fetching component '{{.Component}}' for {{.Toolchain}}..."
+
+[InstallingComponent]
+other = "Installing component '{{.Component}}'..."
+
+[RemovingComponent]
+other = "Removing component '{{.Component}}'..."
+
+[ComponentSubcmdShort]
+other = "Manage toolchain components"
+
+[ComponentAddShort]
+other = "Add components to a toolchain"
+
+[ComponentRemoveShort]
+other = "Remove components from a toolchain"
+
+[ComponentListShort]
+other = "List installed and available components"
+
+[ComponentFlagToolchain]
+other = "Toolchain to operate on (defaults to active toolchain)"
+
+[ComponentFlagInstalled]
+other = "List only installed components"
+
+[ComponentFlagQuiet]
+other = "Force the output to be a single column"
+
+[DocCmdShort]
+other = "Open the documentation for the current toolchain"
+
+[DocFlagPath]
+other = "Print the path or URL to the documentation instead of opening it"
+
+[DocFlagToolchain]
+other = "Toolchain whose documentation to open (defaults to active toolchain)"
+
+[InstallFlagComponent]
+other = "Component to install (repeatable, comma-separated)"
+
+[InstallFlagForce]
+other = "Force re-download and re-install even if already installed"
+
+[StatusInstalled]
+other = "installed"

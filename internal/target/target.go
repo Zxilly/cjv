@@ -67,7 +67,7 @@ func NormalizeList(values []string) ([]string, error) {
 	var targets []string
 	seen := make(map[string]bool)
 	for _, value := range values {
-		for _, part := range strings.Split(value, ",") {
+		for part := range strings.SplitSeq(value, ",") {
 			if strings.TrimSpace(part) == "" {
 				return nil, fmt.Errorf("target list contains an empty target")
 			}
@@ -122,6 +122,17 @@ func ToolchainKey(hostKey, target string) (string, error) {
 		return hostKey, nil
 	}
 	return hostKey + "-" + normalized, nil
+}
+
+// HostKeyOnly strips any target suffix from a toolchain key, returning just
+// the host key (e.g. "linux-x64-ohos" → "linux-x64"). Useful for components
+// like stdx that are not target-specific.
+func HostKeyOnly(toolchainKey string) (string, error) {
+	parts, err := ParseToolchainKey(toolchainKey)
+	if err != nil {
+		return "", err
+	}
+	return parts.HostKey, nil
 }
 
 func ParseToolchainKey(key string) (ToolchainKeyParts, error) {

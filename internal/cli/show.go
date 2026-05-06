@@ -4,9 +4,12 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
+	"strings"
 
 	"github.com/Zxilly/cjv/internal/cjverr"
+	componentlib "github.com/Zxilly/cjv/internal/component"
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/i18n"
 	"github.com/Zxilly/cjv/internal/toolchain"
@@ -109,8 +112,21 @@ func runShowInstalled(cmd *cobra.Command, args []string) error {
 	fmt.Println(i18n.TP("InstalledToolchains", i18n.MsgData{
 		"Count": strconv.Itoa(len(installed)),
 	}, len(installed)))
+	tcRoot, err := config.ToolchainsDir()
+	if err != nil {
+		return err
+	}
 	for _, name := range installed {
 		fmt.Printf("  %s\n", name)
+		if comps, err := componentlib.ListInstalled(filepath.Join(tcRoot, name)); err == nil && len(comps) > 0 {
+			parts := make([]string, len(comps))
+			for i, c := range comps {
+				parts[i] = string(c)
+			}
+			fmt.Printf("    %s %s\n",
+				i18n.TP("InstalledComponents", i18n.MsgData{"Count": strconv.Itoa(len(parts))}, len(parts)),
+				strings.Join(parts, ", "))
+		}
 	}
 	return nil
 }

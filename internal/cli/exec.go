@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/Zxilly/cjv/internal/cjverr"
+	componentlib "github.com/Zxilly/cjv/internal/component"
 	"github.com/Zxilly/cjv/internal/env"
 	"github.com/Zxilly/cjv/internal/proxy"
 	"github.com/spf13/cobra"
@@ -57,7 +58,7 @@ func execRun(cmd *cobra.Command, args []string) error {
 	command := remaining[0]
 	commandArgs := remaining[1:]
 
-	runtimeEnv, err := env.ResolveRuntimeEnv(ctx, tcOverride)
+	runtimeEnv, err := env.ResolveRuntimeEnv(ctx, tcOverride, componentlib.ApplyEnv)
 	if err != nil {
 		return err
 	}

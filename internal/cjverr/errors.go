@@ -135,3 +135,90 @@ func (e *ExitCodeError) Error() string {
 	return fmt.Sprintf("process exited with code %d", e.Code)
 }
 
+// UnknownComponentError indicates an unrecognized component name.
+type UnknownComponentError struct {
+	Name string
+}
+
+func (e *UnknownComponentError) Error() string {
+	return i18n.T("UnknownComponent", i18n.MsgData{"Name": e.Name})
+}
+
+// ComponentNotInstalledError indicates the requested component is missing
+// from a toolchain.
+type ComponentNotInstalledError struct {
+	Toolchain string
+	Component string
+}
+
+func (e *ComponentNotInstalledError) Error() string {
+	return i18n.T("ComponentNotInstalled", i18n.MsgData{
+		"Toolchain": e.Toolchain,
+		"Component": e.Component,
+	})
+}
+
+// ComponentAlreadyInstalledError indicates the component is already present
+// on the toolchain and --force was not supplied.
+type ComponentAlreadyInstalledError struct {
+	Toolchain string
+	Component string
+}
+
+func (e *ComponentAlreadyInstalledError) Error() string {
+	return i18n.T("ComponentAlreadyInstalled", i18n.MsgData{
+		"Toolchain": e.Toolchain,
+		"Component": e.Component,
+	})
+}
+
+// ComponentNotAvailableForChannelError indicates the component cannot be
+// installed offline on the given channel (e.g. docs / stdx-docs on lts/sts).
+type ComponentNotAvailableForChannelError struct {
+	Component string
+	Channel   string
+}
+
+func (e *ComponentNotAvailableForChannelError) Error() string {
+	return i18n.T("ComponentNotAvailableForChannel", i18n.MsgData{
+		"Component": e.Component,
+		"Channel":   e.Channel,
+	})
+}
+
+// ComponentRequiresHostError indicates a component cannot be installed on a
+// custom / linked toolchain.
+type ComponentRequiresHostError struct {
+	Component string
+}
+
+func (e *ComponentRequiresHostError) Error() string {
+	return i18n.T("ComponentRequiresHost", i18n.MsgData{"Component": e.Component})
+}
+
+// DocsNotInstalledError indicates `cjv doc` was invoked on a toolchain that
+// has neither docs nor stdx-docs installed (only meaningful for nightly).
+type DocsNotInstalledError struct {
+	Toolchain string
+}
+
+func (e *DocsNotInstalledError) Error() string {
+	return i18n.T("DocsNotInstalled", i18n.MsgData{"Toolchain": e.Toolchain})
+}
+
+// DocsTopicNotFoundError indicates `cjv doc <topic>` could not resolve the
+// topic to a file under the toolchain's docs root.
+type DocsTopicNotFoundError struct {
+	Toolchain        string
+	Topic            string
+	MissingComponent string
+}
+
+func (e *DocsTopicNotFoundError) Error() string {
+	return i18n.T("DocsTopicNotFound", i18n.MsgData{
+		"Toolchain": e.Toolchain,
+		"Topic":     e.Topic,
+		"Component": e.MissingComponent,
+	})
+}
+

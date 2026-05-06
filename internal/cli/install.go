@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -10,9 +11,12 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 
+	"github.com/Zxilly/cjv/internal/cjverr"
 	"github.com/Zxilly/cjv/internal/cli/selfmgmt"
 	clisettings "github.com/Zxilly/cjv/internal/cli/settings"
+	componentlib "github.com/Zxilly/cjv/internal/component"
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/dist"
 	"github.com/Zxilly/cjv/internal/env"
@@ -27,8 +31,9 @@ import (
 )
 
 var (
-	forceInstall   bool
-	installTargets []string
+	forceInstall      bool
+	installTargets    []string
+	installComponents []string
 
 	// ensurePathConfiguredFn is called during first install to add cjv's bin
 	// directory to the user's PATH. Tests override this to avoid writing to
@@ -37,8 +42,9 @@ var (
 )
 
 func init() {
-	installCmd.Flags().BoolVar(&forceInstall, "force", false, "Force re-download and re-install even if already installed")
+	installCmd.Flags().BoolVar(&forceInstall, "force", false, i18n.T("InstallFlagForce", nil))
 	installCmd.Flags().StringSliceVarP(&installTargets, "target", "t", nil, "Cross-compilation target suffix to install (repeatable, comma-separated)")
+	installCmd.Flags().StringSliceVarP(&installComponents, "component", "c", nil, i18n.T("InstallFlagComponent", nil))
 	rootCmd.AddCommand(installCmd)
 }
 
@@ -52,16 +58,22 @@ var installCmd = &cobra.Command{
 func runInstall(cmd *cobra.Command, args []string) error {
 	selfmgmt.CheckSudoSafety()
 	toolchain.CleanupStagingDirs()
-	return InstallToolchainWithTargets(cmd.Context(), args[0], installTargets, forceInstall)
+	return InstallToolchainWithExtras(cmd.Context(), args[0], installTargets, installComponents, forceInstall)
 }
 
 // InstallToolchainWithOptions installs a toolchain with optional force re-install.
 func InstallToolchainWithOptions(ctx context.Context, input string, force bool) error {
-	return InstallToolchainWithTargets(ctx, input, nil, force)
+	return InstallToolchainWithExtras(ctx, input, nil, nil, force)
 }
 
 // InstallToolchainWithTargets installs the host toolchain plus optional cross SDK target variants.
 func InstallToolchainWithTargets(ctx context.Context, input string, targets []string, force bool) error {
+	return InstallToolchainWithExtras(ctx, input, targets, nil, force)
+}
+
+// InstallToolchainWithExtras installs the host toolchain plus optional cross
+// SDK target variants and optional components.
+func InstallToolchainWithExtras(ctx context.Context, input string, targets, components []string, force bool) error {
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -108,6 +120,85 @@ func InstallToolchainWithTargets(ctx context.Context, input string, targets []st
 		}
 		if err := installResolvedNoDefault(ctx, resolvedTarget, settings, sf, force); err != nil {
 			return err
+		}
+	}
+
+	if len(components) > 0 {
+		if err := installComponentsList(ctx, resolved.Name, components, force, false); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// InstallComponentsForToolchain backs the proxy auto_install path: it
+// resolves tcInput to an already-installed toolchain and installs missing
+// components quietly.
+func InstallComponentsForToolchain(ctx context.Context, tcInput string, components []string) error {
+	if len(components) == 0 {
+		return nil
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	name, err := toolchain.ParseToolchainName(tcInput)
+	if err != nil {
+		return err
+	}
+	installedDir, err := toolchain.FindInstalled(name)
+	if err != nil {
+		return err
+	}
+	return installComponentsList(ctx, filepath.Base(installedDir), components, false, true)
+}
+
+// installComponentsList expects resolvedName as "<channel>-<version>"
+// (the directory name under <CJV_HOME>/toolchains/). quiet suppresses the
+// per-component status lines; used by the proxy auto-install path.
+func installComponentsList(ctx context.Context, resolvedName string, components []string, force, quiet bool) error {
+	resolvedTC, err := toolchain.ParseToolchainName(resolvedName)
+	if err != nil {
+		return err
+	}
+	if resolvedTC.IsCustom() {
+		return &cjverr.ComponentRequiresHostError{Component: strings.Join(components, ", ")}
+	}
+	parsed, err := componentlib.NormalizeList(components)
+	if err != nil {
+		return err
+	}
+	_, settings, err := clisettings.LoadSettings()
+	if err != nil {
+		return err
+	}
+	platformKey, err := dist.CurrentPlatformKey(settings.DefaultHost)
+	if err != nil {
+		return err
+	}
+	downloadsDir, err := config.DownloadsDir()
+	if err != nil {
+		return err
+	}
+	roots, err := componentlib.RootsFor(resolvedName)
+	if err != nil {
+		return err
+	}
+	for _, c := range parsed {
+		if err := componentlib.Install(ctx, roots, resolvedTC, c, platformKey, downloadsDir, force); err != nil {
+			var alreadyErr *cjverr.ComponentAlreadyInstalledError
+			if errors.As(err, &alreadyErr) {
+				if !quiet {
+					fmt.Println(err)
+				}
+				continue
+			}
+			return err
+		}
+		if !quiet {
+			color.Green(i18n.T("ComponentInstalled", i18n.MsgData{
+				"Toolchain": resolvedName,
+				"Component": string(c),
+			}))
 		}
 	}
 	return nil

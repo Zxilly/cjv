@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 
 	"github.com/Zxilly/cjv/internal/cjverr"
+	componentlib "github.com/Zxilly/cjv/internal/component"
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/env"
 	"github.com/Zxilly/cjv/internal/proxy"
@@ -76,7 +77,7 @@ flagLoop:
 
 	toolPath := resolveRunCommand(tcDir, toolName)
 
-	envCfg := env.LoadToolchainEnv(ctx, tcDir)
+	envCfg := env.LoadToolchainEnv(ctx, tcDir, componentlib.ApplyEnv)
 
 	count := proxy.GetRecursionCount()
 

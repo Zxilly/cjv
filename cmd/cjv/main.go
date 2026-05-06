@@ -29,6 +29,9 @@ func main() {
 	resolve.AutoInstallFunc = func(ctx context.Context, input string, targets []string) error {
 		return cli.InstallToolchainWithTargets(ctx, input, targets, false)
 	}
+	resolve.AutoInstallComponentsFunc = func(ctx context.Context, input string, components []string) error {
+		return cli.InstallComponentsForToolchain(ctx, input, components)
+	}
 
 	toolName := proxy.ExtractToolName(os.Args[0])
 

@@ -58,9 +58,10 @@ func (s OverrideSource) String() string {
 }
 
 type ToolchainConfig struct {
-	Name    string
-	Source  OverrideSource
-	Targets []string
+	Name       string
+	Source     OverrideSource
+	Targets    []string
+	Components []string
 }
 
 // ResolveToolchain resolves the active toolchain by priority chain.
@@ -109,9 +110,10 @@ func ResolveToolchainConfig(settings *Settings, cwd string) (ToolchainConfig, er
 					return ToolchainConfig{}, fmt.Errorf("%s: %w", candidate, err)
 				}
 				return ToolchainConfig{
-					Name:    tc.Toolchain.Channel,
-					Source:  SourceToolchainFile,
-					Targets: targets,
+					Name:       tc.Toolchain.Channel,
+					Source:     SourceToolchainFile,
+					Targets:    targets,
+					Components: tc.Toolchain.Components,
 				}, nil
 			}
 			// File exists but channel is empty — report an error so users

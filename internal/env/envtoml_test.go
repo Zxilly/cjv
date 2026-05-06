@@ -66,7 +66,7 @@ func TestLoadToolchainEnv_CapturesOnDemandWhenEnvTomlMissing(t *testing.T) {
 	}
 	require.NoError(t, os.WriteFile(scriptPath, []byte(contents), 0o755))
 
-	cfg := LoadToolchainEnv(context.Background(), tcDir)
+	cfg := LoadToolchainEnv(context.Background(), tcDir, nil)
 	// On macOS, $PWD resolves symlinks (e.g. /var -> /private/var),
 	// so compare against the resolved path.
 	wantDir := tcDir

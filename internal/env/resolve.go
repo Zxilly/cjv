@@ -13,13 +13,14 @@ import (
 // ResolveRuntimeEnv resolves the active toolchain from context and builds
 // the full environment needed to run compiled Cangjie binaries.
 // tcOverride is the optional +toolchain argument (empty string to auto-resolve).
-func ResolveRuntimeEnv(ctx context.Context, tcOverride string) ([]string, error) {
+// componentEnv may be nil; when non-nil it injects component-contributed vars.
+func ResolveRuntimeEnv(ctx context.Context, tcOverride string, componentEnv ComponentEnvProvider) ([]string, error) {
 	active, err := resolve.Active(ctx, tcOverride)
 	if err != nil {
 		return nil, err
 	}
 
-	envCfg := LoadToolchainEnv(ctx, active.Dir)
+	envCfg := LoadToolchainEnv(ctx, active.Dir, componentEnv)
 
 	binDir, err := config.BinDir()
 	if err != nil {

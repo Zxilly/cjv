@@ -18,6 +18,10 @@ type EnvConfig struct {
 	PathPrepend PathPrepend       `toml:"path_prepend"`
 }
 
+// ComponentEnvProvider injects env vars contributed by installed components.
+// Passed in by callers so the env package does not need to import component.
+type ComponentEnvProvider func(vars map[string]string, tcDir string)
+
 type PathPrepend struct {
 	Entries []string `toml:"entries"`
 }
@@ -58,12 +62,14 @@ func LoadEnvConfig(path string) (*EnvConfig, error) {
 
 // LoadToolchainEnv loads env.toml from the toolchain directory, warns on
 // parse errors (falling back to an empty config), and ensures the SDK
-// library path is set.
-func LoadToolchainEnv(ctx context.Context, tcDir string) *EnvConfig {
+// library path is set. componentEnv may be nil; when non-nil it is invoked
+// to add component-contributed vars after the toml is loaded.
+func LoadToolchainEnv(ctx context.Context, tcDir string, componentEnv ComponentEnvProvider) *EnvConfig {
 	envPath := filepath.Join(tcDir, "env.toml")
 	cfg, err := loadEnvConfigRaw(envPath)
 	if err == nil {
 		EnsureLibraryPath(cfg, tcDir)
+		applyComponentEnv(cfg, tcDir, componentEnv)
 		return cfg
 	}
 	result := NewEnvConfig()
@@ -78,7 +84,18 @@ func LoadToolchainEnv(ctx context.Context, tcDir string) *EnvConfig {
 		slog.Warn("failed to parse env.toml", "error", err)
 	}
 	EnsureLibraryPath(result, tcDir)
+	applyComponentEnv(result, tcDir, componentEnv)
 	return result
+}
+
+func applyComponentEnv(cfg *EnvConfig, tcDir string, componentEnv ComponentEnvProvider) {
+	if componentEnv == nil {
+		return
+	}
+	if cfg.Vars == nil {
+		cfg.Vars = make(map[string]string)
+	}
+	componentEnv(cfg.Vars, tcDir)
 }
 
 // Save writes the EnvConfig to path in TOML format.
