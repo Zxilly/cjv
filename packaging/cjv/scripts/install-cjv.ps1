@@ -8,7 +8,6 @@ $ErrorActionPreference = "Stop"
 
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $moduleDir = Split-Path -Parent $scriptDir
-$releaseEnvPath = Join-Path $moduleDir "release.env"
 
 function Get-Sha256Hex {
     param(
@@ -31,21 +30,6 @@ function Get-Sha256Hex {
     }
 }
 
-$releaseEnv = @{}
-if (Test-Path $releaseEnvPath) {
-    foreach ($line in Get-Content $releaseEnvPath) {
-        if ([string]::IsNullOrWhiteSpace($line) -or $line.TrimStart().StartsWith("#")) {
-            continue
-        }
-
-        $parts = $line -split "=", 2
-        if ($parts.Count -ne 2) {
-            throw "invalid release.env line: $line"
-        }
-        $releaseEnv[$parts[0].Trim()] = $parts[1].Trim()
-    }
-}
-
 function Resolve-EnvValue {
     param(
         [string]$Name,
@@ -53,9 +37,6 @@ function Resolve-EnvValue {
     )
     $value = [Environment]::GetEnvironmentVariable($Name)
     if (-not [string]::IsNullOrWhiteSpace($value)) { return $value }
-    if ($releaseEnv.ContainsKey($Name) -and -not [string]::IsNullOrWhiteSpace($releaseEnv[$Name])) {
-        return $releaseEnv[$Name]
-    }
     return $Default
 }
 

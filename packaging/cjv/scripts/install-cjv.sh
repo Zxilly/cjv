@@ -24,12 +24,6 @@ if [ -z "$MODE" ]; then
   exit 1
 fi
 
-RELEASE_ENV="$MODULE_DIR/release.env"
-if [ -f "$RELEASE_ENV" ]; then
-  # shellcheck disable=SC1090
-  . "$RELEASE_ENV"
-fi
-
 REPOSITORY="${CJV_REPOSITORY:-Zxilly/cjv}"
 BASE_URL="${CJV_RELEASE_BASE_URL:-https://github.com/${REPOSITORY}/releases/download}"
 API_BASE_URL="${CJV_API_BASE_URL:-https://api.github.com}"
