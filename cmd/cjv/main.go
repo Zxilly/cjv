@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"strings"
 
 	"github.com/Zxilly/cjv/internal/cjverr"
 	"github.com/Zxilly/cjv/internal/cli"
@@ -21,6 +22,12 @@ var (
 )
 
 func main() {
+	if code := run(); code != 0 {
+		os.Exit(code)
+	}
+}
+
+func run() int {
 	logging.Init()
 
 	utils.AppVersion = version
@@ -41,18 +48,30 @@ func main() {
 
 		if err := proxy.Run(ctx, toolName, os.Args[1:]); err != nil {
 			if exitErr, ok := errors.AsType[*cjverr.ExitCodeError](err); ok {
-				os.Exit(exitErr.Code)
+				return exitErr.Code
 			}
 			fmt.Fprintln(os.Stderr, "cjv:", err)
-			os.Exit(1)
+			return 1
 		}
-		return
+		return 0
+	}
+
+	if isInitInvocation(toolName) {
+		os.Args = append([]string{os.Args[0], "init"}, os.Args[1:]...)
+		defer utils.PauseIfStandaloneConsole()
 	}
 
 	if err := cli.Execute(version, updateURL); err != nil {
 		if exitErr, ok := errors.AsType[*cjverr.ExitCodeError](err); ok {
-			os.Exit(exitErr.Code)
+			return exitErr.Code
 		}
-		os.Exit(1)
+		return 1
 	}
+	return 0
+}
+
+// isInitInvocation makes the binary double as an installer when launched by name.
+// Prefix match tolerates browser-renamed duplicates such as "cjv-init(1)" or "cjv-init-2".
+func isInitInvocation(toolName string) bool {
+	return strings.HasPrefix(toolName, "cjv-init") || strings.HasPrefix(toolName, "cjv-setup")
 }

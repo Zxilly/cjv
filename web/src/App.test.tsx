@@ -1,0 +1,96 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import App from './App'
+import { computePlatformResult } from '@/hooks/use-platform'
+
+vi.mock('@/hooks/use-platform', async (importOriginal) => {
+  const real = await importOriginal<typeof import('@/hooks/use-platform')>()
+  return { ...real, usePlatform: vi.fn(() => real.computePlatformResult('Windows', 'amd64')) }
+})
+
+const platformModule = await import('@/hooks/use-platform')
+const usePlatformMock = vi.mocked(platformModule.usePlatform)
+
+function setPlatform(os: string, arch: string): void {
+  usePlatformMock.mockReturnValue(computePlatformResult(os, arch))
+}
+
+describe('App (ready / Windows)', () => {
+  beforeEach(() => setPlatform('Windows', 'amd64'))
+
+  it('shows the detected platform and primary command on mount', () => {
+    render(<App />)
+    expect(screen.getByText(/检测到你的平台：Windows x86_64/)).toBeInTheDocument()
+    expect(screen.getByText(/install\.ps1/)).toBeInTheDocument()
+  })
+
+  it('switches to the download tab and shows the primary binary', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+    await user.click(screen.getByRole('tab', { name: '下载安装' }))
+    expect(screen.getByRole('link', { name: /cjv-init\.exe/ })).toBeInTheDocument()
+  })
+
+  it('switches to the source tab and shows the go install command', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+    await user.click(screen.getByRole('tab', { name: '编译安装' }))
+    expect(screen.getByText(/^go install /)).toBeInTheDocument()
+  })
+
+  it('toggling the mirror switch flips the primary command to the mirror variant', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+    expect(screen.getByText('GitHub · 默认源')).toBeInTheDocument()
+    await user.click(screen.getByRole('switch'))
+    expect(await screen.findByText(/CJV_MIRROR/)).toBeInTheDocument()
+    expect(await screen.findByText('GitCode · 镜像源')).toBeInTheDocument()
+  })
+
+  it('the binary-install command-install hint switches back to the command tab', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+    await user.click(screen.getByRole('tab', { name: '下载安装' }))
+    await user.click(screen.getByRole('button', { name: /命令安装/ }))
+    expect(screen.getByRole('tab', { name: '命令安装' })).toHaveAttribute('aria-selected', 'true')
+  })
+})
+
+describe('App (unsupported / iOS)', () => {
+  beforeEach(() => setPlatform('iOS', 'arm64'))
+
+  it('renders a single unsupported card with the OS name', () => {
+    render(<App />)
+    expect(screen.getByText(/cjv 暂不支持/)).toBeInTheDocument()
+    expect(screen.getByText('iOS')).toBeInTheDocument()
+    expect(screen.queryByRole('tablist')).not.toBeInTheDocument()
+  })
+
+  it('expands the install card when the user opens "查看其他平台的安装方式"', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+
+    expect(screen.queryByRole('tablist')).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: /查看其他平台的安装方式/ }))
+
+    expect(screen.getByRole('tablist')).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: '命令安装' })).toBeInTheDocument()
+  })
+})
+
+describe('App (unknown OS)', () => {
+  beforeEach(() => setPlatform('FreeBSD', 'amd64'))
+
+  it('shows the unrecognized-platform hint in the command tab', () => {
+    render(<App />)
+    expect(screen.getByText(/无法识别你的平台/)).toBeInTheDocument()
+  })
+
+  it('shows the manual binary list in the download tab', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+    await user.click(screen.getByRole('tab', { name: '下载安装' }))
+    expect(screen.getByText(/请手动选择对应平台的二进制/)).toBeInTheDocument()
+  })
+})

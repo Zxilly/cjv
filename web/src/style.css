@@ -1,9 +1,93 @@
 @import "tailwindcss";
+@import "tw-animate-css";
 
 @import "@fontsource-variable/noto-sans-sc";
 @import "@fontsource-variable/jetbrains-mono";
 @import "@fontsource/patua-one";
 
+@custom-variant dark (&:is(.dark *), &:where(.dark, .dark *));
+@custom-variant data-horizontal (&:where([data-orientation=horizontal], [data-orientation=horizontal] *));
+@custom-variant data-vertical (&:where([data-orientation=vertical], [data-orientation=vertical] *));
+@custom-variant data-active (&:where([data-state=active], [data-state=active] *));
+@custom-variant data-inactive (&:where([data-state=inactive], [data-state=inactive] *));
+@custom-variant data-checked (&:where([data-state=checked], [data-state=checked] *));
+@custom-variant data-unchecked (&:where([data-state=unchecked], [data-state=unchecked] *));
+@custom-variant data-disabled (&:where([data-disabled], [data-disabled] *));
+@custom-variant data-open (&:where([data-state=open], [data-state=open] *));
+@custom-variant data-closed (&:where([data-state=closed], [data-state=closed] *));
+
+:root {
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: oklch(0.205 0 0);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.556 0 0);
+  --accent: oklch(0.97 0 0);
+  --accent-foreground: oklch(0.205 0 0);
+  --destructive: oklch(0.577 0.245 27.325);
+  --destructive-foreground: oklch(0.985 0 0);
+  --border: oklch(0.922 0 0);
+  --input: oklch(0.922 0 0);
+  --ring: oklch(0.708 0 0);
+  --radius: 0.5rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: oklch(0.145 0 0);
+    --foreground: oklch(0.985 0 0);
+    --card: oklch(0.145 0 0);
+    --card-foreground: oklch(0.985 0 0);
+    --popover: oklch(0.145 0 0);
+    --popover-foreground: oklch(0.985 0 0);
+    --primary: oklch(0.985 0 0);
+    --primary-foreground: oklch(0.205 0 0);
+    --secondary: oklch(0.269 0 0);
+    --secondary-foreground: oklch(0.985 0 0);
+    --muted: oklch(0.269 0 0);
+    --muted-foreground: oklch(0.708 0 0);
+    --accent: oklch(0.269 0 0);
+    --accent-foreground: oklch(0.985 0 0);
+    --destructive: oklch(0.396 0.141 25.723);
+    --destructive-foreground: oklch(0.637 0.237 25.331);
+    --border: oklch(0.269 0 0);
+    --input: oklch(0.269 0 0);
+    --ring: oklch(0.439 0 0);
+  }
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
 
 @theme {
   --color-cj: #0fa968;
@@ -11,6 +95,16 @@
 
   --font-sans: "Noto Sans SC Variable", system-ui, -apple-system, sans-serif;
   --font-mono: "JetBrains Mono Variable", "Fira Code", ui-monospace, monospace;
+}
+
+@layer base {
+  html {
+    scrollbar-gutter: stable;
+  }
+
+  * {
+    @apply border-border;
+  }
 }
 
 .cj-gradient {
@@ -23,6 +117,9 @@
 @media (prefers-color-scheme: dark) {
   .cj-gradient {
     background: linear-gradient(135deg, #34d399 0%, #22d3ee 50%, #a78bfa 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
   }
 }
 
@@ -30,59 +127,10 @@
   user-select: all;
 }
 
-.install-box::-webkit-scrollbar {
-  height: 4px;
+.install-box-scroll {
+  scrollbar-width: none;
 }
 
-.install-box::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.install-box::-webkit-scrollbar-thumb {
-  background: #d1d5db;
-  border-radius: 2px;
-}
-
-.install-box::-webkit-scrollbar-thumb:hover {
-  background: #9ca3af;
-}
-
-.install-box {
-  scrollbar-width: thin;
-  scrollbar-color: #d1d5db transparent;
-}
-
-@media (prefers-color-scheme: dark) {
-  .install-box::-webkit-scrollbar-thumb {
-    background: #374151;
-  }
-
-  .install-box::-webkit-scrollbar-thumb:hover {
-    background: #4b5563;
-  }
-
-  .install-box {
-    scrollbar-color: #374151 transparent;
-  }
-}
-
-.slide-enter-active,
-.slide-leave-active {
-  transition: grid-template-rows 0.3s ease;
-  display: grid;
-}
-
-.slide-enter-from,
-.slide-leave-to {
-  grid-template-rows: 0fr;
-}
-
-.slide-enter-to,
-.slide-leave-from {
-  grid-template-rows: 1fr;
-}
-
-.slide-enter-active > *,
-.slide-leave-active > * {
-  overflow: hidden;
+.install-box-scroll::-webkit-scrollbar {
+  display: none;
 }

@@ -3,6 +3,8 @@ name: Deploy static content to Pages
 on:
   push:
     branches: ["master"]
+  release:
+    types: [published]
   workflow_dispatch:
 
 permissions:
@@ -24,14 +26,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       - name: Setup pnpm
-        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4
+        uses: pnpm/action-setup@8912a9102ac27614460f54aedde9e1e7f9aec20d # v6.0.5
         with:
           version: latest
           run_install: false
       - name: Setup Node.js
-        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
-          node-version: 22
+          node-version: lts/*
           cache: pnpm
           cache-dependency-path: web/pnpm-lock.yaml
       - name: Install dependencies
@@ -40,10 +42,22 @@ jobs:
       - name: Build
         working-directory: web
         run: pnpm build
+      - name: Download latest release archives
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p archives
+          gh release download --repo "${GITHUB_REPOSITORY}" --dir archives \
+            --pattern 'cjv_*' --pattern 'cjv-mirror_*'
+          ls -lh archives
+      - name: Extract cjv-init binaries by platform and variant
+        run: |
+          ARCHIVES_DIR=archives OUT_DIR=web/dist/dl bash scripts/extract-init-binaries.sh
+          find web/dist/dl -type f | sort
       - name: Setup Pages
         uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
       - name: Upload artifact
-        uses: actions/upload-pages-artifact@7b1f4a764d45c48632c6b24a0339c27f5614fb0b # v4.0.0
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:
           path: 'web/dist'
       - name: Deploy to GitHub Pages

@@ -31,3 +31,9 @@ Thumbs.db
 # Web frontend
 web/node_modules/
 web/dist/
+web/public/dl/
+web/screenshot-*.png
+web/*.tsbuildinfo
+
+# Local helper scripts artifacts
+/archives/

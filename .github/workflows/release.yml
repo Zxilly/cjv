@@ -17,7 +17,7 @@ jobs:
             exit 1
           fi
       - name: Enable TCP BBR
-        uses: Zxilly/actions-bbr@v1
+        uses: Zxilly/actions-bbr@c3a8ea7012db3c0f4d5fcf6dd257c28f4cba9ead # v1.0.1
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
@@ -34,13 +34,13 @@ jobs:
           git push gitcode "HEAD:refs/heads/master"
           git push gitcode "${GITHUB_REF}"
       - name: Run GoReleaser
-        uses: goreleaser/goreleaser-action@ec59f474b9834571250b370d4735c50f8e2d1e29 # v7.0.0
+        uses: goreleaser/goreleaser-action@1a80836c5c9d9e5755a25cb59ec6f45a3b5f41a8 # v7.2.1
         with:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Upload mirror binaries to GitCode
-        uses: Zxilly/upload-gitcode-release@v1
+        uses: Zxilly/upload-gitcode-release@4ecd2bfd44008dd4f2b2487eda7a2e7bbbf12a1b # v1.0.0
         with:
           gitcode-token: ${{ secrets.GITCODE_TOKEN }}
           target-repo: Zxilly/cjv
