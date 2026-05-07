@@ -2,15 +2,37 @@
 # cjv installer script
 # Usage: curl -sSf https://cjv.zxilly.dev/install.sh | sh
 # Or:    curl -sSf https://cjv.zxilly.dev/install.sh | sh -s -- --mirror -y
+#
+# `--mirror` switches the installer to download the cjv-mirror archive from
+# GitCode (for environments without reliable GitHub access). All other flags
+# are forwarded to `cjv init`.
 
 set -eu
 
-CJV_UPDATE_ROOT="${CJV_UPDATE_ROOT:-https://github.com/Zxilly/cjv/releases/latest/download}"
+CJV_GITHUB_ROOT="${CJV_GITHUB_ROOT:-https://github.com/Zxilly/cjv/releases/latest/download}"
+CJV_GITCODE_ROOT="${CJV_GITCODE_ROOT:-https://gitcode.com/Zxilly/cjv/releases/latest/download}"
 
 main() {
-    # Support CJV_MIRROR env var
     if [ "${CJV_MIRROR:-}" = "1" ]; then
-        set -- --mirror "$@"
+        USE_MIRROR=1
+    else
+        USE_MIRROR=0
+    fi
+
+    INIT_ARGS=""
+    for arg in "$@"; do
+        case "$arg" in
+            --mirror) USE_MIRROR=1 ;;
+            *) INIT_ARGS="$INIT_ARGS $arg" ;;
+        esac
+    done
+
+    if [ "$USE_MIRROR" = "1" ]; then
+        BINARY="cjv-mirror"
+        UPDATE_ROOT="${CJV_UPDATE_ROOT:-$CJV_GITCODE_ROOT}"
+    else
+        BINARY="cjv"
+        UPDATE_ROOT="${CJV_UPDATE_ROOT:-$CJV_GITHUB_ROOT}"
     fi
 
     detect_platform
@@ -20,7 +42,7 @@ main() {
         warn "macOS x86_64 has limited support; some LTS and STS releases may not include prebuilt SDK for macOS x86_64."
     fi
 
-    download_and_install "$@"
+    download_and_install
 }
 
 detect_platform() {
@@ -42,7 +64,7 @@ detect_arch() {
 }
 
 download_and_install() {
-    _url="${CJV_UPDATE_ROOT}/cjv_${PLATFORM}_${ARCH}.tar.gz"
+    _url="${UPDATE_ROOT}/${BINARY}_${PLATFORM}_${ARCH}.tar.gz"
     _tmpdir="$(mktemp -d)"
     # shellcheck disable=SC2064
     trap "rm -rf '$_tmpdir'" EXIT
@@ -60,7 +82,8 @@ download_and_install() {
     tar -xzf "$_tmpdir/cjv.tar.gz" -C "$_tmpdir"
 
     say "running cjv init"
-    "$_tmpdir/cjv" init "$@"
+    # shellcheck disable=SC2086
+    "$_tmpdir/$BINARY" init $INIT_ARGS
 }
 
 say() {

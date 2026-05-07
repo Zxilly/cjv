@@ -68,7 +68,7 @@ other = "Update available: {{.Current}} → {{.Latest}}"
 other = "Updated to {{.Version}}"
 
 [MirrorNoAutoUpdate]
-other = "Mirror variant does not support auto-update. Please download the latest version manually from GitCode."
+other = "Auto-update is not configured for this build. Please download the latest version manually."
 
 # === Override ===
 [OverrideSet]
@@ -230,9 +230,6 @@ other = "default toolchain:"
 [InitOptModifyPath]
 other = "modify PATH variable:"
 
-[InitOptMirror]
-other = "use mirror:"
-
 [InitProceedStandard]
 other = "Proceed with standard installation (default)"
 
@@ -253,9 +250,6 @@ other = "none (install no toolchain)"
 
 [InitModifyPathQuestion]
 other = "Modify PATH variable?"
-
-[InitMirrorQuestion]
-other = "Use mirror for downloads?"
 
 [InitAlreadyInstalled]
 other = "cjv is already installed at {{.Path}}"

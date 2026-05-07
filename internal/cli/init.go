@@ -9,7 +9,6 @@ import (
 	"runtime"
 
 	"github.com/Zxilly/cjv/internal/cli/selfmgmt"
-	clisettings "github.com/Zxilly/cjv/internal/cli/settings"
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/env"
 	"github.com/Zxilly/cjv/internal/i18n"
@@ -24,14 +23,12 @@ var (
 	initYes              bool
 	initDefaultToolchain string
 	initNoModifyPath     bool
-	initMirror           bool
 )
 
 func init() {
 	initCmd.Flags().BoolVarP(&initYes, "yes", "y", false, "Skip confirmation prompt")
 	initCmd.Flags().StringVar(&initDefaultToolchain, "default-toolchain", "lts", "Default toolchain to install (use 'none' to skip)")
 	initCmd.Flags().BoolVar(&initNoModifyPath, "no-modify-path", false, "Do not modify PATH")
-	initCmd.Flags().BoolVar(&initMirror, "mirror", false, "Use mirror for toolchain downloads")
 	rootCmd.AddCommand(initCmd)
 }
 
@@ -88,7 +85,6 @@ func runInit(cmd *cobra.Command, _ []string) error {
 	// Effective options — initialized from CLI flags, may be modified by interactive menu
 	toolchain := initDefaultToolchain
 	modifyPath := !initNoModifyPath
-	useMirror := initMirror
 
 	fmt.Println()
 	color.Cyan(i18n.T("InitWelcome", nil))
@@ -136,7 +132,6 @@ func runInit(cmd *cobra.Command, _ []string) error {
 			fmt.Println()
 			fmt.Printf("   %s %s\n", i18n.T("InitOptToolchain", nil), toolchain)
 			fmt.Printf("   %s %s\n", i18n.T("InitOptModifyPath", nil), yesNoStr(modifyPath))
-			fmt.Printf("   %s %s\n", i18n.T("InitOptMirror", nil), yesNoStr(useMirror))
 			fmt.Println()
 
 			proceedLabel := i18n.T("InitProceedStandard", nil)
@@ -183,13 +178,6 @@ func runInit(cmd *cobra.Command, _ []string) error {
 					Run(); err != nil {
 					return err
 				}
-
-				if err := huh.NewConfirm().
-					Title(i18n.T("InitMirrorQuestion", nil)).
-					Value(&useMirror).
-					Run(); err != nil {
-					return err
-				}
 			}
 		}
 	}
@@ -213,17 +201,6 @@ func runInit(cmd *cobra.Command, _ []string) error {
 	}
 	if err := env.WriteEnvScripts(home, binDir); err != nil {
 		slog.Warn("failed to write env scripts", "error", err)
-	}
-
-	if useMirror {
-		sf, settings, err := clisettings.LoadSettings()
-		if err != nil {
-			return err
-		}
-		settings.ManifestURL = config.MirrorManifestURL
-		if err := sf.Save(settings); err != nil {
-			return err
-		}
 	}
 
 	if toolchain != "none" {

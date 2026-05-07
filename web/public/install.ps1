@@ -5,7 +5,8 @@
 .DESCRIPTION
     Downloads and installs cjv, then runs 'cjv init' to complete setup.
 .PARAMETER Mirror
-    Use mirror source for toolchain downloads
+    Download the cjv-mirror archive from GitCode (for environments without
+    reliable GitHub access).
 .PARAMETER Yes
     Skip confirmation prompt
 .PARAMETER DefaultToolchain
@@ -30,7 +31,18 @@ if ($env:CJV_MIRROR -eq "1") {
     $Mirror = $true
 }
 
-$CjvUpdateRoot = if ($env:CJV_UPDATE_ROOT) { $env:CJV_UPDATE_ROOT } else { "https://github.com/Zxilly/cjv/releases/latest/download" }
+$CjvGithubRoot  = if ($env:CJV_GITHUB_ROOT)  { $env:CJV_GITHUB_ROOT }  else { "https://github.com/Zxilly/cjv/releases/latest/download" }
+$CjvGitcodeRoot = if ($env:CJV_GITCODE_ROOT) { $env:CJV_GITCODE_ROOT } else { "https://gitcode.com/Zxilly/cjv/releases/latest/download" }
+
+if ($env:CJV_UPDATE_ROOT) {
+    $CjvUpdateRoot = $env:CJV_UPDATE_ROOT
+} elseif ($Mirror) {
+    $CjvUpdateRoot = $CjvGitcodeRoot
+} else {
+    $CjvUpdateRoot = $CjvGithubRoot
+}
+
+$BinaryName = if ($Mirror) { "cjv-mirror" } else { "cjv" }
 
 function Get-Architecture {
     $arch = if ($env:PROCESSOR_ARCHITEW6432) { $env:PROCESSOR_ARCHITEW6432 } else { $env:PROCESSOR_ARCHITECTURE }
@@ -43,7 +55,7 @@ function Get-Architecture {
 
 function Install-Cjv {
     $arch = Get-Architecture
-    $url = "$CjvUpdateRoot/cjv_windows_$arch.zip"
+    $url = "$CjvUpdateRoot/${BinaryName}_windows_$arch.zip"
     $tmpDir = Join-Path ([System.IO.Path]::GetTempPath()) "cjv-install-$([System.Guid]::NewGuid().ToString('N').Substring(0, 8))"
 
     try {
@@ -67,16 +79,15 @@ function Install-Cjv {
             $global:ProgressPreference = $savedProgress
         }
 
-        $cjvExe = Join-Path $tmpDir "cjv.exe"
+        $cjvExe = Join-Path $tmpDir "$BinaryName.exe"
         if (-not (Test-Path $cjvExe)) {
-            Write-Error "cjv.exe not found in downloaded archive"
+            Write-Error "$BinaryName.exe not found in downloaded archive"
             exit 1
         }
 
         Write-Host "cjv-install: running cjv init"
         $initArgs = @("init")
         if ($Yes)          { $initArgs += "-y" }
-        if ($Mirror)       { $initArgs += "--mirror" }
         if ($NoModifyPath) { $initArgs += "--no-modify-path" }
         if ($DefaultToolchain -ne "lts") { $initArgs += "--default-toolchain"; $initArgs += $DefaultToolchain }
 

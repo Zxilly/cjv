@@ -24,9 +24,27 @@ jobs:
         uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
         with:
           go-version: stable
+      - name: Mirror repository to GitCode
+        env:
+          GITCODE_TOKEN: ${{ secrets.GITCODE_TOKEN }}
+        run: |
+          git remote add gitcode "https://oauth2:${GITCODE_TOKEN}@gitcode.com/Zxilly/cjv.git"
+          git push gitcode "HEAD:refs/heads/master"
+          git push gitcode "${GITHUB_REF}"
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@ec59f474b9834571250b370d4735c50f8e2d1e29 # v7.0.0
         with:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Upload mirror binaries to GitCode
+        uses: Zxilly/upload-gitcode-release@v1
+        with:
+          gitcode-token: ${{ secrets.GITCODE_TOKEN }}
+          target-repo: Zxilly/cjv
+          tag: ${{ github.ref_name }}
+          target-commitish: master
+          files: |
+            dist/cjv-mirror_*.tar.gz
+            dist/cjv-mirror_*.zip
+            dist/checksums.txt

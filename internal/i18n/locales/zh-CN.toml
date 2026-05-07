@@ -67,7 +67,7 @@ other = "发现新版本: {{.Current}} → {{.Latest}}"
 other = "已更新到 {{.Version}}"
 
 [MirrorNoAutoUpdate]
-other = "mirror 变体暂不支持自动更新。请手动从 GitCode 下载最新版本。"
+other = "当前构建未配置自动更新源，请手动下载最新版本。"
 
 # === 覆盖 ===
 [OverrideSet]
@@ -227,9 +227,6 @@ other = "默认工具链："
 [InitOptModifyPath]
 other = "修改 PATH："
 
-[InitOptMirror]
-other = "使用镜像："
-
 [InitProceedStandard]
 other = "继续标准安装（默认）"
 
@@ -250,9 +247,6 @@ other = "none（不安装工具链）"
 
 [InitModifyPathQuestion]
 other = "是否修改 PATH 变量？"
-
-[InitMirrorQuestion]
-other = "是否使用镜像下载？"
 
 [InitAlreadyInstalled]
 other = "cjv 已安装在 {{.Path}}"

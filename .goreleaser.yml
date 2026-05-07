@@ -18,13 +18,14 @@ builds:
   - id: cjv-mirror
     main: ./cmd/cjv
     binary: cjv-mirror
+    flags:
+      - -tags=mirror
     ldflags:
       - -s -w
       - -X main.version={{.Version}}
       - -X main.commit={{.Commit}}
       - -X main.date={{.Date}}
-      - -X main.updateURL=https://github.com/Zxilly/cjv/releases
-      - -X github.com/Zxilly/cjv/internal/config.DefaultManifestURL=https://raw.gitcode.com/Zxilly/cangjie-version-manifest/raw/master/versions.json
+      - -X main.updateURL=https://gitcode.com/Zxilly/cjv/releases
     goos: [linux, darwin, windows]
     goarch: [amd64, arm64]
     ignore:

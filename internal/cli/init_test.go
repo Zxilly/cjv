@@ -21,16 +21,13 @@ func TestRunInitNonInteractiveNoToolchainWritesManagedFiles(t *testing.T) {
 	oldYes := initYes
 	oldToolchain := initDefaultToolchain
 	oldNoModifyPath := initNoModifyPath
-	oldMirror := initMirror
 	initYes = true
 	initDefaultToolchain = "none"
 	initNoModifyPath = true
-	initMirror = true
 	t.Cleanup(func() {
 		initYes = oldYes
 		initDefaultToolchain = oldToolchain
 		initNoModifyPath = oldNoModifyPath
-		initMirror = oldMirror
 		config.ResetDefaultSettingsFileCache()
 	})
 
@@ -50,7 +47,7 @@ func TestRunInitNonInteractiveNoToolchainWritesManagedFiles(t *testing.T) {
 
 	settings, err := config.LoadSettings(filepath.Join(home, "settings.toml"))
 	require.NoError(t, err)
-	assert.Equal(t, config.MirrorManifestURL, settings.ManifestURL)
+	assert.Equal(t, config.DefaultManifestURL, settings.ManifestURL)
 	assert.NoDirExists(t, filepath.Join(home, "toolchains", "lts-1.0.5"))
 }
 
@@ -62,16 +59,13 @@ func TestRunInitContinuesWhenDefaultToolchainInstallFails(t *testing.T) {
 	oldYes := initYes
 	oldToolchain := initDefaultToolchain
 	oldNoModifyPath := initNoModifyPath
-	oldMirror := initMirror
 	initYes = true
 	initDefaultToolchain = "local-sdk"
 	initNoModifyPath = true
-	initMirror = false
 	t.Cleanup(func() {
 		initYes = oldYes
 		initDefaultToolchain = oldToolchain
 		initNoModifyPath = oldNoModifyPath
-		initMirror = oldMirror
 		_ = os.Unsetenv(config.EnvNoPathSetup)
 		config.ResetDefaultSettingsFileCache()
 	})
@@ -91,19 +85,16 @@ func TestRunInitCoversAlreadyInstalledAndModifyPathBranches(t *testing.T) {
 	oldYes := initYes
 	oldToolchain := initDefaultToolchain
 	oldNoModifyPath := initNoModifyPath
-	oldMirror := initMirror
 	oldEnsurePath := ensurePathConfiguredFn
 	var pathConfigured bool
 	initYes = true
 	initDefaultToolchain = "none"
 	initNoModifyPath = false
-	initMirror = false
 	ensurePathConfiguredFn = func() { pathConfigured = true }
 	t.Cleanup(func() {
 		initYes = oldYes
 		initDefaultToolchain = oldToolchain
 		initNoModifyPath = oldNoModifyPath
-		initMirror = oldMirror
 		ensurePathConfiguredFn = oldEnsurePath
 		config.ResetDefaultSettingsFileCache()
 	})
