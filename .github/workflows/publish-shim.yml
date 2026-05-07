@@ -1,0 +1,38 @@
+name: Publish central-repo shim
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Set up Cangjie
+        uses: Zxilly/setup-cangjie@ff94aa01f985321ddfa5cd0973bb26b4c37e6010 # v2.1.1
+        with:
+          channel: sts
+          version: latest
+          repo-token: ${{ secrets.CANGJIE_REPO_TOKEN }}
+      - name: Bundle shim
+        working-directory: packaging/cjv
+        run: cjpm bundle
+      - name: Verify bundle ships source only
+        working-directory: packaging/cjv
+        run: |
+          version="$(awk -F'"' '/^version[[:space:]]*=/ { print $2; exit }' cjpm.toml)"
+          bundle="target/cjv-${version}.cjp"
+          if [ ! -f "$bundle" ]; then
+            echo "::error::bundle output missing: $bundle"
+            exit 1
+          fi
+          if tar -tf "$bundle" | grep -qE '(^|/)(cjv(\.exe)?|.*\.(dll|dylib|exe|o|obj|so))$'; then
+            echo "::error::bundle unexpectedly contains a binary payload"
+            exit 1
+          fi
+      - name: Publish shim
+        working-directory: packaging/cjv
+        run: cjpm publish

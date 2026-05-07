@@ -25,22 +25,34 @@ if [ -z "$MODE" ]; then
 fi
 
 RELEASE_ENV="$MODULE_DIR/release.env"
-if [ ! -f "$RELEASE_ENV" ]; then
-  echo "release.env is missing: $RELEASE_ENV" >&2
-  exit 1
+if [ -f "$RELEASE_ENV" ]; then
+  # shellcheck disable=SC1090
+  . "$RELEASE_ENV"
 fi
 
-# shellcheck disable=SC1090
-. "$RELEASE_ENV"
+REPOSITORY="${CJV_REPOSITORY:-Zxilly/cjv}"
+BASE_URL="${CJV_RELEASE_BASE_URL:-https://github.com/${REPOSITORY}/releases/download}"
+API_BASE_URL="${CJV_API_BASE_URL:-https://api.github.com}"
 
-if [ -z "${CJV_VERSION:-}" ] || [ -z "${CJV_TAG:-}" ] || [ -z "${CJV_REPOSITORY:-}" ]; then
-  echo "release.env must define CJV_VERSION, CJV_TAG and CJV_REPOSITORY" >&2
-  exit 1
-fi
+resolve_latest_tag() {
+  url="$API_BASE_URL/repos/$REPOSITORY/releases/latest"
+  response=$(curl -fsSL -H "Accept: application/vnd.github+json" "$url")
+  echo "$response" | awk -F'"' '/"tag_name":/ { print $4; exit }'
+}
 
-BASE_URL="${CJV_RELEASE_BASE_URL:-}"
-if [ -z "$BASE_URL" ]; then
-  BASE_URL="https://github.com/${CJV_REPOSITORY}/releases/download"
+# CJV_VERSION env override may be either "v0.2.0" or "0.2.0"; missing means latest.
+TAG="${CJV_VERSION:-}"
+if [ -n "$TAG" ]; then
+  case "$TAG" in
+    v*) ;;
+    *) TAG="v$TAG" ;;
+  esac
+else
+  TAG=$(resolve_latest_tag)
+  if [ -z "$TAG" ]; then
+    echo "failed to resolve latest cjv release tag from $API_BASE_URL" >&2
+    exit 1
+  fi
 fi
 
 OS_NAME=$(uname -s 2>/dev/null || echo unknown)
@@ -75,8 +87,8 @@ case "$MODE" in
     ;;
 esac
 
-ASSET_URL="$BASE_URL/$CJV_TAG/$ASSET"
-CHECKSUMS_URL="$BASE_URL/$CJV_TAG/checksums.txt"
+ASSET_URL="$BASE_URL/$TAG/$ASSET"
+CHECKSUMS_URL="$BASE_URL/$TAG/checksums.txt"
 TMP_DIR=$(mktemp -d "${TMPDIR:-/tmp}/cjv-package.XXXXXX")
 cleanup() {
   rm -rf "$TMP_DIR"
@@ -154,4 +166,4 @@ cp "$DOWNLOADED_BIN" "$TEMP_DEST"
 chmod +x "$TEMP_DEST"
 mv "$TEMP_DEST" "$DEST"
 
-echo "Installed cjv $CJV_VERSION to $DEST"
+echo "Installed cjv $TAG to $DEST"

@@ -31,36 +31,50 @@ function Get-Sha256Hex {
     }
 }
 
-if (-not (Test-Path $releaseEnvPath)) {
-    throw "release.env is missing: $releaseEnvPath"
-}
-
 $releaseEnv = @{}
-foreach ($line in Get-Content $releaseEnvPath) {
-    if ([string]::IsNullOrWhiteSpace($line) -or $line.TrimStart().StartsWith("#")) {
-        continue
+if (Test-Path $releaseEnvPath) {
+    foreach ($line in Get-Content $releaseEnvPath) {
+        if ([string]::IsNullOrWhiteSpace($line) -or $line.TrimStart().StartsWith("#")) {
+            continue
+        }
+
+        $parts = $line -split "=", 2
+        if ($parts.Count -ne 2) {
+            throw "invalid release.env line: $line"
+        }
+        $releaseEnv[$parts[0].Trim()] = $parts[1].Trim()
     }
+}
 
-    $parts = $line -split "=", 2
-    if ($parts.Count -ne 2) {
-        throw "invalid release.env line: $line"
+function Resolve-EnvValue {
+    param(
+        [string]$Name,
+        [string]$Default
+    )
+    $value = [Environment]::GetEnvironmentVariable($Name)
+    if (-not [string]::IsNullOrWhiteSpace($value)) { return $value }
+    if ($releaseEnv.ContainsKey($Name) -and -not [string]::IsNullOrWhiteSpace($releaseEnv[$Name])) {
+        return $releaseEnv[$Name]
     }
-    $releaseEnv[$parts[0].Trim()] = $parts[1].Trim()
+    return $Default
 }
 
-$version = $releaseEnv["CJV_VERSION"]
-$tag = $releaseEnv["CJV_TAG"]
-$repository = $releaseEnv["CJV_REPOSITORY"]
-$baseUrl = $env:CJV_RELEASE_BASE_URL
-if ([string]::IsNullOrWhiteSpace($baseUrl)) {
-    $baseUrl = $releaseEnv["CJV_RELEASE_BASE_URL"]
-}
-if ([string]::IsNullOrWhiteSpace($baseUrl)) {
-    $baseUrl = "https://github.com/$repository/releases/download"
-}
+$repository  = Resolve-EnvValue -Name "CJV_REPOSITORY"        -Default "Zxilly/cjv"
+$baseUrl     = Resolve-EnvValue -Name "CJV_RELEASE_BASE_URL"  -Default "https://github.com/$repository/releases/download"
+$apiBaseUrl  = Resolve-EnvValue -Name "CJV_API_BASE_URL"      -Default "https://api.github.com"
 
-if ([string]::IsNullOrWhiteSpace($version) -or [string]::IsNullOrWhiteSpace($tag) -or [string]::IsNullOrWhiteSpace($repository)) {
-    throw "release.env must define CJV_VERSION, CJV_TAG and CJV_REPOSITORY"
+$tag = Resolve-EnvValue -Name "CJV_VERSION" -Default ""
+if ($tag) {
+    if (-not $tag.StartsWith("v")) { $tag = "v$tag" }
+}
+else {
+    $latestUrl = "$apiBaseUrl/repos/$repository/releases/latest"
+    $headers = @{ "Accept" = "application/vnd.github+json"; "User-Agent" = "cjv-installer" }
+    $response = Invoke-RestMethod -Uri $latestUrl -Headers $headers
+    $tag = $response.tag_name
+    if ([string]::IsNullOrWhiteSpace($tag)) {
+        throw "failed to resolve latest cjv release tag from $apiBaseUrl"
+    }
 }
 
 $arch = [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString()
@@ -126,7 +140,7 @@ try {
     Copy-Item -Path $downloadedBinary -Destination $stagedBinary -Force
     Move-Item -Path $stagedBinary -Destination $destination -Force
 
-    Write-Host "Installed cjv $version to $destination"
+    Write-Host "Installed cjv $tag to $destination"
 }
 finally {
     if (Test-Path $tmpDir) {

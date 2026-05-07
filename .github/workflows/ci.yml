@@ -149,8 +149,6 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-      - name: Set up uv
-        uses: astral-sh/setup-uv@cec208311dfd045dd5311c1add060b2062131d57 # v8.0.0
       - name: Set up Cangjie
         uses: Zxilly/setup-cangjie@ff94aa01f985321ddfa5cd0973bb26b4c37e6010 # v2.1.1
         with:
@@ -168,9 +166,12 @@ jobs:
 
           mkdir -p "$pkg_dir" "$archive_dir"
           cp -r "$packaging_dir/"* "$pkg_dir/"
-          uv run "$repo_root/scripts/update_release.py" --dir "$pkg_dir"
 
-          version="$(grep '^CJV_VERSION=' "$pkg_dir/release.env" | cut -d= -f2-)"
+          version="$(awk -F'"' '/^version[[:space:]]*=/ { print $2; exit }' "$pkg_dir/cjpm.toml")"
+          if [ -z "$version" ]; then
+            echo "::error::failed to read version from cjpm.toml"
+            exit 1
+          fi
 
           cd "$pkg_dir"
           cjpm bundle
@@ -185,8 +186,6 @@ jobs:
             exit 1
           fi
           cp "$bundle_path" "$archive_dir/cjv-$version.cjp"
-        env:
-          GH_TOKEN: ${{ github.token }}
       - name: Upload central repository bundle
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
@@ -242,11 +241,6 @@ jobs:
           fi
 
           pkg_dir="$(dirname "$manifest")"
-          version="$(grep '^CJV_VERSION=' "$pkg_dir/release.env" | head -n1 | cut -d= -f2-)"
-          if [ -z "$version" ]; then
-            echo "::error::missing CJV_VERSION in release.env"
-            exit 1
-          fi
 
           real_cjv_home="${CJV_HOME:-}"
           if [ -z "$real_cjv_home" ] && [ -n "${HOME:-}" ]; then
@@ -275,7 +269,3 @@ jobs:
 
           version_output="$("$installed" --version)"
           echo "Installed version: $version_output"
-          if ! echo "$version_output" | grep -qF "$version"; then
-            echo "::error::installed version mismatch: expected $version, got $version_output"
-            exit 1
-          fi
