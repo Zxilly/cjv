@@ -30,6 +30,8 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Set up uv
+        uses: astral-sh/setup-uv@cec208311dfd045dd5311c1add060b2062131d57 # v8.0.0
       - name: Set up Cangjie
         uses: Zxilly/setup-cangjie@ff94aa01f985321ddfa5cd0973bb26b4c37e6010 # v2.1.1
         with:
@@ -42,13 +44,7 @@ jobs:
           PACKAGE_DIR="$RUNNER_TEMP/packaging-cjv"
           mkdir -p "$PACKAGE_DIR"
           cp -R packaging/cjv/. "$PACKAGE_DIR/"
-          sed -i "s/version = \"X.Y.Z\"/version = \"${VERSION}\"/" "$PACKAGE_DIR/cjpm.toml"
-          printf '%s\n' \
-            "CJV_VERSION=${VERSION}" \
-            "CJV_TAG=${GITHUB_REF_NAME}" \
-            "CJV_REPOSITORY=Zxilly/cjv" \
-            "CJV_RELEASE_BASE_URL=https://github.com/Zxilly/cjv/releases/download" \
-            > "$PACKAGE_DIR/release.env"
+          uv run scripts/update_release.py --version "$VERSION" --dir "$PACKAGE_DIR"
           echo "PACKAGE_DIR=$PACKAGE_DIR" >> "$GITHUB_ENV"
       - name: Bundle central repository package
         working-directory: ${{ env.PACKAGE_DIR }}
