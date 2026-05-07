@@ -44,6 +44,7 @@ jobs:
           target-repo: Zxilly/cjv
           tag: ${{ github.ref_name }}
           target-commitish: master
+          body: "See https://github.com/Zxilly/cjv/releases/tag/${{ github.ref_name }} for the full changelog."
           files: |
             dist/cjv-mirror_*.tar.gz
             dist/cjv-mirror_*.zip
