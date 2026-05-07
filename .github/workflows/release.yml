@@ -51,3 +51,11 @@ jobs:
             dist/cjv-mirror_*.tar.gz
             dist/cjv-mirror_*.zip
             dist/checksums.txt
+
+  pages:
+    needs: release
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    uses: ./.github/workflows/pages.yml

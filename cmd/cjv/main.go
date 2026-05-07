@@ -14,6 +14,7 @@ import (
 	"github.com/Zxilly/cjv/internal/proxy"
 	"github.com/Zxilly/cjv/internal/resolve"
 	"github.com/Zxilly/cjv/internal/utils"
+	"github.com/spf13/cobra"
 )
 
 var (
@@ -57,6 +58,9 @@ func run() int {
 	}
 
 	if isInitInvocation(toolName) {
+		// cjv-init is designed to be double-clicked from Explorer, so disable
+		// cobra's mousetrap that would otherwise abort with a "use cmd.exe" notice.
+		cobra.MousetrapHelpText = ""
 		os.Args = append([]string{os.Args[0], "init"}, os.Args[1:]...)
 		defer utils.PauseIfStandaloneConsole()
 	}

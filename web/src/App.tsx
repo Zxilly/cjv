@@ -104,7 +104,6 @@ export default function App() {
           binary={platform.binary}
           allBinaries={allBinaries}
           mirror={mirror}
-          onUseCommandInstall={() => handleTabChange('command')}
         />
       </TabsContent>
     ),

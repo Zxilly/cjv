@@ -6,7 +6,6 @@ interface BinaryInstallProps {
   binary: BinaryInfo | null
   allBinaries: BinaryInfo[]
   mirror: boolean
-  onUseCommandInstall?: () => void
 }
 
 const platformKey = (b: BinaryInfo) => `${b.goos}_${b.goarch}`
@@ -58,7 +57,7 @@ function ManualDownloadList({
   )
 }
 
-export function BinaryInstall({ binary, allBinaries, mirror, onUseCommandInstall }: BinaryInstallProps) {
+export function BinaryInstall({ binary, allBinaries, mirror }: BinaryInstallProps) {
   if (!binary) {
     return (
       <>
@@ -68,17 +67,6 @@ export function BinaryInstall({ binary, allBinaries, mirror, onUseCommandInstall
         <div className="px-6 pb-4">
           <ManualDownloadList binaries={allBinaries} mirror={mirror} />
         </div>
-        {onUseCommandInstall && (
-          <div className="px-6 py-3 text-center">
-            <button
-              type="button"
-              onClick={onUseCommandInstall}
-              className="text-xs text-gray-400 dark:text-gray-500 hover:text-cj dark:hover:text-cj-light hover:underline cursor-pointer focus-visible:outline-none focus-visible:underline"
-            >
-              不确定？切换到命令安装 →
-            </button>
-          </div>
-        )}
       </>
     )
   }
@@ -102,19 +90,6 @@ export function BinaryInstall({ binary, allBinaries, mirror, onUseCommandInstall
           {binary.binaryName}
         </a>
         <p className="text-base text-gray-500 dark:text-gray-400 mt-3">然后按屏幕提示完成安装。</p>
-        {onUseCommandInstall && (
-          <p className="mt-2 text-xs text-gray-400 dark:text-gray-500">
-            或使用{' '}
-            <button
-              type="button"
-              onClick={onUseCommandInstall}
-              className="text-cj dark:text-cj-light hover:underline cursor-pointer focus-visible:outline-none focus-visible:underline"
-            >
-              命令安装
-            </button>
-            {' '}（自动校验并配置 PATH）
-          </p>
-        )}
         <p className="mt-4 text-sm text-gray-400 dark:text-gray-500">检测到你的平台：{binary.label}</p>
         {binary.warning && (
           <p className="mt-3 text-sm text-amber-600 dark:text-amber-400">⚠ {binary.warning}</p>

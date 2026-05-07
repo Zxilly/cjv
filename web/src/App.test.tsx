@@ -47,14 +47,6 @@ describe('App (ready / Windows)', () => {
     expect(await screen.findByText(/CJV_MIRROR/)).toBeInTheDocument()
     expect(await screen.findByText('GitCode · 镜像源')).toBeInTheDocument()
   })
-
-  it('the binary-install command-install hint switches back to the command tab', async () => {
-    const user = userEvent.setup()
-    render(<App />)
-    await user.click(screen.getByRole('tab', { name: '下载安装' }))
-    await user.click(screen.getByRole('button', { name: /命令安装/ }))
-    expect(screen.getByRole('tab', { name: '命令安装' })).toHaveAttribute('aria-selected', 'true')
-  })
 })
 
 describe('App (unsupported / iOS)', () => {

@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { BinaryInstall } from './binary-install'
@@ -41,14 +41,6 @@ describe('BinaryInstall (binary detected)', () => {
     expect(hrefs.filter(h => h?.includes('linux_arm64'))).toHaveLength(1)
   })
 
-  it('invokes the command-install callback when clicked', async () => {
-    const user = userEvent.setup()
-    const onSwitch = vi.fn()
-    render(<BinaryInstall binary={winBinary} allBinaries={allBinaries} mirror={false} onUseCommandInstall={onSwitch} />)
-
-    await user.click(screen.getByRole('button', { name: /命令安装/ }))
-    expect(onSwitch).toHaveBeenCalledOnce()
-  })
 })
 
 describe('BinaryInstall (no binary)', () => {
@@ -56,15 +48,6 @@ describe('BinaryInstall (no binary)', () => {
     render(<BinaryInstall binary={null} allBinaries={allBinaries} mirror={false} />)
     expect(screen.getByText(/请手动选择对应平台的二进制/)).toBeInTheDocument()
     expect(screen.getAllByRole('link', { name: /cjv-init/ })).toHaveLength(allBinaries.length)
-  })
-
-  it('falls back to the command-install hint button', async () => {
-    const user = userEvent.setup()
-    const onSwitch = vi.fn()
-    render(<BinaryInstall binary={null} allBinaries={allBinaries} mirror={false} onUseCommandInstall={onSwitch} />)
-
-    await user.click(screen.getByRole('button', { name: /切换到命令安装/ }))
-    expect(onSwitch).toHaveBeenCalledOnce()
   })
 
   it('uses the GitCode releases link when mirror=true', () => {

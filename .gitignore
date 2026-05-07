@@ -37,3 +37,6 @@ web/*.tsbuildinfo
 
 # Local helper scripts artifacts
 /archives/
+
+# Vendor
+/vendor/
