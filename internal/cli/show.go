@@ -59,7 +59,7 @@ func runShowDefault(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Show default_host and profile from settings
+	// Show default_host from settings
 	sf, sfErr := config.DefaultSettingsFile()
 	var settings *config.Settings
 	if sfErr == nil {
@@ -71,12 +71,6 @@ func runShowDefault(cmd *cobra.Command, args []string) error {
 			host = i18n.T("ShowDefaultHostAuto", nil)
 		}
 		fmt.Println(i18n.T("ShowDefaultHost", i18n.MsgData{"Host": host}))
-
-		profile := settings.Profile
-		if profile == "" {
-			profile = i18n.T("ShowProfileDefault", nil)
-		}
-		fmt.Println(i18n.T("ShowProfile", i18n.MsgData{"Profile": profile}))
 	}
 
 	fmt.Println()

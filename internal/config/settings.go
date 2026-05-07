@@ -36,7 +36,6 @@ type Settings struct {
 	AutoSelfUpdate   string            `toml:"auto_self_update"`
 	AutoInstall      bool              `toml:"auto_install"`
 	DefaultHost      string            `toml:"default_host,omitempty"`
-	Profile          string            `toml:"profile,omitempty"`
 	GitCodeAPIKey    string            `toml:"gitcode_api_key,omitempty"`
 	Overrides        map[string]string `toml:"overrides,omitempty"`
 }

@@ -173,12 +173,6 @@ other = "Default host: {{.Host}}"
 [ShowDefaultHostAuto]
 other = "(auto)"
 
-[ShowProfile]
-other = "Profile: {{.Profile}}"
-
-[ShowProfileDefault]
-other = "(default)"
-
 # === Cache ===
 [CacheAlreadyClean]
 other = "Download cache is already clean"

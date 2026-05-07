@@ -77,6 +77,25 @@ cjv resolves the active toolchain in the following order (highest priority first
 3. Toolchain file (`cangjie-sdk.toml` in the current or parent directories)
 4. Default toolchain (set via `cjv default`)
 
+## Toolchain File `cangjie-sdk.toml`
+
+cjv walks up from the current directory and uses the first `cangjie-sdk.toml` it finds as the project's toolchain declaration. All fields live under the `[toolchain]` table:
+
+```toml
+[toolchain]
+channel = "lts"                          # required; toolchain name (e.g. lts / sts / nightly / a specific version)
+components = ["stdx", "docs"]            # optional; components to install alongside the toolchain
+targets = ["ohos", "android"]            # optional; additive cross-compilation target suffixes
+```
+
+| Field        | Type     | Description                                                                              |
+| ------------ | -------- | ---------------------------------------------------------------------------------------- |
+| `channel`    | string   | Toolchain name. An empty file is equivalent to no declaration and falls through to the next resolution step. |
+| `components` | string[] | When `auto_install` is enabled, missing components are installed transparently during proxy execution. |
+| `targets`    | string[] | Target suffixes only (e.g. `ohos`, `android`, `ohos-arm32`); do not use full platform keys. |
+
+Unrecognized keys (such as a typo `[toolchian]` or `channal = "lts"`) are reported as warn-level log messages but do not block parsing. The semantics of `targets` and `components` are detailed in the sections below.
+
 ## Cross-Compilation SDKs
 
 Target SDKs are additive installs on top of the host toolchain and do not change the active toolchain. Proxy execution of `cjc` and `cjpm` still uses the host SDK.

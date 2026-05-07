@@ -20,7 +20,6 @@ type ToolchainSection struct {
 	Channel    string   `toml:"channel"`
 	Components []string `toml:"components,omitempty"`
 	Targets    []string `toml:"targets,omitempty"`
-	Profile    string   `toml:"profile,omitempty"`
 }
 
 func ParseToolchainFile(path string) (*ToolchainFileContent, error) {

@@ -73,22 +73,6 @@ var setDefaultHostCmd = &cobra.Command{
 	},
 }
 
-var setProfileCmd = &cobra.Command{
-	Use:   "profile <name>",
-	Short: "Set the default installation profile",
-	Args:  cobra.ExactArgs(1),
-	RunE: func(cmd *cobra.Command, args []string) error {
-		val := args[0]
-		return updateSetting("profile", val, func(s *config.Settings) bool {
-			if s.Profile == val {
-				return false
-			}
-			s.Profile = val
-			return true
-		})
-	},
-}
-
 var setGitCodeAPIKeyCmd = &cobra.Command{
 	Use:   "gitcode-api-key <key>",
 	Short: "Set the GitCode API access token for nightly builds",

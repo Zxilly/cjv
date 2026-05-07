@@ -170,12 +170,6 @@ other = "默认主机: {{.Host}}"
 [ShowDefaultHostAuto]
 other = "(自动)"
 
-[ShowProfile]
-other = "配置: {{.Profile}}"
-
-[ShowProfileDefault]
-other = "(默认)"
-
 # === 缓存 ===
 [CacheAlreadyClean]
 other = "下载缓存已清空"

@@ -18,7 +18,6 @@ func TestSetCommandsUpdateSettings(t *testing.T) {
 	require.NoError(t, setAutoSelfUpdateCmd.RunE(setAutoSelfUpdateCmd, []string{config.AutoSelfUpdateDisable}))
 	require.NoError(t, setAutoInstallCmd.RunE(setAutoInstallCmd, []string{"false"}))
 	require.NoError(t, setDefaultHostCmd.RunE(setDefaultHostCmd, []string{"linux-amd64"}))
-	require.NoError(t, setProfileCmd.RunE(setProfileCmd, []string{"minimal"}))
 	require.NoError(t, setGitCodeAPIKeyCmd.RunE(setGitCodeAPIKeyCmd, []string{"secret"}))
 
 	settings, err := config.LoadSettings(filepath.Join(home, "settings.toml"))
@@ -26,7 +25,6 @@ func TestSetCommandsUpdateSettings(t *testing.T) {
 	assert.Equal(t, config.AutoSelfUpdateDisable, settings.AutoSelfUpdate)
 	assert.False(t, settings.AutoInstall)
 	assert.Equal(t, "linux-amd64", settings.DefaultHost)
-	assert.Equal(t, "minimal", settings.Profile)
 	assert.Equal(t, "secret", settings.GitCodeAPIKey)
 }
 

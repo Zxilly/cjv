@@ -36,37 +36,37 @@ cjv run sts cjc --version
 
 ## 命令
 
-| 命令                                                | 说明                               |
-| --------------------------------------------------- | ---------------------------------- |
-| `cjv install <toolchain> [-t target]`               | 安装仓颉 SDK 工具链，可附加交叉编译目标 |
-| `cjv uninstall <toolchain>`                         | 卸载工具链                         |
-| `cjv update [toolchain]`                            | 更新已安装的工具链                 |
-| `cjv default [toolchain]`                           | 设置或显示默认工具链               |
-| `cjv show`                                          | 显示活跃和已安装的工具链           |
-| `cjv show active`                                   | 显示当前活跃的工具链               |
-| `cjv show installed`                                | 列出已安装的工具链                 |
-| `cjv show home`                                     | 显示 CJV_HOME 路径                 |
-| `cjv run <toolchain> <command> [args...]`           | 使用指定工具链运行命令             |
-| `cjv exec [+toolchain] <command> [args...]`         | 使用仓颉运行时环境执行命令         |
-| `cjv envsetup [+toolchain] [--shell=TYPE]`          | 输出配置仓颉运行时环境的 shell 命令 |
-| `cjv which <command>`                               | 显示活跃工具链中 SDK 工具的路径    |
-| `cjv check`                                         | 检查可用更新（不安装）             |
-| `cjv override set <toolchain>`                      | 为当前目录设置工具链覆盖           |
-| `cjv override unset`                                | 移除当前目录的工具链覆盖           |
-| `cjv override list`                                 | 列出所有目录覆盖                   |
-| `cjv toolchain list`                                | 列出已安装的工具链                 |
-| `cjv toolchain link <name> <path>`                  | 将自定义工具链链接到本地目录       |
-| `cjv toolchain uninstall <name>`                    | 卸载工具链                         |
-| `cjv component add <name>... [--toolchain <tc>]`    | 为工具链安装 component（如 stdx）  |
-| `cjv component remove <name>... [--toolchain <tc>]` | 从工具链卸载 component             |
-| `cjv component list [--toolchain <tc>] [--installed]` | 列出 component 的安装与可用情况 |
-| `cjv doc [--path] [--toolchain <tc>] [topic]`       | 在浏览器中打开当前工具链的离线文档 |
-| `cjv set auto-self-update <enable\|disable\|check>` | 设置自动自更新行为                 |
-| `cjv set auto-install <true\|false>`                | 设置代理模式下缺失工具链的自动安装 |
-| `cjv set gitcode-api-key <key>`                     | 设置 GitCode API 访问令牌（nightly 构建需要） |
-| `cjv self update`                                   | 更新 cjv 到最新版本                |
-| `cjv self uninstall`                                | 卸载 cjv 及所有已安装的工具链      |
-| `cjv self clean-cache`                              | 清理下载缓存                       |
+| 命令                                                  | 说明                                          |
+| ----------------------------------------------------- | --------------------------------------------- |
+| `cjv install <toolchain> [-t target]`                 | 安装仓颉 SDK 工具链，可附加交叉编译目标       |
+| `cjv uninstall <toolchain>`                           | 卸载工具链                                    |
+| `cjv update [toolchain]`                              | 更新已安装的工具链                            |
+| `cjv default [toolchain]`                             | 设置或显示默认工具链                          |
+| `cjv show`                                            | 显示活跃和已安装的工具链                      |
+| `cjv show active`                                     | 显示当前活跃的工具链                          |
+| `cjv show installed`                                  | 列出已安装的工具链                            |
+| `cjv show home`                                       | 显示 CJV_HOME 路径                            |
+| `cjv run <toolchain> <command> [args...]`             | 使用指定工具链运行命令                        |
+| `cjv exec [+toolchain] <command> [args...]`           | 使用仓颉运行时环境执行命令                    |
+| `cjv envsetup [+toolchain] [--shell=TYPE]`            | 输出配置仓颉运行时环境的 shell 命令           |
+| `cjv which <command>`                                 | 显示活跃工具链中 SDK 工具的路径               |
+| `cjv check`                                           | 检查可用更新（不安装）                        |
+| `cjv override set <toolchain>`                        | 为当前目录设置工具链覆盖                      |
+| `cjv override unset`                                  | 移除当前目录的工具链覆盖                      |
+| `cjv override list`                                   | 列出所有目录覆盖                              |
+| `cjv toolchain list`                                  | 列出已安装的工具链                            |
+| `cjv toolchain link <name> <path>`                    | 将自定义工具链链接到本地目录                  |
+| `cjv toolchain uninstall <name>`                      | 卸载工具链                                    |
+| `cjv component add <name>... [--toolchain <tc>]`      | 为工具链安装 component（如 stdx）             |
+| `cjv component remove <name>... [--toolchain <tc>]`   | 从工具链卸载 component                        |
+| `cjv component list [--toolchain <tc>] [--installed]` | 列出 component 的安装与可用情况               |
+| `cjv doc [--path] [--toolchain <tc>] [topic]`         | 在浏览器中打开当前工具链的离线文档            |
+| `cjv set auto-self-update <enable\|disable\|check>`   | 设置自动自更新行为                            |
+| `cjv set auto-install <true\|false>`                  | 设置代理模式下缺失工具链的自动安装            |
+| `cjv set gitcode-api-key <key>`                       | 设置 GitCode API 访问令牌（nightly 构建需要） |
+| `cjv self update`                                     | 更新 cjv 到最新版本                           |
+| `cjv self uninstall`                                  | 卸载 cjv 及所有已安装的工具链                 |
+| `cjv self clean-cache`                                | 清理下载缓存                                  |
 
 ## 工具链解析
 
@@ -76,6 +76,25 @@ cjv 按以下优先级顺序解析活跃工具链（从高到低）：
 2. 目录覆盖（通过 `cjv override set` 设置）
 3. 工具链文件（当前目录或父目录中的 `cangjie-sdk.toml`）
 4. 默认工具链（通过 `cjv default` 设置）
+
+## 工具链文件 `cangjie-sdk.toml`
+
+cjv 从当前目录开始向上递归查找 `cangjie-sdk.toml`，找到的第一个文件被视为该项目的工具链声明。所有字段都位于 `[toolchain]` 表中：
+
+```toml
+[toolchain]
+channel = "lts"                          # 必填，工具链名称（如 lts / sts / nightly / 具体版本）
+components = ["stdx", "docs"]            # 可选，需要随工具链安装的 component
+targets = ["ohos", "android"]            # 可选，附加的交叉编译目标后缀
+```
+
+| 字段         | 类型     | 说明                                                                     |
+| ------------ | -------- | ------------------------------------------------------------------------ |
+| `channel`    | string   | 工具链名称；空文件等同于未声明，仍会回退到下一级解析                     |
+| `components` | string[] | 启用 `auto_install` 时，代理执行会自动补齐缺失的 component               |
+| `targets`    | string[] | 仅填写目标后缀（如 `ohos`、`android`、`ohos-arm32`），不要写完整平台 key |
+
+未识别的键（如 `[toolchian]` 拼写错误或 `channal = "lts"`）会以 warn 级别日志提示，但不会阻止解析。`targets` 与 `components` 的具体语义详见下文对应章节。
 
 ## 交叉编译 SDK
 
@@ -164,17 +183,17 @@ cjv envsetup | Invoke-Expression
 
 ## 环境变量
 
-| 变量                   | 说明                                                   |
-| ---------------------- | ------------------------------------------------------ |
-| `CJV_HOME`             | 覆盖默认主目录（默认: `~/.cjv`）                       |
-| `CJV_TOOLCHAIN`        | 强制指定工具链，覆盖所有其他解析方式                   |
-| `CJV_LOG`              | 设置日志级别: `debug`、`info`、`warn`（默认）、`error` |
-| `CJV_MAX_RETRIES`      | 下载失败最大重试次数（默认: `3`）                      |
-| `CJV_DOWNLOAD_TIMEOUT` | HTTP 下载超时秒数（默认: `180`）                       |
-| `CJV_GITCODE_API_KEY`  | GitCode API 访问令牌，用于查询和下载 nightly 工具链    |
-| `CJV_NO_PATH_SETUP`    | 设为 `1` 跳过首次安装时的 PATH 自动配置                |
+| 变量                        | 说明                                                                     |
+| --------------------------- | ------------------------------------------------------------------------ |
+| `CJV_HOME`                  | 覆盖默认主目录（默认: `~/.cjv`）                                         |
+| `CJV_TOOLCHAIN`             | 强制指定工具链，覆盖所有其他解析方式                                     |
+| `CJV_LOG`                   | 设置日志级别: `debug`、`info`、`warn`（默认）、`error`                   |
+| `CJV_MAX_RETRIES`           | 下载失败最大重试次数（默认: `3`）                                        |
+| `CJV_DOWNLOAD_TIMEOUT`      | HTTP 下载超时秒数（默认: `180`）                                         |
+| `CJV_GITCODE_API_KEY`       | GitCode API 访问令牌，用于查询和下载 nightly 工具链                      |
+| `CJV_NO_PATH_SETUP`         | 设为 `1` 跳过首次安装时的 PATH 自动配置                                  |
 | `CANGJIE_STDX_PATH_DYNAMIC` | 由 cjv 自动注入，指向 `<CJV_HOME>/stdx/<tc>/dynamic`（仅当 stdx 已安装） |
-| `CANGJIE_STDX_PATH_STATIC`  | 由 cjv 自动注入，指向 `<CJV_HOME>/stdx/<tc>/static`（仅当 stdx 已安装） |
+| `CANGJIE_STDX_PATH_STATIC`  | 由 cjv 自动注入，指向 `<CJV_HOME>/stdx/<tc>/static`（仅当 stdx 已安装）  |
 
 ## 目录结构
 

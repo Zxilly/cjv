@@ -87,7 +87,6 @@ func TestParseToolchainFile_ValidWithAllFields(t *testing.T) {
 channel = "lts"
 components = ["std", "gui"]
 targets = ["win32-x64"]
-profile = "full"
 `
 	require.NoError(t, os.WriteFile(path, []byte(content), 0o644))
 
@@ -96,7 +95,6 @@ profile = "full"
 	assert.Equal(t, "lts", tc.Toolchain.Channel)
 	assert.Equal(t, []string{"std", "gui"}, tc.Toolchain.Components)
 	assert.Equal(t, []string{"win32-x64"}, tc.Toolchain.Targets)
-	assert.Equal(t, "full", tc.Toolchain.Profile)
 }
 
 func TestParseToolchainFile_NonExistentFile(t *testing.T) {
