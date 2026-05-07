@@ -111,3 +111,13 @@ func TestNormalizeList(t *testing.T) {
 	_, err = NormalizeList([]string{"unknown"})
 	assert.Error(t, err)
 }
+
+func TestAvailableComponentsFiltersBySelectedPlatform(t *testing.T) {
+	tc := toolchain.ToolchainName{Channel: toolchain.LTS, Version: "1.0.5"}
+
+	got := AvailableComponents(tc, "linux-x64-ohos")
+
+	assert.NotContains(t, got, Stdx)
+	assert.Contains(t, got, Docs)
+	assert.Contains(t, got, StdxDocs)
+}

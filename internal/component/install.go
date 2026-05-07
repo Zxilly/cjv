@@ -28,11 +28,7 @@ func Install(ctx context.Context, roots Roots, tc toolchain.ToolchainName, name 
 		}
 	}
 
-	if force {
-		if err := Remove(roots, name); err != nil {
-			return fmt.Errorf("reinstall: remove existing %s: %w", name, err)
-		}
-	} else if IsInstalled(roots.TcDir, name) {
+	if !force && IsInstalled(roots.TcDir, name) {
 		return &cjverr.ComponentAlreadyInstalledError{
 			Toolchain: filepath.Base(roots.TcDir),
 			Component: string(name),
@@ -40,6 +36,10 @@ func Install(ctx context.Context, roots Roots, tc toolchain.ToolchainName, name 
 	}
 
 	assetURL, err := ResolveAssetURL(spec, tc, platformKey)
+	if err != nil {
+		return err
+	}
+	checksum, err := componentChecksum(ctx, tc, assetURL, name)
 	if err != nil {
 		return err
 	}
@@ -57,18 +57,23 @@ func Install(ctx context.Context, roots Roots, tc toolchain.ToolchainName, name 
 		"Component": string(name),
 		"Toolchain": filepath.Base(roots.TcDir),
 	}))
-	if err := dist.DownloadFileCached(ctx, assetURL, archivePath, "", downloadsDir); err != nil {
+	if err := dist.DownloadFileCached(ctx, assetURL, archivePath, checksum, downloadsDir); err != nil {
 		return err
 	}
 
 	destDir := spec.InstallRoot(roots)
-	if err := os.MkdirAll(destDir, 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(destDir), 0o755); err != nil {
 		return err
 	}
+	stageDir, err := os.MkdirTemp(filepath.Dir(destDir), ".cjv-component-*")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(stageDir) //nolint:errcheck // best-effort cleanup
 
 	fmt.Println(i18n.T("InstallingComponent", i18n.MsgData{"Component": string(name)}))
 
-	paths, err := dist.ExtractFlattened(ctx, archivePath, destDir, spec.StripTopLevel)
+	paths, err := dist.ExtractFlattened(ctx, archivePath, stageDir, spec.StripTopLevel)
 	if err != nil {
 		return err
 	}
@@ -76,12 +81,73 @@ func Install(ctx context.Context, roots Roots, tc toolchain.ToolchainName, name 
 		return fmt.Errorf("component %q archive contained no files", name)
 	}
 
+	var snap *Snapshot
+	var moved []string
 	defer func() {
 		if retErr == nil {
 			return
 		}
-		_ = removePaths(roots, name, paths) //nolint:errcheck // best-effort rollback
+		_ = removePaths(roots, name, moved)         //nolint:errcheck // best-effort rollback
+		_ = cleanupComponentMeta(roots.TcDir, name) //nolint:errcheck // best-effort rollback
+		if snap != nil {
+			_ = snap.Restore() //nolint:errcheck // best-effort rollback
+		}
 	}()
 
+	if force && IsInstalled(roots.TcDir, name) {
+		snap, err = TakeSnapshot(roots, []Name{name})
+		if err != nil {
+			return err
+		}
+		defer snap.Cleanup() //nolint:errcheck // best-effort cleanup
+		if err := Remove(roots, name); err != nil {
+			return fmt.Errorf("reinstall: remove existing %s: %w", name, err)
+		}
+	}
+
+	moved, err = moveStagedFiles(stageDir, destDir, paths)
+	if err != nil {
+		return err
+	}
 	return WriteManifest(roots.TcDir, name, paths)
+}
+
+func componentChecksum(ctx context.Context, tc toolchain.ToolchainName, assetURL string, name Name) (string, error) {
+	checksum := dist.FetchNightlySHA256(ctx, assetURL)
+	if checksum == "" && tc.Channel != toolchain.Nightly {
+		return "", fmt.Errorf("component %q checksum not found at %s.sha256", name, assetURL)
+	}
+	return checksum, nil
+}
+
+func moveStagedFiles(stageDir, destDir string, paths []string) ([]string, error) {
+	if err := os.MkdirAll(destDir, 0o755); err != nil {
+		return nil, err
+	}
+	moved := make([]string, 0, len(paths))
+	for _, rel := range paths {
+		src := filepath.Join(stageDir, filepath.FromSlash(rel))
+		dst := filepath.Join(destDir, filepath.FromSlash(rel))
+		if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+			return moved, err
+		}
+		if _, err := os.Lstat(dst); err == nil {
+			if err := os.RemoveAll(dst); err != nil {
+				return moved, err
+			}
+		}
+		if err := os.Rename(src, dst); err != nil {
+			return moved, err
+		}
+		moved = append(moved, rel)
+	}
+	return moved, nil
+}
+
+func cleanupComponentMeta(tcDir string, name Name) error {
+	err1 := os.Remove(metaPath(tcDir, "manifest-"+string(name)))
+	if err1 != nil && !os.IsNotExist(err1) {
+		return err1
+	}
+	return removeFromComponentsIndex(tcDir, name)
 }

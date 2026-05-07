@@ -1,10 +1,12 @@
 package cli
 
 import (
+	"io"
 	"os"
 	"testing"
 
 	"github.com/Zxilly/cjv/internal/config"
+	"github.com/stretchr/testify/require"
 )
 
 // TestMain configures the test environment for the cli package.
@@ -32,4 +34,25 @@ func runTests(m *testing.M) int {
 	ensurePathConfiguredFn = func() {}
 	config.ResetDefaultSettingsFileCache()
 	return m.Run()
+}
+
+func captureStdout(t *testing.T, fn func() error) (string, error) {
+	t.Helper()
+
+	oldStdout := os.Stdout
+	r, w, err := os.Pipe()
+	require.NoError(t, err)
+	os.Stdout = w
+	defer func() {
+		os.Stdout = oldStdout
+	}()
+
+	runErr := fn()
+
+	os.Stdout = oldStdout
+	require.NoError(t, w.Close())
+	data, readErr := io.ReadAll(r)
+	require.NoError(t, readErr)
+	require.NoError(t, r.Close())
+	return string(data), runErr
 }

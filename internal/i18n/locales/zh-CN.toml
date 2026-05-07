@@ -328,6 +328,9 @@ other = "无法打开浏览器，文档位于：{{.Path}}"
 [DocsTopicNotFound]
 other = "工具链 '{{.Toolchain}}' 未找到主题 '{{.Topic}}' 的文档。可尝试 'cjv component add {{.Component}}'。"
 
+[DocsTopicNotFoundNoHint]
+other = "工具链 '{{.Toolchain}}' 未找到主题 '{{.Topic}}' 的文档。"
+
 [FetchingComponent]
 other = "正在为 {{.Toolchain}} 下载 component '{{.Component}}'..."
 

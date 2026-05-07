@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync/atomic"
 	"testing"
 
@@ -105,6 +106,28 @@ func TestDownloadFileRetriesTooManyRequests(t *testing.T) {
 	assert.GreaterOrEqual(t, attempts.Load(), int32(2))
 }
 
+func TestDownloadFilePermanentClientErrorDoesNotRetry(t *testing.T) {
+	t.Setenv("CJV_MAX_RETRIES", "5")
+	var attempts atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempts.Add(1)
+		http.Error(w, "missing", http.StatusNotFound)
+	}))
+	defer server.Close()
+
+	err := DownloadFile(context.Background(), server.URL+"/missing.zip", filepath.Join(t.TempDir(), "archive.zip"), "")
+
+	require.Error(t, err)
+	assert.Equal(t, int32(1), attempts.Load())
+}
+
+func TestDownloadFileInvalidRequestURL(t *testing.T) {
+	err := DownloadFile(context.Background(), "http://[::1", filepath.Join(t.TempDir(), "archive.zip"), "")
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "create request")
+}
+
 func TestDownloadFileCached_CacheHit(t *testing.T) {
 	cacheDir := t.TempDir()
 	content := []byte("cached content")
@@ -177,6 +200,29 @@ func TestDownloadFileCached_CacheHitChecksumMismatchRedownloads(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, content, cachedData)
 	assert.Equal(t, int32(1), requests.Load(), "checksum mismatch should trigger a redownload")
+}
+
+func TestDownloadFileCachedCacheHitDestinationDirectoryError(t *testing.T) {
+	cacheDir := t.TempDir()
+	content := []byte("cached content")
+	h := sha256.Sum256(content)
+	sha256Hex := hex.EncodeToString(h[:])
+	require.NoError(t, os.WriteFile(filepath.Join(cacheDir, sha256Hex), content, 0o644))
+	parentFile := filepath.Join(t.TempDir(), "not-a-directory")
+	require.NoError(t, os.WriteFile(parentFile, []byte("file"), 0o644))
+
+	err := DownloadFileCached(context.Background(), "https://example.invalid/archive.zip", filepath.Join(parentFile, "out.zip"), sha256Hex, cacheDir)
+
+	require.Error(t, err)
+}
+
+func TestDownloadFileCachedCacheDirCreationError(t *testing.T) {
+	parentFile := filepath.Join(t.TempDir(), "not-a-directory")
+	require.NoError(t, os.WriteFile(parentFile, []byte("file"), 0o644))
+
+	err := DownloadFileCached(context.Background(), "https://example.invalid/archive.zip", filepath.Join(t.TempDir(), "out.zip"), "", filepath.Join(parentFile, "cache"))
+
+	require.Error(t, err)
 }
 
 func TestDownloadFileCached_NoChecksumUsesURLHash(t *testing.T) {
@@ -269,6 +315,25 @@ func TestDownloadOnce_ResumeServerReturns200(t *testing.T) {
 	assert.Equal(t, full, data)
 }
 
+func TestDownloadOnceRangeNotSatisfiableDropsPartial(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.NotEmpty(t, r.Header.Get("Range"))
+		w.WriteHeader(http.StatusRequestedRangeNotSatisfiable)
+	}))
+	defer server.Close()
+
+	partialPath := filepath.Join(t.TempDir(), "archive.partial")
+	require.NoError(t, os.WriteFile(partialPath, []byte("stale"), 0o644))
+
+	err := downloadOnce(context.Background(), server.URL+"/archive.zip", partialPath, "archive.zip", "")
+
+	require.NoError(t, err)
+	assert.FileExists(t, partialPath)
+	data, readErr := os.ReadFile(partialPath)
+	require.NoError(t, readErr)
+	assert.Empty(t, data)
+}
+
 // --- Tests merged from download_replace_test.go ---
 
 func TestDownloadFileReplacesExistingDestination(t *testing.T) {
@@ -337,4 +402,72 @@ func TestNonRetriableError_ErrorAndUnwrap(t *testing.T) {
 	assert.Equal(t, "resource not found", nre.Error())
 	assert.Equal(t, inner, nre.Unwrap())
 	assert.True(t, errors.Is(nre, inner))
+}
+
+func TestGetMaxDownloadRetriesFromEnv(t *testing.T) {
+	t.Setenv("CJV_MAX_RETRIES", "0")
+	assert.Equal(t, 0, getMaxDownloadRetries())
+
+	t.Setenv("CJV_MAX_RETRIES", "invalid")
+	assert.Equal(t, 3, getMaxDownloadRetries())
+}
+
+func TestDownloadTempHelpers(t *testing.T) {
+	parentFile := filepath.Join(t.TempDir(), "not-a-directory")
+	require.NoError(t, os.WriteFile(parentFile, []byte("file"), 0o644))
+	_, err := newDownloadTempPath(filepath.Join(parentFile, "archive.zip"))
+	require.Error(t, err)
+
+	cleanupDownloadTemp(filepath.Join(t.TempDir(), "missing.partial"))
+	err = promoteDownloadedFile(filepath.Join(t.TempDir(), "missing.partial"), filepath.Join(t.TempDir(), "dest.zip"))
+	require.Error(t, err)
+	var nre *nonRetriableError
+	assert.ErrorAs(t, err, &nre)
+}
+
+func TestVerifyArchiveMagic(t *testing.T) {
+	dir := t.TempDir()
+	zipPath := filepath.Join(dir, "archive.zip")
+	gzipPath := filepath.Join(dir, "archive.tar.gz")
+	badPath := filepath.Join(dir, "archive.bin")
+	shortPath := filepath.Join(dir, "short.bin")
+	require.NoError(t, os.WriteFile(zipPath, []byte{0x50, 0x4B, 0x03, 0x04}, 0o644))
+	require.NoError(t, os.WriteFile(gzipPath, []byte{0x1f, 0x8b, 0x08}, 0o644))
+	require.NoError(t, os.WriteFile(badPath, []byte("not an archive"), 0o644))
+	require.NoError(t, os.WriteFile(shortPath, []byte{0x50}, 0o644))
+
+	require.NoError(t, verifyArchiveMagic(zipPath))
+	require.NoError(t, verifyArchiveMagic(gzipPath))
+	require.Error(t, verifyArchiveMagic(badPath))
+	require.Error(t, verifyArchiveMagic(shortPath))
+}
+
+func TestVerifyCachedFileErrorBranches(t *testing.T) {
+	dir := t.TempDir()
+	missing := filepath.Join(dir, "missing.zip")
+	require.Error(t, verifyCachedFile(missing, ""))
+
+	empty := filepath.Join(dir, "empty.zip")
+	require.NoError(t, os.WriteFile(empty, nil, 0o644))
+	require.Error(t, verifyCachedFile(empty, ""))
+
+	content := filepath.Join(dir, "content.zip")
+	require.NoError(t, os.WriteFile(content, []byte("content"), 0o644))
+	require.Error(t, verifyCachedFile(content, strings.Repeat("0", 64)))
+}
+
+func TestDownloadFileCachedNoChecksumValidatesCachedArchive(t *testing.T) {
+	cacheDir := t.TempDir()
+	dest := filepath.Join(t.TempDir(), "out.zip")
+	url := "https://example.invalid/archive.zip"
+	key := cacheKey(url, "")
+	require.NoError(t, os.WriteFile(filepath.Join(cacheDir, key), []byte{0x50, 0x4B, 0x03, 0x04, 0x00}, 0o644))
+
+	require.NoError(t, DownloadFileCached(context.Background(), url, dest, "", cacheDir))
+	assert.FileExists(t, dest)
+
+	require.NoError(t, os.WriteFile(filepath.Join(cacheDir, key), []byte("bad"), 0o644))
+	err := DownloadFileCached(context.Background(), url, filepath.Join(t.TempDir(), "bad.zip"), "", cacheDir)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "valid archive")
 }

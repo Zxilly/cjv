@@ -62,6 +62,10 @@ func AddPathToWindowsRegistry(binDir string) error {
 	}
 	defer key.Close() //nolint:errcheck // best-effort cleanup
 
+	return addPathToRegistryKey(key, binDir)
+}
+
+func addPathToRegistryKey(key registry.Key, binDir string) error {
 	pathName := findPathValueName(key)
 
 	existing, _, err := key.GetStringValue(pathName)
@@ -98,6 +102,10 @@ func RemovePathFromWindowsRegistry(binDir string) error {
 	}
 	defer key.Close() //nolint:errcheck // best-effort cleanup
 
+	return removePathFromRegistryKey(key, binDir)
+}
+
+func removePathFromRegistryKey(key registry.Key, binDir string) error {
 	pathName := findPathValueName(key)
 
 	existing, _, err := key.GetStringValue(pathName)

@@ -110,3 +110,67 @@ func TestUnsetNonexistentOverrides_NoOpWhenAllExist(t *testing.T) {
 
 	assert.Len(t, stg.Overrides, 2, "all overrides should be preserved")
 }
+
+func TestOverrideUnsetCommandRemovesMatchingNormalizedPath(t *testing.T) {
+	home := t.TempDir()
+	dir := t.TempDir()
+	t.Setenv(config.EnvHome, home)
+	config.ResetDefaultSettingsFileCache()
+	t.Cleanup(config.ResetDefaultSettingsFileCache)
+
+	settings := config.DefaultSettings()
+	settings.Overrides[config.NormalizePath(dir)] = "lts-1.0.5"
+	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, "settings.toml")))
+
+	oldPath := overrideUnsetPath
+	oldNonexistent := overrideUnsetNonexistent
+	overrideUnsetPath = dir
+	overrideUnsetNonexistent = false
+	t.Cleanup(func() {
+		overrideUnsetPath = oldPath
+		overrideUnsetNonexistent = oldNonexistent
+	})
+
+	require.NoError(t, overrideUnsetCmd.RunE(overrideUnsetCmd, nil))
+
+	got, err := config.LoadSettings(filepath.Join(home, "settings.toml"))
+	require.NoError(t, err)
+	assert.Empty(t, got.Overrides)
+}
+
+func TestOverrideUnsetCommandErrorsWhenMissing(t *testing.T) {
+	home := t.TempDir()
+	dir := t.TempDir()
+	t.Setenv(config.EnvHome, home)
+	config.ResetDefaultSettingsFileCache()
+	t.Cleanup(config.ResetDefaultSettingsFileCache)
+
+	oldPath := overrideUnsetPath
+	oldNonexistent := overrideUnsetNonexistent
+	overrideUnsetPath = dir
+	overrideUnsetNonexistent = false
+	t.Cleanup(func() {
+		overrideUnsetPath = oldPath
+		overrideUnsetNonexistent = oldNonexistent
+	})
+
+	err := overrideUnsetCmd.RunE(overrideUnsetCmd, nil)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "no override")
+}
+
+func TestOverrideListCommandHandlesEmptyAndSortedEntries(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv(config.EnvHome, home)
+	config.ResetDefaultSettingsFileCache()
+	t.Cleanup(config.ResetDefaultSettingsFileCache)
+
+	require.NoError(t, overrideListCmd.RunE(overrideListCmd, nil))
+
+	settings := config.DefaultSettings()
+	settings.Overrides[filepath.Join(home, "b")] = "sts"
+	settings.Overrides[filepath.Join(home, "a")] = "lts"
+	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, "settings.toml")))
+
+	require.NoError(t, overrideListCmd.RunE(overrideListCmd, nil))
+}

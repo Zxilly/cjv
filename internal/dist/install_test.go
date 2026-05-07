@@ -142,6 +142,55 @@ func TestInstallSDKInvalidArchive(t *testing.T) {
 	assert.Error(t, err)
 }
 
+func TestExtractFlattenedRejectsMissingArchiveAndBadDestination(t *testing.T) {
+	missingArchive := filepath.Join(t.TempDir(), "missing.zip")
+	_, err := ExtractFlattened(context.Background(), missingArchive, filepath.Join(t.TempDir(), "dest"), true)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to open archive")
+
+	zipPath := createTestZip(t, map[string]string{"file.txt": "content"})
+	parentFile := filepath.Join(t.TempDir(), "not-a-dir")
+	require.NoError(t, os.WriteFile(parentFile, []byte("file"), 0o644))
+	_, err = ExtractFlattened(context.Background(), zipPath, filepath.Join(parentFile, "dest"), true)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to create install directory")
+}
+
+func TestMoveContentsRecordingOverwritesExistingEntry(t *testing.T) {
+	src := t.TempDir()
+	dst := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(src, "bin"), 0o755))
+	require.NoError(t, os.MkdirAll(filepath.Join(dst, "bin"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(src, "bin", "cjc"), []byte("fresh"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(dst, "bin", "cjc"), []byte("stale"), 0o755))
+
+	paths, err := moveContentsRecording(src, dst)
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{filepath.ToSlash(filepath.Join("bin", "cjc"))}, paths)
+	assertFileContent(t, filepath.Join(dst, "bin", "cjc"), "fresh")
+}
+
+func TestCopyEntryRejectsUnsafeSymlinkTargets(t *testing.T) {
+	dir := t.TempDir()
+
+	absoluteLink := filepath.Join(dir, "absolute-link")
+	if err := os.Symlink(filepath.Join(dir, "target.txt"), absoluteLink); err != nil {
+		t.Skipf("symlink creation requires privileges on this platform: %v", err)
+	}
+	require.Error(t, copyEntry(absoluteLink, filepath.Join(t.TempDir(), "copy")))
+
+	parentLink := filepath.Join(dir, "parent-link")
+	require.NoError(t, os.Symlink(filepath.Join("..", "target.txt"), parentLink))
+	require.Error(t, copyEntry(parentLink, filepath.Join(t.TempDir(), "copy")))
+}
+
+func TestCopyEntryReportsMissingSource(t *testing.T) {
+	err := copyEntry(filepath.Join(t.TempDir(), "missing"), filepath.Join(t.TempDir(), "copy"))
+
+	require.Error(t, err)
+}
+
 func assertFileContent(t *testing.T, path, expected string) {
 	t.Helper()
 	data, err := os.ReadFile(path)

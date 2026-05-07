@@ -39,6 +39,7 @@ var (
 	// directory to the user's PATH. Tests override this to avoid writing to
 	// the real system PATH (e.g., the Windows registry).
 	ensurePathConfiguredFn = ensurePathConfigured
+	componentInstallFunc   = componentlib.Install
 )
 
 func init() {
@@ -160,6 +161,12 @@ func installComponentsList(ctx context.Context, resolvedName string, components 
 	if err != nil {
 		return err
 	}
+	if resolvedTC.PlatformKey != "" {
+		return fmt.Errorf("target variant %q cannot be used for component installation; use host toolchain %q", resolvedName, toolchain.ToolchainName{
+			Channel: resolvedTC.Channel,
+			Version: resolvedTC.Version,
+		}.String())
+	}
 	if resolvedTC.IsCustom() {
 		return &cjverr.ComponentRequiresHostError{Component: strings.Join(components, ", ")}
 	}
@@ -183,8 +190,13 @@ func installComponentsList(ctx context.Context, resolvedName string, components 
 	if err != nil {
 		return err
 	}
+	snap, err := componentlib.TakeSnapshot(roots, parsed)
+	if err != nil {
+		return err
+	}
+	defer snap.Cleanup() //nolint:errcheck // best-effort cleanup
 	for _, c := range parsed {
-		if err := componentlib.Install(ctx, roots, resolvedTC, c, platformKey, downloadsDir, force); err != nil {
+		if err := componentInstallFunc(ctx, roots, resolvedTC, c, platformKey, downloadsDir, force); err != nil {
 			var alreadyErr *cjverr.ComponentAlreadyInstalledError
 			if errors.As(err, &alreadyErr) {
 				if !quiet {
@@ -192,6 +204,7 @@ func installComponentsList(ctx context.Context, resolvedName string, components 
 				}
 				continue
 			}
+			_ = snap.Restore() //nolint:errcheck // best-effort rollback
 			return err
 		}
 		if !quiet {

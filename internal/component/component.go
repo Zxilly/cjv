@@ -134,6 +134,21 @@ func KnownComponents() []Name {
 	return names
 }
 
+func AvailableComponents(tc toolchain.ToolchainName, platformKey string) []Name {
+	var out []Name
+	for _, n := range KnownComponents() {
+		spec, err := SpecFor(n)
+		if err != nil || !spec.SupportsChannel(tc.Channel) {
+			continue
+		}
+		if _, err := ResolveAssetURL(spec, tc, platformKey); err != nil {
+			continue
+		}
+		out = append(out, n)
+	}
+	return out
+}
+
 func ParseName(s string) (Name, error) {
 	trimmed := strings.TrimSpace(s)
 	if trimmed == "" {

@@ -15,6 +15,8 @@ import (
 	"runtime"
 	"testing"
 
+	"github.com/Zxilly/cjv/internal/cjverr"
+	componentlib "github.com/Zxilly/cjv/internal/component"
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/dist"
 	"github.com/Zxilly/cjv/internal/proxy"
@@ -681,4 +683,87 @@ func TestInstallToolchainWithOptions_Wrapper(t *testing.T) {
 
 	installed, _ := toolchain.ListInstalled()
 	assert.NotEmpty(t, installed)
+}
+
+func TestResolveNightlyWithSpecificVersionSkipsLatestLookup(t *testing.T) {
+	settings := config.DefaultSettings()
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	resolved, err := resolveNightlyWithPlatformKey(ctx, toolchain.ToolchainName{
+		Channel: toolchain.Nightly,
+		Version: "202501010000",
+	}, &settings, "linux-x64")
+
+	require.NoError(t, err)
+	assert.Equal(t, "nightly-202501010000", resolved.Name)
+	assert.Contains(t, resolved.URL, "202501010000")
+	assert.Empty(t, resolved.SHA256)
+}
+
+func TestInstallToolchainWithExtrasRejectsCustomAndTargetVariantWithTargets(t *testing.T) {
+	err := InstallToolchainWithExtras(context.Background(), "local-sdk", nil, nil, false)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "custom toolchain")
+
+	err = InstallToolchainWithExtras(context.Background(), "lts-1.0.5-linux-x64-ohos", []string{"android"}, nil, false)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "cannot combine")
+}
+
+func TestEnsurePathConfiguredCanBeDisabledByEnv(t *testing.T) {
+	t.Setenv(config.EnvNoPathSetup, "1")
+	ensurePathConfigured()
+}
+
+func TestInstallComponentsForToolchainNoComponentsIsNoop(t *testing.T) {
+	require.NoError(t, InstallComponentsForToolchain(context.Background(), "lts", nil))
+}
+
+func TestInstallComponentsForToolchainRejectsInvalidAndMissingToolchain(t *testing.T) {
+	err := InstallComponentsForToolchain(context.Background(), "+bad", []string{"docs"})
+	require.Error(t, err)
+
+	home := t.TempDir()
+	t.Setenv(config.EnvHome, home)
+	config.ResetDefaultSettingsFileCache()
+	t.Cleanup(config.ResetDefaultSettingsFileCache)
+
+	err = InstallComponentsForToolchain(context.Background(), "lts-1.0.5", []string{"docs"})
+	require.Error(t, err)
+}
+
+func TestInstallComponentsListInputValidationAndAlreadyInstalled(t *testing.T) {
+	err := installComponentsList(context.Background(), "+bad", []string{"docs"}, false, true)
+	require.Error(t, err)
+
+	err = installComponentsList(context.Background(), "local-sdk", []string{"docs"}, false, true)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "docs")
+
+	tcName := "lts-1.0.5"
+	setupComponentCLITest(t, tcName)
+	err = installComponentsList(context.Background(), tcName, []string{"unknown"}, false, true)
+	require.Error(t, err)
+
+	oldInstall := componentInstallFunc
+	componentInstallFunc = func(ctx context.Context, roots componentlib.Roots, tc toolchain.ToolchainName, name componentlib.Name, platformKey, downloadsDir string, force bool) error {
+		return &cjverr.ComponentAlreadyInstalledError{Toolchain: tc.String(), Component: string(name)}
+	}
+	t.Cleanup(func() { componentInstallFunc = oldInstall })
+
+	err = installComponentsList(context.Background(), tcName, []string{"docs"}, false, false)
+	require.NoError(t, err)
+}
+
+func TestResolveAndLocateDispatchesNightlyAndDefaultToolchainExistsInvalidName(t *testing.T) {
+	settings := config.DefaultSettings()
+	resolved, err := resolveAndLocateWithPlatformKey(context.Background(), toolchain.ToolchainName{
+		Channel: toolchain.Nightly,
+		Version: "202501010000",
+	}, &settings, nil, "linux-x64")
+
+	require.NoError(t, err)
+	assert.Equal(t, "nightly-202501010000", resolved.Name)
+	assert.False(t, defaultToolchainExists("+bad"))
 }

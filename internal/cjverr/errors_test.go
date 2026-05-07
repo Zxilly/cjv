@@ -76,6 +76,46 @@ func TestAllErrorTypes_ProduceReadableMessages(t *testing.T) {
 			&UnknownChannelError{Channel: "beta"},
 			[]string{"beta"},
 		},
+		{
+			"GitCodeAPIKeyRequired",
+			&GitCodeAPIKeyRequiredError{},
+			nil,
+		},
+		{
+			"UnknownComponent",
+			&UnknownComponentError{Name: "extra-docs"},
+			[]string{"extra-docs"},
+		},
+		{
+			"ComponentNotInstalled",
+			&ComponentNotInstalledError{Toolchain: "lts-1.0.5", Component: "docs"},
+			[]string{"lts-1.0.5", "docs"},
+		},
+		{
+			"ComponentAlreadyInstalled",
+			&ComponentAlreadyInstalledError{Toolchain: "lts-1.0.5", Component: "stdx"},
+			[]string{"lts-1.0.5", "stdx"},
+		},
+		{
+			"ComponentNotAvailableForChannel",
+			&ComponentNotAvailableForChannelError{Component: "docs", Channel: "nightly"},
+			[]string{"docs", "nightly"},
+		},
+		{
+			"ComponentRequiresHost",
+			&ComponentRequiresHostError{Component: "docs"},
+			[]string{"docs"},
+		},
+		{
+			"DocsNotInstalled",
+			&DocsNotInstalledError{Toolchain: "nightly-202501010000"},
+			[]string{"nightly-202501010000"},
+		},
+		{
+			"DocsTopicNotFound",
+			&DocsTopicNotFoundError{Toolchain: "nightly-202501010000", Topic: "stdx", MissingComponent: "stdx-docs"},
+			[]string{"nightly-202501010000", "stdx", "stdx-docs"},
+		},
 	}
 
 	for _, tt := range tests {
@@ -92,3 +132,15 @@ func TestAllErrorTypes_ProduceReadableMessages(t *testing.T) {
 	}
 }
 
+func TestExitCodeErrorMessage(t *testing.T) {
+	assert.Equal(t, "process exited with code 42", (&ExitCodeError{Code: 42}).Error())
+}
+
+func TestDocsTopicNotFoundWithoutMissingComponentOmitsInstallHint(t *testing.T) {
+	i18n.Init("en")
+
+	msg := (&DocsTopicNotFoundError{Toolchain: "lts-1.0.5", Topic: "missing"}).Error()
+
+	assert.Contains(t, msg, "missing")
+	assert.NotContains(t, msg, "component add")
+}

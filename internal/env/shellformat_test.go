@@ -68,3 +68,25 @@ func TestComputeEnvDiff(t *testing.T) {
 	assert.Equal(t, "/new:/usr/bin", keys["PATH"])
 	assert.Equal(t, "hello", keys["NEW_VAR"])
 }
+
+func TestParseShellFlagAndDefaultShellType(t *testing.T) {
+	tests := map[string]ShellType{
+		"bash":       ShellPosix,
+		"zsh":        ShellPosix,
+		"sh":         ShellPosix,
+		"posix":      ShellPosix,
+		"fish":       ShellFish,
+		"powershell": ShellPowerShell,
+		"pwsh":       ShellPowerShell,
+		"cmd":        ShellCmd,
+	}
+	for input, want := range tests {
+		got, err := ParseShellFlag(input)
+		assert.NoError(t, err)
+		assert.Equal(t, want, got)
+	}
+
+	_, err := ParseShellFlag("unknown")
+	assert.Error(t, err)
+	assert.Contains(t, []ShellType{ShellPosix, ShellPowerShell}, DefaultShellType())
+}

@@ -69,6 +69,8 @@ func TestPathFunctions_ConstructCorrectPaths(t *testing.T) {
 		{"ToolchainsDir", ToolchainsDir, "toolchains"},
 		{"BinDir", BinDir, "bin"},
 		{"DownloadsDir", DownloadsDir, "downloads"},
+		{"DocsDir", DocsDir, "docs"},
+		{"StdxDir", StdxDir, "stdx"},
 		{"SettingsPath", SettingsPath, "settings.toml"},
 	}
 
@@ -79,6 +81,47 @@ func TestPathFunctions_ConstructCorrectPaths(t *testing.T) {
 			assert.Equal(t, filepath.Join(home, tt.suffix), got)
 		})
 	}
+}
+
+func TestPerToolchainPathFunctions(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv(EnvHome, home)
+
+	docs, err := DocsDirFor("lts-1.0.5")
+	require.NoError(t, err)
+	assert.Equal(t, filepath.Join(home, "docs", "lts-1.0.5"), docs)
+
+	stdx, err := StdxDirFor("lts-1.0.5")
+	require.NoError(t, err)
+	assert.Equal(t, filepath.Join(home, "stdx", "lts-1.0.5"), stdx)
+}
+
+func TestDefaultSettingsFileCachesByResolvedPath(t *testing.T) {
+	home1 := t.TempDir()
+	home2 := t.TempDir()
+	ResetDefaultSettingsFileCache()
+	t.Cleanup(ResetDefaultSettingsFileCache)
+
+	t.Setenv(EnvHome, home1)
+	sf1, err := DefaultSettingsFile()
+	require.NoError(t, err)
+	sf1Again, err := DefaultSettingsFile()
+	require.NoError(t, err)
+	assert.Same(t, sf1, sf1Again)
+
+	t.Setenv(EnvHome, home2)
+	sf2, err := DefaultSettingsFile()
+	require.NoError(t, err)
+	assert.NotSame(t, sf1, sf2)
+	assert.Equal(t, filepath.Join(home2, "settings.toml"), sf2.Path())
+}
+
+func TestResetCachedUserHomeDir(t *testing.T) {
+	ResetCachedUserHomeDir()
+	home, err := cachedUserHomeDir()
+	require.NoError(t, err)
+	assert.NotEmpty(t, home)
+	ResetCachedUserHomeDir()
 }
 
 func TestLoadSettings_DefaultsWhenMissing(t *testing.T) {

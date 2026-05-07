@@ -117,3 +117,26 @@ func TestEnvConfig_SaveCreatesFile(t *testing.T) {
 
 	assert.FileExists(t, path)
 }
+
+func TestLoadEnvConfigMalformedReturnsError(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "bad.toml")
+	require.NoError(t, os.WriteFile(path, []byte("[vars\nbad"), 0o644))
+
+	_, err := LoadEnvConfig(path)
+
+	require.Error(t, err)
+}
+
+func TestLoadToolchainEnvAppliesComponentEnv(t *testing.T) {
+	tcDir := t.TempDir()
+	cfg := NewEnvConfig()
+	cfg.Vars["BASE"] = "1"
+	require.NoError(t, cfg.Save(filepath.Join(tcDir, "env.toml")))
+
+	got := LoadToolchainEnv(context.Background(), tcDir, func(vars map[string]string, tcDir string) {
+		vars["COMPONENT"] = "enabled"
+	})
+
+	assert.Equal(t, "1", got.Vars["BASE"])
+	assert.Equal(t, "enabled", got.Vars["COMPONENT"])
+}

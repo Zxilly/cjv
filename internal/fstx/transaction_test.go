@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestTransaction_Commit_CleansBackups(t *testing.T) {
@@ -143,4 +145,70 @@ func TestTransaction_RenameFile(t *testing.T) {
 	if err := tx.Commit(); err != nil {
 		t.Fatal(err)
 	}
+}
+
+func TestTransaction_Rollback_RestoresRemovedDirAndRenamedFile(t *testing.T) {
+	dir := t.TempDir()
+	prefix := filepath.Join(dir, "dest")
+	if err := os.MkdirAll(prefix, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	removedDir := filepath.Join(prefix, "removed")
+	if err := os.MkdirAll(removedDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	removedFile := filepath.Join(removedDir, "file.txt")
+	if err := os.WriteFile(removedFile, []byte("removed"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	from := filepath.Join(prefix, "from.txt")
+	to := filepath.Join(prefix, "to.txt")
+	if err := os.WriteFile(from, []byte("renamed"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	tx, err := NewTransaction(prefix)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := tx.RemoveDir(removedDir); err != nil {
+		t.Fatal(err)
+	}
+	if err := tx.RenameFile(from, to); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := tx.Rollback(); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := os.Stat(removedFile); err != nil {
+		t.Fatal("removed directory should be restored:", err)
+	}
+	if _, err := os.Stat(from); err != nil {
+		t.Fatal("renamed file should move back:", err)
+	}
+	if _, err := os.Stat(to); !os.IsNotExist(err) {
+		t.Fatal("destination should be gone after rollback")
+	}
+}
+
+func TestTransaction_ErrorBranches(t *testing.T) {
+	dir := t.TempDir()
+	prefix := filepath.Join(dir, "dest")
+	require.NoError(t, os.MkdirAll(prefix, 0o755))
+
+	tx, err := NewTransaction(prefix)
+	require.NoError(t, err)
+	defer tx.Rollback() //nolint:errcheck
+
+	require.Error(t, tx.AddFile(filepath.Join(dir, "missing.txt"), filepath.Join(prefix, "added.txt")))
+	require.Error(t, tx.RemoveFile(filepath.Join(prefix, "missing.txt")))
+	require.Error(t, tx.RemoveDir(filepath.Join(prefix, "missing-dir")))
+	require.Error(t, tx.RenameFile(filepath.Join(prefix, "missing.txt"), filepath.Join(prefix, "renamed.txt")))
+
+	require.NoError(t, tx.Commit())
+	require.Error(t, tx.Commit())
 }

@@ -263,6 +263,24 @@ func TestRunUpdate_WithToolchain(t *testing.T) {
 	assert.NoError(t, err)
 }
 
+func TestRunUpdateRunsSelfCheckWhenSettingsAvailable(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("CJV_HOME", home)
+	require.NoError(t, config.EnsureDirs())
+	require.NoError(t, os.MkdirAll(filepath.Join(home, "toolchains", "local-sdk"), 0o755))
+	settings := config.DefaultSettings()
+	settings.AutoSelfUpdate = config.AutoSelfUpdateCheck
+	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, "settings.toml")))
+
+	oldNoSelfUpdate := noSelfUpdate
+	noSelfUpdate = false
+	t.Cleanup(func() { noSelfUpdate = oldNoSelfUpdate })
+
+	cmd := &cobra.Command{}
+	cmd.SetContext(context.Background())
+	require.NoError(t, runUpdate(cmd, nil))
+}
+
 func TestRunUpdate_SingleToolchain(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("CJV_HOME", home)
@@ -304,6 +322,27 @@ func TestUpdateSingle_UnknownToolchain(t *testing.T) {
 
 	err := updateSingle(context.Background(), "nonexistent-99.99")
 	assert.Error(t, err)
+}
+
+func TestUpdateSingleRejectsInvalidCustomMissingChannelAndMissingVariant(t *testing.T) {
+	require.Error(t, updateSingle(context.Background(), "+bad"))
+	require.Error(t, updateSingle(context.Background(), "local-sdk"))
+
+	home := t.TempDir()
+	t.Setenv("CJV_HOME", home)
+	require.NoError(t, config.EnsureDirs())
+	settings := config.DefaultSettings()
+	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, "settings.toml")))
+
+	err := updateSingle(context.Background(), "lts")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "lts")
+
+	targetKey, err := dist.CurrentPlatformKeyWithTarget("", "ohos")
+	require.NoError(t, err)
+	err = updateSingle(context.Background(), "sts-2.0.0-"+targetKey)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), targetKey)
 }
 
 // Tests for findInstalledForChannel -- used by the update command to

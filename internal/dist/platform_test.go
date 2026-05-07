@@ -78,3 +78,21 @@ func TestNightlyFilenameForPlatformWithTarget(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "cangjie-sdk-windows-x64-ohos-arm32-1.1.0-alpha.20260429010057.zip", name)
 }
+
+func TestPlatformHelpersErrorAndMappingBranches(t *testing.T) {
+	_, err := CurrentPlatformKey("unsupported-host")
+	require.Error(t, err)
+
+	_, err = CurrentPlatformKeyWithTarget("unsupported-host", "ohos")
+	require.Error(t, err)
+
+	_, err = NightlyFilename("plan9", "amd64", "1.0.0")
+	require.Error(t, err)
+
+	_, err = NightlyFilenameForPlatform("unsupported-host", "1.0.0")
+	require.Error(t, err)
+
+	assert.Equal(t, "windows", NightlyGOOS("windows"))
+	assert.Equal(t, "darwin", NightlyGOOS("mac"))
+	assert.Equal(t, "linux", NightlyGOOS("linux"))
+}

@@ -1,12 +1,16 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"path/filepath"
 	"slices"
+	"strings"
 
 	"github.com/Zxilly/cjv/internal/cjverr"
+	clisettings "github.com/Zxilly/cjv/internal/cli/settings"
 	componentlib "github.com/Zxilly/cjv/internal/component"
+	"github.com/Zxilly/cjv/internal/dist"
 	"github.com/Zxilly/cjv/internal/i18n"
 	"github.com/Zxilly/cjv/internal/toolchain"
 	"github.com/fatih/color"
@@ -100,9 +104,9 @@ func runComponentAdd(cmd *cobra.Command, args []string) error {
 }
 
 func runComponentRemove(cmd *cobra.Command, args []string) error {
-	parsed, err := componentlib.NormalizeList(args)
-	if err != nil {
-		return err
+	parsed, parseErrs := parseComponentRemoveArgs(args)
+	if len(parsed) == 0 {
+		return errors.Join(parseErrs...)
 	}
 
 	tcDir, _, err := resolveToolchainArg(componentToolchain)
@@ -115,27 +119,31 @@ func runComponentRemove(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	var removeErrs []error
+	removeErrs = append(removeErrs, parseErrs...)
 	for _, c := range parsed {
 		if !componentlib.IsInstalled(tcDir, c) {
-			return &cjverr.ComponentNotInstalledError{
+			removeErrs = append(removeErrs, &cjverr.ComponentNotInstalledError{
 				Toolchain: filepath.Base(tcDir),
 				Component: string(c),
-			}
+			})
+			continue
 		}
 		fmt.Println(i18n.T("RemovingComponent", i18n.MsgData{"Component": string(c)}))
 		if err := componentlib.Remove(roots, c); err != nil {
-			return err
+			removeErrs = append(removeErrs, err)
+			continue
 		}
 		color.Green(i18n.T("ComponentRemoved", i18n.MsgData{
 			"Toolchain": filepath.Base(tcDir),
 			"Component": string(c),
 		}))
 	}
-	return nil
+	return errors.Join(removeErrs...)
 }
 
 func runComponentList(cmd *cobra.Command, args []string) error {
-	tcDir, _, err := resolveToolchainArg(componentToolchain)
+	tcDir, tcName, err := resolveToolchainArg(componentToolchain)
 	if err != nil {
 		return err
 	}
@@ -145,12 +153,30 @@ func runComponentList(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	available := componentlib.KnownComponents()
+	if !tcName.IsCustom() {
+		platformKey := tcName.PlatformKey
+		if platformKey == "" {
+			_, settings, err := clisettings.LoadSettings()
+			if err != nil {
+				return err
+			}
+			platformKey, err = dist.CurrentPlatformKey(settings.DefaultHost)
+			if err != nil {
+				return err
+			}
+		}
+		available = componentlib.AvailableComponents(tcName, platformKey)
+	} else {
+		available = nil
+	}
+
 	if componentListQuiet {
 		for _, n := range installed {
 			fmt.Println(string(n))
 		}
 		if !componentListInstalledOnly {
-			for _, n := range componentlib.KnownComponents() {
+			for _, n := range available {
 				if slices.Contains(installed, n) {
 					continue
 				}
@@ -169,7 +195,7 @@ func runComponentList(cmd *cobra.Command, args []string) error {
 		fmt.Printf("%s (%s)\n", string(n), i18n.T("StatusInstalled", nil))
 	}
 	if !componentListInstalledOnly {
-		for _, n := range componentlib.KnownComponents() {
+		for _, n := range available {
 			if slices.Contains(installed, n) {
 				continue
 			}
@@ -177,4 +203,32 @@ func runComponentList(cmd *cobra.Command, args []string) error {
 		}
 	}
 	return nil
+}
+
+func parseComponentRemoveArgs(args []string) ([]componentlib.Name, []error) {
+	var out []componentlib.Name
+	var errs []error
+	seen := make(map[componentlib.Name]bool)
+	seenUnknown := make(map[string]bool)
+	for _, raw := range args {
+		for part := range strings.SplitSeq(raw, ",") {
+			part = strings.TrimSpace(part)
+			if part == "" {
+				continue
+			}
+			n, err := componentlib.ParseName(part)
+			if err != nil {
+				if !seenUnknown[part] {
+					seenUnknown[part] = true
+					errs = append(errs, err)
+				}
+				continue
+			}
+			if !seen[n] {
+				seen[n] = true
+				out = append(out, n)
+			}
+		}
+	}
+	return out, errs
 }

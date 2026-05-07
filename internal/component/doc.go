@@ -111,7 +111,14 @@ func ResolveDocPath(roots Roots, topic string) (string, error) {
 
 	// Fall back to treating the topic as a relative path; search every
 	// installed doc component's subtree.
-	rel := filepath.FromSlash(topic)
+	rel, ok := safeDocRel(topic)
+	if !ok {
+		return "", &cjverr.DocsTopicNotFoundError{
+			Toolchain:        tcName,
+			Topic:            topic,
+			MissingComponent: "",
+		}
+	}
 	for _, name := range []Name{Docs, StdxDocs} {
 		if !installed[name] {
 			continue
@@ -122,7 +129,7 @@ func ResolveDocPath(roots Roots, topic string) (string, error) {
 			filepath.Join(base, rel+".html"),
 			filepath.Join(base, rel, "index.html"),
 		} {
-			if fileExists(candidate) {
+			if isUnder(base, candidate) && fileExists(candidate) {
 				return candidate, nil
 			}
 		}
@@ -137,4 +144,27 @@ func ResolveDocPath(roots Roots, topic string) (string, error) {
 func fileExists(path string) bool {
 	info, err := os.Stat(path)
 	return err == nil && !info.IsDir()
+}
+
+func safeDocRel(topic string) (string, bool) {
+	if strings.TrimSpace(topic) == "" {
+		return "", false
+	}
+	rel := filepath.FromSlash(topic)
+	if filepath.VolumeName(rel) != "" || filepath.IsAbs(rel) {
+		return "", false
+	}
+	clean := filepath.Clean(rel)
+	if clean == "." || clean == ".." || strings.HasPrefix(clean, ".."+string(filepath.Separator)) {
+		return "", false
+	}
+	return clean, true
+}
+
+func isUnder(base, candidate string) bool {
+	rel, err := filepath.Rel(base, candidate)
+	if err != nil {
+		return false
+	}
+	return rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) && !filepath.IsAbs(rel)
 }

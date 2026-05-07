@@ -1,6 +1,8 @@
 package cli
 
 import (
+	"context"
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -49,4 +51,22 @@ func TestExtractPlusToolchainFromExecArgs(t *testing.T) {
 		assert.Equal(t, tt.wantTC, tc)
 		assert.Equal(t, tt.wantRemain, remain)
 	}
+}
+
+func TestExecRunExecutesCommandWithActiveToolchain(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv(config.EnvHome, home)
+	t.Setenv(config.EnvToolchain, "")
+	config.ResetDefaultSettingsFileCache()
+	require.NoError(t, config.EnsureDirs())
+	require.NoError(t, os.MkdirAll(filepath.Join(home, "toolchains", "lts-1.0.5"), 0o755))
+
+	settings := config.DefaultSettings()
+	settings.DefaultToolchain = "lts-1.0.5"
+	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, "settings.toml")))
+
+	cmd := &cobra.Command{}
+	cmd.SetContext(context.Background())
+	require.NoError(t, execRun(cmd, []string{"go", "version"}))
+	require.NoError(t, execRun(cmd, []string{"--help"}))
 }

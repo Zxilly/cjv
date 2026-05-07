@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -49,4 +50,29 @@ func TestRunRun_NoToolchain(t *testing.T) {
 	cmd := &cobra.Command{}
 	err := runRun(cmd, []string{"cjc", "--version"})
 	assert.Error(t, err, "should error when no toolchain is configured")
+}
+
+func TestRunRunExecutesFallbackCommandForInstalledToolchain(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv(config.EnvHome, home)
+	t.Setenv(config.EnvToolchain, "")
+	require.NoError(t, config.EnsureDirs())
+	require.NoError(t, os.MkdirAll(filepath.Join(home, "toolchains", "lts-1.0.5"), 0o755))
+	settings := config.DefaultSettings()
+	settings.DefaultToolchain = "lts-1.0.5"
+	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, "settings.toml")))
+
+	cmd := &cobra.Command{}
+	cmd.SetContext(context.Background())
+	err := runRun(cmd, []string{"lts", "go", "version"})
+
+	require.NoError(t, err)
+}
+
+func TestRunRunHandlesHelpAndInvalidArgs(t *testing.T) {
+	cmd := &cobra.Command{Use: "run"}
+
+	require.NoError(t, runRun(cmd, []string{"--help"}))
+	require.Error(t, runRun(cmd, []string{"lts"}))
+	require.Error(t, runRun(cmd, []string{"bad/name", "go"}))
 }

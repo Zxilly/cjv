@@ -93,3 +93,17 @@ func TestForceUpdateManagedExecutable(t *testing.T) {
 	assert.Equal(t, originalSize, info2.Size(), "managed binary should be restored to original size")
 	assert.NotEqual(t, int64(3), info2.Size(), "managed binary should not still be the 3-byte dummy")
 }
+
+func TestEnsureManagedExecutableCopiesCurrentBinary(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv(config.EnvHome, home)
+
+	got, err := EnsureManagedExecutable()
+	require.NoError(t, err)
+	assert.Equal(t, filepath.Join(home, "bin", proxy.CjvBinaryName()), got)
+	assert.FileExists(t, got)
+
+	gotAgain, err := EnsureManagedExecutable()
+	require.NoError(t, err)
+	assert.Equal(t, got, gotAgain)
+}

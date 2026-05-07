@@ -79,3 +79,68 @@ func TestRemove_DocsAndStdxDocsAreIsolated(t *testing.T) {
 	assert.True(t, IsInstalled(tcDir, Docs))
 	assert.False(t, IsInstalled(tcDir, StdxDocs))
 }
+
+func TestListInstalledIgnoresUnknownAndMissingManifests(t *testing.T) {
+	tcDir := t.TempDir()
+	require.NoError(t, os.MkdirAll(metaPath(tcDir), 0o755))
+	require.NoError(t, os.WriteFile(metaPath(tcDir, componentsFile), []byte("docs\nunknown\nstdx\n"), 0o644))
+	require.NoError(t, os.WriteFile(metaPath(tcDir, "manifest-docs"), []byte("index.html\n"), 0o644))
+
+	got, err := ListInstalled(tcDir)
+
+	require.NoError(t, err)
+	assert.Equal(t, []Name{Docs}, got)
+}
+
+func TestRemoveMissingManifestTidiesIndex(t *testing.T) {
+	tcDir := t.TempDir()
+	roots := Roots{TcDir: tcDir, DocsDir: t.TempDir(), StdxDir: t.TempDir()}
+	require.NoError(t, os.MkdirAll(metaPath(tcDir), 0o755))
+	require.NoError(t, os.WriteFile(metaPath(tcDir, componentsFile), []byte("docs\n"), 0o644))
+
+	require.NoError(t, Remove(roots, Docs))
+
+	got, err := ListInstalled(tcDir)
+	require.NoError(t, err)
+	assert.Empty(t, got)
+}
+
+func TestRemoveKeepsFilesClaimedByComponentWithSameRoot(t *testing.T) {
+	tcDir := t.TempDir()
+	docsRoot := t.TempDir()
+	roots := Roots{TcDir: tcDir, DocsDir: docsRoot, StdxDir: t.TempDir()}
+	sharedName := Name("docs-copy")
+	specs[sharedName] = Spec{
+		Name:              sharedName,
+		Location:          InstallLocation{Anchor: AnchorDocs, Subdir: "main"},
+		StripTopLevel:     false,
+		SupportedChannels: specs[Docs].SupportedChannels,
+	}
+	t.Cleanup(func() { delete(specs, sharedName) })
+
+	mainDir := filepath.Join(docsRoot, "main")
+	require.NoError(t, os.MkdirAll(mainDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(mainDir, "shared.css"), []byte("shared"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(mainDir, "docs-only.js"), []byte("docs"), 0o644))
+	require.NoError(t, WriteManifest(tcDir, Docs, []string{"shared.css", "docs-only.js"}))
+	require.NoError(t, WriteManifest(tcDir, sharedName, []string{"shared.css"}))
+
+	require.NoError(t, Remove(roots, Docs))
+
+	assert.FileExists(t, filepath.Join(mainDir, "shared.css"))
+	assert.NoFileExists(t, filepath.Join(mainDir, "docs-only.js"))
+	assert.True(t, IsInstalled(tcDir, sharedName))
+	assert.False(t, IsInstalled(tcDir, Docs))
+}
+
+func TestManifestErrors(t *testing.T) {
+	tcDir := t.TempDir()
+	require.Error(t, func() error {
+		_, err := ReadManifest(tcDir, Docs)
+		return err
+	}())
+
+	require.NoError(t, os.WriteFile(filepath.Join(tcDir, ".cjv"), []byte("not a directory"), 0o644))
+	require.Error(t, WriteManifest(tcDir, Docs, []string{"index.html"}))
+	require.Error(t, writeComponentsIndex(tcDir, []Name{Docs}))
+}

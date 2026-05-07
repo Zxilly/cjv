@@ -331,6 +331,9 @@ other = "Failed to open browser; documentation is at: {{.Path}}"
 [DocsTopicNotFound]
 other = "No documentation found for topic '{{.Topic}}' in toolchain '{{.Toolchain}}'. Try 'cjv component add {{.Component}}'."
 
+[DocsTopicNotFoundNoHint]
+other = "No documentation found for topic '{{.Topic}}' in toolchain '{{.Toolchain}}'."
+
 [FetchingComponent]
 other = "Fetching component '{{.Component}}' for {{.Toolchain}}..."
 

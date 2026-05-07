@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 
@@ -74,5 +75,5 @@ func fileURL(absPath string) string {
 	if len(clean) > 0 && clean[0] != '/' {
 		clean = "/" + clean
 	}
-	return "file://" + clean
+	return (&url.URL{Scheme: "file", Path: clean}).String()
 }

@@ -215,10 +215,15 @@ type DocsTopicNotFoundError struct {
 }
 
 func (e *DocsTopicNotFoundError) Error() string {
+	if e.MissingComponent == "" {
+		return i18n.T("DocsTopicNotFoundNoHint", i18n.MsgData{
+			"Toolchain": e.Toolchain,
+			"Topic":     e.Topic,
+		})
+	}
 	return i18n.T("DocsTopicNotFound", i18n.MsgData{
 		"Toolchain": e.Toolchain,
 		"Topic":     e.Topic,
 		"Component": e.MissingComponent,
 	})
 }
-

@@ -72,6 +72,25 @@ func TestToolchainKey(t *testing.T) {
 	key, err = ToolchainKey("linux-x64", "ohos")
 	require.NoError(t, err)
 	assert.Equal(t, "linux-x64-ohos", key)
+
+	_, err = ToolchainKey("linux-x64-ohos", "android")
+	assert.Error(t, err)
+
+	_, err = ToolchainKey("unknown-host", "ohos")
+	assert.Error(t, err)
+}
+
+func TestCurrentHostKeyAndHostKeyOnly(t *testing.T) {
+	key, err := CurrentHostKey("linux-amd64")
+	require.NoError(t, err)
+	assert.Equal(t, "linux-x64", key)
+
+	_, err = CurrentHostKey("linux")
+	assert.Error(t, err)
+
+	host, err := HostKeyOnly("linux-x64-ohos")
+	require.NoError(t, err)
+	assert.Equal(t, "linux-x64", host)
 }
 
 func TestParseToolchainKey(t *testing.T) {
