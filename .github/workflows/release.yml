@@ -16,6 +16,8 @@ jobs:
             echo "Only stable tags trigger a release"
             exit 1
           fi
+      - name: Enable TCP BBR
+        uses: Zxilly/actions-bbr@v1
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
@@ -43,7 +45,7 @@ jobs:
           gitcode-token: ${{ secrets.GITCODE_TOKEN }}
           target-repo: Zxilly/cjv
           tag: ${{ github.ref_name }}
-          target-commitish: master
+          target-commitish: ${{ github.sha }}
           body: "See https://github.com/Zxilly/cjv/releases/tag/${{ github.ref_name }} for the full changelog."
           files: |
             dist/cjv-mirror_*.tar.gz
