@@ -28,7 +28,7 @@ jobs:
         env:
           GITCODE_TOKEN: ${{ secrets.GITCODE_TOKEN }}
         run: |
-          git remote add gitcode "https://oauth2:${GITCODE_TOKEN}@gitcode.com/Zxilly/cjv.git"
+          git remote add gitcode "https://Zxilly:${GITCODE_TOKEN}@gitcode.com/Zxilly/cjv.git"
           git push gitcode "HEAD:refs/heads/master"
           git push gitcode "${GITHUB_REF}"
       - name: Run GoReleaser
