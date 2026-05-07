@@ -153,7 +153,7 @@ func runComponentList(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	available := componentlib.KnownComponents()
+	var available []componentlib.Name
 	if !tcName.IsCustom() {
 		platformKey := tcName.PlatformKey
 		if platformKey == "" {
@@ -167,8 +167,6 @@ func runComponentList(cmd *cobra.Command, args []string) error {
 			}
 		}
 		available = componentlib.AvailableComponents(tcName, platformKey)
-	} else {
-		available = nil
 	}
 
 	if componentListQuiet {
