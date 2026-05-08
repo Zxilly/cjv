@@ -26,11 +26,11 @@ func EnsureLibraryPath(cfg *EnvConfig, sdkDir string) {
 		ldKey = "LD_LIBRARY_PATH"
 	}
 
-	// Build the merged value: SDK lib + env.toml value + current process env
+	// Build the merged value: SDK lib + derived value + current process env
 	parts := []string{libDir}
 
-	if envTomlVal := cfg.Vars[ldKey]; envTomlVal != "" {
-		parts = append(parts, envTomlVal)
+	if derivedVal := cfg.Vars[ldKey]; derivedVal != "" {
+		parts = append(parts, derivedVal)
 	}
 
 	if processVal := os.Getenv(ldKey); processVal != "" {

@@ -110,8 +110,8 @@ func TestBuildProxyEnv_EmptyBaseEnv(t *testing.T) {
 	assert.Contains(t, pathValue, "/sdk/bin")
 }
 
-func TestBuildProxyEnv_EnvTomlOverridesBase(t *testing.T) {
-	// SDK-specific vars from env.toml should override the base env.
+func TestBuildProxyEnv_ToolchainVarsOverrideBase(t *testing.T) {
+	// SDK-specific vars should override the base env.
 	cfg := NewEnvConfig()
 	cfg.Vars["CANGJIE_HOME"] = "/new/sdk"
 
@@ -127,7 +127,7 @@ func TestBuildProxyEnv_EnvTomlOverridesBase(t *testing.T) {
 		}
 	}
 	assert.Equal(t, "/new/sdk", cjHome,
-		"env.toml var should override base env var")
+		"toolchain-derived var should override base env var")
 }
 
 func TestBuildProxyEnv_PathDeduplication(t *testing.T) {

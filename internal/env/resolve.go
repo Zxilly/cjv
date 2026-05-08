@@ -20,7 +20,7 @@ func ResolveRuntimeEnv(ctx context.Context, tcOverride string, componentEnv Comp
 		return nil, err
 	}
 
-	envCfg := LoadToolchainEnv(ctx, active.Dir, componentEnv)
+	envCfg := LoadToolchainEnv(active.Dir, componentEnv)
 
 	binDir, err := config.BinDir()
 	if err != nil {

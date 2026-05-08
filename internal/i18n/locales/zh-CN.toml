@@ -43,9 +43,6 @@ other = "校验和不匹配: 期望 {{.Expected}}, 实际 {{.Actual}}"
 [Extracting]
 other = "正在解压..."
 
-[CapturingEnv]
-other = "正在捕获环境配置..."
-
 # === 代理 ===
 [RecursionLimitExceeded]
 other = "代理递归次数超过上限 ({{.Max}})，可能存在无限循环"

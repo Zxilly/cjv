@@ -44,9 +44,6 @@ other = "Checksum mismatch: expected {{.Expected}}, got {{.Actual}}"
 [Extracting]
 other = "Extracting..."
 
-[CapturingEnv]
-other = "Capturing environment setup..."
-
 # === Proxy ===
 [RecursionLimitExceeded]
 other = "Proxy recursion limit ({{.Max}}) exceeded. Possible infinite loop."

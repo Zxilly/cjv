@@ -92,7 +92,7 @@ flagLoop:
 
 	toolPath := resolveRunCommand(tcDir, toolName)
 
-	envCfg := env.LoadToolchainEnv(ctx, tcDir, componentlib.ApplyEnv)
+	envCfg := env.LoadToolchainEnv(tcDir, componentlib.ApplyEnv)
 
 	count := proxy.GetRecursionCount()
 

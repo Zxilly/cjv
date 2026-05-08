@@ -109,7 +109,7 @@ func Run(ctx context.Context, toolName string, args []string) error {
 		return err
 	}
 
-	envCfg := env.LoadToolchainEnv(ctx, active.Dir, component.ApplyEnv)
+	envCfg := env.LoadToolchainEnv(active.Dir, component.ApplyEnv)
 
 	binDir, err := config.BinDir()
 	if err != nil {

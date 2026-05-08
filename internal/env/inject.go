@@ -19,10 +19,11 @@ type ProxyEnvContext struct {
 }
 
 // BuildProxyEnv constructs the environment for a proxy subprocess.
-// It applies env.toml vars, keeps CjvBinDir at the front of PATH so nested
-// invocations still route through the proxy, and increments the recursion counter.
-// On Windows, ToolchainBinDir is appended so tools under tools/bin can still load
-// DLLs shipped in the SDK bin directory without taking precedence over PATH tools.
+// It applies the toolchain's vars, keeps CjvBinDir at the front of PATH so
+// nested invocations still route through the proxy, and increments the
+// recursion counter. On Windows, ToolchainBinDir is appended so tools under
+// tools/bin can still load DLLs shipped in the SDK bin directory without
+// taking precedence over PATH tools.
 func BuildProxyEnv(baseEnv []string, ctx ProxyEnvContext) []string {
 	envMap := make(map[string]string)
 	displayKeys := make(map[string]string)
