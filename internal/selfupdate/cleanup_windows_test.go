@@ -54,3 +54,21 @@ func TestCleanupOldBinaries_NoBinaryNoOp(t *testing.T) {
 	// No binary, no crash
 	assert.NotPanics(t, func() { CleanupOldBinaries() })
 }
+
+func TestCleanupOldBinaries_RestoresDotOldWhenManagedBinaryMissing(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("CJV_HOME", home)
+
+	binDir := filepath.Join(home, "bin")
+	require.NoError(t, os.MkdirAll(binDir, 0o755))
+	binaryName := proxy.CjvBinaryName()
+	dotOld := filepath.Join(binDir, "."+binaryName+".old")
+	require.NoError(t, os.WriteFile(dotOld, []byte("old binary"), 0o755))
+
+	CleanupOldBinaries()
+
+	data, err := os.ReadFile(filepath.Join(binDir, binaryName))
+	require.NoError(t, err)
+	assert.Equal(t, []byte("old binary"), data)
+	assert.NoFileExists(t, dotOld)
+}

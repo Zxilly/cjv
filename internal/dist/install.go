@@ -112,6 +112,9 @@ func walkAndMove(srcRoot, destRoot, relDir string, paths *[]string) error {
 // placeEntry prefers rename, falling back to copy on cross-filesystem moves.
 // The destination is removed first so reinstalls overwrite cleanly.
 func placeEntry(src, dst string) error {
+	if err := validateSymlinkTarget(src); err != nil {
+		return err
+	}
 	if _, err := os.Lstat(dst); err == nil {
 		if err := utils.RemoveAllRetry(dst); err != nil {
 			return fmt.Errorf("failed to overwrite %s: %w", dst, err)
@@ -130,15 +133,12 @@ func copyEntry(src, dst string) error {
 	}
 
 	if info.Mode()&os.ModeSymlink != 0 {
+		if err := validateSymlinkTarget(src); err != nil {
+			return err
+		}
 		target, err := os.Readlink(src)
 		if err != nil {
 			return err
-		}
-		if filepath.IsAbs(target) {
-			return fmt.Errorf("refusing to create symlink with absolute target: %s -> %s", src, target)
-		}
-		if strings.HasPrefix(filepath.ToSlash(filepath.Clean(target)), "../") {
-			return fmt.Errorf("refusing to create symlink with parent-traversing target: %s -> %s", src, target)
 		}
 		if targetInfo, err := os.Stat(src); err == nil && targetInfo.IsDir() {
 			return utils.SymlinkOrJunction(target, dst)
@@ -150,6 +150,28 @@ func copyEntry(src, dst string) error {
 		return copyDir(src, dst)
 	}
 	return utils.CopyFile(src, dst, info.Mode())
+}
+
+func validateSymlinkTarget(src string) error {
+	info, err := os.Lstat(src)
+	if err != nil {
+		return err
+	}
+	if info.Mode()&os.ModeSymlink == 0 {
+		return nil
+	}
+	target, err := os.Readlink(src)
+	if err != nil {
+		return err
+	}
+	if filepath.IsAbs(target) {
+		return fmt.Errorf("refusing to create symlink with absolute target: %s -> %s", src, target)
+	}
+	clean := filepath.ToSlash(filepath.Clean(target))
+	if clean == ".." || strings.HasPrefix(clean, "../") {
+		return fmt.Errorf("refusing to create symlink with parent-traversing target: %s -> %s", src, target)
+	}
+	return nil
 }
 
 func copyDir(src, dst string) error {

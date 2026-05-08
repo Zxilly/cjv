@@ -193,6 +193,30 @@ func TestActiveAutoInstallsMissingHostToolchain(t *testing.T) {
 	assert.Equal(t, "lts-1.0.5", gotInput)
 }
 
+func TestActiveRunsToolchainRecoveryBeforeResolving(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv(config.EnvHome, home)
+	t.Setenv(config.EnvToolchain, "")
+	config.ResetDefaultSettingsFileCache()
+	t.Cleanup(config.ResetDefaultSettingsFileCache)
+	require.NoError(t, config.EnsureDirs())
+
+	backup := filepath.Join(home, "toolchains", ".fstx-crash", "0-lts-1.0.5")
+	require.NoError(t, os.MkdirAll(backup, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(backup, "release.txt"), []byte("old"), 0o644))
+
+	settings := config.DefaultSettings()
+	settings.DefaultToolchain = "lts"
+	settings.AutoInstall = false
+	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, "settings.toml")))
+
+	active, err := Active(context.Background(), "")
+
+	require.NoError(t, err)
+	assert.Equal(t, "lts-1.0.5", active.Name)
+	assert.FileExists(t, filepath.Join(home, "toolchains", "lts-1.0.5", "release.txt"))
+}
+
 func TestActiveAutoInstallFailureReportsToolchainMissing(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv(config.EnvHome, home)

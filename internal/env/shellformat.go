@@ -52,13 +52,16 @@ func ComputeEnvDiff(base, modified []string) []EnvDiff {
 func FormatEnvDiff(diffs []EnvDiff, shell ShellType) string {
 	var b strings.Builder
 	for _, d := range diffs {
+		if !isSafeShellEnvKey(d.Key) {
+			continue
+		}
 		switch shell {
 		case ShellFish:
 			fmt.Fprintf(&b, "set -gx %s %s\n", d.Key, shellQuote(d.Value, shell))
 		case ShellPowerShell:
 			fmt.Fprintf(&b, "$env:%s = %s\n", d.Key, shellQuote(d.Value, shell))
 		case ShellCmd:
-			fmt.Fprintf(&b, "set %s=%s\n", d.Key, d.Value)
+			fmt.Fprintf(&b, "set \"%s=%s\"\n", d.Key, shellQuote(d.Value, shell))
 		default: // ShellPosix
 			fmt.Fprintf(&b, "export %s=%s\n", d.Key, shellQuote(d.Value, shell))
 		}
@@ -66,18 +69,35 @@ func FormatEnvDiff(diffs []EnvDiff, shell ShellType) string {
 	return b.String()
 }
 
+func isSafeShellEnvKey(key string) bool {
+	if key == "" {
+		return false
+	}
+	for i, r := range key {
+		if i == 0 {
+			if r != '_' && (r < 'A' || r > 'Z') && (r < 'a' || r > 'z') {
+				return false
+			}
+			continue
+		}
+		if r != '_' && (r < 'A' || r > 'Z') && (r < 'a' || r > 'z') && (r < '0' || r > '9') {
+			return false
+		}
+	}
+	return true
+}
+
 func shellQuote(value string, shell ShellType) string {
 	switch shell {
 	case ShellCmd:
-		return value
+		return batchLiteral(value)
 	case ShellPowerShell:
-		// PowerShell: escape " with `"
-		escaped := strings.ReplaceAll(value, `"`, "`\"")
-		return `"` + escaped + `"`
+		return powerShellSingleQuote(value)
 	case ShellFish:
-		// Fish: escape \ and "
+		// Fish: escape \, ", and $ inside double quotes.
 		escaped := strings.ReplaceAll(value, `\`, `\\`)
 		escaped = strings.ReplaceAll(escaped, `"`, `\"`)
+		escaped = strings.ReplaceAll(escaped, `$`, `\$`)
 		return `"` + escaped + `"`
 	default: // ShellPosix
 		// POSIX: escape \, ", $, `

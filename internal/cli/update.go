@@ -80,7 +80,9 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 	}
 
 	// Clean up download cache
-	if n := cleanDownloadCache(); n > 0 {
+	if n, cacheErr := cleanDownloadCache(); cacheErr != nil {
+		slog.Warn("failed to clean download cache", "removed", n, "error", cacheErr)
+	} else if n > 0 {
 		slog.Debug("cleaned download cache", "removed", n)
 	}
 

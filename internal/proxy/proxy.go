@@ -23,7 +23,10 @@ const maxRecursion = 20
 func ExtractToolName(argv0 string) string {
 	name := filepath.Base(argv0)
 	if runtime.GOOS == "windows" {
-		name = strings.TrimSuffix(name, ".exe")
+		ext := filepath.Ext(name)
+		if strings.EqualFold(ext, ".exe") {
+			name = strings.TrimSuffix(name, ext)
+		}
 	}
 	return name
 }

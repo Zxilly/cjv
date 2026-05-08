@@ -4,46 +4,59 @@ import (
 	"fmt"
 	"path/filepath"
 	"runtime"
+	"strings"
 
 	"github.com/Zxilly/cjv/internal/utils"
 )
 
 // WritePosixEnvScript writes a POSIX shell env script that adds binDir to PATH.
 func WritePosixEnvScript(path, binDir string) error {
+	quotedBinDir := shellQuote(binDir, ShellPosix)
 	content := fmt.Sprintf(`#!/bin/sh
 # cjv shell setup (managed by cjv, do not edit)
 case ":${PATH}:" in
-    *:"%s":*)
+    *:%s:*)
         ;;
     *)
-        export PATH="%s:$PATH"
+        export PATH=%s:"$PATH"
         ;;
 esac
-`, binDir, binDir)
+`, quotedBinDir, quotedBinDir)
 	return utils.WriteFileAtomic(path, []byte(content), 0o644)
 }
 
 // WritePowerShellEnvScript writes a PowerShell env script that adds binDir to PATH.
 func WritePowerShellEnvScript(path, binDir string) error {
+	quotedBinDir := powerShellSingleQuote(binDir)
 	content := fmt.Sprintf(`# cjv shell setup (managed by cjv, do not edit)
-$cjvBin = "%s"
+$cjvBin = %s
 if (-not ($env:PATH -split [IO.Path]::PathSeparator | Where-Object { $_ -eq $cjvBin })) {
     $env:PATH = "$cjvBin$([IO.Path]::PathSeparator)$env:PATH"
 }
-`, binDir)
+`, quotedBinDir)
 	return utils.WriteFileAtomic(path, []byte(content), 0o644)
 }
 
 // WriteBatEnvScript writes a CMD batch env script that adds binDir to PATH.
 func WriteBatEnvScript(path, binDir string) error {
+	escapedBinDir := batchLiteral(binDir)
 	content := fmt.Sprintf(`@echo off
 rem cjv shell setup (managed by cjv, do not edit)
 echo %%PATH%% | find /I "%s" >nul
 if errorlevel 1 (
     set "PATH=%s;%%PATH%%"
 )
-`, binDir, binDir)
+`, escapedBinDir, escapedBinDir)
 	return utils.WriteFileAtomic(path, []byte(content), 0o644)
+}
+
+func powerShellSingleQuote(value string) string {
+	return "'" + strings.ReplaceAll(value, "'", "''") + "'"
+}
+
+func batchLiteral(value string) string {
+	replacer := strings.NewReplacer("^", "^^", "%", "%%", `"`, `^"`)
+	return replacer.Replace(value)
 }
 
 // WriteEnvScripts writes platform-appropriate env scripts to the given directory.

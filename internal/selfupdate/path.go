@@ -11,6 +11,8 @@ import (
 	"github.com/Zxilly/cjv/internal/utils"
 )
 
+var copyManagedExecutableFile = utils.CopyFile
+
 // ManagedExecutablePath returns the cjv binary managed under CJV_HOME/bin.
 // It is anchored to the installed bin directory rather than the currently
 // running executable path, so update/uninstall always target the managed copy.
@@ -89,8 +91,26 @@ func copyCurrentExeTo(binDir, dst string) (string, error) {
 	if err := os.MkdirAll(binDir, 0o755); err != nil {
 		return "", err
 	}
-	if err := utils.CopyFile(currentExe, dst, info.Mode().Perm()); err != nil {
+
+	mode := info.Mode().Perm()
+	tmp, err := os.CreateTemp(binDir, "."+filepath.Base(dst)+"-*")
+	if err != nil {
+		return "", fmt.Errorf("failed to create temporary managed cjv binary: %w", err)
+	}
+	tmpPath := tmp.Name()
+	defer os.Remove(tmpPath) //nolint:errcheck // best-effort cleanup
+	if err := tmp.Close(); err != nil {
+		return "", errors.Join(err, os.Remove(tmpPath))
+	}
+
+	if err := copyManagedExecutableFile(currentExe, tmpPath, mode); err != nil {
 		return "", fmt.Errorf("failed to install managed cjv binary %s: %w", dst, err)
+	}
+	if err := os.Chmod(tmpPath, mode); err != nil {
+		return "", fmt.Errorf("failed to set permissions on managed cjv binary %s: %w", tmpPath, err)
+	}
+	if err := replaceManagedExecutableFile(tmpPath, dst); err != nil {
+		return "", fmt.Errorf("failed to replace managed cjv binary %s: %w", dst, err)
 	}
 	return dst, nil
 }

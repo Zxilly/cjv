@@ -26,4 +26,17 @@ describe('CodeBlock', () => {
     rerender(<CodeBlock command="second" />)
     expect(await screen.findByText('second')).toBeInTheDocument()
   })
+
+  it('clears the copied state when the command changes', async () => {
+    const user = userEvent.setup()
+    const { container, rerender } = render(<CodeBlock command="official" />)
+
+    await user.click(screen.getByRole('button', { name: '复制' }))
+    await waitFor(() => expect(container.querySelector('.text-cj')).not.toBeNull())
+
+    rerender(<CodeBlock command="mirror" />)
+
+    expect(await screen.findByText('mirror')).toBeInTheDocument()
+    await waitFor(() => expect(container.querySelector('.text-cj')).toBeNull())
+  })
 })

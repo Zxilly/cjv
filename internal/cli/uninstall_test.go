@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/Zxilly/cjv/internal/config"
@@ -47,6 +48,66 @@ func TestRunUninstall_NotInstalled(t *testing.T) {
 
 	err := runUninstall(nil, []string{"nonexistent-99.99"})
 	assert.Error(t, err, "uninstalling non-existent toolchain should error")
+}
+
+func TestRunUninstall_PreservesSettingsWhenRemoveFails(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("Windows keeps the process working directory locked")
+	}
+
+	home := t.TempDir()
+	t.Setenv("CJV_HOME", home)
+	require.NoError(t, config.EnsureDirs())
+
+	name := "lts-1.0.5"
+	toolchainDir := filepath.Join(home, "toolchains", name)
+	require.NoError(t, os.MkdirAll(toolchainDir, 0o755))
+
+	projectDir := filepath.Join(home, "project")
+	settings := config.DefaultSettings()
+	settings.DefaultToolchain = name
+	settings.Overrides[projectDir] = name
+	settingsPath := filepath.Join(home, "settings.toml")
+	require.NoError(t, config.SaveSettings(&settings, settingsPath))
+
+	wd, err := os.Getwd()
+	require.NoError(t, err)
+	require.NoError(t, os.Chdir(toolchainDir))
+	t.Cleanup(func() {
+		_ = os.Chdir(wd)
+		_ = os.RemoveAll(filepath.Join(home, "toolchains"))
+	})
+
+	err = runUninstall(nil, []string{name})
+
+	require.Error(t, err)
+	loaded, err := config.LoadSettings(settingsPath)
+	require.NoError(t, err)
+	assert.Equal(t, name, loaded.DefaultToolchain)
+	assert.Equal(t, name, loaded.Overrides[projectDir])
+}
+
+func TestUpdateSettingsAfterUninstallDoesNotPromoteTargetVariantToDefault(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("CJV_HOME", home)
+	config.ResetDefaultSettingsFileCache()
+	t.Cleanup(config.ResetDefaultSettingsFileCache)
+	require.NoError(t, config.EnsureDirs())
+
+	name := "lts-1.0.5"
+	targetVariant := "lts-1.0.5-linux-x64-ohos"
+	require.NoError(t, os.MkdirAll(filepath.Join(home, "toolchains", name), 0o755))
+	require.NoError(t, os.MkdirAll(filepath.Join(home, "toolchains", targetVariant), 0o755))
+
+	settings := config.DefaultSettings()
+	settings.DefaultToolchain = name
+	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, "settings.toml")))
+
+	require.NoError(t, updateSettingsAfterUninstall(name))
+
+	loaded, err := config.LoadSettings(filepath.Join(home, "settings.toml"))
+	require.NoError(t, err)
+	assert.Empty(t, loaded.DefaultToolchain)
 }
 
 func TestRunUninstall_MultipleInstalled(t *testing.T) {

@@ -94,12 +94,14 @@ func ParseToolchainName(input string) (ToolchainName, error) {
 		return ToolchainName{}, fmt.Errorf("invalid toolchain name '%s'", input)
 	}
 
+	lowerInput := strings.ToLower(input)
 	for _, ch := range []Channel{LTS, STS, Nightly} {
 		prefix := ch.String()
-		if input == prefix {
+		if lowerInput == prefix {
 			return ToolchainName{Channel: ch}, nil
 		}
-		if version, ok := strings.CutPrefix(input, prefix+"-"); ok {
+		if strings.HasPrefix(lowerInput, prefix+"-") {
+			version := input[len(prefix)+1:]
 			if version == "" {
 				return ToolchainName{}, fmt.Errorf("empty version in toolchain name '%s'", input)
 			}

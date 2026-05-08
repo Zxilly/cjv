@@ -16,11 +16,15 @@ const (
 	StagingSuffix = ".staging"
 	// BackupSuffix marks backup directories from force-installs.
 	BackupSuffix = ".old"
+	// FstxTempPrefix marks transaction directories used while replacing toolchains.
+	FstxTempPrefix = ".fstx-"
 )
 
 // IsTempDir returns true if the directory name is a staging or backup artifact.
 func IsTempDir(name string) bool {
-	return strings.HasSuffix(name, StagingSuffix) || strings.HasSuffix(name, BackupSuffix)
+	return strings.HasSuffix(name, StagingSuffix) ||
+		strings.HasSuffix(name, BackupSuffix) ||
+		strings.HasPrefix(name, FstxTempPrefix)
 }
 
 // compareSemVer compares two version strings (e.g. "1.0.5", "1.10.0").

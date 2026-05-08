@@ -226,7 +226,7 @@ func TestDownloadFileCachedCacheDirCreationError(t *testing.T) {
 }
 
 func TestDownloadFileCached_NoChecksumUsesURLHash(t *testing.T) {
-	content := []byte("nightly content no checksum")
+	content := []byte{0x50, 0x4B, 0x03, 0x04, 0x00}
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write(content)
@@ -245,6 +245,43 @@ func TestDownloadFileCached_NoChecksumUsesURLHash(t *testing.T) {
 	expectedKey := hex.EncodeToString(urlHash[:])
 	_, err = os.Stat(filepath.Join(cacheDir, expectedKey))
 	assert.NoError(t, err)
+}
+
+func TestDownloadFileCachedNoChecksumRejectsInvalidCacheMiss(t *testing.T) {
+	content := []byte("<html>not an archive</html>")
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write(content)
+	}))
+	defer server.Close()
+
+	cacheDir := t.TempDir()
+	dest := filepath.Join(t.TempDir(), "nightly.tar.gz")
+	url := server.URL + "/nightly.tar.gz"
+	key := cacheKey(url, "")
+
+	err := DownloadFileCached(context.Background(), url, dest, "", cacheDir)
+
+	require.Error(t, err)
+	assert.NoFileExists(t, dest)
+	assert.NoFileExists(t, filepath.Join(cacheDir, key))
+}
+
+func TestDownloadFileCachedDestinationSameAsCachePathDoesNotTruncate(t *testing.T) {
+	content := []byte("fresh download content")
+	hash := fmt.Sprintf("%x", sha256.Sum256(content))
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write(content)
+	}))
+	defer server.Close()
+
+	cacheDir := t.TempDir()
+	dest := filepath.Join(cacheDir, hash)
+
+	require.NoError(t, DownloadFileCached(context.Background(), server.URL+"/"+hash, dest, hash, cacheDir))
+
+	data, err := os.ReadFile(dest)
+	require.NoError(t, err)
+	assert.Equal(t, content, data)
 }
 
 func TestDownloadOnce_ResumeWithRange(t *testing.T) {
@@ -291,6 +328,25 @@ func TestDownloadOnce_ResumeWithRange(t *testing.T) {
 	_ = second // referenced for clarity
 }
 
+func TestDownloadOnceRejectsWrongContentRange(t *testing.T) {
+	full := []byte{0x1f, 0x8b, 0x08, 0x00, 0x01, 0x02}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		require.NotEmpty(t, r.Header.Get("Range"))
+		w.Header().Set("Content-Range", fmt.Sprintf("bytes 0-%d/%d", len(full)-1, len(full)))
+		w.WriteHeader(http.StatusPartialContent)
+		_, _ = w.Write(full)
+	}))
+	defer server.Close()
+
+	partialPath := filepath.Join(t.TempDir(), "test.partial")
+	require.NoError(t, os.WriteFile(partialPath, full[:2], 0o644))
+
+	err := downloadOnce(context.Background(), server.URL+"/test.tar.gz", partialPath, "test.tar.gz", "")
+
+	require.Error(t, err)
+	assert.NoFileExists(t, partialPath)
+}
+
 func TestDownloadOnce_ResumeServerReturns200(t *testing.T) {
 	// Server does not support Range — returns full content with 200.
 	full := []byte("complete content here")
@@ -327,11 +383,8 @@ func TestDownloadOnceRangeNotSatisfiableDropsPartial(t *testing.T) {
 
 	err := downloadOnce(context.Background(), server.URL+"/archive.zip", partialPath, "archive.zip", "")
 
-	require.NoError(t, err)
-	assert.FileExists(t, partialPath)
-	data, readErr := os.ReadFile(partialPath)
-	require.NoError(t, readErr)
-	assert.Empty(t, data)
+	require.Error(t, err)
+	assert.NoFileExists(t, partialPath)
 }
 
 // --- Tests merged from download_replace_test.go ---
@@ -467,7 +520,56 @@ func TestDownloadFileCachedNoChecksumValidatesCachedArchive(t *testing.T) {
 	assert.FileExists(t, dest)
 
 	require.NoError(t, os.WriteFile(filepath.Join(cacheDir, key), []byte("bad"), 0o644))
-	err := DownloadFileCached(context.Background(), url, filepath.Join(t.TempDir(), "bad.zip"), "", cacheDir)
+	err := verifyCachedFile(filepath.Join(cacheDir, key), "")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "valid archive")
+}
+
+func TestDownloadFileCachedNoChecksumInvalidCacheRedownloads(t *testing.T) {
+	content := []byte{0x50, 0x4B, 0x03, 0x04, 0x00}
+	var requests atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests.Add(1)
+		_, _ = w.Write(content)
+	}))
+	defer server.Close()
+
+	cacheDir := t.TempDir()
+	dest := filepath.Join(t.TempDir(), "out.zip")
+	url := server.URL + "/nightly.zip"
+	key := cacheKey(url, "")
+	require.NoError(t, os.WriteFile(filepath.Join(cacheDir, key), []byte("bad cache"), 0o644))
+
+	require.NoError(t, DownloadFileCached(context.Background(), url, dest, "", cacheDir))
+
+	data, err := os.ReadFile(dest)
+	require.NoError(t, err)
+	assert.Equal(t, content, data)
+	assert.Equal(t, int32(1), requests.Load())
+}
+
+func TestDownloadFileCachedNoChecksumRemovesLegacyPartialAndDownloadsFresh(t *testing.T) {
+	content := []byte{0x50, 0x4B, 0x03, 0x04, 0x00}
+	var requests atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests.Add(1)
+		assert.Empty(t, r.Header.Get("Range"))
+		_, _ = w.Write(content)
+	}))
+	defer server.Close()
+
+	cacheDir := t.TempDir()
+	dest := filepath.Join(t.TempDir(), "out.zip")
+	url := server.URL + "/nightly.zip"
+	key := cacheKey(url, "")
+	require.NoError(t, os.MkdirAll(cacheDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(cacheDir, key+".partial"), []byte("stale partial"), 0o644))
+
+	require.NoError(t, DownloadFileCached(context.Background(), url, dest, "", cacheDir))
+
+	data, err := os.ReadFile(dest)
+	require.NoError(t, err)
+	assert.Equal(t, content, data)
+	assert.NoFileExists(t, filepath.Join(cacheDir, key+".partial"))
+	assert.Equal(t, int32(1), requests.Load())
 }

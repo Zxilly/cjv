@@ -185,6 +185,48 @@ func TestCopyEntryRejectsUnsafeSymlinkTargets(t *testing.T) {
 	require.Error(t, copyEntry(parentLink, filepath.Join(t.TempDir(), "copy")))
 }
 
+func TestMoveContentsRecordingRejectsUnsafeSymlinkTargets(t *testing.T) {
+	src := t.TempDir()
+	dst := t.TempDir()
+
+	absoluteLink := filepath.Join(src, "absolute-link")
+	if err := os.Symlink(filepath.Join(src, "target.txt"), absoluteLink); err != nil {
+		t.Skipf("symlink creation requires privileges on this platform: %v", err)
+	}
+
+	paths, err := moveContentsRecording(src, dst)
+	require.Error(t, err)
+	assert.Empty(t, paths)
+	assert.NoFileExists(t, filepath.Join(dst, "absolute-link"))
+
+	src = t.TempDir()
+	dst = t.TempDir()
+	parentLink := filepath.Join(src, "parent-link")
+	require.NoError(t, os.Symlink(filepath.Join("..", "target.txt"), parentLink))
+
+	paths, err = moveContentsRecording(src, dst)
+	require.Error(t, err)
+	assert.Empty(t, paths)
+	assert.NoFileExists(t, filepath.Join(dst, "parent-link"))
+}
+
+func TestMoveContentsRecordingRejectsUnsafeSymlinkWithoutDeletingExistingDestination(t *testing.T) {
+	src := t.TempDir()
+	dst := t.TempDir()
+	existingPath := filepath.Join(dst, "lib")
+	require.NoError(t, os.WriteFile(existingPath, []byte("old"), 0o644))
+
+	link := filepath.Join(src, "lib")
+	if err := os.Symlink(filepath.Join(src, "target.txt"), link); err != nil {
+		t.Skipf("symlink creation requires privileges on this platform: %v", err)
+	}
+
+	paths, err := moveContentsRecording(src, dst)
+	require.Error(t, err)
+	assert.Empty(t, paths)
+	assertFileContent(t, existingPath, "old")
+}
+
 func TestCopyEntryReportsMissingSource(t *testing.T) {
 	err := copyEntry(filepath.Join(t.TempDir(), "missing"), filepath.Join(t.TempDir(), "copy"))
 

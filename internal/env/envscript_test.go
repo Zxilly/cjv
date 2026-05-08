@@ -34,6 +34,32 @@ func TestWritePosixEnvScript(t *testing.T) {
 	}
 }
 
+func TestWritePosixEnvScriptEscapesBinDir(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "env")
+	binDir := `/tmp/cjv"; touch /tmp/pwn; echo "$HOME/bin`
+
+	if err := WritePosixEnvScript(path, binDir); err != nil {
+		t.Fatalf("WritePosixEnvScript failed: %v", err)
+	}
+
+	content, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(content)
+
+	if strings.Contains(s, `"/tmp/cjv"; touch /tmp/pwn`) {
+		t.Fatal("env script contains an unescaped double quote that can terminate the PATH literal")
+	}
+	if !strings.Contains(s, `\"; touch /tmp/pwn`) {
+		t.Fatal("env script did not escape embedded double quotes in binDir")
+	}
+	if !strings.Contains(s, `\$HOME`) {
+		t.Fatal("env script did not escape dollar expansion in binDir")
+	}
+}
+
 func TestWritePowerShellEnvScript(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "env.ps1")
@@ -57,6 +83,29 @@ func TestWritePowerShellEnvScript(t *testing.T) {
 	}
 }
 
+func TestWritePowerShellEnvScriptUsesLiteralBinDir(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "env.ps1")
+	binDir := `C:\Users\$(throw 'pwn')\.cjv\bin`
+
+	if err := WritePowerShellEnvScript(path, binDir); err != nil {
+		t.Fatalf("WritePowerShellEnvScript failed: %v", err)
+	}
+
+	content, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(content)
+
+	if strings.Contains(s, `$cjvBin = "`) {
+		t.Fatal("env.ps1 assigns binDir with an interpolating string")
+	}
+	if !strings.Contains(s, `$cjvBin = 'C:\Users\$(throw ''pwn'')\.cjv\bin'`) {
+		t.Fatal("env.ps1 did not single-quote and escape binDir")
+	}
+}
+
 func TestWriteBatEnvScript(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "env.bat")
@@ -77,6 +126,29 @@ func TestWriteBatEnvScript(t *testing.T) {
 	}
 	if !strings.Contains(s, `%PATH%`) {
 		t.Error("env.bat missing PATH reference")
+	}
+}
+
+func TestWriteBatEnvScriptEscapesPercentExpansion(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "env.bat")
+	binDir := `C:\Users\%USERNAME%\.cjv\bin`
+
+	if err := WriteBatEnvScript(path, binDir); err != nil {
+		t.Fatalf("WriteBatEnvScript failed: %v", err)
+	}
+
+	content, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(content)
+
+	if strings.Contains(s, `\Users\%USERNAME%\`) {
+		t.Fatal("env.bat contains an unescaped percent expansion in binDir")
+	}
+	if !strings.Contains(s, `%%USERNAME%%`) {
+		t.Fatal("env.bat did not escape percent signs in binDir")
 	}
 }
 

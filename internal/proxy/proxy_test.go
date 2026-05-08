@@ -17,6 +17,7 @@ func TestExtractToolName(t *testing.T) {
 	assert.Equal(t, "cjpm", ExtractToolName("/usr/local/bin/cjpm"))
 	if runtime.GOOS == "windows" {
 		assert.Equal(t, "cjc", ExtractToolName("C:\\Users\\user\\.cjv\\bin\\cjc.exe"))
+		assert.Equal(t, "CJC", ExtractToolName("C:\\Users\\user\\.cjv\\bin\\CJC.EXE"))
 	}
 }
 

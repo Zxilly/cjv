@@ -59,20 +59,21 @@ func DownloadFileCached(ctx context.Context, url, dest, sha256Hex, cacheDir stri
 	sha256Hex = strings.ToLower(sha256Hex)
 	key := cacheKey(url, sha256Hex)
 	cachedPath := filepath.Join(cacheDir, key)
-	partialPath := cachedPath + ".partial"
+	legacyPartialPath := cachedPath + ".partial"
 
 	// Cache hit: file already exists in cache.
 	if _, err := os.Stat(cachedPath); err == nil {
 		slog.Info("cache hit", "key", key)
 		if err := verifyCachedFile(cachedPath, sha256Hex); err == nil {
-			if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
-				return err
-			}
-			return utils.CopyFile(cachedPath, dest, 0o644)
+			return copyCachedFileToDest(cachedPath, dest)
 		} else {
 			var mismatchErr *cjverr.ChecksumMismatchError
-			if errors.As(err, &mismatchErr) {
-				slog.Warn("cached download checksum mismatch; redownloading", "path", cachedPath, "expected", mismatchErr.Expected, "actual", mismatchErr.Actual)
+			if errors.As(err, &mismatchErr) || sha256Hex == "" {
+				if mismatchErr != nil {
+					slog.Warn("cached download checksum mismatch; redownloading", "path", cachedPath, "expected", mismatchErr.Expected, "actual", mismatchErr.Actual)
+				} else {
+					slog.Warn("cached download is invalid; redownloading", "path", cachedPath, "error", err)
+				}
 				if err := utils.RemoveAllRetry(cachedPath); err != nil {
 					return fmt.Errorf("remove corrupt cache %s: %w", cachedPath, err)
 				}
@@ -86,6 +87,13 @@ func DownloadFileCached(ctx context.Context, url, dest, sha256Hex, cacheDir stri
 	if err := os.MkdirAll(cacheDir, 0o755); err != nil {
 		return err
 	}
+	if err := removeLegacyPartial(legacyPartialPath); err != nil {
+		return err
+	}
+	partialPath, err := newDownloadTempPath(cachedPath)
+	if err != nil {
+		return err
+	}
 
 	var lastErr error
 	for attempt := range getMaxDownloadRetries() + 1 {
@@ -95,15 +103,18 @@ func DownloadFileCached(ctx context.Context, url, dest, sha256Hex, cacheDir stri
 
 		lastErr = downloadOnce(ctx, url, partialPath, filepath.Base(dest), sha256Hex)
 		if lastErr == nil {
+			if sha256Hex == "" {
+				if err := verifyCachedFile(partialPath, sha256Hex); err != nil {
+					cleanupDownloadTemp(partialPath)
+					return fmt.Errorf("downloaded file is not a valid archive: %w", err)
+				}
+			}
 			// Promote partial to cached.
 			if err := utils.RenameRetry(partialPath, cachedPath); err != nil {
 				return fmt.Errorf("promote to cache %s: %w", cachedPath, err)
 			}
 			// Copy from cache to dest.
-			if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
-				return err
-			}
-			return utils.CopyFile(cachedPath, dest, 0o644)
+			return copyCachedFileToDest(cachedPath, dest)
 		}
 
 		var nre *nonRetriableError
@@ -113,7 +124,39 @@ func DownloadFileCached(ctx context.Context, url, dest, sha256Hex, cacheDir stri
 		}
 		// On retriable errors, keep .partial for resume on next attempt.
 	}
+	cleanupDownloadTemp(partialPath)
 	return lastErr
+}
+
+func removeLegacyPartial(path string) error {
+	if err := utils.RemoveAllRetry(path); err != nil {
+		return fmt.Errorf("remove stale partial download %s: %w", path, err)
+	}
+	return nil
+}
+
+func copyCachedFileToDest(cachedPath, dest string) error {
+	if samePath(cachedPath, dest) {
+		return nil
+	}
+	if infoA, errA := os.Stat(cachedPath); errA == nil {
+		if infoB, errB := os.Stat(dest); errB == nil && os.SameFile(infoA, infoB) {
+			return nil
+		}
+	}
+	if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
+		return err
+	}
+	return utils.CopyFile(cachedPath, dest, 0o644)
+}
+
+func samePath(a, b string) bool {
+	absA, errA := filepath.Abs(a)
+	absB, errB := filepath.Abs(b)
+	if errA == nil && errB == nil {
+		return filepath.Clean(absA) == filepath.Clean(absB)
+	}
+	return filepath.Clean(a) == filepath.Clean(b)
 }
 
 // verifyChecksum compares the hash digest against the expected hex string.
@@ -252,6 +295,12 @@ func downloadOnce(ctx context.Context, url, tmpPath, displayName, sha256Hex stri
 
 	switch resp.StatusCode {
 	case http.StatusPartialContent:
+		if existingSize > 0 {
+			if err := validateContentRangeStart(resp.Header.Get("Content-Range"), existingSize); err != nil {
+				cleanupDownloadTemp(tmpPath)
+				return fmt.Errorf("invalid resume response for %s: %w", url, err)
+			}
+		}
 		resumed = true
 	case http.StatusOK:
 		existingSize = 0
@@ -265,7 +314,7 @@ func downloadOnce(ctx context.Context, url, tmpPath, displayName, sha256Hex stri
 		if _, statErr := os.Stat(tmpPath); statErr == nil {
 			return fmt.Errorf("cannot resume download: failed to remove stale partial file %s", tmpPath)
 		}
-		existingSize = 0
+		return fmt.Errorf("cannot resume download: server rejected range for %s", url)
 	default:
 		if isNonRetriableHTTPStatus(resp.StatusCode) {
 			return &nonRetriableError{err: fmt.Errorf("HTTP %d for %s", resp.StatusCode, url)}
@@ -341,6 +390,32 @@ func downloadOnce(ctx context.Context, url, tmpPath, displayName, sha256Hex stri
 		return &nonRetriableError{err: err}
 	}
 
+	return nil
+}
+
+func validateContentRangeStart(header string, expectedStart int64) error {
+	if header == "" {
+		return fmt.Errorf("missing Content-Range header")
+	}
+	unit, spec, ok := strings.Cut(header, " ")
+	if !ok || !strings.EqualFold(unit, "bytes") {
+		return fmt.Errorf("invalid Content-Range header %q", header)
+	}
+	rangeSpec, _, ok := strings.Cut(spec, "/")
+	if !ok {
+		return fmt.Errorf("invalid Content-Range header %q", header)
+	}
+	startText, endText, ok := strings.Cut(rangeSpec, "-")
+	if !ok || startText == "" || endText == "" {
+		return fmt.Errorf("invalid Content-Range header %q", header)
+	}
+	start, err := strconv.ParseInt(startText, 10, 64)
+	if err != nil {
+		return fmt.Errorf("invalid Content-Range start %q: %w", startText, err)
+	}
+	if start != expectedStart {
+		return fmt.Errorf("Content-Range starts at %d, expected %d", start, expectedStart)
+	}
 	return nil
 }
 

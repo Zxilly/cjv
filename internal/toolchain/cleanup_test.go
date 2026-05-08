@@ -49,6 +49,22 @@ func TestCleanupStagingDirs_RestoresBackupWhenOriginalMissing(t *testing.T) {
 	assert.True(t, os.IsNotExist(err), ".old should no longer exist after restoration")
 }
 
+func TestCleanupStagingDirs_RestoresFstxBackupWhenOriginalMissing(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("CJV_HOME", tmpDir)
+
+	tcDir := filepath.Join(tmpDir, "toolchains")
+	backup := filepath.Join(tcDir, ".fstx-crash", "0-lts-1.0.5")
+	require.NoError(t, os.MkdirAll(backup, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(backup, "release.txt"), []byte("old"), 0o644))
+
+	CleanupStagingDirs()
+
+	restored := filepath.Join(tcDir, "lts-1.0.5")
+	assert.FileExists(t, filepath.Join(restored, "release.txt"))
+	assert.NoDirExists(t, filepath.Join(tcDir, ".fstx-crash"))
+}
+
 func TestCleanupStagingDirs_RemovesBackupWhenOriginalExists(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("CJV_HOME", tmpDir)

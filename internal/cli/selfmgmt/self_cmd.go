@@ -16,6 +16,12 @@ import (
 
 var uninstallYes bool
 
+var (
+	ensureSelfManagedExecutable = selfupdate.EnsureManagedExecutable
+	removeSelfHomeDir           = removeHomeDir
+	cleanupSelfPathEntries      = cleanupPathEntries
+)
+
 // NewSelfCommand creates the "self" command with its subcommands.
 // cleanCacheCmd can be nil if no cache cleanup subcommand is needed.
 func NewSelfCommand(ver, updURL string, cleanCacheCmd *cobra.Command) *cobra.Command {
@@ -61,39 +67,17 @@ func NewSelfCommand(ver, updURL string, cleanCacheCmd *cobra.Command) *cobra.Com
 			if err != nil {
 				return err
 			}
-			managedExe, err := selfupdate.EnsureManagedExecutable()
+			managedExe, err := ensureSelfManagedExecutable()
 			if err != nil {
 				return err
 			}
 
-			// Remove PATH entries from shell configs (Unix)
-			if runtime.GOOS != "windows" {
-				posix, fish := env.ShellConfigPaths()
-				for _, rc := range posix {
-					if err := env.RemovePathFromShellConfig(rc); err != nil {
-						slog.Warn("failed to clean PATH from shell config", "path", rc, "error", err)
-					}
-				}
-				if fish != "" {
-					if err := env.RemovePathFromShellConfig(fish); err != nil {
-						slog.Warn("failed to clean PATH from shell config", "path", fish, "error", err)
-					}
-				}
-			} else {
-				// Windows: remove from registry
-				binDir, err := config.BinDir()
-				if err != nil {
-					slog.Warn("failed to determine bin directory", "error", err)
-				} else if err := env.RemovePathFromWindowsRegistry(binDir); err != nil {
-					slog.Warn("failed to clean PATH from registry", "error", err)
-				}
-			}
-
 			// Remove ~/.cjv/ (platform-specific: on Windows, a detached process
 			// handles delayed deletion of the running binary).
-			if err := removeHomeDir(home, managedExe); err != nil {
+			if err := removeSelfHomeDir(home, managedExe); err != nil {
 				return err
 			}
+			cleanupSelfPathEntries()
 
 			fmt.Println(i18n.T("UninstallComplete", nil))
 			return nil
@@ -108,4 +92,30 @@ func NewSelfCommand(ver, updURL string, cleanCacheCmd *cobra.Command) *cobra.Com
 	}
 
 	return selfCmd
+}
+
+func cleanupPathEntries() {
+	// Remove PATH entries from shell configs (Unix)
+	if runtime.GOOS != "windows" {
+		posix, fish := env.ShellConfigPaths()
+		for _, rc := range posix {
+			if err := env.RemovePathFromShellConfig(rc); err != nil {
+				slog.Warn("failed to clean PATH from shell config", "path", rc, "error", err)
+			}
+		}
+		if fish != "" {
+			if err := env.RemovePathFromShellConfig(fish); err != nil {
+				slog.Warn("failed to clean PATH from shell config", "path", fish, "error", err)
+			}
+		}
+		return
+	}
+
+	// Windows: remove from registry
+	binDir, err := config.BinDir()
+	if err != nil {
+		slog.Warn("failed to determine bin directory", "error", err)
+	} else if err := env.RemovePathFromWindowsRegistry(binDir); err != nil {
+		slog.Warn("failed to clean PATH from registry", "error", err)
+	}
 }

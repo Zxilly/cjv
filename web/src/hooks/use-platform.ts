@@ -100,14 +100,25 @@ function toReadyInfo(p: PlatformEntry): ReadyInfo {
   return { label: p.label, hint: p.hint, command: p.command, mirrorCommand: p.mirrorCommand, warning: p.warning }
 }
 
-function findEntry(os: string, arch: string): PlatformEntry | undefined {
-  const goos: BinaryInfo['goos'] | null =
+function normalizeOS(os: string): BinaryInfo['goos'] | null {
+  return (
     os === 'Windows' ? 'windows'
     : os === 'Mac OS' || os === 'macOS' ? 'darwin'
     : os === 'Linux' ? 'linux'
     : null
-  if (!goos) return undefined
-  const goarch: BinaryInfo['goarch'] = arch === 'arm64' ? 'arm64' : 'amd64'
+  )
+}
+
+function normalizeArch(arch: string): BinaryInfo['goarch'] | null {
+  if (arch === 'amd64' || arch === 'x86_64') return 'amd64'
+  if (arch === 'arm64' || arch === 'aarch64') return 'arm64'
+  return null
+}
+
+function findEntry(os: string, arch: string): PlatformEntry | undefined {
+  const goos = normalizeOS(os)
+  const goarch = normalizeArch(arch)
+  if (!goos || !goarch) return undefined
   return PLATFORMS.find(p => p.goos === goos && p.goarch === goarch)
 }
 
@@ -125,6 +136,7 @@ const SOURCE_METHOD: InstallMethod = {
 
 export function computePlatformResult(os: string, arch: string): PlatformResult {
   const entry = findEntry(os, arch)
+  const knownDesktopOS = normalizeOS(os) !== null
   const common: CommonResult = {
     methods: METHODS,
     otherMethods: METHODS,
@@ -143,8 +155,8 @@ export function computePlatformResult(os: string, arch: string): PlatformResult 
   }
   return {
     ...common,
-    state: UNSUPPORTED.has(os) ? 'unsupported' : 'unknown',
-    info: { label: UNSUPPORTED.has(os) ? os : '未知平台' },
+    state: UNSUPPORTED.has(os) || knownDesktopOS ? 'unsupported' : 'unknown',
+    info: { label: UNSUPPORTED.has(os) ? os : knownDesktopOS ? `${os} ${arch}` : '未知平台' },
     binary: null,
   }
 }

@@ -34,10 +34,13 @@ describe('computePlatformResult', () => {
     expect(r.binary.warning).toMatch(/x86_64/)
   })
 
-  it('treats unknown arch on a known OS as the amd64 fallback', () => {
-    const r = asReady(computePlatformResult('Linux', 'mips64'))
-    expect(r.binary.goarch).toBe('amd64')
-    expect(r.info.label).toBe('Linux x86_64')
+  it('marks unsupported CPU architectures on known desktop OSes as unsupported', () => {
+    for (const [os, arch] of [['Linux', 'mips64'], ['Linux', 'ia32'], ['Windows', 'arm64']] as const) {
+      const r = computePlatformResult(os, arch)
+      expect(r.state).toBe('unsupported')
+      expect(r.info.label).toBe(`${os} ${arch}`)
+      expect(r.binary).toBeNull()
+    }
   })
 
   it('detects Linux ARM64', () => {

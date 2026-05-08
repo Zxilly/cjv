@@ -3,6 +3,7 @@ package cli
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -49,15 +50,26 @@ func runUninstall(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	sf, settings, err := clisettings.LoadSettings()
+	if err != nil {
+		return err
+	}
+	rollbackSettings := cloneSettings(settings)
+
 	// Update settings BEFORE removing the directory. If the process is killed
 	// between these two steps, an orphaned directory is harmless (cleaned up
 	// later), but dangling settings references would break all tool invocations.
-	if err := updateSettingsAfterUninstall(name); err != nil {
+	// If deletion fails while this process is still running, roll settings back.
+	if err := updateSettingsAfterUninstallLoaded(sf, settings, name); err != nil {
 		return err
 	}
 
 	if err := utils.RemoveAllRetry(dir); err != nil {
-		return fmt.Errorf("failed to remove toolchain: %w", err)
+		removeErr := fmt.Errorf("failed to remove toolchain: %w", err)
+		if restoreErr := sf.Save(rollbackSettings); restoreErr != nil {
+			return errors.Join(removeErr, fmt.Errorf("failed to restore settings: %w", restoreErr))
+		}
+		return removeErr
 	}
 
 	// Per-toolchain docs and stdx live outside the toolchain directory; nuke
@@ -82,7 +94,10 @@ func updateSettingsAfterUninstall(name string) error {
 	if err != nil {
 		return err
 	}
+	return updateSettingsAfterUninstallLoaded(sf, settings, name)
+}
 
+func updateSettingsAfterUninstallLoaded(sf *config.SettingsFile, settings *config.Settings, name string) error {
 	changed := false
 
 	// Clean up overrides referencing the uninstalled toolchain
@@ -95,16 +110,9 @@ func updateSettingsAfterUninstall(name string) error {
 
 	// Update default if it pointed to the uninstalled toolchain
 	if settings.DefaultToolchain == name {
-		remaining, listErr := toolchain.ListInstalled()
+		newDefault, listErr := nextDefaultAfterUninstall(name)
 		if listErr != nil {
-			return fmt.Errorf("failed to list installed toolchains: %w", listErr)
-		}
-		newDefault := ""
-		idx := slices.IndexFunc(remaining, func(r string) bool {
-			return r != name
-		})
-		if idx >= 0 {
-			newDefault = remaining[idx]
+			return listErr
 		}
 		settings.DefaultToolchain = newDefault
 		changed = true
@@ -114,4 +122,28 @@ func updateSettingsAfterUninstall(name string) error {
 		return sf.Save(settings)
 	}
 	return nil
+}
+
+func nextDefaultAfterUninstall(name string) (string, error) {
+	remaining, listErr := toolchain.ListInstalled()
+	if listErr != nil {
+		return "", fmt.Errorf("failed to list installed toolchains: %w", listErr)
+	}
+	idx := slices.IndexFunc(remaining, func(r string) bool {
+		if r == name {
+			return false
+		}
+		parsed, err := toolchain.ParseToolchainName(r)
+		return err == nil && parsed.PlatformKey == ""
+	})
+	if idx < 0 {
+		return "", nil
+	}
+	return remaining[idx], nil
+}
+
+func cloneSettings(settings *config.Settings) *config.Settings {
+	cp := *settings
+	cp.Overrides = maps.Clone(settings.Overrides)
+	return &cp
 }

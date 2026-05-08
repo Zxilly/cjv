@@ -30,6 +30,27 @@ func TestParseToolchainName(t *testing.T) {
 	}
 }
 
+func TestParseToolchainNameCaseInsensitiveChannel(t *testing.T) {
+	tests := []struct {
+		input   string
+		channel Channel
+		version string
+	}{
+		{"LTS", LTS, ""},
+		{"Sts-1.1.0-beta.23", STS, "1.1.0-beta.23"},
+		{"NIGHTLY-1.1.0-alpha.20260306010001", Nightly, "1.1.0-alpha.20260306010001"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			name, err := ParseToolchainName(tt.input)
+			require.NoError(t, err)
+			assert.Equal(t, tt.channel, name.Channel)
+			assert.Equal(t, tt.version, name.Version)
+			assert.False(t, name.IsCustom())
+		})
+	}
+}
+
 func TestParseToolchainNameInvalid(t *testing.T) {
 	_, err := ParseToolchainName("")
 	assert.Error(t, err)

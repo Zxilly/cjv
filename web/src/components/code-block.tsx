@@ -17,6 +17,13 @@ export function CodeBlock({ command, primary }: CodeBlockProps) {
   const iconCls = primary ? 'w-4 h-4' : 'w-3.5 h-3.5'
 
   useEffect(() => () => { if (timer.current) clearTimeout(timer.current) }, [])
+  useEffect(() => {
+    setCopied(false)
+    if (timer.current) {
+      clearTimeout(timer.current)
+      timer.current = undefined
+    }
+  }, [command])
 
   function copy() {
     navigator.clipboard.writeText(command).then(() => {

@@ -28,7 +28,7 @@ func TestFormatEnvDiff_PowerShell(t *testing.T) {
 		{Key: "PATH", Value: "C:\\new;C:\\old"},
 	}
 	result := FormatEnvDiff(diff, ShellPowerShell)
-	assert.Equal(t, "$env:PATH = \"C:\\new;C:\\old\"\n", result)
+	assert.Equal(t, "$env:PATH = 'C:\\new;C:\\old'\n", result)
 }
 
 func TestFormatEnvDiff_Cmd(t *testing.T) {
@@ -36,7 +36,7 @@ func TestFormatEnvDiff_Cmd(t *testing.T) {
 		{Key: "PATH", Value: "C:\\new;C:\\old"},
 	}
 	result := FormatEnvDiff(diff, ShellCmd)
-	assert.Equal(t, "set PATH=C:\\new;C:\\old\n", result)
+	assert.Equal(t, "set \"PATH=C:\\new;C:\\old\"\n", result)
 }
 
 func TestFormatEnvDiff_PosixEscaping(t *testing.T) {
@@ -52,7 +52,38 @@ func TestFormatEnvDiff_PowerShellEscaping(t *testing.T) {
 		{Key: "FOO", Value: `value with "quotes"`},
 	}
 	result := FormatEnvDiff(diff, ShellPowerShell)
-	assert.Equal(t, "$env:FOO = \"value with `\"quotes`\"\"\n", result)
+	assert.Equal(t, "$env:FOO = 'value with \"quotes\"'\n", result)
+}
+
+func TestFormatEnvDiff_EscapesShellExpansion(t *testing.T) {
+	assert.Equal(t,
+		"$env:FOO = '$(throw ''pwn'')'\n",
+		FormatEnvDiff([]EnvDiff{{Key: "FOO", Value: `$(throw 'pwn')`}}, ShellPowerShell),
+	)
+	assert.Equal(t,
+		"set -gx FOO \"\\$HOME\"\n",
+		FormatEnvDiff([]EnvDiff{{Key: "FOO", Value: `$HOME`}}, ShellFish),
+	)
+	assert.Equal(t,
+		"set \"FOO=%%USERNAME%%\"\n",
+		FormatEnvDiff([]EnvDiff{{Key: "FOO", Value: `%USERNAME%`}}, ShellCmd),
+	)
+	assert.Equal(t,
+		"set \"FOO=good& echo injected\"\n",
+		FormatEnvDiff([]EnvDiff{{Key: "FOO", Value: `good& echo injected`}}, ShellCmd),
+	)
+}
+
+func TestFormatEnvDiffSkipsUnsafeKeys(t *testing.T) {
+	diff := []EnvDiff{
+		{Key: "BAD; touch /tmp/pwn", Value: "x"},
+		{Key: "SAFE_KEY", Value: "ok"},
+	}
+
+	assert.Equal(t, "export SAFE_KEY=\"ok\"\n", FormatEnvDiff(diff, ShellPosix))
+	assert.Equal(t, "set -gx SAFE_KEY \"ok\"\n", FormatEnvDiff(diff, ShellFish))
+	assert.Equal(t, "$env:SAFE_KEY = 'ok'\n", FormatEnvDiff(diff, ShellPowerShell))
+	assert.Equal(t, "set \"SAFE_KEY=ok\"\n", FormatEnvDiff(diff, ShellCmd))
 }
 
 func TestComputeEnvDiff(t *testing.T) {

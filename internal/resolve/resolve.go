@@ -37,6 +37,7 @@ func Active(ctx context.Context, tcOverride string) (ActiveToolchain, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
+	toolchain.CleanupStagingDirs()
 
 	settings, settingsErr := loadSettings()
 	tcName, source, targets, components, err := resolveName(settings, settingsErr, tcOverride)

@@ -2,7 +2,9 @@ package proxy
 
 import (
 	"path/filepath"
+	"runtime"
 	"slices"
+	"strings"
 )
 
 var toolPathMap = map[string]string{
@@ -29,12 +31,27 @@ var allTools = func() []string {
 	return tools
 }()
 
+var toolPathLookup = func() map[string]string {
+	lookup := make(map[string]string, len(toolPathMap))
+	for name, relPath := range toolPathMap {
+		lookup[canonicalToolName(name)] = relPath
+	}
+	return lookup
+}()
+
+func canonicalToolName(name string) string {
+	if runtime.GOOS == "windows" {
+		return strings.ToLower(name)
+	}
+	return name
+}
+
 func ToolRelativePath(name string) string {
-	return filepath.FromSlash(toolPathMap[name])
+	return filepath.FromSlash(toolPathLookup[canonicalToolName(name)])
 }
 
 func IsProxyTool(name string) bool {
-	_, ok := toolPathMap[name]
+	_, ok := toolPathLookup[canonicalToolName(name)]
 	return ok
 }
 
