@@ -9,6 +9,7 @@ import (
 	"slices"
 
 	"github.com/Zxilly/cjv/internal/cjverr"
+	"github.com/Zxilly/cjv/internal/cli/output"
 	clisettings "github.com/Zxilly/cjv/internal/cli/settings"
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/i18n"
@@ -81,10 +82,15 @@ func runUninstall(cmd *cobra.Command, args []string) error {
 		_ = utils.RemoveAllRetry(stdxDir) //nolint:errcheck // best-effort cleanup
 	}
 
-	color.Green(i18n.T("ToolchainUninstalled", i18n.MsgData{
-		"Name": name,
-	}))
-	return nil
+	return output.RenderTo(cmdOutput(cmd), uninstallResult{Name: name})
+}
+
+type uninstallResult struct {
+	Name string `json:"name"`
+}
+
+func (r uninstallResult) Text() string {
+	return color.GreenString(i18n.T("ToolchainUninstalled", i18n.MsgData{"Name": r.Name}))
 }
 
 // updateSettingsAfterUninstall updates default toolchain and cleans up

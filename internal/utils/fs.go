@@ -5,7 +5,28 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 )
+
+// IsPathUnder reports whether candidate resolves to a path inside base. Both
+// arguments are made absolute before comparison so callers may pass relative
+// paths. Returns false if the relation cannot be computed (e.g. different
+// Windows volumes), since that itself indicates the path is not under base.
+func IsPathUnder(base, candidate string) bool {
+	absBase, err := filepath.Abs(base)
+	if err != nil {
+		return false
+	}
+	absCandidate, err := filepath.Abs(candidate)
+	if err != nil {
+		return false
+	}
+	rel, err := filepath.Rel(absBase, absCandidate)
+	if err != nil {
+		return false
+	}
+	return rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) && !filepath.IsAbs(rel)
+}
 
 var (
 	createSymlink   = os.Symlink

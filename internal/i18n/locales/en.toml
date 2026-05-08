@@ -137,6 +137,9 @@ other = "Toolchain '{{.Name}}' linked to {{.Path}}"
 [UnknownChannel]
 other = "Unknown channel: {{.Channel}}"
 
+[UnsupportedForJSON]
+other = "Command '{{.Command}}' does not support --json output"
+
 # === Default command ===
 [DefaultCleared]
 other = "Default toolchain cleared"

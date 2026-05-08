@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	"github.com/Zxilly/cjv/internal/cjverr"
+	"github.com/Zxilly/cjv/internal/cli/output"
 	"github.com/Zxilly/cjv/internal/cli/selfmgmt"
 	clisettings "github.com/Zxilly/cjv/internal/cli/settings"
 	componentlib "github.com/Zxilly/cjv/internal/component"
@@ -58,10 +59,39 @@ var installCmd = &cobra.Command{
 	RunE:  runInstall,
 }
 
+type installResult struct {
+	Toolchain  string   `json:"toolchain"`
+	Targets    []string `json:"targets"`
+	Components []string `json:"components"`
+	Forced     bool     `json:"forced"`
+}
+
+func (r installResult) Text() string { return "" }
+
 func runInstall(cmd *cobra.Command, args []string) error {
 	selfmgmt.CheckSudoSafety()
 	toolchain.CleanupStagingDirs()
-	return InstallToolchainWithExtras(cmd.Context(), args[0], installTargets, installComponents, forceInstall)
+	if err := InstallToolchainWithExtras(cmd.Context(), args[0], installTargets, installComponents, forceInstall); err != nil {
+		return err
+	}
+	if !output.IsJSON() {
+		return nil
+	}
+	return output.RenderTo(cmdOutput(cmd), installResult{
+		Toolchain:  args[0],
+		Targets:    installTargets,
+		Components: installComponents,
+		Forced:     forceInstall,
+	})
+}
+
+// noteStep emits a progress/status line to stdout in text mode; in JSON
+// mode it is suppressed so stdout remains a single JSON document.
+func noteStep(s string) {
+	if output.IsJSON() {
+		return
+	}
+	fmt.Println(s)
 }
 
 // InstallToolchainWithOptions installs a toolchain with optional force re-install.
@@ -201,7 +231,7 @@ func installComponentsList(ctx context.Context, resolvedName string, components 
 		if err := componentInstallFunc(ctx, roots, resolvedTC, c, platformKey, downloadsDir, force); err != nil {
 			var alreadyErr *cjverr.ComponentAlreadyInstalledError
 			if errors.As(err, &alreadyErr) {
-				if !quiet {
+				if !quiet && !output.IsJSON() {
 					fmt.Println(err)
 				}
 				continue
@@ -209,7 +239,7 @@ func installComponentsList(ctx context.Context, resolvedName string, components 
 			_ = snap.Restore() //nolint:errcheck // best-effort rollback
 			return err
 		}
-		if !quiet {
+		if !quiet && !output.IsJSON() {
 			color.Green(i18n.T("ComponentInstalled", i18n.MsgData{
 				"Toolchain": resolvedName,
 				"Component": string(c),
@@ -244,6 +274,11 @@ func installResolvedWithDefault(ctx context.Context, rt resolvedToolchain, setti
 	isReinstall := false
 	if _, err := os.Stat(destDir); err == nil {
 		if !force {
+			if output.IsJSON() {
+				// In JSON mode treat "already installed" as a structured error
+				// so consumers can branch on it instead of seeing a no-op.
+				return &cjverr.ToolchainAlreadyInstalledError{Name: resolvedName}
+			}
 			fmt.Println(i18n.T("ToolchainAlreadyInstalled", i18n.MsgData{
 				"Name": resolvedName,
 			}))
@@ -280,7 +315,7 @@ func installResolvedWithDefault(ctx context.Context, rt resolvedToolchain, setti
 		}
 	}()
 
-	fmt.Println(i18n.T("Extracting", nil))
+	noteStep(i18n.T("Extracting", nil))
 	if err := dist.InstallSDK(ctx, archivePath, stagingDir); err != nil {
 		return err
 	}
@@ -293,7 +328,7 @@ func installResolvedWithDefault(ctx context.Context, rt resolvedToolchain, setti
 	if err := swapInstalledToolchain(stagingDir, destDir, isReinstall, func() error {
 		// Capture env after the rename so that $PWD = destDir and all
 		// paths in env.toml naturally point to the final location.
-		fmt.Println(i18n.T("CapturingEnv", nil))
+		noteStep(i18n.T("CapturingEnv", nil))
 		envCfg, err := env.CaptureEnvSetup(ctx, destDir)
 		if err != nil {
 			return err
@@ -320,9 +355,11 @@ func installResolvedWithDefault(ctx context.Context, rt resolvedToolchain, setti
 		return err
 	}
 
-	color.Green(i18n.T("ToolchainInstalled", i18n.MsgData{
-		"Name": resolvedName,
-	}))
+	if !output.IsJSON() {
+		color.Green(i18n.T("ToolchainInstalled", i18n.MsgData{
+			"Name": resolvedName,
+		}))
+	}
 	return nil
 }
 
@@ -398,7 +435,7 @@ func resolveAndLocateWithPlatformKey(ctx context.Context, name toolchain.Toolcha
 	}
 
 	if manifest == nil {
-		fmt.Println(i18n.T("FetchingManifest", nil))
+		noteStep(i18n.T("FetchingManifest", nil))
 		var fetchErr error
 		manifest, fetchErr = fetchManifest(ctx, settings.ManifestURL)
 		if fetchErr != nil {
@@ -450,7 +487,7 @@ func resolveNightlyWithPlatformKey(ctx context.Context, name toolchain.Toolchain
 	version := name.Version
 
 	if version == "" {
-		fmt.Println(i18n.T("FetchingNightly", nil))
+		noteStep(i18n.T("FetchingNightly", nil))
 		v, err := dist.FetchLatestNightly(ctx, dist.DefaultNightlyAPIURL, settings.GitCodeAPIKey)
 		if err != nil {
 			return resolvedToolchain{}, err
@@ -470,7 +507,7 @@ func resolveNightlyWithPlatformKey(ctx context.Context, name toolchain.Toolchain
 
 	sha256 := dist.FetchNightlySHA256(ctx, url)
 	if sha256 == "" {
-		fmt.Println(i18n.T("NightlyNoChecksum", nil))
+		noteStep(i18n.T("NightlyNoChecksum", nil))
 	}
 	return resolvedToolchain{Name: resolved.String(), URL: url, SHA256: sha256}, nil
 }

@@ -7,6 +7,42 @@ import (
 	"github.com/Zxilly/cjv/internal/i18n"
 )
 
+// ErrorCode is a stable machine-readable error identifier.
+type ErrorCode string
+
+const (
+	ErrorCodeUnknown                         ErrorCode = "UNKNOWN"
+	ErrorCodeToolchainNotInstalled           ErrorCode = "TOOLCHAIN_NOT_INSTALLED"
+	ErrorCodeToolchainAlreadyInstalled       ErrorCode = "TOOLCHAIN_ALREADY_INSTALLED"
+	ErrorCodeVersionNotFound                 ErrorCode = "VERSION_NOT_FOUND"
+	ErrorCodeVersionNotAvailable             ErrorCode = "VERSION_NOT_AVAILABLE"
+	ErrorCodeNoToolchainConfigured           ErrorCode = "NO_TOOLCHAIN_CONFIGURED"
+	ErrorCodeUnknownTool                     ErrorCode = "UNKNOWN_TOOL"
+	ErrorCodeToolNotInToolchain              ErrorCode = "TOOL_NOT_IN_TOOLCHAIN"
+	ErrorCodeChecksumMismatch                ErrorCode = "CHECKSUM_MISMATCH"
+	ErrorCodeUnsupportedPlatform             ErrorCode = "UNSUPPORTED_PLATFORM"
+	ErrorCodeRecursionLimitExceeded          ErrorCode = "RECURSION_LIMIT_EXCEEDED"
+	ErrorCodeUnknownChannel                  ErrorCode = "UNKNOWN_CHANNEL"
+	ErrorCodeGitCodeAPIKeyRequired           ErrorCode = "GITCODE_API_KEY_REQUIRED"
+	ErrorCodeUnsupportedForJSON              ErrorCode = "UNSUPPORTED_FOR_JSON"
+	ErrorCodeUnknownComponent                ErrorCode = "UNKNOWN_COMPONENT"
+	ErrorCodeComponentNotInstalled           ErrorCode = "COMPONENT_NOT_INSTALLED"
+	ErrorCodeComponentAlreadyInstalled       ErrorCode = "COMPONENT_ALREADY_INSTALLED"
+	ErrorCodeComponentNotAvailableForChannel ErrorCode = "COMPONENT_NOT_AVAILABLE_FOR_CHANNEL"
+	ErrorCodeComponentRequiresHost           ErrorCode = "COMPONENT_REQUIRES_HOST"
+	ErrorCodeDocsNotInstalled                ErrorCode = "DOCS_NOT_INSTALLED"
+	ErrorCodeDocsTopicNotFound               ErrorCode = "DOCS_TOPIC_NOT_FOUND"
+)
+
+// Coded is implemented by errors that carry a stable machine-readable code
+// and a structured details map. The output renderer uses this to build the
+// JSON error envelope without knowing about specific error types.
+type Coded interface {
+	error
+	Code() ErrorCode
+	Details() map[string]any
+}
+
 // ToolchainNotInstalledError indicates the requested toolchain is not installed.
 type ToolchainNotInstalledError struct {
 	Name string
@@ -15,6 +51,8 @@ type ToolchainNotInstalledError struct {
 func (e *ToolchainNotInstalledError) Error() string {
 	return i18n.T("ToolchainNotInstalled", i18n.MsgData{"Name": e.Name})
 }
+func (e *ToolchainNotInstalledError) Code() ErrorCode         { return ErrorCodeToolchainNotInstalled }
+func (e *ToolchainNotInstalledError) Details() map[string]any { return map[string]any{"name": e.Name} }
 
 // ToolchainAlreadyInstalledError indicates the toolchain is already present.
 type ToolchainAlreadyInstalledError struct {
@@ -23,6 +61,10 @@ type ToolchainAlreadyInstalledError struct {
 
 func (e *ToolchainAlreadyInstalledError) Error() string {
 	return i18n.T("ToolchainAlreadyInstalled", i18n.MsgData{"Name": e.Name})
+}
+func (e *ToolchainAlreadyInstalledError) Code() ErrorCode { return ErrorCodeToolchainAlreadyInstalled }
+func (e *ToolchainAlreadyInstalledError) Details() map[string]any {
+	return map[string]any{"name": e.Name}
 }
 
 // VersionNotFoundError indicates a version was not found in any channel.
@@ -33,6 +75,8 @@ type VersionNotFoundError struct {
 func (e *VersionNotFoundError) Error() string {
 	return i18n.T("VersionNotFound", i18n.MsgData{"Version": e.Version})
 }
+func (e *VersionNotFoundError) Code() ErrorCode         { return ErrorCodeVersionNotFound }
+func (e *VersionNotFoundError) Details() map[string]any { return map[string]any{"version": e.Version} }
 
 // VersionNotAvailableError indicates a version is not available for the platform.
 type VersionNotAvailableError struct {
@@ -46,6 +90,10 @@ func (e *VersionNotAvailableError) Error() string {
 		"Platform": e.Platform,
 	})
 }
+func (e *VersionNotAvailableError) Code() ErrorCode { return ErrorCodeVersionNotAvailable }
+func (e *VersionNotAvailableError) Details() map[string]any {
+	return map[string]any{"version": e.Version, "platform": e.Platform}
+}
 
 // NoToolchainConfiguredError indicates no toolchain has been configured.
 type NoToolchainConfiguredError struct{}
@@ -53,6 +101,8 @@ type NoToolchainConfiguredError struct{}
 func (e *NoToolchainConfiguredError) Error() string {
 	return i18n.T("NoToolchainConfigured", nil)
 }
+func (e *NoToolchainConfiguredError) Code() ErrorCode         { return ErrorCodeNoToolchainConfigured }
+func (e *NoToolchainConfiguredError) Details() map[string]any { return map[string]any{} }
 
 // UnknownToolError indicates an unrecognized tool name.
 type UnknownToolError struct {
@@ -62,6 +112,8 @@ type UnknownToolError struct {
 func (e *UnknownToolError) Error() string {
 	return i18n.T("UnknownTool", i18n.MsgData{"Name": e.Name})
 }
+func (e *UnknownToolError) Code() ErrorCode         { return ErrorCodeUnknownTool }
+func (e *UnknownToolError) Details() map[string]any { return map[string]any{"name": e.Name} }
 
 // ToolNotInToolchainError indicates the requested proxy tool is not present in
 // the resolved toolchain installation.
@@ -76,6 +128,10 @@ func (e *ToolNotInToolchainError) Error() string {
 		"Path": e.Path,
 	})
 }
+func (e *ToolNotInToolchainError) Code() ErrorCode { return ErrorCodeToolNotInToolchain }
+func (e *ToolNotInToolchainError) Details() map[string]any {
+	return map[string]any{"tool": e.Tool, "path": e.Path}
+}
 
 // ChecksumMismatchError indicates a download checksum verification failure.
 type ChecksumMismatchError struct {
@@ -89,6 +145,10 @@ func (e *ChecksumMismatchError) Error() string {
 		"Actual":   e.Actual,
 	})
 }
+func (e *ChecksumMismatchError) Code() ErrorCode { return ErrorCodeChecksumMismatch }
+func (e *ChecksumMismatchError) Details() map[string]any {
+	return map[string]any{"expected": e.Expected, "actual": e.Actual}
+}
 
 // UnsupportedPlatformError indicates the platform is not supported.
 type UnsupportedPlatformError struct {
@@ -99,6 +159,10 @@ type UnsupportedPlatformError struct {
 func (e *UnsupportedPlatformError) Error() string {
 	return i18n.T("UnsupportedPlatform", i18n.MsgData{"OS": e.OS, "Arch": e.Arch})
 }
+func (e *UnsupportedPlatformError) Code() ErrorCode { return ErrorCodeUnsupportedPlatform }
+func (e *UnsupportedPlatformError) Details() map[string]any {
+	return map[string]any{"os": e.OS, "arch": e.Arch}
+}
 
 // RecursionLimitError indicates proxy recursion exceeded the maximum.
 type RecursionLimitError struct {
@@ -108,6 +172,8 @@ type RecursionLimitError struct {
 func (e *RecursionLimitError) Error() string {
 	return i18n.T("RecursionLimitExceeded", i18n.MsgData{"Max": strconv.Itoa(e.Max)})
 }
+func (e *RecursionLimitError) Code() ErrorCode         { return ErrorCodeRecursionLimitExceeded }
+func (e *RecursionLimitError) Details() map[string]any { return map[string]any{"max": e.Max} }
 
 // UnknownChannelError indicates an unrecognized channel name.
 type UnknownChannelError struct {
@@ -117,6 +183,8 @@ type UnknownChannelError struct {
 func (e *UnknownChannelError) Error() string {
 	return i18n.T("UnknownChannel", i18n.MsgData{"Channel": e.Channel})
 }
+func (e *UnknownChannelError) Code() ErrorCode         { return ErrorCodeUnknownChannel }
+func (e *UnknownChannelError) Details() map[string]any { return map[string]any{"channel": e.Channel} }
 
 // GitCodeAPIKeyRequiredError indicates the GitCode API key is not configured.
 type GitCodeAPIKeyRequiredError struct{}
@@ -124,15 +192,36 @@ type GitCodeAPIKeyRequiredError struct{}
 func (e *GitCodeAPIKeyRequiredError) Error() string {
 	return i18n.T("GitCodeAPIKeyRequired", nil)
 }
+func (e *GitCodeAPIKeyRequiredError) Code() ErrorCode         { return ErrorCodeGitCodeAPIKeyRequired }
+func (e *GitCodeAPIKeyRequiredError) Details() map[string]any { return map[string]any{} }
 
 // ExitCodeError carries a process exit code so callers can propagate it
 // without calling os.Exit directly (which would skip deferred cleanup).
+//
+// ExitCodeError intentionally does NOT implement Coded: it is a transparent
+// wrapper for child-process exit codes and carries no semantic information
+// for an end user. Renderers should pass it through without writing an envelope.
 type ExitCodeError struct {
 	Code int
 }
 
 func (e *ExitCodeError) Error() string {
 	return fmt.Sprintf("process exited with code %d", e.Code)
+}
+
+// UnsupportedForJSONError indicates the requested command cannot produce
+// machine-readable JSON output (e.g. shell-script emitters, interactive
+// installers, or transparent process proxies).
+type UnsupportedForJSONError struct {
+	Command string
+}
+
+func (e *UnsupportedForJSONError) Error() string {
+	return i18n.T("UnsupportedForJSON", i18n.MsgData{"Command": e.Command})
+}
+func (e *UnsupportedForJSONError) Code() ErrorCode { return ErrorCodeUnsupportedForJSON }
+func (e *UnsupportedForJSONError) Details() map[string]any {
+	return map[string]any{"command": e.Command}
 }
 
 // UnknownComponentError indicates an unrecognized component name.
@@ -143,6 +232,8 @@ type UnknownComponentError struct {
 func (e *UnknownComponentError) Error() string {
 	return i18n.T("UnknownComponent", i18n.MsgData{"Name": e.Name})
 }
+func (e *UnknownComponentError) Code() ErrorCode         { return ErrorCodeUnknownComponent }
+func (e *UnknownComponentError) Details() map[string]any { return map[string]any{"name": e.Name} }
 
 // ComponentNotInstalledError indicates the requested component is missing
 // from a toolchain.
@@ -156,6 +247,10 @@ func (e *ComponentNotInstalledError) Error() string {
 		"Toolchain": e.Toolchain,
 		"Component": e.Component,
 	})
+}
+func (e *ComponentNotInstalledError) Code() ErrorCode { return ErrorCodeComponentNotInstalled }
+func (e *ComponentNotInstalledError) Details() map[string]any {
+	return map[string]any{"toolchain": e.Toolchain, "component": e.Component}
 }
 
 // ComponentAlreadyInstalledError indicates the component is already present
@@ -171,6 +266,10 @@ func (e *ComponentAlreadyInstalledError) Error() string {
 		"Component": e.Component,
 	})
 }
+func (e *ComponentAlreadyInstalledError) Code() ErrorCode { return ErrorCodeComponentAlreadyInstalled }
+func (e *ComponentAlreadyInstalledError) Details() map[string]any {
+	return map[string]any{"toolchain": e.Toolchain, "component": e.Component}
+}
 
 // ComponentNotAvailableForChannelError indicates the component cannot be
 // installed offline on the given channel (e.g. docs / stdx-docs on lts/sts).
@@ -185,6 +284,12 @@ func (e *ComponentNotAvailableForChannelError) Error() string {
 		"Channel":   e.Channel,
 	})
 }
+func (e *ComponentNotAvailableForChannelError) Code() ErrorCode {
+	return ErrorCodeComponentNotAvailableForChannel
+}
+func (e *ComponentNotAvailableForChannelError) Details() map[string]any {
+	return map[string]any{"component": e.Component, "channel": e.Channel}
+}
 
 // ComponentRequiresHostError indicates a component cannot be installed on a
 // custom / linked toolchain.
@@ -195,6 +300,10 @@ type ComponentRequiresHostError struct {
 func (e *ComponentRequiresHostError) Error() string {
 	return i18n.T("ComponentRequiresHost", i18n.MsgData{"Component": e.Component})
 }
+func (e *ComponentRequiresHostError) Code() ErrorCode { return ErrorCodeComponentRequiresHost }
+func (e *ComponentRequiresHostError) Details() map[string]any {
+	return map[string]any{"component": e.Component}
+}
 
 // DocsNotInstalledError indicates `cjv doc` was invoked on a toolchain that
 // has neither docs nor stdx-docs installed (only meaningful for nightly).
@@ -204,6 +313,10 @@ type DocsNotInstalledError struct {
 
 func (e *DocsNotInstalledError) Error() string {
 	return i18n.T("DocsNotInstalled", i18n.MsgData{"Toolchain": e.Toolchain})
+}
+func (e *DocsNotInstalledError) Code() ErrorCode { return ErrorCodeDocsNotInstalled }
+func (e *DocsNotInstalledError) Details() map[string]any {
+	return map[string]any{"toolchain": e.Toolchain}
 }
 
 // DocsTopicNotFoundError indicates `cjv doc <topic>` could not resolve the
@@ -226,4 +339,12 @@ func (e *DocsTopicNotFoundError) Error() string {
 		"Topic":     e.Topic,
 		"Component": e.MissingComponent,
 	})
+}
+func (e *DocsTopicNotFoundError) Code() ErrorCode { return ErrorCodeDocsTopicNotFound }
+func (e *DocsTopicNotFoundError) Details() map[string]any {
+	return map[string]any{
+		"toolchain":         e.Toolchain,
+		"topic":             e.Topic,
+		"missing_component": e.MissingComponent,
+	}
 }

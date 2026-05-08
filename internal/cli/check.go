@@ -3,8 +3,10 @@ package cli
 import (
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/Zxilly/cjv/internal/cjverr"
+	"github.com/Zxilly/cjv/internal/cli/output"
 	clisettings "github.com/Zxilly/cjv/internal/cli/settings"
 	"github.com/Zxilly/cjv/internal/dist"
 	"github.com/Zxilly/cjv/internal/i18n"
@@ -19,6 +21,53 @@ var checkCmd = &cobra.Command{
 	RunE:  runCheck,
 }
 
+type checkEntry struct {
+	Name            string `json:"name"`
+	Latest          string `json:"latest,omitempty"`
+	UpdateAvailable bool   `json:"update_available"`
+	NotForPlatform  bool   `json:"not_for_platform,omitempty"`
+	Platform        string `json:"platform,omitempty"`
+	Error           string `json:"error,omitempty"`
+}
+
+type checkResult struct {
+	Toolchains    []checkEntry `json:"toolchains"`
+	CjvVersion    string       `json:"cjv_version"`
+	HasUpdates    bool         `json:"has_updates"`
+	NoneInstalled bool         `json:"none_installed,omitempty"`
+}
+
+func (r checkResult) Text() string {
+	if r.NoneInstalled {
+		return i18n.T("NoToolchainsInstalled", nil)
+	}
+	var b strings.Builder
+	for _, e := range r.Toolchains {
+		switch {
+		case e.Error != "":
+			fmt.Fprintf(&b, "  %s: %s\n", e.Name, e.Error)
+		case e.NotForPlatform:
+			fmt.Fprintf(&b, "  %s: %s\n", e.Name, i18n.T("UpdateAvailableButNotForPlatform", i18n.MsgData{
+				"Current":  e.Name,
+				"Latest":   e.Latest,
+				"Platform": e.Platform,
+			}))
+		case e.UpdateAvailable:
+			b.WriteString(color.YellowString("  %s → %s", e.Name, e.Latest))
+			b.WriteByte('\n')
+		default:
+			b.WriteString(color.GreenString("  %s ✓", e.Name))
+			b.WriteByte('\n')
+		}
+	}
+	fmt.Fprintf(&b, "\n  cjv %s\n", r.CjvVersion)
+	if !r.HasUpdates {
+		b.WriteString(color.GreenString(i18n.T("AllUpToDate", nil)))
+		b.WriteByte('\n')
+	}
+	return b.String()
+}
+
 func runCheck(cmd *cobra.Command, args []string) error {
 	ctx := cmd.Context()
 	installed, err := toolchain.ListInstalled()
@@ -26,8 +75,7 @@ func runCheck(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	if len(installed) == 0 {
-		fmt.Println(i18n.T("NoToolchainsInstalled", nil))
-		return nil
+		return output.RenderTo(cmdOutput(cmd), checkResult{NoneInstalled: true, CjvVersion: version})
 	}
 
 	_, settings, err := clisettings.LoadSettings()
@@ -35,7 +83,6 @@ func runCheck(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	// Pre-fetch latest nightly once if any nightly toolchain is installed
 	var latestNightly string
 	var nightlyErr error
 	for _, name := range installed {
@@ -51,11 +98,11 @@ func runCheck(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	// Lazy-fetch manifest only when a non-nightly toolchain needs it
 	var manifest *dist.Manifest
 	var manifestErr error
 
-	hasUpdates := false
+	result := checkResult{CjvVersion: version}
+
 	for _, name := range installed {
 		parsed, err := toolchain.ParseToolchainName(name)
 		if err != nil || parsed.IsCustom() || parsed.Channel == toolchain.UnknownChannel {
@@ -64,7 +111,7 @@ func runCheck(cmd *cobra.Command, args []string) error {
 
 		if parsed.Channel == toolchain.Nightly {
 			if nightlyErr != nil {
-				fmt.Printf("  %s: %s\n", name, nightlyErr)
+				result.Toolchains = append(result.Toolchains, checkEntry{Name: name, Error: nightlyErr.Error()})
 				continue
 			}
 			latestName := toolchain.ToolchainName{
@@ -72,12 +119,12 @@ func runCheck(cmd *cobra.Command, args []string) error {
 				Version:     latestNightly,
 				PlatformKey: parsed.PlatformKey,
 			}.String()
+			entry := checkEntry{Name: name, Latest: latestName}
 			if latestName != name {
-				color.Yellow("  %s → %s", name, latestName)
-				hasUpdates = true
-			} else {
-				color.Green("  %s ✓", name)
+				entry.UpdateAvailable = true
+				result.HasUpdates = true
 			}
+			result.Toolchains = append(result.Toolchains, entry)
 			continue
 		}
 
@@ -99,33 +146,24 @@ func runCheck(cmd *cobra.Command, args []string) error {
 			latestName = toolchain.ToolchainName{Channel: parsed.Channel, Version: latest, PlatformKey: parsed.PlatformKey}.String()
 			infoPlatformKey = parsed.PlatformKey
 		}
+		entry := checkEntry{Name: name, Latest: latestName}
 		if latestName != name {
 			_, err = manifest.GetDownloadInfo(parsed.Channel, latest, infoPlatformKey)
 			if err != nil {
-				var vnaErr *cjverr.VersionNotAvailableError
-				if errors.As(err, &vnaErr) {
-					fmt.Printf("  %s: %s\n", name, i18n.T("UpdateAvailableButNotForPlatform", i18n.MsgData{
-						"Current":  name,
-						"Latest":   latestName,
-						"Platform": infoPlatformKey,
-					}))
+				if _, ok := errors.AsType[*cjverr.VersionNotAvailableError](err); ok {
+					entry.NotForPlatform = true
+					entry.Platform = infoPlatformKey
 				}
+				result.Toolchains = append(result.Toolchains, entry)
 				continue
 			}
-			color.Yellow("  %s → %s", name, latestName)
-			hasUpdates = true
-		} else {
-			color.Green("  %s ✓", name)
+			entry.UpdateAvailable = true
+			result.HasUpdates = true
 		}
+		result.Toolchains = append(result.Toolchains, entry)
 	}
 
-	fmt.Printf("\n  cjv %s\n", version)
-
-	if !hasUpdates {
-		color.Green(i18n.T("AllUpToDate", nil))
-	}
-
-	return nil
+	return output.RenderTo(cmdOutput(cmd), result)
 }
 
 func init() {

@@ -558,7 +558,7 @@ func TestFullLifecycle(t *testing.T) {
 	require.NotEmpty(t, installed)
 
 	// Update (already up to date)
-	_, _, updateErr := updateAll(context.Background())
+	_, updateErr := updateAll(context.Background())
 	require.NoError(t, updateErr)
 
 	// Uninstall

@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 
 	"github.com/Zxilly/cjv/internal/cjverr"
+	"github.com/Zxilly/cjv/internal/cli/output"
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/i18n"
 	"github.com/Zxilly/cjv/internal/proxy"
@@ -15,6 +16,18 @@ import (
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 )
+
+type toolchainLinkResult struct {
+	Name string `json:"name"`
+	Path string `json:"path"`
+}
+
+func (r toolchainLinkResult) Text() string {
+	return color.GreenString(i18n.T("ToolchainLinked", i18n.MsgData{
+		"Name": r.Name,
+		"Path": r.Path,
+	}))
+}
 
 var toolchainCmd = &cobra.Command{
 	Use:   "toolchain",
@@ -85,11 +98,7 @@ var toolchainLinkCmd = &cobra.Command{
 			return err
 		}
 
-		color.Green(i18n.T("ToolchainLinked", i18n.MsgData{
-			"Name": name,
-			"Path": absPath,
-		}))
-		return nil
+		return output.RenderTo(cmdOutput(cmd), toolchainLinkResult{Name: name, Path: absPath})
 	},
 }
 

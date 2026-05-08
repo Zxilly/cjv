@@ -178,11 +178,35 @@ func TestCopyEntryRejectsUnsafeSymlinkTargets(t *testing.T) {
 	if err := os.Symlink(filepath.Join(dir, "target.txt"), absoluteLink); err != nil {
 		t.Skipf("symlink creation requires privileges on this platform: %v", err)
 	}
-	require.Error(t, copyEntry(absoluteLink, filepath.Join(t.TempDir(), "copy")))
+	require.Error(t, copyEntry(dir, absoluteLink, filepath.Join(t.TempDir(), "copy")))
 
 	parentLink := filepath.Join(dir, "parent-link")
 	require.NoError(t, os.Symlink(filepath.Join("..", "target.txt"), parentLink))
-	require.Error(t, copyEntry(parentLink, filepath.Join(t.TempDir(), "copy")))
+	require.Error(t, copyEntry(dir, parentLink, filepath.Join(t.TempDir(), "copy")))
+}
+
+// SDK archives ship internal cross-directory relative symlinks such as
+// third_party/llvm/lib/foo.so -> ../../../runtime/lib/foo.so. These resolve
+// inside the archive root and must be allowed.
+func TestCopyEntryAllowsInternalRelativeSymlink(t *testing.T) {
+	root := t.TempDir()
+	deepDir := filepath.Join(root, "third_party", "llvm", "lib")
+	runtimeDir := filepath.Join(root, "runtime", "lib")
+	require.NoError(t, os.MkdirAll(deepDir, 0o755))
+	require.NoError(t, os.MkdirAll(runtimeDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(runtimeDir, "libfoo.so"), []byte("x"), 0o644))
+
+	link := filepath.Join(deepDir, "libfoo.so")
+	relTarget := filepath.Join("..", "..", "..", "runtime", "lib", "libfoo.so")
+	if err := os.Symlink(relTarget, link); err != nil {
+		t.Skipf("symlink creation requires privileges on this platform: %v", err)
+	}
+
+	dst := filepath.Join(t.TempDir(), "libfoo.so")
+	require.NoError(t, copyEntry(root, link, dst))
+	gotTarget, err := os.Readlink(dst)
+	require.NoError(t, err)
+	assert.Equal(t, filepath.ToSlash(relTarget), filepath.ToSlash(gotTarget))
 }
 
 func TestMoveContentsRecordingRejectsUnsafeSymlinkTargets(t *testing.T) {
@@ -228,7 +252,8 @@ func TestMoveContentsRecordingRejectsUnsafeSymlinkWithoutDeletingExistingDestina
 }
 
 func TestCopyEntryReportsMissingSource(t *testing.T) {
-	err := copyEntry(filepath.Join(t.TempDir(), "missing"), filepath.Join(t.TempDir(), "copy"))
+	root := t.TempDir()
+	err := copyEntry(root, filepath.Join(root, "missing"), filepath.Join(t.TempDir(), "copy"))
 
 	require.Error(t, err)
 }
@@ -252,7 +277,7 @@ func TestCopyDir_PreservesNestedStructure(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(src, "lib", "runtime.so"), []byte("lib"), 0o644))
 
 	dst := filepath.Join(t.TempDir(), "sdk")
-	require.NoError(t, copyDir(src, dst))
+	require.NoError(t, copyDir(src, src, dst))
 
 	assert.FileExists(t, filepath.Join(dst, "bin", "cjc"))
 	assert.FileExists(t, filepath.Join(dst, "lib", "runtime.so"))
@@ -266,7 +291,7 @@ func TestCopyDir_EmptyDirectory(t *testing.T) {
 	src := t.TempDir()
 	dst := filepath.Join(t.TempDir(), "empty")
 
-	require.NoError(t, copyDir(src, dst))
+	require.NoError(t, copyDir(src, src, dst))
 	assert.DirExists(t, dst)
 }
 
@@ -275,7 +300,7 @@ func TestCopyEntry_RegularFile(t *testing.T) {
 	require.NoError(t, os.WriteFile(src, []byte("MZ..."), 0o755))
 
 	dst := filepath.Join(t.TempDir(), "tool_copy.exe")
-	require.NoError(t, copyEntry(src, dst))
+	require.NoError(t, copyEntry(filepath.Dir(src), src, dst))
 
 	got, err := os.ReadFile(dst)
 	require.NoError(t, err)
@@ -288,7 +313,7 @@ func TestCopyEntry_DirectoryDelegatesToCopyDir(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(src, "inner.txt"), []byte("data"), 0o644))
 
 	dst := filepath.Join(t.TempDir(), "copied_dir")
-	require.NoError(t, copyEntry(src, dst))
+	require.NoError(t, copyEntry(src, src, dst))
 
 	assert.FileExists(t, filepath.Join(dst, "inner.txt"))
 }
@@ -301,7 +326,7 @@ func TestCopyDir_DeeplyNested(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(deep, "leaf.txt"), []byte("deep"), 0o644))
 
 	dst := filepath.Join(t.TempDir(), "copy")
-	require.NoError(t, copyDir(src, dst))
+	require.NoError(t, copyDir(src, src, dst))
 
 	got, err := os.ReadFile(filepath.Join(dst, "a", "b", "c", "leaf.txt"))
 	require.NoError(t, err)

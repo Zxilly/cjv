@@ -1,10 +1,11 @@
 package selfmgmt
 
 import (
-	"fmt"
 	"log/slog"
 	"runtime"
 
+	"github.com/Zxilly/cjv/internal/cjverr"
+	"github.com/Zxilly/cjv/internal/cli/output"
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/env"
 	"github.com/Zxilly/cjv/internal/i18n"
@@ -13,6 +14,26 @@ import (
 	"github.com/charmbracelet/huh"
 	"github.com/spf13/cobra"
 )
+
+type selfUpdateResult struct {
+	Version string `json:"version"`
+	Updated bool   `json:"updated"`
+}
+
+// Text returns "" because selfupdate.Update prints its own progress; the
+// result struct exists primarily to give JSON consumers a stable shape.
+func (r selfUpdateResult) Text() string { return "" }
+
+type selfUninstallResult struct {
+	Confirmed bool `json:"confirmed"`
+}
+
+func (r selfUninstallResult) Text() string {
+	if r.Confirmed {
+		return i18n.T("UninstallComplete", nil)
+	}
+	return ""
+}
 
 var uninstallYes bool
 
@@ -41,7 +62,13 @@ func NewSelfCommand(ver, updURL string, cleanCacheCmd *cobra.Command) *cobra.Com
 			if err := selfupdate.Update(cmd.Context(), updURL, ver); err != nil {
 				return err
 			}
-			return proxy.CreateAllProxyLinks()
+			if err := proxy.CreateAllProxyLinks(); err != nil {
+				return err
+			}
+			if !output.IsJSON() {
+				return nil
+			}
+			return output.RenderTo(cmd.OutOrStdout(), selfUpdateResult{Version: ver, Updated: true})
 		},
 	}
 
@@ -49,6 +76,10 @@ func NewSelfCommand(ver, updURL string, cleanCacheCmd *cobra.Command) *cobra.Com
 		Use:   "uninstall",
 		Short: "Uninstall cjv and all installed toolchains",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			// Interactive confirmation cannot be combined with JSON output.
+			if output.IsJSON() && !uninstallYes {
+				return &cjverr.UnsupportedForJSONError{Command: "self uninstall (without --yes)"}
+			}
 			confirm := uninstallYes
 			if !confirm {
 				err := huh.NewConfirm().
@@ -79,8 +110,7 @@ func NewSelfCommand(ver, updURL string, cleanCacheCmd *cobra.Command) *cobra.Com
 			}
 			cleanupSelfPathEntries()
 
-			fmt.Println(i18n.T("UninstallComplete", nil))
-			return nil
+			return output.RenderTo(cmd.OutOrStdout(), selfUninstallResult{Confirmed: true})
 		},
 	}
 

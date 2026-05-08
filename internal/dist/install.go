@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/codeclysm/extract/v4"
 
@@ -101,7 +100,7 @@ func walkAndMove(srcRoot, destRoot, relDir string, paths *[]string) error {
 			continue
 		}
 
-		if err := placeEntry(src, dst); err != nil {
+		if err := placeEntry(srcRoot, src, dst); err != nil {
 			return err
 		}
 		*paths = append(*paths, filepath.ToSlash(relPath))
@@ -111,8 +110,8 @@ func walkAndMove(srcRoot, destRoot, relDir string, paths *[]string) error {
 
 // placeEntry prefers rename, falling back to copy on cross-filesystem moves.
 // The destination is removed first so reinstalls overwrite cleanly.
-func placeEntry(src, dst string) error {
-	if err := validateSymlinkTarget(src); err != nil {
+func placeEntry(srcRoot, src, dst string) error {
+	if err := validateSymlinkTarget(srcRoot, src); err != nil {
 		return err
 	}
 	if _, err := os.Lstat(dst); err == nil {
@@ -123,17 +122,17 @@ func placeEntry(src, dst string) error {
 	if err := utils.RenameRetry(src, dst); err == nil {
 		return nil
 	}
-	return copyEntry(src, dst)
+	return copyEntry(srcRoot, src, dst)
 }
 
-func copyEntry(src, dst string) error {
+func copyEntry(srcRoot, src, dst string) error {
 	info, err := os.Lstat(src)
 	if err != nil {
 		return err
 	}
 
 	if info.Mode()&os.ModeSymlink != 0 {
-		if err := validateSymlinkTarget(src); err != nil {
+		if err := validateSymlinkTarget(srcRoot, src); err != nil {
 			return err
 		}
 		target, err := os.Readlink(src)
@@ -147,12 +146,15 @@ func copyEntry(src, dst string) error {
 	}
 
 	if info.IsDir() {
-		return copyDir(src, dst)
+		return copyDir(srcRoot, src, dst)
 	}
 	return utils.CopyFile(src, dst, info.Mode())
 }
 
-func validateSymlinkTarget(src string) error {
+// validateSymlinkTarget rejects symlinks whose resolved target escapes srcRoot.
+// Parent-traversing targets are allowed as long as the resolved path stays
+// inside srcRoot.
+func validateSymlinkTarget(srcRoot, src string) error {
 	info, err := os.Lstat(src)
 	if err != nil {
 		return err
@@ -167,14 +169,14 @@ func validateSymlinkTarget(src string) error {
 	if filepath.IsAbs(target) {
 		return fmt.Errorf("refusing to create symlink with absolute target: %s -> %s", src, target)
 	}
-	clean := filepath.ToSlash(filepath.Clean(target))
-	if clean == ".." || strings.HasPrefix(clean, "../") {
-		return fmt.Errorf("refusing to create symlink with parent-traversing target: %s -> %s", src, target)
+	resolved := filepath.Join(filepath.Dir(src), target)
+	if !utils.IsPathUnder(srcRoot, resolved) {
+		return fmt.Errorf("refusing to create symlink whose target escapes the install root: %s -> %s", src, target)
 	}
 	return nil
 }
 
-func copyDir(src, dst string) error {
+func copyDir(srcRoot, src, dst string) error {
 	if err := os.MkdirAll(dst, 0o755); err != nil {
 		return err
 	}
@@ -187,7 +189,7 @@ func copyDir(src, dst string) error {
 	for _, entry := range entries {
 		srcPath := filepath.Join(src, entry.Name())
 		dstPath := filepath.Join(dst, entry.Name())
-		if err := copyEntry(srcPath, dstPath); err != nil {
+		if err := copyEntry(srcRoot, srcPath, dstPath); err != nil {
 			return err
 		}
 	}

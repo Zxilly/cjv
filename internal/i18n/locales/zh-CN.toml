@@ -134,6 +134,9 @@ other = "工具链 '{{.Name}}' 已链接到 {{.Path}}"
 [UnknownChannel]
 other = "未知通道: {{.Channel}}"
 
+[UnsupportedForJSON]
+other = "命令 '{{.Command}}' 不支持 --json 输出"
+
 # === 默认命令 ===
 [DefaultCleared]
 other = "已清除默认工具链"

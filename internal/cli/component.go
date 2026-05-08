@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/Zxilly/cjv/internal/cjverr"
+	"github.com/Zxilly/cjv/internal/cli/output"
 	clisettings "github.com/Zxilly/cjv/internal/cli/settings"
 	componentlib "github.com/Zxilly/cjv/internal/component"
 	"github.com/Zxilly/cjv/internal/dist"
@@ -16,6 +17,72 @@ import (
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 )
+
+type componentEntry struct {
+	Name      string `json:"name"`
+	Installed bool   `json:"installed"`
+}
+
+type componentListResult struct {
+	Toolchain  string           `json:"toolchain"`
+	Components []componentEntry `json:"components"`
+}
+
+// componentListView attaches presentation flags to a componentListResult so
+// they can affect Text() rendering without polluting the JSON data shape.
+type componentListView struct {
+	componentListResult
+	quiet         bool
+	installedOnly bool
+}
+
+func (v componentListView) Text() string {
+	if v.quiet {
+		var b strings.Builder
+		for _, c := range v.Components {
+			b.WriteString(c.Name)
+			b.WriteByte('\n')
+		}
+		return b.String()
+	}
+	if len(v.Components) == 0 && v.installedOnly {
+		return i18n.T("NoComponentsInstalled", nil)
+	}
+	var b strings.Builder
+	for _, c := range v.Components {
+		label := i18n.T("AvailableComponents", nil)
+		if c.Installed {
+			label = i18n.T("StatusInstalled", nil)
+		}
+		fmt.Fprintf(&b, "%s (%s)\n", c.Name, label)
+	}
+	return b.String()
+}
+
+func (v componentListView) JSONValue() any {
+	return v.componentListResult
+}
+
+type componentRemovedEntry struct {
+	Toolchain string `json:"toolchain"`
+	Component string `json:"component"`
+}
+
+type componentRemoveResult struct {
+	Removed []componentRemovedEntry `json:"removed"`
+}
+
+func (r componentRemoveResult) Text() string {
+	var b strings.Builder
+	for _, e := range r.Removed {
+		b.WriteString(color.GreenString(i18n.T("ComponentRemoved", i18n.MsgData{
+			"Toolchain": e.Toolchain,
+			"Component": e.Component,
+		})))
+		b.WriteByte('\n')
+	}
+	return b.String()
+}
 
 var (
 	componentToolchain         string
@@ -109,37 +176,44 @@ func runComponentRemove(cmd *cobra.Command, args []string) error {
 		return errors.Join(parseErrs...)
 	}
 
-	tcDir, _, err := resolveToolchainArg(componentToolchain)
+	tcDir, tcName, err := resolveToolchainArg(componentToolchain)
 	if err != nil {
 		return err
 	}
+	toolchainName := tcName.String()
 
-	roots, err := componentlib.RootsFor(filepath.Base(tcDir))
+	roots, err := componentlib.RootsFor(toolchainName)
 	if err != nil {
 		return err
 	}
 
 	var removeErrs []error
 	removeErrs = append(removeErrs, parseErrs...)
+	result := componentRemoveResult{}
 	for _, c := range parsed {
 		if !componentlib.IsInstalled(tcDir, c) {
 			removeErrs = append(removeErrs, &cjverr.ComponentNotInstalledError{
-				Toolchain: filepath.Base(tcDir),
+				Toolchain: toolchainName,
 				Component: string(c),
 			})
 			continue
 		}
-		fmt.Println(i18n.T("RemovingComponent", i18n.MsgData{"Component": string(c)}))
+		if !output.IsJSON() {
+			fmt.Println(i18n.T("RemovingComponent", i18n.MsgData{"Component": string(c)}))
+		}
 		if err := componentlib.Remove(roots, c); err != nil {
 			removeErrs = append(removeErrs, err)
 			continue
 		}
-		color.Green(i18n.T("ComponentRemoved", i18n.MsgData{
-			"Toolchain": filepath.Base(tcDir),
-			"Component": string(c),
-		}))
+		result.Removed = append(result.Removed, componentRemovedEntry{
+			Toolchain: toolchainName,
+			Component: string(c),
+		})
 	}
-	return errors.Join(removeErrs...)
+	if joinErr := errors.Join(removeErrs...); joinErr != nil {
+		return joinErr
+	}
+	return output.RenderTo(cmdOutput(cmd), result)
 }
 
 func runComponentList(cmd *cobra.Command, args []string) error {
@@ -169,38 +243,23 @@ func runComponentList(cmd *cobra.Command, args []string) error {
 		available = componentlib.AvailableComponents(tcName, platformKey)
 	}
 
-	if componentListQuiet {
-		for _, n := range installed {
-			fmt.Println(string(n))
-		}
-		if !componentListInstalledOnly {
-			for _, n := range available {
-				if slices.Contains(installed, n) {
-					continue
-				}
-				fmt.Println(string(n))
-			}
-		}
-		return nil
-	}
-
-	if len(installed) == 0 && componentListInstalledOnly {
-		fmt.Println(i18n.T("NoComponentsInstalled", nil))
-		return nil
-	}
-
+	result := componentListResult{Toolchain: tcName.String()}
 	for _, n := range installed {
-		fmt.Printf("%s (%s)\n", string(n), i18n.T("StatusInstalled", nil))
+		result.Components = append(result.Components, componentEntry{Name: string(n), Installed: true})
 	}
 	if !componentListInstalledOnly {
 		for _, n := range available {
 			if slices.Contains(installed, n) {
 				continue
 			}
-			fmt.Printf("%s (%s)\n", string(n), i18n.T("AvailableComponents", nil))
+			result.Components = append(result.Components, componentEntry{Name: string(n), Installed: false})
 		}
 	}
-	return nil
+	return output.RenderTo(cmdOutput(cmd), componentListView{
+		componentListResult: result,
+		quiet:               componentListQuiet,
+		installedOnly:       componentListInstalledOnly,
+	})
 }
 
 func parseComponentRemoveArgs(args []string) ([]componentlib.Name, []error) {

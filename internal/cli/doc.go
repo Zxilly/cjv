@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/Zxilly/cjv/internal/cli/output"
 	componentlib "github.com/Zxilly/cjv/internal/component"
 	"github.com/Zxilly/cjv/internal/i18n"
 	"github.com/Zxilly/cjv/internal/utils"
@@ -28,6 +29,20 @@ var docCmd = &cobra.Command{
 	RunE:    runDoc,
 }
 
+type docResult struct {
+	Toolchain string `json:"toolchain"`
+	Topic     string `json:"topic,omitempty"`
+	Path      string `json:"path"`
+	Opened    bool   `json:"opened"`
+}
+
+func (r docResult) Text() string {
+	if !r.Opened {
+		return r.Path
+	}
+	return ""
+}
+
 func init() {
 	docCmd.Flags().BoolVar(&docPath, "path", false, i18n.T("DocFlagPath", nil))
 	docCmd.Flags().StringVar(&docToolchain, "toolchain", "", i18n.T("DocFlagToolchain", nil))
@@ -40,12 +55,13 @@ func runDoc(cmd *cobra.Command, args []string) error {
 		topic = args[0]
 	}
 
-	tcDir, _, err := resolveToolchainArg(docToolchain)
+	_, parsedName, err := resolveToolchainArg(docToolchain)
 	if err != nil {
 		return err
 	}
+	tcName := parsedName.String()
 
-	roots, err := componentlib.RootsFor(filepath.Base(tcDir))
+	roots, err := componentlib.RootsFor(tcName)
 	if err != nil {
 		return err
 	}
@@ -54,9 +70,10 @@ func runDoc(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	if docPath {
-		fmt.Println(docFile)
-		return nil
+	// In JSON mode, never launch a browser — JSON consumers want the path,
+	// not a side effect.
+	if docPath || output.IsJSON() {
+		return output.RenderTo(cmdOutput(cmd), docResult{Toolchain: tcName, Topic: topic, Path: docFile, Opened: false})
 	}
 
 	fmt.Fprintln(os.Stderr, i18n.T("OpeningDocs", nil))
@@ -64,7 +81,7 @@ func runDoc(cmd *cobra.Command, args []string) error {
 		fmt.Fprintln(os.Stderr, i18n.T("OpeningDocsBrowserFailed", i18n.MsgData{"Path": docFile}))
 		return err
 	}
-	return nil
+	return output.RenderTo(cmdOutput(cmd), docResult{Toolchain: tcName, Topic: topic, Path: docFile, Opened: true})
 }
 
 // fileURL returns a file:// URL pointing at an absolute local file path. We

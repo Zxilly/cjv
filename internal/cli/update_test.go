@@ -20,7 +20,7 @@ func TestUpdateAll_NoToolchains(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("CJV_HOME", home)
 
-	_, _, err := updateAll(context.Background())
+	_, err := updateAll(context.Background())
 	assert.NoError(t, err, "no toolchains should be a no-op")
 }
 
@@ -37,7 +37,7 @@ func TestUpdateAll_WithInstalledToolchain(t *testing.T) {
 	require.NoError(t, InstallToolchainWithOptions(context.Background(), "lts", false))
 
 	// Update all — should check for updates (already latest)
-	_, _, err := updateAll(context.Background())
+	_, err := updateAll(context.Background())
 	assert.NoError(t, err)
 }
 
@@ -58,7 +58,7 @@ func TestReinstallChannel_AlreadyUpToDate(t *testing.T) {
 
 	// Reinstall same channel — should print "already up to date"
 	sf := config.NewSettingsFile(settingsPath)
-	err := reinstallChannel(context.Background(), toolchain.LTS, "lts-1.0.5", settings2, sf, nil)
+	_, _, err := reinstallChannel(context.Background(), toolchain.LTS, "lts-1.0.5", settings2, sf, nil)
 	assert.NoError(t, err)
 }
 
@@ -74,7 +74,7 @@ func TestUpdateSingle_ChannelName(t *testing.T) {
 	require.NoError(t, InstallToolchainWithOptions(context.Background(), "lts", false))
 
 	// Update by channel name
-	err := updateSingle(context.Background(), "lts")
+	_, err := updateSingle(context.Background(), "lts")
 	assert.NoError(t, err)
 }
 
@@ -94,7 +94,8 @@ func TestUpdateSingle_TargetVariantUpdatesVariant(t *testing.T) {
 	settings.ManifestURL = server.URL + "/sdk-versions.json"
 	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, "settings.toml")))
 
-	require.NoError(t, updateSingle(context.Background(), oldName))
+	_, err = updateSingle(context.Background(), oldName)
+	require.NoError(t, err)
 
 	installed, err := toolchain.ListInstalled()
 	require.NoError(t, err)
@@ -150,7 +151,7 @@ func TestReinstallChannel_UpgradesToNewerVersion(t *testing.T) {
 
 	// Reinstall should upgrade from 1.0.0 to 1.0.5
 	sf := config.NewSettingsFile(settingsPath)
-	err := reinstallChannel(context.Background(), toolchain.LTS, "lts-1.0.0", &settings, sf, nil)
+	_, _, err := reinstallChannel(context.Background(), toolchain.LTS, "lts-1.0.0", &settings, sf, nil)
 	require.NoError(t, err)
 
 	// New version should be installed
@@ -179,7 +180,14 @@ func TestReinstallChannelForPlatform_UpdatesTargetVariant(t *testing.T) {
 	require.NoError(t, config.SaveSettings(&settings, settingsPath))
 
 	sf := config.NewSettingsFile(settingsPath)
-	require.NoError(t, reinstallChannelForPlatform(context.Background(), toolchain.STS, oldName, &settings, sf, nil, targetKey))
+	_, _, err = reinstallChannelForPlatform(context.Background(), reinstallRequest{
+		Channel:      toolchain.STS,
+		CurrentName:  oldName,
+		Settings:     &settings,
+		SettingsFile: sf,
+		PlatformKey:  targetKey,
+	})
+	require.NoError(t, err)
 
 	installed, err := toolchain.ListInstalled()
 	require.NoError(t, err)
@@ -203,7 +211,8 @@ func TestReinstallChannel_UpdatesDefaultToolchain(t *testing.T) {
 	require.NoError(t, config.SaveSettings(&settings, settingsPath))
 
 	sf2 := config.NewSettingsFile(settingsPath)
-	require.NoError(t, reinstallChannel(context.Background(), toolchain.LTS, "lts-1.0.0", &settings, sf2, nil))
+	_, _, err := reinstallChannel(context.Background(), toolchain.LTS, "lts-1.0.0", &settings, sf2, nil)
+	require.NoError(t, err)
 
 	// Default should be updated to new version
 	reloaded, _ := config.LoadSettings(filepath.Join(home, "settings.toml"))
@@ -227,7 +236,8 @@ func TestReinstallChannel_UpdatesOverrides(t *testing.T) {
 	require.NoError(t, config.SaveSettings(&settings, settingsPath))
 
 	sf3 := config.NewSettingsFile(settingsPath)
-	require.NoError(t, reinstallChannel(context.Background(), toolchain.LTS, "lts-1.0.0", &settings, sf3, nil))
+	_, _, err := reinstallChannel(context.Background(), toolchain.LTS, "lts-1.0.0", &settings, sf3, nil)
+	require.NoError(t, err)
 
 	reloaded, _ := config.LoadSettings(filepath.Join(home, "settings.toml"))
 	assert.Equal(t, "lts-1.0.5", reloaded.Overrides["C:\\project-a"],
@@ -312,7 +322,7 @@ func TestUpdateSingle_ExistingToolchain(t *testing.T) {
 	require.NoError(t, InstallToolchainWithOptions(context.Background(), "lts", false))
 
 	// Update the installed toolchain
-	err := updateSingle(context.Background(), "lts-1.0.5")
+	_, err := updateSingle(context.Background(), "lts-1.0.5")
 	assert.NoError(t, err)
 }
 
@@ -320,13 +330,15 @@ func TestUpdateSingle_UnknownToolchain(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("CJV_HOME", home)
 
-	err := updateSingle(context.Background(), "nonexistent-99.99")
+	_, err := updateSingle(context.Background(), "nonexistent-99.99")
 	assert.Error(t, err)
 }
 
 func TestUpdateSingleRejectsInvalidCustomMissingChannelAndMissingVariant(t *testing.T) {
-	require.Error(t, updateSingle(context.Background(), "+bad"))
-	require.Error(t, updateSingle(context.Background(), "local-sdk"))
+	_, err := updateSingle(context.Background(), "+bad")
+	require.Error(t, err)
+	_, err = updateSingle(context.Background(), "local-sdk")
+	require.Error(t, err)
 
 	home := t.TempDir()
 	t.Setenv("CJV_HOME", home)
@@ -334,13 +346,13 @@ func TestUpdateSingleRejectsInvalidCustomMissingChannelAndMissingVariant(t *test
 	settings := config.DefaultSettings()
 	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, "settings.toml")))
 
-	err := updateSingle(context.Background(), "lts")
+	_, err = updateSingle(context.Background(), "lts")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "lts")
 
 	targetKey, err := dist.CurrentPlatformKeyWithTarget("", "ohos")
 	require.NoError(t, err)
-	err = updateSingle(context.Background(), "sts-2.0.0-"+targetKey)
+	_, err = updateSingle(context.Background(), "sts-2.0.0-"+targetKey)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), targetKey)
 }

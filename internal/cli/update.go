@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 
 	"github.com/Zxilly/cjv/internal/cjverr"
+	"github.com/Zxilly/cjv/internal/cli/output"
 	clisettings "github.com/Zxilly/cjv/internal/cli/settings"
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/dist"
@@ -36,15 +37,41 @@ var updateCmd = &cobra.Command{
 	RunE:  runUpdate,
 }
 
+type updateEntry struct {
+	From string `json:"from"`
+	To   string `json:"to"`
+}
+
+type updateResult struct {
+	Updates       []updateEntry `json:"updates"`
+	NoneInstalled bool          `json:"none_installed,omitempty"`
+}
+
+func (r updateResult) Text() string { return "" }
+
+type updateOutcome struct {
+	settingsFile  *config.SettingsFile
+	settings      *config.Settings
+	updates       []updateEntry
+	noneInstalled bool
+}
+
 func runUpdate(cmd *cobra.Command, args []string) error {
 	ctx := cmd.Context()
 	toolchain.CleanupStagingDirs()
 
 	if len(args) == 1 {
-		return updateSingle(ctx, args[0])
+		updates, err := updateSingle(ctx, args[0])
+		if err != nil {
+			return err
+		}
+		if !output.IsJSON() {
+			return nil
+		}
+		return output.RenderTo(cmdOutput(cmd), updateResult{Updates: updates})
 	}
 
-	sf, settings, err := updateAll(ctx)
+	outcome, err := updateAll(ctx)
 
 	// Self-update check and cache cleanup run regardless of updateAll errors.
 	// updateAll may partially succeed (some toolchains updated, others failed),
@@ -54,8 +81,9 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 	// Reload settings from the cached SettingsFile to pick up mutations made
 	// by reinstallChannel through this same SettingsFile instance
 	// (e.g. default_toolchain changes). Note: this does not re-read from disk.
-	if sf != nil {
-		if reloaded, loadErr := sf.Load(); loadErr == nil {
+	settings := outcome.settings
+	if outcome.settingsFile != nil {
+		if reloaded, loadErr := outcome.settingsFile.Load(); loadErr == nil {
 			settings = reloaded
 		}
 	}
@@ -75,7 +103,9 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 			if settings.AutoSelfUpdate != config.AutoSelfUpdateCheck {
 				slog.Warn("unknown auto_self_update value, treating as check", "value", settings.AutoSelfUpdate)
 			}
-			fmt.Printf("\n  cjv %s\n", version)
+			if !output.IsJSON() {
+				fmt.Printf("\n  cjv %s\n", version)
+			}
 		}
 	}
 
@@ -86,66 +116,93 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 		slog.Debug("cleaned download cache", "removed", n)
 	}
 
-	return err
-}
-
-func updateSingle(ctx context.Context, input string) error {
-	name, err := toolchain.ParseToolchainName(input)
 	if err != nil {
 		return err
 	}
+	if !output.IsJSON() {
+		return nil
+	}
+	return output.RenderTo(cmdOutput(cmd), updateResult{
+		Updates:       outcome.updates,
+		NoneInstalled: outcome.noneInstalled,
+	})
+}
+
+func updateSingle(ctx context.Context, input string) ([]updateEntry, error) {
+	name, err := toolchain.ParseToolchainName(input)
+	if err != nil {
+		return nil, err
+	}
 	if name.IsCustom() {
-		return fmt.Errorf("cannot update custom toolchain '%s'", input)
+		return nil, fmt.Errorf("cannot update custom toolchain '%s'", input)
 	}
 	if name.PlatformKey != "" {
 		currentName := name.String()
 		if _, err := toolchain.FindInstalled(name); err != nil {
 			if errors.Is(err, os.ErrNotExist) {
-				return &cjverr.ToolchainNotInstalledError{Name: currentName}
+				return nil, &cjverr.ToolchainNotInstalledError{Name: currentName}
 			}
-			return err
+			return nil, err
 		}
 		sf, settings, err := clisettings.LoadSettings()
 		if err != nil {
-			return err
+			return nil, err
 		}
-		return reinstallChannelForPlatform(ctx, name.Channel, currentName, settings, sf, nil, name.PlatformKey)
+		entry, updated, err := reinstallChannelForPlatform(ctx, reinstallRequest{
+			Channel:      name.Channel,
+			CurrentName:  currentName,
+			Settings:     settings,
+			SettingsFile: sf,
+			PlatformKey:  name.PlatformKey,
+		})
+		return updateEntries(entry, updated), err
 	}
 
 	// If channel-only (e.g. "lts"), find the installed version for that channel
 	if name.IsChannelOnly() {
 		installed, err := findInstalledForChannel(name.Channel)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		if installed == "" {
-			return &cjverr.ToolchainNotInstalledError{Name: input}
+			return nil, &cjverr.ToolchainNotInstalledError{Name: input}
 		}
 		sf, settings, err := clisettings.LoadSettings()
 		if err != nil {
-			return err
+			return nil, err
 		}
-		return reinstallChannel(ctx, name.Channel, installed, settings, sf, nil)
+		entry, updated, err := reinstallChannel(ctx, name.Channel, installed, settings, sf, nil)
+		return updateEntries(entry, updated), err
 	}
 
 	// Specific version — just install it (InstallToolchainWithOptions handles "already installed")
-	return InstallToolchainWithOptions(ctx, input, false)
+	return nil, InstallToolchainWithOptions(ctx, input, false)
 }
 
-func updateAll(ctx context.Context) (*config.SettingsFile, *config.Settings, error) {
+func updateEntries(entry updateEntry, updated bool) []updateEntry {
+	if !updated {
+		return nil
+	}
+	return []updateEntry{entry}
+}
+
+func updateAll(ctx context.Context) (updateOutcome, error) {
 	installed, err := toolchain.ListInstalled()
 	if err != nil {
-		return nil, nil, err
+		return updateOutcome{}, err
 	}
 	if len(installed) == 0 {
-		fmt.Println(i18n.T("NoToolchainsInstalled", nil))
-		return nil, nil, nil
+		if !output.IsJSON() {
+			fmt.Println(i18n.T("NoToolchainsInstalled", nil))
+		}
+		return updateOutcome{noneInstalled: true}, nil
 	}
 
 	sf, settings, err := clisettings.LoadSettings()
 	if err != nil {
-		return nil, nil, err
+		return updateOutcome{}, err
 	}
+	outcome := updateOutcome{settingsFile: sf, settings: settings}
 
 	// Lazily fetch manifest only if there are non-nightly channels to update.
 	var manifest *dist.Manifest
@@ -162,7 +219,7 @@ func updateAll(ctx context.Context) (*config.SettingsFile, *config.Settings, err
 			continue // skip custom/linked toolchains
 		}
 		if parsed.Channel != toolchain.Nightly && manifest == nil && manifestErr == nil {
-			fmt.Println(i18n.T("FetchingManifest", nil))
+			noteStep(i18n.T("FetchingManifest", nil))
 			manifest, manifestErr = fetchManifest(ctx, settings.ManifestURL)
 			if manifestErr != nil {
 				slog.Warn("manifest fetch failed; skipping non-nightly updates", "error", manifestErr)
@@ -180,76 +237,105 @@ func updateAll(ctx context.Context) (*config.SettingsFile, *config.Settings, err
 			errs = append(errs, err)
 			continue
 		}
+		outcome.settings = settings
 
-		if err := reinstallChannelForPlatform(ctx, parsed.Channel, name, settings, sf, manifest, parsed.PlatformKey); err != nil {
+		entry, updated, err := reinstallChannelForPlatform(ctx, reinstallRequest{
+			Channel:      parsed.Channel,
+			CurrentName:  name,
+			Settings:     settings,
+			SettingsFile: sf,
+			Manifest:     manifest,
+			PlatformKey:  parsed.PlatformKey,
+		})
+		if err != nil {
 			slog.Warn("failed to update toolchain", "name", name, "error", err)
 			errs = append(errs, err)
+			continue
+		}
+		if updated {
+			outcome.updates = append(outcome.updates, entry)
 		}
 	}
-	return sf, settings, errors.Join(errs...)
+	return outcome, errors.Join(errs...)
 }
 
-func reinstallChannel(ctx context.Context, channel toolchain.Channel, currentName string, settings *config.Settings, sf *config.SettingsFile, manifest *dist.Manifest) error {
-	return reinstallChannelForPlatform(ctx, channel, currentName, settings, sf, manifest, "")
+type reinstallRequest struct {
+	Channel      toolchain.Channel
+	CurrentName  string
+	Settings     *config.Settings
+	SettingsFile *config.SettingsFile
+	Manifest     *dist.Manifest
+	PlatformKey  string
 }
 
-func reinstallChannelForPlatform(ctx context.Context, channel toolchain.Channel, currentName string, settings *config.Settings, sf *config.SettingsFile, manifest *dist.Manifest, platformKey string) error {
-	resolved, err := resolveAndLocateWithPlatformKey(ctx, toolchain.ToolchainName{Channel: channel}, settings, manifest, platformKey)
+func reinstallChannel(ctx context.Context, channel toolchain.Channel, currentName string, settings *config.Settings, sf *config.SettingsFile, manifest *dist.Manifest) (updateEntry, bool, error) {
+	return reinstallChannelForPlatform(ctx, reinstallRequest{
+		Channel:      channel,
+		CurrentName:  currentName,
+		Settings:     settings,
+		SettingsFile: sf,
+		Manifest:     manifest,
+	})
+}
+
+func reinstallChannelForPlatform(ctx context.Context, req reinstallRequest) (updateEntry, bool, error) {
+	resolved, err := resolveAndLocateWithPlatformKey(ctx, toolchain.ToolchainName{Channel: req.Channel}, req.Settings, req.Manifest, req.PlatformKey)
 	if err != nil {
-		return err
+		return updateEntry{}, false, err
 	}
 
-	if resolved.Name == currentName {
-		color.Green(i18n.T("AlreadyUpToDate", i18n.MsgData{
-			"Version": currentName,
-		}))
-		return nil
+	if resolved.Name == req.CurrentName {
+		if !output.IsJSON() {
+			color.Green(i18n.T("AlreadyUpToDate", i18n.MsgData{
+				"Version": req.CurrentName,
+			}))
+		}
+		return updateEntry{}, false, nil
 	}
 
-	fmt.Println(i18n.T("UpdateFound", i18n.MsgData{
-		"Current": currentName,
+	noteStep(i18n.T("UpdateFound", i18n.MsgData{
+		"Current": req.CurrentName,
 		"Latest":  resolved.Name,
 	}))
+	update := updateEntry{From: req.CurrentName, To: resolved.Name}
 
-	if platformKey == "" {
-		if err := installResolved(ctx, resolved, settings, sf, false); err != nil {
-			return err
+	if req.PlatformKey == "" {
+		if err := installResolved(ctx, resolved, req.Settings, req.SettingsFile, false); err != nil {
+			return updateEntry{}, false, err
 		}
 	} else {
-		if err := installResolvedNoDefault(ctx, resolved, settings, sf, false); err != nil {
-			return err
+		if err := installResolvedNoDefault(ctx, resolved, req.Settings, req.SettingsFile, false); err != nil {
+			return updateEntry{}, false, err
 		}
 	}
 
-	if platformKey == "" {
-		// Update default if it pointed to the old version
-		if settings.DefaultToolchain == currentName {
-			settings.DefaultToolchain = resolved.Name
+	if req.PlatformKey == "" {
+		if req.Settings.DefaultToolchain == req.CurrentName {
+			req.Settings.DefaultToolchain = resolved.Name
 		}
 
-		// Update any overrides that referenced the old version
-		for dir, tc := range settings.Overrides {
-			if tc == currentName {
-				settings.Overrides[dir] = resolved.Name
+		for dir, tc := range req.Settings.Overrides {
+			if tc == req.CurrentName {
+				req.Settings.Overrides[dir] = resolved.Name
 			}
 		}
 	}
 
-	if err := sf.Save(settings); err != nil {
-		return err
+	if err := req.SettingsFile.Save(req.Settings); err != nil {
+		return updateEntry{}, false, err
 	}
 
 	tcDir, err := config.ToolchainsDir()
 	if err != nil {
-		return err
+		return updateEntry{}, false, err
 	}
-	oldDir := filepath.Join(tcDir, currentName)
+	oldDir := filepath.Join(tcDir, req.CurrentName)
 	if err := utils.RemoveAllRetry(oldDir); err != nil {
-		slog.Warn("failed to remove old toolchain", "name", currentName, "error", err)
+		slog.Warn("failed to remove old toolchain", "name", req.CurrentName, "error", err)
 		fmt.Fprintf(os.Stderr, "\n%s\n", i18n.T("OldToolchainRemoveWarning", i18n.MsgData{"Dir": oldDir}))
 	}
 
-	return nil
+	return update, true, nil
 }
 
 func findInstalledForChannel(channel toolchain.Channel) (string, error) {

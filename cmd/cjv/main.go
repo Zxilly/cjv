@@ -10,6 +10,7 @@ import (
 
 	"github.com/Zxilly/cjv/internal/cjverr"
 	"github.com/Zxilly/cjv/internal/cli"
+	"github.com/Zxilly/cjv/internal/cli/output"
 	"github.com/Zxilly/cjv/internal/logging"
 	"github.com/Zxilly/cjv/internal/proxy"
 	"github.com/Zxilly/cjv/internal/resolve"
@@ -68,6 +69,11 @@ func run() int {
 	if err := cli.Execute(version, updateURL); err != nil {
 		if exitErr, ok := errors.AsType[*cjverr.ExitCodeError](err); ok {
 			return exitErr.Code
+		}
+		// In JSON mode the envelope was already written to stdout by
+		// cli.Execute; keep stderr clean so consumers see only JSON on stdout.
+		if !output.IsJSON() {
+			fmt.Fprintln(os.Stderr, "cjv:", err)
 		}
 		return 1
 	}

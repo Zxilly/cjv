@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/Zxilly/cjv/internal/cjverr"
+	"github.com/Zxilly/cjv/internal/utils"
 )
 
 // DocsRoot returns the absolute documentation root for the toolchain.
@@ -129,7 +130,7 @@ func ResolveDocPath(roots Roots, topic string) (string, error) {
 			filepath.Join(base, rel+".html"),
 			filepath.Join(base, rel, "index.html"),
 		} {
-			if isUnder(base, candidate) && fileExists(candidate) {
+			if utils.IsPathUnder(base, candidate) && fileExists(candidate) {
 				return candidate, nil
 			}
 		}
@@ -161,10 +162,3 @@ func safeDocRel(topic string) (string, bool) {
 	return clean, true
 }
 
-func isUnder(base, candidate string) bool {
-	rel, err := filepath.Rel(base, candidate)
-	if err != nil {
-		return false
-	}
-	return rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) && !filepath.IsAbs(rel)
-}

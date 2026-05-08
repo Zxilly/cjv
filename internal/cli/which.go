@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"github.com/Zxilly/cjv/internal/cli/output"
 	"github.com/Zxilly/cjv/internal/proxy"
 	"github.com/Zxilly/cjv/internal/resolve"
 	"github.com/spf13/cobra"
@@ -14,6 +15,14 @@ var whichCmd = &cobra.Command{
 	RunE:  runWhich,
 }
 
+type whichResult struct {
+	Tool      string `json:"tool,omitempty"`
+	Path      string `json:"path"`
+	Toolchain string `json:"toolchain"`
+}
+
+func (r whichResult) Text() string { return r.Path }
+
 func runWhich(cmd *cobra.Command, args []string) error {
 	active, err := resolve.Active(cmd.Context(), "")
 	if err != nil {
@@ -21,17 +30,14 @@ func runWhich(cmd *cobra.Command, args []string) error {
 	}
 
 	if len(args) == 0 {
-		cmd.Println(active.Dir)
-		return nil
+		return output.RenderTo(cmdOutput(cmd), whichResult{Path: active.Dir, Toolchain: active.Name})
 	}
 
 	toolPath, err := proxy.ResolveInstalledToolBinary(active.Dir, args[0])
 	if err != nil {
 		return err
 	}
-
-	cmd.Println(toolPath)
-	return nil
+	return output.RenderTo(cmdOutput(cmd), whichResult{Tool: args[0], Path: toolPath, Toolchain: active.Name})
 }
 
 func init() {

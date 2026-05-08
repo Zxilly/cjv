@@ -9,6 +9,8 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/Zxilly/cjv/internal/cjverr"
+	"github.com/Zxilly/cjv/internal/cli/output"
 	"github.com/Zxilly/cjv/internal/cli/selfmgmt"
 	componentlib "github.com/Zxilly/cjv/internal/component"
 	"github.com/Zxilly/cjv/internal/config"
@@ -82,6 +84,9 @@ func initComponentOptions() []huh.Option[string] {
 }
 
 func runInit(cmd *cobra.Command, _ []string) error {
+	if output.IsJSON() {
+		return &cjverr.UnsupportedForJSONError{Command: "init"}
+	}
 	selfmgmt.CheckSudoSafety()
 
 	home, err := config.Home()

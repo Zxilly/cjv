@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/Zxilly/cjv/internal/cjverr"
+	"github.com/Zxilly/cjv/internal/cli/output"
 	componentlib "github.com/Zxilly/cjv/internal/component"
 	"github.com/Zxilly/cjv/internal/env"
 	"github.com/Zxilly/cjv/internal/proxy"
@@ -36,16 +37,21 @@ func extractPlusToolchainFromArgs(args []string) (string, []string) {
 }
 
 func execRun(cmd *cobra.Command, args []string) error {
+	var err error
+	args, err = stripJSONModeFlagPrefix(args, true)
+	if err != nil {
+		return err
+	}
+	if output.IsJSON() {
+		return &cjverr.UnsupportedForJSONError{Command: "exec"}
+	}
 	ctx := cmd.Context()
 	if ctx == nil {
 		ctx = context.Background()
 	}
 
-	// Handle --help
-	for _, a := range args {
-		if a == "--help" || a == "-h" {
-			return cmd.Help()
-		}
+	if len(args) > 0 && (args[0] == "--help" || args[0] == "-h") {
+		return cmd.Help()
 	}
 
 	tcOverride, remaining := extractPlusToolchainFromArgs(args)

@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 
 	"github.com/Zxilly/cjv/internal/cjverr"
+	"github.com/Zxilly/cjv/internal/cli/output"
 	componentlib "github.com/Zxilly/cjv/internal/component"
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/env"
@@ -35,15 +36,29 @@ func runRun(cmd *cobra.Command, args []string) error {
 	install := false
 flagLoop:
 	for len(args) > 0 {
+		matched, err := applyJSONModeFlag(args[0])
+		if err != nil {
+			return err
+		}
+		if matched {
+			args = args[1:]
+			continue
+		}
 		switch args[0] {
 		case "--install":
 			install = true
 			args = args[1:]
 		case "--help", "-h":
 			return cmd.Help()
+		case "--":
+			args = args[1:]
+			break flagLoop
 		default:
 			break flagLoop
 		}
+	}
+	if output.IsJSON() {
+		return &cjverr.UnsupportedForJSONError{Command: "run"}
 	}
 
 	if len(args) < 2 {

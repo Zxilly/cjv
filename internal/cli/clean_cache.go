@@ -8,11 +8,23 @@ import (
 	"path/filepath"
 	"strconv"
 
+	"github.com/Zxilly/cjv/internal/cli/output"
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/i18n"
 	"github.com/Zxilly/cjv/internal/utils"
 	"github.com/spf13/cobra"
 )
+
+type cleanCacheResult struct {
+	Removed int `json:"removed"`
+}
+
+func (r cleanCacheResult) Text() string {
+	if r.Removed == 0 {
+		return i18n.T("CacheAlreadyClean", nil)
+	}
+	return i18n.T("CacheCleanedCount", i18n.MsgData{"Count": strconv.Itoa(r.Removed)})
+}
 
 const cleanDownloadCacheMaxPasses = 3
 
@@ -24,12 +36,7 @@ var cleanCacheCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		if removed == 0 {
-			fmt.Println(i18n.T("CacheAlreadyClean", nil))
-			return nil
-		}
-		fmt.Println(i18n.T("CacheCleanedCount", i18n.MsgData{"Count": strconv.Itoa(removed)}))
-		return nil
+		return output.RenderTo(cmdOutput(cmd), cleanCacheResult{Removed: removed})
 	},
 }
 
