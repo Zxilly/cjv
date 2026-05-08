@@ -40,6 +40,8 @@ var (
 	// the real system PATH (e.g., the Windows registry).
 	ensurePathConfiguredFn = ensurePathConfigured
 	componentInstallFunc   = componentlib.Install
+
+	installToolchainWithExtrasFn = InstallToolchainWithExtras
 )
 
 func init() {

@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -108,4 +109,43 @@ func TestRunInitCoversAlreadyInstalledAndModifyPathBranches(t *testing.T) {
 
 	assert.NotEmpty(t, yesNoStr(true))
 	assert.NotEmpty(t, yesNoStr(false))
+}
+
+func TestRunInitPassesConfiguredComponentsToDefaultToolchainInstall(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv(config.EnvHome, home)
+	config.ResetDefaultSettingsFileCache()
+
+	oldYes := initYes
+	oldToolchain := initDefaultToolchain
+	oldNoModifyPath := initNoModifyPath
+	oldComponents := initComponents
+	oldInstall := installToolchainWithExtrasFn
+	initYes = true
+	initDefaultToolchain = "sts"
+	initNoModifyPath = true
+	initComponents = []string{"stdx", "docs"}
+
+	var gotInput string
+	var gotComponents []string
+	installToolchainWithExtrasFn = func(ctx context.Context, input string, targets, components []string, force bool) error {
+		gotInput = input
+		gotComponents = append([]string(nil), components...)
+		return nil
+	}
+
+	t.Cleanup(func() {
+		initYes = oldYes
+		initDefaultToolchain = oldToolchain
+		initNoModifyPath = oldNoModifyPath
+		initComponents = oldComponents
+		installToolchainWithExtrasFn = oldInstall
+		config.ResetDefaultSettingsFileCache()
+	})
+
+	err := runInit(&cobra.Command{}, nil)
+
+	require.NoError(t, err)
+	assert.Equal(t, "sts", gotInput)
+	assert.Equal(t, []string{"stdx", "docs"}, gotComponents)
 }

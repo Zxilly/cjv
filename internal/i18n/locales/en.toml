@@ -221,6 +221,9 @@ other = "Current installation options:"
 [InitOptToolchain]
 other = "default toolchain:"
 
+[InitOptComponents]
+other = "components:"
+
 [InitOptModifyPath]
 other = "modify PATH variable:"
 
@@ -241,6 +244,12 @@ other = "Default toolchain?"
 
 [InitToolchainNone]
 other = "none (install no toolchain)"
+
+[InitComponentsQuestion]
+other = "Components to install with the default toolchain?"
+
+[InitComponentsNone]
+other = "none"
 
 [InitModifyPathQuestion]
 other = "Modify PATH variable?"

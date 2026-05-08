@@ -218,6 +218,9 @@ other = "当前安装选项："
 [InitOptToolchain]
 other = "默认工具链："
 
+[InitOptComponents]
+other = "附加 component："
+
 [InitOptModifyPath]
 other = "修改 PATH："
 
@@ -238,6 +241,12 @@ other = "默认工具链？"
 
 [InitToolchainNone]
 other = "none（不安装工具链）"
+
+[InitComponentsQuestion]
+other = "随默认工具链安装哪些 component？"
+
+[InitComponentsNone]
+other = "无"
 
 [InitModifyPathQuestion]
 other = "是否修改 PATH 变量？"

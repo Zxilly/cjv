@@ -7,8 +7,10 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 
 	"github.com/Zxilly/cjv/internal/cli/selfmgmt"
+	componentlib "github.com/Zxilly/cjv/internal/component"
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/env"
 	"github.com/Zxilly/cjv/internal/i18n"
@@ -23,11 +25,13 @@ var (
 	initYes              bool
 	initDefaultToolchain string
 	initNoModifyPath     bool
+	initComponents       []string
 )
 
 func init() {
 	initCmd.Flags().BoolVarP(&initYes, "yes", "y", false, "Skip confirmation prompt")
 	initCmd.Flags().StringVar(&initDefaultToolchain, "default-toolchain", "lts", "Default toolchain to install (use 'none' to skip)")
+	initCmd.Flags().StringSliceVarP(&initComponents, "component", "c", nil, i18n.T("InstallFlagComponent", nil))
 	initCmd.Flags().BoolVar(&initNoModifyPath, "no-modify-path", false, "Do not modify PATH")
 	rootCmd.AddCommand(initCmd)
 }
@@ -50,6 +54,31 @@ func yesNoStr(b bool) string {
 		return i18n.T("Yes", nil)
 	}
 	return i18n.T("No", nil)
+}
+
+func initComponentsStr(values []string) string {
+	components, err := componentlib.NormalizeList(values)
+	if err != nil {
+		return strings.Join(values, ", ")
+	}
+	if len(components) == 0 {
+		return i18n.T("InitComponentsNone", nil)
+	}
+	parts := make([]string, 0, len(components))
+	for _, c := range components {
+		parts = append(parts, string(c))
+	}
+	return strings.Join(parts, ", ")
+}
+
+func initComponentOptions() []huh.Option[string] {
+	known := componentlib.KnownComponents()
+	options := make([]huh.Option[string], 0, len(known))
+	for _, c := range known {
+		name := string(c)
+		options = append(options, huh.NewOption(name, name))
+	}
+	return options
 }
 
 func runInit(cmd *cobra.Command, _ []string) error {
@@ -84,6 +113,7 @@ func runInit(cmd *cobra.Command, _ []string) error {
 
 	// Effective options — initialized from CLI flags, may be modified by interactive menu
 	toolchain := initDefaultToolchain
+	components := append([]string(nil), initComponents...)
 	modifyPath := !initNoModifyPath
 
 	fmt.Println()
@@ -131,6 +161,7 @@ func runInit(cmd *cobra.Command, _ []string) error {
 			fmt.Println(i18n.T("InitCurrentOptions", nil))
 			fmt.Println()
 			fmt.Printf("   %s %s\n", i18n.T("InitOptToolchain", nil), toolchain)
+			fmt.Printf("   %s %s\n", i18n.T("InitOptComponents", nil), initComponentsStr(components))
 			fmt.Printf("   %s %s\n", i18n.T("InitOptModifyPath", nil), yesNoStr(modifyPath))
 			fmt.Println()
 
@@ -172,6 +203,16 @@ func runInit(cmd *cobra.Command, _ []string) error {
 					return err
 				}
 
+				if toolchain == "none" {
+					components = nil
+				} else if err := huh.NewMultiSelect[string]().
+					Title(i18n.T("InitComponentsQuestion", nil)).
+					Options(initComponentOptions()...).
+					Value(&components).
+					Run(); err != nil {
+					return err
+				}
+
 				if err := huh.NewConfirm().
 					Title(i18n.T("InitModifyPathQuestion", nil)).
 					Value(&modifyPath).
@@ -180,6 +221,10 @@ func runInit(cmd *cobra.Command, _ []string) error {
 				}
 			}
 		}
+	}
+
+	if toolchain == "none" && len(components) > 0 {
+		return fmt.Errorf("cannot install components when default toolchain is 'none'")
 	}
 
 	ctx := cmd.Context()
@@ -209,7 +254,7 @@ func runInit(cmd *cobra.Command, _ []string) error {
 			return err
 		}
 		defer os.Unsetenv(config.EnvNoPathSetup) //nolint:errcheck // best-effort cleanup
-		if err := InstallToolchainWithOptions(ctx, toolchain, false); err != nil {
+		if err := installToolchainWithExtrasFn(ctx, toolchain, nil, components, false); err != nil {
 			fmt.Fprintf(os.Stderr, "\n%s\n", i18n.T("InitToolchainFailed", i18n.MsgData{
 				"Name": toolchain,
 				"Err":  err.Error(),

@@ -79,15 +79,15 @@ func stdxURL(tc toolchain.ToolchainName, platformKey string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	ext := dist.ArchiveExt(dist.NightlyGOOS(parts.NightlyOS))
-	asset := fmt.Sprintf("cangjie-stdx-%s-%s-%s.1%s",
-		parts.NightlyOS, parts.NightlyArch, tc.Version, ext)
+	stdxVersion := tc.Version + ".1"
+	asset := fmt.Sprintf("cangjie-stdx-%s-%s-%s.zip",
+		parts.NightlyOS, parts.NightlyArch, stdxVersion)
 
 	switch tc.Channel {
 	case toolchain.Nightly:
 		return joinReleaseURL(dist.DefaultNightlyBaseURL, tc.Version, asset)
 	default:
-		return joinReleaseURL(stdxReleaseBase(), "v"+tc.Version, asset)
+		return joinReleaseURL(stdxReleaseBase(), "v"+stdxVersion, asset)
 	}
 }
 

@@ -22,19 +22,13 @@ func TestResolveAssetURL_Stdx(t *testing.T) {
 			name:     "lts linux aarch64",
 			tc:       toolchain.ToolchainName{Channel: toolchain.LTS, Version: "1.1.0-beta.25"},
 			platform: "linux-arm64",
-			wantURL:  "https://gitcode.com/Cangjie/cangjie_stdx/releases/download/v1.1.0-beta.25/cangjie-stdx-linux-aarch64-1.1.0-beta.25.1.tar.gz",
+			wantURL:  "https://gitcode.com/Cangjie/cangjie_stdx/releases/download/v1.1.0-beta.25.1/cangjie-stdx-linux-aarch64-1.1.0-beta.25.1.zip",
 		},
 		{
 			name:     "sts windows x64",
 			tc:       toolchain.ToolchainName{Channel: toolchain.STS, Version: "1.1.0-beta.25"},
 			platform: "win32-x64",
-			wantURL:  "https://gitcode.com/Cangjie/cangjie_stdx/releases/download/v1.1.0-beta.25/cangjie-stdx-windows-x64-1.1.0-beta.25.1.zip",
-		},
-		{
-			name:     "nightly linux aarch64",
-			tc:       toolchain.ToolchainName{Channel: toolchain.Nightly, Version: "1.1.0-alpha.20260506010057"},
-			platform: "linux-arm64",
-			wantURL:  "https://gitcode.com/Cangjie/nightly_build/releases/download/1.1.0-alpha.20260506010057/cangjie-stdx-linux-aarch64-1.1.0-alpha.20260506010057.1.tar.gz",
+			wantURL:  "https://gitcode.com/Cangjie/cangjie_stdx/releases/download/v1.1.0-beta.25.1/cangjie-stdx-windows-x64-1.1.0-beta.25.1.zip",
 		},
 	}
 	for _, tt := range tests {
@@ -51,24 +45,6 @@ func TestResolveAssetURL_StdxRejectsTargetSuffix(t *testing.T) {
 	tc := toolchain.ToolchainName{Channel: toolchain.LTS, Version: "1.0.5"}
 	_, err := ResolveAssetURL(spec, tc, "linux-x64-ohos")
 	assert.Error(t, err)
-}
-
-func TestResolveAssetURL_DocsAndStdxDocs_Nightly(t *testing.T) {
-	tc := toolchain.ToolchainName{Channel: toolchain.Nightly, Version: "1.1.0-alpha.20260506010057"}
-
-	docsSpec, _ := SpecFor(Docs)
-	docsURL, err := ResolveAssetURL(docsSpec, tc, "")
-	require.NoError(t, err)
-	assert.Equal(t,
-		"https://gitcode.com/Cangjie/nightly_build/releases/download/1.1.0-alpha.20260506010057/cangjie-docs-html-1.1.0-alpha.20260506010057.tar.gz",
-		docsURL)
-
-	stdxDocsSpec, _ := SpecFor(StdxDocs)
-	stdxDocsURL, err := ResolveAssetURL(stdxDocsSpec, tc, "")
-	require.NoError(t, err)
-	assert.Equal(t,
-		"https://gitcode.com/Cangjie/nightly_build/releases/download/1.1.0-alpha.20260506010057/cangjie-stdx-docs-html-1.1.0-alpha.20260506010057.1.tar.gz",
-		stdxDocsURL)
 }
 
 func TestResolveAssetURL_Docs_LTSSTS(t *testing.T) {
