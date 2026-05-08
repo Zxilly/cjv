@@ -44,8 +44,7 @@ var (
 )
 
 // NewSelfCommand creates the "self" command with its subcommands.
-// cleanCacheCmd can be nil if no cache cleanup subcommand is needed.
-func NewSelfCommand(ver, updURL string, cleanCacheCmd *cobra.Command) *cobra.Command {
+func NewSelfCommand(ver, updURL string) *cobra.Command {
 	selfCmd := &cobra.Command{
 		Use:   "self",
 		Short: "Manage the cjv installation itself",
@@ -117,9 +116,6 @@ func NewSelfCommand(ver, updURL string, cleanCacheCmd *cobra.Command) *cobra.Com
 	selfUninstallCmd.Flags().BoolVarP(&uninstallYes, "yes", "y", false, "Skip confirmation prompt")
 	selfCmd.AddCommand(selfUpdateCmd)
 	selfCmd.AddCommand(selfUninstallCmd)
-	if cleanCacheCmd != nil {
-		selfCmd.AddCommand(cleanCacheCmd)
-	}
 
 	return selfCmd
 }

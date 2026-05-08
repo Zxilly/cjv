@@ -173,13 +173,6 @@ other = "Default host: {{.Host}}"
 [ShowDefaultHostAuto]
 other = "(auto)"
 
-# === Cache ===
-[CacheAlreadyClean]
-other = "Download cache is already clean"
-
-[CacheCleanedCount]
-other = "Removed {{.Count}} cached files"
-
 # === Warnings ===
 [PathConfigWarning]
 other = "Warning: Could not automatically configure PATH. You may need to add {{.BinDir}} to your PATH manually."

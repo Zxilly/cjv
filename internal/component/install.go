@@ -43,19 +43,24 @@ func Install(ctx context.Context, roots Roots, tc toolchain.ToolchainName, name 
 	if err := os.MkdirAll(downloadsDir, 0o755); err != nil {
 		return err
 	}
-	parsed, err := url.Parse(assetURL)
-	if err != nil || parsed.Path == "" {
+	if parsed, err := url.Parse(assetURL); err != nil || parsed.Path == "" {
 		return fmt.Errorf("invalid component asset URL: %s", assetURL)
 	}
-	archivePath := filepath.Join(downloadsDir, filepath.Base(parsed.Path))
 
 	fmt.Println(i18n.T("FetchingComponent", i18n.MsgData{
 		"Component": string(name),
 		"Toolchain": filepath.Base(roots.TcDir),
 	}))
-	if err := dist.DownloadFileCached(ctx, assetURL, archivePath, "", downloadsDir); err != nil {
+	archivePath, err := dist.DownloadCached(ctx, assetURL, "", downloadsDir)
+	if err != nil {
 		return err
 	}
+	// Drop the staged archive on success; failures keep it for the next retry.
+	defer func() {
+		if retErr == nil {
+			_ = dist.CleanupDownload(archivePath) //nolint:errcheck // best-effort
+		}
+	}()
 
 	destDir := spec.InstallRoot(roots)
 	if err := os.MkdirAll(filepath.Dir(destDir), 0o755); err != nil {

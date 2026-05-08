@@ -170,13 +170,6 @@ other = "默认主机: {{.Host}}"
 [ShowDefaultHostAuto]
 other = "(自动)"
 
-# === 缓存 ===
-[CacheAlreadyClean]
-other = "下载缓存已清空"
-
-[CacheCleanedCount]
-other = "已清除 {{.Count}} 个缓存文件"
-
 # === 警告 ===
 [PathConfigWarning]
 other = "警告: 无法自动配置 PATH。你可能需要手动将 {{.BinDir}} 添加到 PATH 中。"

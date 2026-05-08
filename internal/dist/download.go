@@ -51,48 +51,35 @@ func cacheKey(url, sha256Hex string) string {
 	return hex.EncodeToString(h[:])
 }
 
-// DownloadFileCached downloads url to dest using cacheDir for content-addressed caching.
-// If the cache already contains a file matching the expected hash, it is copied
-// directly without making an HTTP request. On cache miss the file is downloaded
-// into cacheDir first, then copied to dest.
-func DownloadFileCached(ctx context.Context, url, dest, sha256Hex, cacheDir string) error {
+// DownloadCached stages url under cacheDir as a hash-keyed file and returns
+// its path. cacheDir is a *transient* staging area, not a persistent cache:
+// callers are expected to consume the returned file (typically by extracting
+// an archive) and then drop it via os.Remove on the success path. Files left
+// behind from a crashed earlier run are reused if their content still
+// verifies, so repeated install attempts after an interruption do not
+// re-download.
+func DownloadCached(ctx context.Context, url, sha256Hex, cacheDir string) (string, error) {
 	sha256Hex = strings.ToLower(sha256Hex)
 	key := cacheKey(url, sha256Hex)
-	cachedPath := filepath.Join(cacheDir, key)
-	legacyPartialPath := cachedPath + ".partial"
+	stagedPath := filepath.Join(cacheDir, key)
 
-	// Cache hit: file already exists in cache.
-	if _, err := os.Stat(cachedPath); err == nil {
-		slog.Info("cache hit", "key", key)
-		if err := verifyCachedFile(cachedPath, sha256Hex); err == nil {
-			return copyCachedFileToDest(cachedPath, dest)
-		} else {
-			var mismatchErr *cjverr.ChecksumMismatchError
-			if errors.As(err, &mismatchErr) || sha256Hex == "" {
-				if mismatchErr != nil {
-					slog.Warn("cached download checksum mismatch; redownloading", "path", cachedPath, "expected", mismatchErr.Expected, "actual", mismatchErr.Actual)
-				} else {
-					slog.Warn("cached download is invalid; redownloading", "path", cachedPath, "error", err)
-				}
-				if err := utils.RemoveAllRetry(cachedPath); err != nil {
-					return fmt.Errorf("remove corrupt cache %s: %w", cachedPath, err)
-				}
-			} else {
-				return err
-			}
-		}
+	if reused, err := tryReuseStaged(stagedPath, sha256Hex); err != nil {
+		return "", err
+	} else if reused {
+		return stagedPath, nil
 	}
 
-	// Cache miss: download into cacheDir.
 	if err := os.MkdirAll(cacheDir, 0o755); err != nil {
-		return err
+		return "", err
 	}
-	if err := removeLegacyPartial(legacyPartialPath); err != nil {
-		return err
+	// Old cjv versions wrote partials at "<key>.partial"; sweep them so a
+	// stale fixed-name partial cannot be mistaken for a valid staged file.
+	if err := removeLegacyPartial(stagedPath + ".partial"); err != nil {
+		return "", err
 	}
-	partialPath, err := newDownloadTempPath(cachedPath)
+	partialPath, err := newDownloadTempPath(stagedPath)
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	var lastErr error
@@ -101,20 +88,18 @@ func DownloadFileCached(ctx context.Context, url, dest, sha256Hex, cacheDir stri
 			slog.Info("retrying download", "attempt", attempt+1, "max", getMaxDownloadRetries()+1)
 		}
 
-		lastErr = downloadOnce(ctx, url, partialPath, filepath.Base(dest), sha256Hex)
+		lastErr = downloadOnce(ctx, url, partialPath, filepath.Base(stagedPath), sha256Hex)
 		if lastErr == nil {
 			if sha256Hex == "" {
-				if err := verifyCachedFile(partialPath, sha256Hex); err != nil {
+				if err := verifyStagedFile(partialPath, sha256Hex); err != nil {
 					cleanupDownloadTemp(partialPath)
-					return fmt.Errorf("downloaded file is not a valid archive: %w", err)
+					return "", fmt.Errorf("downloaded file is not a valid archive: %w", err)
 				}
 			}
-			// Promote partial to cached.
-			if err := utils.RenameRetry(partialPath, cachedPath); err != nil {
-				return fmt.Errorf("promote to cache %s: %w", cachedPath, err)
+			if err := utils.RenameRetry(partialPath, stagedPath); err != nil {
+				return "", fmt.Errorf("promote staged file %s: %w", stagedPath, err)
 			}
-			// Copy from cache to dest.
-			return copyCachedFileToDest(cachedPath, dest)
+			return stagedPath, nil
 		}
 
 		var nre *nonRetriableError
@@ -122,10 +107,38 @@ func DownloadFileCached(ctx context.Context, url, dest, sha256Hex, cacheDir stri
 			cleanupDownloadTemp(partialPath)
 			break
 		}
-		// On retriable errors, keep .partial for resume on next attempt.
+		// Retriable error: keep .partial-* on disk for the next attempt.
 	}
 	cleanupDownloadTemp(partialPath)
-	return lastErr
+	return "", lastErr
+}
+
+// tryReuseStaged checks for a leftover staged file from a prior run. Returns
+// (true, nil) if the file passes verification and can be reused as-is,
+// (false, nil) if no usable file is present (callers should download fresh),
+// or (false, err) on a fatal verification problem the caller cannot recover.
+func tryReuseStaged(stagedPath, sha256Hex string) (bool, error) {
+	if _, err := os.Stat(stagedPath); err != nil {
+		return false, nil
+	}
+	slog.Info("staged download already present", "path", stagedPath)
+	verifyErr := verifyStagedFile(stagedPath, sha256Hex)
+	if verifyErr == nil {
+		return true, nil
+	}
+	var mismatchErr *cjverr.ChecksumMismatchError
+	if !errors.As(verifyErr, &mismatchErr) && sha256Hex != "" {
+		return false, verifyErr
+	}
+	if mismatchErr != nil {
+		slog.Warn("staged download checksum mismatch; redownloading", "path", stagedPath, "expected", mismatchErr.Expected, "actual", mismatchErr.Actual)
+	} else {
+		slog.Warn("staged download is invalid; redownloading", "path", stagedPath, "error", verifyErr)
+	}
+	if err := utils.RemoveAllRetry(stagedPath); err != nil {
+		return false, fmt.Errorf("remove corrupt staged file %s: %w", stagedPath, err)
+	}
+	return false, nil
 }
 
 func removeLegacyPartial(path string) error {
@@ -133,30 +146,6 @@ func removeLegacyPartial(path string) error {
 		return fmt.Errorf("remove stale partial download %s: %w", path, err)
 	}
 	return nil
-}
-
-func copyCachedFileToDest(cachedPath, dest string) error {
-	if samePath(cachedPath, dest) {
-		return nil
-	}
-	if infoA, errA := os.Stat(cachedPath); errA == nil {
-		if infoB, errB := os.Stat(dest); errB == nil && os.SameFile(infoA, infoB) {
-			return nil
-		}
-	}
-	if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
-		return err
-	}
-	return utils.CopyFile(cachedPath, dest, 0o644)
-}
-
-func samePath(a, b string) bool {
-	absA, errA := filepath.Abs(a)
-	absB, errB := filepath.Abs(b)
-	if errA == nil && errB == nil {
-		return filepath.Clean(absA) == filepath.Clean(absB)
-	}
-	return filepath.Clean(a) == filepath.Clean(b)
 }
 
 // verifyChecksum compares the hash digest against the expected hex string.
@@ -172,9 +161,17 @@ func verifyChecksum(hasher hash.Hash, expected string) error {
 	return nil
 }
 
-func verifyCachedFile(path, sha256Hex string) error {
+// CleanupDownload removes a staged download once its archive has been
+// extracted, keeping cacheDir empty in steady state (rustup-style). Failures
+// during install must NOT call this: leaving the file on disk lets the next
+// run reuse it instead of re-downloading.
+func CleanupDownload(stagedPath string) error {
+	return utils.RemoveAllRetry(stagedPath)
+}
+
+func verifyStagedFile(path, sha256Hex string) error {
 	if sha256Hex == "" {
-		// No checksum available (e.g. nightly builds). Verify the cached
+		// No checksum available (e.g. nightly builds). Verify the staged
 		// file is non-empty and has a valid archive magic header to catch
 		// corrupt or truncated downloads.
 		info, err := os.Stat(path)
@@ -182,10 +179,10 @@ func verifyCachedFile(path, sha256Hex string) error {
 			return err
 		}
 		if info.Size() == 0 {
-			return fmt.Errorf("cached file %s is empty", path)
+			return fmt.Errorf("staged file %s is empty", path)
 		}
 		if err := verifyArchiveMagic(path); err != nil {
-			return fmt.Errorf("cached file %s is not a valid archive: %w", path, err)
+			return fmt.Errorf("staged file %s is not a valid archive: %w", path, err)
 		}
 		return nil
 	}
@@ -197,7 +194,7 @@ func verifyCachedFile(path, sha256Hex string) error {
 
 	hasher := sha256.New()
 	if _, err := io.Copy(hasher, f); err != nil {
-		return fmt.Errorf("hash cached file %s: %w", path, err)
+		return fmt.Errorf("hash staged file %s: %w", path, err)
 	}
 	return verifyChecksum(hasher, sha256Hex)
 }
@@ -260,7 +257,7 @@ func cleanupDownloadTemp(path string) {
 
 func promoteDownloadedFile(tmpPath, dest string) error {
 	if err := utils.RenameRetry(tmpPath, dest); err != nil {
-		return &nonRetriableError{err: fmt.Errorf("failed to promote download cache %s: %w", dest, err)}
+		return &nonRetriableError{err: fmt.Errorf("promote downloaded file to %s: %w", dest, err)}
 	}
 	return nil
 }

@@ -66,7 +66,6 @@ cjv run sts cjc --version
 | `cjv set gitcode-api-key <key>`                     | Set GitCode API access token (required for nightly builds) |
 | `cjv self update`                                   | Update cjv to the latest version                        |
 | `cjv self uninstall`                                | Uninstall cjv and all installed toolchains              |
-| `cjv self clean-cache`                              | Clean the download cache                                |
 
 ## Toolchain Resolution
 
@@ -211,7 +210,7 @@ Both commands use the same toolchain resolution priority as proxy mode and suppo
     <tc>/
       main/                    # docs component (dev-guide, libs/std, tools)
       stdx/                    # stdx-docs component (libs_stdx)
-  downloads/      # Downloaded SDK archives (cache)
+  downloads/      # Transient staging area (drained on successful install; only retained for crash recovery)
   settings.toml   # User settings
 ```
 

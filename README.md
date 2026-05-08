@@ -66,7 +66,6 @@ cjv run sts cjc --version
 | `cjv set gitcode-api-key <key>`                       | 设置 GitCode API 访问令牌（nightly 构建需要） |
 | `cjv self update`                                     | 更新 cjv 到最新版本                           |
 | `cjv self uninstall`                                  | 卸载 cjv 及所有已安装的工具链                 |
-| `cjv self clean-cache`                                | 清理下载缓存                                  |
 
 ## 工具链解析
 
@@ -211,7 +210,7 @@ cjv envsetup | Invoke-Expression
     <tc>/
       main/                    # docs component（dev-guide / libs/std / tools 入口）
       stdx/                    # stdx-docs component（libs_stdx 入口）
-  downloads/      # 下载的 SDK 归档文件（缓存）
+  downloads/      # 下载暂存区（安装成功后即清空，仅用于中断恢复）
   settings.toml   # 用户设置
 ```
 

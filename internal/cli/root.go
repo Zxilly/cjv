@@ -80,7 +80,7 @@ func Execute(ver, updURL string) error {
 	rootCmd.PersistentFlags().BoolVar(&jsonFlag, "json", false, "output machine-readable JSON")
 
 	settings.RegisterCommands(rootCmd)
-	rootCmd.AddCommand(selfmgmt.NewSelfCommand(ver, updURL, cleanCacheCmd))
+	rootCmd.AddCommand(selfmgmt.NewSelfCommand(ver, updURL))
 
 	err := rootCmd.Execute()
 	if err != nil {

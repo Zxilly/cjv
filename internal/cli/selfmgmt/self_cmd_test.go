@@ -15,14 +15,12 @@ import (
 func TestNewSelfCommandWiresSubcommandsAndUpdate(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv(config.EnvHome, home)
-	clean := &cobra.Command{Use: "clean-cache"}
 
-	cmd := NewSelfCommand("dev", "", clean)
+	cmd := NewSelfCommand("dev", "")
 
 	assert.NotNil(t, cmd)
 	assert.NotNil(t, findSubcommand(cmd, "update"))
 	assert.NotNil(t, findSubcommand(cmd, "uninstall"))
-	assert.NotNil(t, findSubcommand(cmd, "clean-cache"))
 
 	update := findSubcommand(cmd, "update")
 	require.NoError(t, update.RunE(update, nil))
@@ -55,7 +53,7 @@ func TestSelfUninstallDoesNotCleanPathWhenRemoveHomeFails(t *testing.T) {
 		cleanupSelfPathEntries = oldCleanup
 	})
 
-	cmd := NewSelfCommand("dev", "", nil)
+	cmd := NewSelfCommand("dev", "")
 	uninstallYes = true
 	uninstall := findSubcommand(cmd, "uninstall")
 	require.Error(t, uninstall.RunE(uninstall, nil))

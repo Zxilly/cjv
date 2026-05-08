@@ -6,54 +6,30 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
-	"strconv"
 
-	"github.com/Zxilly/cjv/internal/cli/output"
 	"github.com/Zxilly/cjv/internal/config"
-	"github.com/Zxilly/cjv/internal/i18n"
 	"github.com/Zxilly/cjv/internal/utils"
-	"github.com/spf13/cobra"
 )
 
-type cleanCacheResult struct {
-	Removed int `json:"removed"`
-}
+// purgeDownloadsDir wipes leftover entries from the downloads staging area.
+// Steady state is empty (each install removes its archive on success), so
+// this is a sweep for whatever a crashed/aborted run left behind. Called by
+// `cjv update` to mimic rustup's end-of-update cleanup.
+const purgeDownloadsMaxPasses = 3
 
-func (r cleanCacheResult) Text() string {
-	if r.Removed == 0 {
-		return i18n.T("CacheAlreadyClean", nil)
-	}
-	return i18n.T("CacheCleanedCount", i18n.MsgData{"Count": strconv.Itoa(r.Removed)})
-}
-
-const cleanDownloadCacheMaxPasses = 3
-
-var cleanCacheCmd = &cobra.Command{
-	Use:   "clean-cache",
-	Short: "Remove cached downloads",
-	RunE: func(cmd *cobra.Command, args []string) error {
-		removed, err := cleanDownloadCache()
-		if err != nil {
-			return err
-		}
-		return output.RenderTo(cmdOutput(cmd), cleanCacheResult{Removed: removed})
-	},
-}
-
-// cleanDownloadCache removes all entries from the downloads directory.
-func cleanDownloadCache() (int, error) {
+func purgeDownloadsDir() (int, error) {
 	dir, err := config.DownloadsDir()
 	if err != nil {
 		return 0, err
 	}
 	removed := 0
 
-	for range cleanDownloadCacheMaxPasses {
+	for range purgeDownloadsMaxPasses {
 		entries, err := os.ReadDir(dir)
 		if err != nil {
 			if !errors.Is(err, os.ErrNotExist) {
-				slog.Warn("failed to read download cache", "dir", dir, "error", err)
-				return removed, fmt.Errorf("read download cache %s: %w", dir, err)
+				slog.Warn("failed to read downloads dir", "dir", dir, "error", err)
+				return removed, fmt.Errorf("read downloads dir %s: %w", dir, err)
 			}
 			return removed, nil
 		}
@@ -64,7 +40,7 @@ func cleanDownloadCache() (int, error) {
 		var errs []error
 		for _, e := range entries {
 			path := filepath.Join(dir, e.Name())
-			if err := removeDownloadCacheEntry(path); err == nil {
+			if err := removePurgeEntry(path); err == nil {
 				removed++
 			} else {
 				errs = append(errs, fmt.Errorf("remove %s: %w", path, err))
@@ -80,20 +56,20 @@ func cleanDownloadCache() (int, error) {
 		if errors.Is(err, os.ErrNotExist) {
 			return removed, nil
 		}
-		return removed, fmt.Errorf("read download cache %s: %w", dir, err)
+		return removed, fmt.Errorf("read downloads dir %s: %w", dir, err)
 	}
 	if len(entries) > 0 {
-		return removed, fmt.Errorf("download cache still contains %d entries after cleanup", len(entries))
+		return removed, fmt.Errorf("downloads dir still contains %d entries after cleanup", len(entries))
 	}
 	return removed, nil
 }
 
-func removeDownloadCacheEntry(path string) error {
+func removePurgeEntry(path string) error {
 	err := utils.RemoveAllRetry(path)
 	if err == nil {
 		return nil
 	}
-	if chmodErr := makeDownloadCacheEntryWritable(path); chmodErr != nil {
+	if chmodErr := makePurgeEntryWritable(path); chmodErr != nil {
 		return errors.Join(err, chmodErr)
 	}
 	if retryErr := utils.RemoveAllRetry(path); retryErr != nil {
@@ -102,7 +78,7 @@ func removeDownloadCacheEntry(path string) error {
 	return nil
 }
 
-func makeDownloadCacheEntryWritable(path string) error {
+func makePurgeEntryWritable(path string) error {
 	return filepath.WalkDir(path, func(p string, entry os.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr

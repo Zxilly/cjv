@@ -295,15 +295,20 @@ func installResolvedWithDefault(ctx context.Context, rt resolvedToolchain, setti
 	if err != nil {
 		return err
 	}
-	u, err := url.Parse(rt.URL)
-	if err != nil || u.Path == "" {
+	if u, err := url.Parse(rt.URL); err != nil || u.Path == "" {
 		return fmt.Errorf("invalid toolchain download URL: %s", rt.URL)
 	}
-	archivePath := filepath.Join(downloadsDir, filepath.Base(u.Path))
 
-	if err := dist.DownloadFileCached(ctx, rt.URL, archivePath, rt.SHA256, downloadsDir); err != nil {
+	archivePath, err := dist.DownloadCached(ctx, rt.URL, rt.SHA256, downloadsDir)
+	if err != nil {
 		return err
 	}
+	// Drop the staged archive on success; failures keep it for the next retry.
+	defer func() {
+		if retErr == nil {
+			_ = dist.CleanupDownload(archivePath) //nolint:errcheck // best-effort
+		}
+	}()
 
 	stagingDir := destDir + toolchain.StagingSuffix
 	if err := utils.RemoveAllRetry(stagingDir); err != nil {
