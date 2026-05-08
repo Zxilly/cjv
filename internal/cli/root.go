@@ -21,9 +21,10 @@ var (
 )
 
 var rootCmd = &cobra.Command{
-	Use:   "cjv",
-	Short: "Cangjie SDK manager",
-	Long:  "cjv is an SDK manager for the Cangjie programming language.",
+	Use:          "cjv",
+	Short:        "Cangjie SDK manager",
+	Long:         "cjv is an SDK manager for the Cangjie programming language.",
+	SilenceUsage: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		installed, err := toolchain.ListInstalled()
 		if err != nil {
