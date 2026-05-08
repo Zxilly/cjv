@@ -5,14 +5,13 @@ import (
 	"archive/zip"
 	"compress/gzip"
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/Zxilly/cjv/internal/cjverr"
@@ -59,14 +58,6 @@ func buildZip(t *testing.T, dir, name string, files map[string]string) string {
 	return path
 }
 
-func sha256File(t *testing.T, path string) string {
-	t.Helper()
-	data, err := os.ReadFile(path)
-	require.NoError(t, err)
-	sum := sha256.Sum256(data)
-	return hex.EncodeToString(sum[:])
-}
-
 func TestInstall_Stdx_StripsTopLevel(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("stdx archives are tar.gz on non-windows; on Windows the SDK ships zip — covered elsewhere")
@@ -82,16 +73,12 @@ func TestInstall_Stdx_StripsTopLevel(t *testing.T) {
 	})
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if filepath.Ext(r.URL.Path) == ".sha256" {
-			_, _ = w.Write([]byte(sha256File(t, tarPath)))
-			return
-		}
 		http.ServeFile(w, r, tarPath)
 	}))
 	defer server.Close()
 
 	// Override the LTS release base URL so ResolveAssetURL points at our server.
-	origBase := DefaultStdxReleaseBaseURL
+	origBase := stdxReleaseBaseOverride
 	stdxReleaseBaseOverride = server.URL
 	defer func() { stdxReleaseBaseOverride = origBase }()
 
@@ -148,34 +135,27 @@ func TestInstall_ForceDownloadFailureKeepsExistingComponent(t *testing.T) {
 	assert.Equal(t, "old", string(data))
 }
 
-func TestInstall_ReleaseComponentRequiresChecksumSidecar(t *testing.T) {
-	tarPath := buildTarGz(t, t.TempDir(), "docs.tar.gz", map[string]string{
-		"index.html": "docs",
+func TestInstall_StdxDocs_WritesManifestAndFiles(t *testing.T) {
+	tarPath := buildTarGz(t, t.TempDir(), "stdx-docs.tar.gz", map[string]string{
+		"libs_stdx/index.html": "stdx docs",
 	})
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if filepath.Ext(r.URL.Path) == ".sha256" {
-			http.NotFound(w, r)
-			return
-		}
 		http.ServeFile(w, r, tarPath)
 	}))
 	defer server.Close()
 
-	origBase := docsBundleBaseOverride
-	docsBundleBaseOverride = server.URL
-	defer func() { docsBundleBaseOverride = origBase }()
+	origBase := stdxReleaseBaseOverride
+	stdxReleaseBaseOverride = server.URL
+	defer func() { stdxReleaseBaseOverride = origBase }()
 
 	tcDir := t.TempDir()
 	roots := Roots{TcDir: tcDir, DocsDir: t.TempDir(), StdxDir: t.TempDir()}
 	tc := toolchain.ToolchainName{Channel: toolchain.LTS, Version: "1.0.5"}
 
-	err := Install(context.Background(), roots, tc, Docs, "", t.TempDir(), false)
-
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "checksum")
-	assert.False(t, IsInstalled(tcDir, Docs))
-	assert.NoFileExists(t, filepath.Join(roots.DocsDir, "main", "index.html"))
+	require.NoError(t, Install(context.Background(), roots, tc, StdxDocs, "", t.TempDir(), false))
+	assert.FileExists(t, filepath.Join(roots.DocsDir, "stdx", "libs_stdx", "index.html"))
+	assert.True(t, IsInstalled(tcDir, StdxDocs))
 }
 
 func TestInstall_Docs_WritesManifestAndFiles(t *testing.T) {
@@ -189,10 +169,6 @@ func TestInstall_Docs_WritesManifestAndFiles(t *testing.T) {
 	})
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if filepath.Ext(r.URL.Path) == ".sha256" {
-			_, _ = w.Write([]byte(sha256File(t, tarPath)))
-			return
-		}
 		http.ServeFile(w, r, tarPath)
 	}))
 	defer server.Close()
@@ -232,10 +208,6 @@ func TestInstall_Stdx_WindowsZip(t *testing.T) {
 	})
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if filepath.Ext(r.URL.Path) == ".sha256" {
-			_, _ = w.Write([]byte(sha256File(t, zipPath)))
-			return
-		}
 		http.ServeFile(w, r, zipPath)
 	}))
 	defer server.Close()
@@ -254,14 +226,16 @@ func TestInstall_Stdx_WindowsZip(t *testing.T) {
 	assert.FileExists(t, filepath.Join(roots.StdxDir, "static", "foo.lib"))
 }
 
-func TestInstall_RejectsChecksumMismatch(t *testing.T) {
+func TestInstall_DocsDoesNotRequestChecksumSidecar(t *testing.T) {
 	t.Setenv("CJV_MAX_RETRIES", "0")
 	tarPath := buildTarGz(t, t.TempDir(), "docs.tar.gz", map[string]string{
 		"index.html": "docs",
 	})
+	var shaRequests atomic.Int32
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if filepath.Ext(r.URL.Path) == ".sha256" {
+			shaRequests.Add(1)
 			_, _ = w.Write([]byte(strings.Repeat("0", 64)))
 			return
 		}
@@ -277,12 +251,108 @@ func TestInstall_RejectsChecksumMismatch(t *testing.T) {
 	roots := Roots{TcDir: tcDir, DocsDir: t.TempDir(), StdxDir: t.TempDir()}
 	tc := toolchain.ToolchainName{Channel: toolchain.LTS, Version: "1.0.5"}
 
-	err := Install(context.Background(), roots, tc, Docs, "", t.TempDir(), false)
+	require.NoError(t, Install(context.Background(), roots, tc, Docs, "", t.TempDir(), false))
+	assert.Zero(t, shaRequests.Load())
+	assert.True(t, IsInstalled(tcDir, Docs))
+}
 
-	require.Error(t, err)
-	var mismatch *cjverr.ChecksumMismatchError
-	assert.ErrorAs(t, err, &mismatch)
-	assert.False(t, IsInstalled(tcDir, Docs))
+// TestInstall_AllComponentsSmoke installs every Name returned by
+// KnownComponents against mock servers and verifies each lands on disk with a
+// manifest. Guards against silent regressions when a new component is added
+// to the spec map but its install path is not exercised end-to-end.
+func TestInstall_AllComponentsSmoke(t *testing.T) {
+	const version = "1.0.5"
+
+	platformKey := "linux-arm64"
+	stdxArchiveName := "cangjie-stdx-linux-aarch64-" + version + ".1.tar.gz"
+	stdxBuilder := func(t *testing.T, dir string) string {
+		return buildTarGz(t, dir, stdxArchiveName, map[string]string{
+			"cangjie-stdx-linux-aarch64-" + version + "/dynamic/libfoo.so": "dynamic",
+			"cangjie-stdx-linux-aarch64-" + version + "/static/libfoo.a":  "static",
+		})
+	}
+	if runtime.GOOS == "windows" {
+		platformKey = "win32-x64"
+		stdxArchiveName = "cangjie-stdx-windows-x64-" + version + ".1.zip"
+		stdxBuilder = func(t *testing.T, dir string) string {
+			return buildZip(t, dir, stdxArchiveName, map[string]string{
+				"cangjie-stdx-windows-x64-" + version + "/dynamic/foo.dll": "dynamic",
+				"cangjie-stdx-windows-x64-" + version + "/static/foo.lib":  "static",
+			})
+		}
+	}
+
+	srvDir := t.TempDir()
+	stdxArchive := stdxBuilder(t, srvDir)
+	docsArchive := buildTarGz(t, srvDir, "cangjie-docs-html-"+version+".tar.gz", map[string]string{
+		"index.html": "docs",
+	})
+	stdxDocsArchive := buildTarGz(t, srvDir, "cangjie-stdx-docs-html-"+version+".1.tar.gz", map[string]string{
+		"libs_stdx/index.html": "stdx docs",
+	})
+
+	archives := map[string]string{
+		stdxArchiveName: stdxArchive,
+		"cangjie-docs-html-" + version + ".tar.gz":        docsArchive,
+		"cangjie-stdx-docs-html-" + version + ".1.tar.gz": stdxDocsArchive,
+	}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if path, ok := archives[filepath.Base(r.URL.Path)]; ok {
+			http.ServeFile(w, r, path)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	defer server.Close()
+
+	origStdx := stdxReleaseBaseOverride
+	origDocs := docsBundleBaseOverride
+	stdxReleaseBaseOverride = server.URL
+	docsBundleBaseOverride = server.URL
+	defer func() {
+		stdxReleaseBaseOverride = origStdx
+		docsBundleBaseOverride = origDocs
+	}()
+
+	tc := toolchain.ToolchainName{Channel: toolchain.LTS, Version: version}
+
+	stdxLib := "libfoo.so"
+	if runtime.GOOS == "windows" {
+		stdxLib = "foo.dll"
+	}
+	expectedFile := map[Name]string{
+		Stdx:     filepath.Join("dynamic", stdxLib),
+		Docs:     filepath.Join("main", "index.html"),
+		StdxDocs: filepath.Join("stdx", "libs_stdx", "index.html"),
+	}
+	rootDirFor := func(name Name, roots Roots) string {
+		switch name {
+		case Stdx:
+			return roots.StdxDir
+		default:
+			return roots.DocsDir
+		}
+	}
+
+	known := KnownComponents()
+	require.NotEmpty(t, known)
+	for _, name := range known {
+		t.Run(string(name), func(t *testing.T) {
+			roots := Roots{TcDir: t.TempDir(), DocsDir: t.TempDir(), StdxDir: t.TempDir()}
+			pk := ""
+			if name == Stdx {
+				pk = platformKey
+			}
+
+			require.NoError(t, Install(context.Background(), roots, tc, name, pk, t.TempDir(), false))
+			assert.True(t, IsInstalled(roots.TcDir, name))
+			assert.FileExists(t, filepath.Join(rootDirFor(name, roots), expectedFile[name]))
+
+			manifest, err := ReadManifest(roots.TcDir, name)
+			require.NoError(t, err)
+			assert.NotEmpty(t, manifest)
+		})
+	}
 }
 
 func TestInstallRejectsUnknownAndUnsupportedComponents(t *testing.T) {

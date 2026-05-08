@@ -28,7 +28,8 @@ func Install(ctx context.Context, roots Roots, tc toolchain.ToolchainName, name 
 		}
 	}
 
-	if !force && IsInstalled(roots.TcDir, name) {
+	alreadyInstalled := IsInstalled(roots.TcDir, name)
+	if !force && alreadyInstalled {
 		return &cjverr.ComponentAlreadyInstalledError{
 			Toolchain: filepath.Base(roots.TcDir),
 			Component: string(name),
@@ -39,11 +40,6 @@ func Install(ctx context.Context, roots Roots, tc toolchain.ToolchainName, name 
 	if err != nil {
 		return err
 	}
-	checksum, err := componentChecksum(ctx, tc, assetURL, name)
-	if err != nil {
-		return err
-	}
-
 	if err := os.MkdirAll(downloadsDir, 0o755); err != nil {
 		return err
 	}
@@ -57,7 +53,7 @@ func Install(ctx context.Context, roots Roots, tc toolchain.ToolchainName, name 
 		"Component": string(name),
 		"Toolchain": filepath.Base(roots.TcDir),
 	}))
-	if err := dist.DownloadFileCached(ctx, assetURL, archivePath, checksum, downloadsDir); err != nil {
+	if err := dist.DownloadFileCached(ctx, assetURL, archivePath, "", downloadsDir); err != nil {
 		return err
 	}
 
@@ -94,7 +90,7 @@ func Install(ctx context.Context, roots Roots, tc toolchain.ToolchainName, name 
 		}
 	}()
 
-	if force && IsInstalled(roots.TcDir, name) {
+	if force && alreadyInstalled {
 		snap, err = TakeSnapshot(roots, []Name{name})
 		if err != nil {
 			return err
@@ -110,14 +106,6 @@ func Install(ctx context.Context, roots Roots, tc toolchain.ToolchainName, name 
 		return err
 	}
 	return WriteManifest(roots.TcDir, name, paths)
-}
-
-func componentChecksum(ctx context.Context, tc toolchain.ToolchainName, assetURL string, name Name) (string, error) {
-	checksum := dist.FetchNightlySHA256(ctx, assetURL)
-	if checksum == "" && tc.Channel != toolchain.Nightly {
-		return "", fmt.Errorf("component %q checksum not found at %s.sha256", name, assetURL)
-	}
-	return checksum, nil
 }
 
 func moveStagedFiles(stageDir, destDir string, paths []string) ([]string, error) {
