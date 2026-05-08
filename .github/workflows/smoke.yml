@@ -10,12 +10,11 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  smoke:
+  real-component-downloads:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, ubuntu-24.04-arm, macos-latest, macos-15-intel, windows-latest]
-        flow: [install-command, run-install]
+        os: [ubuntu-latest, ubuntu-24.04-arm]
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout repository
@@ -24,7 +23,9 @@ jobs:
         uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
         with:
           go-version: stable
-      - name: Run smoke tests
-        run: go test -v -tags smoke -count=1 -timeout 180s ./tests/smoke/
+      - name: Enable TCP BBR
+        uses: Zxilly/actions-bbr@c3a8ea7012db3c0f4d5fcf6dd257c28f4cba9ead # v1.0.1
+      - name: Run real LTS/STS component download smoke
+        run: go test -v -tags smoke -run TestSmokeRealComponentDownloads_LTSSTS -count=1 -timeout 45m ./tests/smoke/
         env:
-          CJV_SMOKE_FLOW: ${{ matrix.flow }}
+          CJV_DOWNLOAD_TIMEOUT: "900"

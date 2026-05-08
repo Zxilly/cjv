@@ -59,21 +59,17 @@ func buildZip(t *testing.T, dir, name string, files map[string]string) string {
 }
 
 func TestInstall_Stdx_StripsTopLevel(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("stdx archives are tar.gz on non-windows; on Windows the SDK ships zip — covered elsewhere")
-	}
-
 	srvDir := t.TempDir()
 
-	// Mock GitCode endpoint serving a fake stdx tarball with one top-level
+	// Mock GitCode endpoint serving a fake stdx zip with one top-level
 	// directory we expect Install to strip.
-	tarPath := buildTarGz(t, srvDir, "stdx.tar.gz", map[string]string{
-		"cangjie-stdx-linux-aarch64-1.0.5/dynamic/libfoo.so": "dynamic-bytes",
-		"cangjie-stdx-linux-aarch64-1.0.5/static/libfoo.a":   "static-bytes",
+	zipPath := buildZip(t, srvDir, "stdx.zip", map[string]string{
+		"cangjie-stdx-linux-aarch64-1.0.5.1/dynamic/libfoo.so": "dynamic-bytes",
+		"cangjie-stdx-linux-aarch64-1.0.5.1/static/libfoo.a":   "static-bytes",
 	})
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		http.ServeFile(w, r, tarPath)
+		http.ServeFile(w, r, zipPath)
 	}))
 	defer server.Close()
 
@@ -256,28 +252,29 @@ func TestInstall_DocsDoesNotRequestChecksumSidecar(t *testing.T) {
 	assert.True(t, IsInstalled(tcDir, Docs))
 }
 
-// TestInstall_AllComponentsSmoke installs every Name returned by
+// TestInstall_AllComponentsWithMockArchives installs every Name returned by
 // KnownComponents against mock servers and verifies each lands on disk with a
 // manifest. Guards against silent regressions when a new component is added
 // to the spec map but its install path is not exercised end-to-end.
-func TestInstall_AllComponentsSmoke(t *testing.T) {
+func TestInstall_AllComponentsWithMockArchives(t *testing.T) {
 	const version = "1.0.5"
 
 	platformKey := "linux-arm64"
-	stdxArchiveName := "cangjie-stdx-linux-aarch64-" + version + ".1.tar.gz"
+	stdxVersion := version + ".1"
+	stdxArchiveName := "cangjie-stdx-linux-aarch64-" + stdxVersion + ".zip"
 	stdxBuilder := func(t *testing.T, dir string) string {
-		return buildTarGz(t, dir, stdxArchiveName, map[string]string{
-			"cangjie-stdx-linux-aarch64-" + version + "/dynamic/libfoo.so": "dynamic",
-			"cangjie-stdx-linux-aarch64-" + version + "/static/libfoo.a":  "static",
+		return buildZip(t, dir, stdxArchiveName, map[string]string{
+			"cangjie-stdx-linux-aarch64-" + stdxVersion + "/dynamic/libfoo.so": "dynamic",
+			"cangjie-stdx-linux-aarch64-" + stdxVersion + "/static/libfoo.a":   "static",
 		})
 	}
 	if runtime.GOOS == "windows" {
 		platformKey = "win32-x64"
-		stdxArchiveName = "cangjie-stdx-windows-x64-" + version + ".1.zip"
+		stdxArchiveName = "cangjie-stdx-windows-x64-" + stdxVersion + ".zip"
 		stdxBuilder = func(t *testing.T, dir string) string {
 			return buildZip(t, dir, stdxArchiveName, map[string]string{
-				"cangjie-stdx-windows-x64-" + version + "/dynamic/foo.dll": "dynamic",
-				"cangjie-stdx-windows-x64-" + version + "/static/foo.lib":  "static",
+				"cangjie-stdx-windows-x64-" + stdxVersion + "/dynamic/foo.dll": "dynamic",
+				"cangjie-stdx-windows-x64-" + stdxVersion + "/static/foo.lib":  "static",
 			})
 		}
 	}
