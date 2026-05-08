@@ -3,6 +3,7 @@ package output
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
 
@@ -129,7 +130,7 @@ func requireNoError(t *testing.T, err error) {
 
 func requireSameError(t *testing.T, got, want error) {
 	t.Helper()
-	if got != want {
+	if !errors.Is(got, want) {
 		t.Fatalf("got error %v, want %v", got, want)
 	}
 }

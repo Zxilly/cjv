@@ -86,7 +86,7 @@ func RenderErrorTo(stdout, stderr io.Writer, err error) error {
 	enc := json.NewEncoder(stdout)
 	enc.SetEscapeHTML(false)
 	if encErr := enc.Encode(envelope); encErr != nil {
-		fmt.Fprintln(stderr, "cjv: failed to encode error envelope:", encErr)
+		_, _ = fmt.Fprintln(stderr, "cjv: failed to encode error envelope:", encErr)
 	}
 	return err
 }
