@@ -18,10 +18,8 @@ func TestBuildProxyEnv(t *testing.T) {
 	}
 
 	cfg := &EnvConfig{
-		Vars: map[string]string{"CANGJIE_HOME": "/sdk"},
-		PathPrepend: PathPrepend{
-			Entries: []string{"/sdk/bin", "/sdk/tools/bin"},
-		},
+		Vars:        map[string]string{"CANGJIE_HOME": "/sdk"},
+		PathPrepend: []string{"/sdk/bin", "/sdk/tools/bin"},
 	}
 
 	result := BuildProxyEnv(baseEnv, ProxyEnvContext{
@@ -49,8 +47,7 @@ func TestBuildProxyEnvPreservesExisting(t *testing.T) {
 	}
 
 	cfg := &EnvConfig{
-		Vars:        map[string]string{"NEW_VAR": "world"},
-		PathPrepend: PathPrepend{},
+		Vars: map[string]string{"NEW_VAR": "world"},
 	}
 
 	result := BuildProxyEnv(baseEnv, ProxyEnvContext{
@@ -92,7 +89,7 @@ func TestBuildProxyEnv_EmptyBaseEnv(t *testing.T) {
 	// When baseEnv is empty (no PATH set), the function should still
 	// construct a valid environment with the required entries.
 	cfg := NewEnvConfig()
-	cfg.PathPrepend.Entries = []string{"/sdk/bin"}
+	cfg.PathPrepend = []string{"/sdk/bin"}
 
 	result := BuildProxyEnv(nil, ProxyEnvContext{
 		Cfg: cfg, CjvBinDir: "/cjv/bin", ToolchainBinDir: "/tc/bin", ToolchainName: "lts-1.0.5",
@@ -153,6 +150,20 @@ func TestBuildProxyEnv_PathDeduplication(t *testing.T) {
 		}
 	}
 	assert.Equal(t, 1, count, "PATH should not contain duplicates")
+}
+
+func TestBuildProxyEnv_PathAppendAfterBasePath(t *testing.T) {
+	cfg := NewEnvConfig()
+	cfg.PathPrepend = []string{"/sdk/bin"}
+	cfg.PathAppend = []string{"/home/user/.cjpm/bin"}
+	baseEnv := []string{"PATH=/usr/bin"}
+
+	result := BuildProxyEnv(baseEnv, ProxyEnvContext{
+		Cfg: cfg, CjvBinDir: "/cjv/bin", ToolchainBinDir: "/sdk/bin",
+	})
+
+	parts := strings.Split(findEnvValue(result, "PATH"), sep)
+	assert.Equal(t, []string{"/cjv/bin", "/sdk/bin", "/usr/bin", "/home/user/.cjpm/bin"}, parts)
 }
 
 func TestBuildProxyEnv_SetsToolchainName(t *testing.T) {

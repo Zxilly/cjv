@@ -32,78 +32,10 @@ func TestDeriveToolchainEnv_OnlyExistingDirsAdded(t *testing.T) {
 
 	cfg := DeriveToolchainEnv(sdk)
 
-	assert.Contains(t, cfg.PathPrepend.Entries, filepath.Join(sdk, "bin"))
-	assert.Contains(t, cfg.PathPrepend.Entries, filepath.Join(sdk, "tools", "bin"))
-	assert.NotContains(t, cfg.PathPrepend.Entries, filepath.Join(sdk, "tools", "lib"),
+	assert.Contains(t, cfg.PathPrepend, filepath.Join(sdk, "bin"))
+	assert.Contains(t, cfg.PathPrepend, filepath.Join(sdk, "tools", "bin"))
+	assert.NotContains(t, cfg.PathPrepend, filepath.Join(sdk, "tools", "lib"),
 		"missing tools/lib should not be added")
-}
-
-func TestDeriveToolchainEnv_DetectsCjnativeBackend(t *testing.T) {
-	sdk := t.TempDir()
-	backend := runtime.GOOS + "_" + hostArch() + "_cjnative"
-	writeDir(t, sdk, "runtime", "lib", backend)
-	writeDir(t, sdk, "lib", backend)
-
-	cfg := DeriveToolchainEnv(sdk)
-
-	assert.Contains(t, cfg.PathPrepend.Entries, filepath.Join(sdk, "runtime", "lib", backend))
-	assert.Contains(t, cfg.PathPrepend.Entries, filepath.Join(sdk, "lib", backend))
-}
-
-func TestDeriveToolchainEnv_DetectsLlvmBackend(t *testing.T) {
-	sdk := t.TempDir()
-	backend := runtime.GOOS + "_" + hostArch() + "_llvm"
-	writeDir(t, sdk, "runtime", "lib", backend)
-	writeDir(t, sdk, "lib", backend)
-
-	cfg := DeriveToolchainEnv(sdk)
-
-	assert.Contains(t, cfg.PathPrepend.Entries, filepath.Join(sdk, "runtime", "lib", backend))
-	assert.Contains(t, cfg.PathPrepend.Entries, filepath.Join(sdk, "lib", backend))
-}
-
-func TestDeriveToolchainEnv_IgnoresCrossTargetRuntimes(t *testing.T) {
-	sdk := t.TempDir()
-	hostBackend := runtime.GOOS + "_" + hostArch() + "_cjnative"
-	writeDir(t, sdk, "runtime", "lib", hostBackend)
-	// Cross-compile runtimes share the same parent directory but should
-	// not be added to host PATH.
-	writeDir(t, sdk, "runtime", "lib", "linux_ohos_aarch64_cjnative")
-
-	cfg := DeriveToolchainEnv(sdk)
-
-	assert.Contains(t, cfg.PathPrepend.Entries, filepath.Join(sdk, "runtime", "lib", hostBackend))
-	assert.NotContains(t, cfg.PathPrepend.Entries, filepath.Join(sdk, "runtime", "lib", "linux_ohos_aarch64_cjnative"))
-}
-
-func TestDeriveToolchainEnv_OSPrefixAgnostic(t *testing.T) {
-	// The host arch suffix (x86_64 / aarch64) is what we match on, not the
-	// OS prefix — Cangjie's archive filenames use "mac" while Go uses
-	// "darwin", and we shouldn't have to know which one ends up in the
-	// runtime/lib directory name.
-	sdk := t.TempDir()
-	custom := "someos_" + hostArch() + "_cjnative"
-	writeDir(t, sdk, "runtime", "lib", custom)
-	writeDir(t, sdk, "lib", custom)
-
-	cfg := DeriveToolchainEnv(sdk)
-
-	assert.Contains(t, cfg.PathPrepend.Entries, filepath.Join(sdk, "runtime", "lib", custom))
-	assert.Contains(t, cfg.PathPrepend.Entries, filepath.Join(sdk, "lib", custom))
-}
-
-func TestDeriveToolchainEnv_PrefersCjnativeOverLlvm(t *testing.T) {
-	// When both backends are present the modern cjnative dir should win.
-	sdk := t.TempDir()
-	cj := runtime.GOOS + "_" + hostArch() + "_cjnative"
-	llvm := runtime.GOOS + "_" + hostArch() + "_llvm"
-	writeDir(t, sdk, "runtime", "lib", cj)
-	writeDir(t, sdk, "runtime", "lib", llvm)
-
-	cfg := DeriveToolchainEnv(sdk)
-
-	assert.Contains(t, cfg.PathPrepend.Entries, filepath.Join(sdk, "runtime", "lib", cj))
-	assert.NotContains(t, cfg.PathPrepend.Entries, filepath.Join(sdk, "runtime", "lib", llvm))
 }
 
 func TestDeriveToolchainEnv_NoBackendDirReturnsNoLibPaths(t *testing.T) {
@@ -112,34 +44,67 @@ func TestDeriveToolchainEnv_NoBackendDirReturnsNoLibPaths(t *testing.T) {
 
 	cfg := DeriveToolchainEnv(sdk)
 
-	for _, p := range cfg.PathPrepend.Entries {
+	for _, p := range cfg.PathPrepend {
+		assert.NotContains(t, p, "_cjnative")
+		assert.NotContains(t, p, "_llvm")
+	}
+	for _, p := range cfg.LibraryPathPrepend {
 		assert.NotContains(t, p, "_cjnative")
 		assert.NotContains(t, p, "_llvm")
 	}
 }
 
-func TestDeriveToolchainEnv_PosixIncludesLldbWhenPresent(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("third_party/llvm/lldb/lib is POSIX-only")
-	}
+func TestHostBackendDirForArch_DetectsCjnative(t *testing.T) {
 	sdk := t.TempDir()
-	lldb := writeDir(t, sdk, "third_party", "llvm", "lldb", "lib")
+	backend := "linux_x86_64_cjnative"
+	writeDir(t, sdk, "runtime", "lib", backend)
 
-	cfg := DeriveToolchainEnv(sdk)
-
-	assert.Contains(t, cfg.PathPrepend.Entries, lldb)
+	assert.Equal(t, backend, hostBackendDirForArch(sdk, "x86_64"))
 }
 
-func TestDeriveToolchainEnv_WindowsSkipsLldb(t *testing.T) {
-	if runtime.GOOS != "windows" {
-		t.Skip("Windows-specific")
-	}
+func TestHostBackendDirForArch_DetectsLlvm(t *testing.T) {
 	sdk := t.TempDir()
-	writeDir(t, sdk, "third_party", "llvm", "lldb", "lib")
+	backend := "linux_x86_64_llvm"
+	writeDir(t, sdk, "runtime", "lib", backend)
 
-	cfg := DeriveToolchainEnv(sdk)
+	assert.Equal(t, backend, hostBackendDirForArch(sdk, "x86_64"))
+}
 
-	for _, p := range cfg.PathPrepend.Entries {
-		assert.NotContains(t, p, filepath.Join("lldb", "lib"))
-	}
+func TestHostBackendDirForArch_IgnoresCrossTargets(t *testing.T) {
+	sdk := t.TempDir()
+	host := "linux_x86_64_cjnative"
+	writeDir(t, sdk, "runtime", "lib", host)
+	// Cross-compile runtimes share the parent directory but have an extra
+	// segment between OS and arch (e.g. linux_ohos_aarch64_cjnative).
+	writeDir(t, sdk, "runtime", "lib", "linux_ohos_aarch64_cjnative")
+
+	assert.Equal(t, host, hostBackendDirForArch(sdk, "x86_64"))
+}
+
+func TestHostBackendDirForArch_OSPrefixAgnostic(t *testing.T) {
+	// The host arch suffix (x86_64 / aarch64) is what we match on, not the
+	// OS prefix — Cangjie's archive filenames use "mac" while Go uses
+	// "darwin", and we shouldn't have to know which one ends up in the
+	// runtime/lib directory name.
+	sdk := t.TempDir()
+	custom := "someos_x86_64_cjnative"
+	writeDir(t, sdk, "runtime", "lib", custom)
+
+	assert.Equal(t, custom, hostBackendDirForArch(sdk, "x86_64"))
+}
+
+func TestHostBackendDirForArch_PrefersCjnativeOverLlvm(t *testing.T) {
+	sdk := t.TempDir()
+	cj := "linux_x86_64_cjnative"
+	writeDir(t, sdk, "runtime", "lib", cj)
+	writeDir(t, sdk, "runtime", "lib", "linux_x86_64_llvm")
+
+	assert.Equal(t, cj, hostBackendDirForArch(sdk, "x86_64"))
+}
+
+func TestHostArchMapsGoArch(t *testing.T) {
+	assert.Equal(t, "x86_64", hostArchName("amd64"))
+	assert.Equal(t, "aarch64", hostArchName("arm64"))
+	assert.Equal(t, "riscv64", hostArchName("riscv64"))
+	assert.Equal(t, hostArchName(runtime.GOARCH), hostArch())
 }

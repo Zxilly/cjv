@@ -4,55 +4,45 @@ package env
 
 import (
 	"os"
-	"path/filepath"
 	"runtime"
 	"strings"
 )
 
-// EnsureLibraryPath prepends the SDK lib directory to the appropriate
+// EnsureLibraryPath prepends SDK library directories to the appropriate
 // library search path environment variable. It merges with the current
 // process environment value to avoid overwriting user settings.
-func EnsureLibraryPath(cfg *EnvConfig, sdkDir string) {
-	libDir := filepath.Join(sdkDir, "lib")
-	if _, err := os.Stat(libDir); err != nil {
+func EnsureLibraryPath(cfg *EnvConfig) {
+	entries := libraryPathEntries(cfg)
+	if len(entries) == 0 {
 		return
 	}
 
-	var ldKey string
-	switch runtime.GOOS {
-	case "darwin":
-		ldKey = "DYLD_FALLBACK_LIBRARY_PATH"
-	default:
-		ldKey = "LD_LIBRARY_PATH"
+	ldKey := libraryPathKey(runtime.GOOS)
+	if ldKey == "" {
+		return
 	}
 
-	// Build the merged value: SDK lib + derived value + current process env
-	parts := []string{libDir}
-
+	parts := append([]string(nil), entries...)
 	if derivedVal := cfg.Vars[ldKey]; derivedVal != "" {
 		parts = append(parts, derivedVal)
 	}
-
 	if processVal := os.Getenv(ldKey); processVal != "" {
 		parts = append(parts, processVal)
-	} else if runtime.GOOS == "darwin" && ldKey == "DYLD_FALLBACK_LIBRARY_PATH" {
-		// macOS: preserve system defaults when env var was unset
-		home, _ := os.UserHomeDir()
-		if home != "" {
-			parts = append(parts, filepath.Join(home, "lib"))
-		}
-		parts = append(parts, "/usr/local/lib", "/usr/lib")
 	}
 
-	// Deduplicate
 	seen := make(map[string]bool)
 	var deduped []string
 	for _, p := range parts {
-		for _, entry := range strings.Split(p, string(os.PathListSeparator)) {
-			if entry != "" && !seen[entry] {
-				seen[entry] = true
-				deduped = append(deduped, entry)
+		for entry := range strings.SplitSeq(p, string(os.PathListSeparator)) {
+			if entry == "" {
+				continue
 			}
+			key := canonicalEnvKey(entry)
+			if seen[key] {
+				continue
+			}
+			seen[key] = true
+			deduped = append(deduped, entry)
 		}
 	}
 

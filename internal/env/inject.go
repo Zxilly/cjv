@@ -77,8 +77,8 @@ func BuildProxyEnv(baseEnv []string, ctx ProxyEnvContext) []string {
 			order = append(order, pathKey)
 		}
 
-		existingSet := make(map[string]bool, len(entries)+len(ctx.Cfg.PathPrepend.Entries)+2)
-		all := make([]string, 0, len(ctx.Cfg.PathPrepend.Entries)+len(entries)+2)
+		existingSet := make(map[string]bool, len(entries)+len(ctx.Cfg.PathPrepend)+len(ctx.Cfg.PathAppend)+2)
+		all := make([]string, 0, len(ctx.Cfg.PathPrepend)+len(entries)+len(ctx.Cfg.PathAppend)+2)
 		appendUnique := func(entry string) {
 			if entry == "" {
 				return
@@ -92,10 +92,13 @@ func BuildProxyEnv(baseEnv []string, ctx ProxyEnvContext) []string {
 		}
 
 		appendUnique(ctx.CjvBinDir)
-		for _, e := range ctx.Cfg.PathPrepend.Entries {
+		for _, e := range ctx.Cfg.PathPrepend {
 			appendUnique(e)
 		}
 		for _, e := range entries {
+			appendUnique(e)
+		}
+		for _, e := range ctx.Cfg.PathAppend {
 			appendUnique(e)
 		}
 		if runtime.GOOS == "windows" {

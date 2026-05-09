@@ -16,10 +16,8 @@ func TestBuildProxyEnvCollapsesWindowsEnvKeyCasing(t *testing.T) {
 		"cjv_toolchain=old",
 	}
 	cfg := &EnvConfig{
-		Vars: map[string]string{},
-		PathPrepend: PathPrepend{
-			Entries: []string{"C:\\SDK\\tools\\bin"},
-		},
+		Vars:        map[string]string{},
+		PathPrepend: []string{"C:\\SDK\\tools\\bin"},
 	}
 
 	result := BuildProxyEnv(baseEnv, ProxyEnvContext{

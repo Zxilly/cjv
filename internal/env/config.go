@@ -4,17 +4,15 @@ package env
 // BuildProxyEnv: a set of variables to set and a list of directories to
 // prepend to PATH.
 type EnvConfig struct {
-	Vars        map[string]string
-	PathPrepend PathPrepend
+	Vars               map[string]string
+	PathPrepend        []string
+	PathAppend         []string
+	LibraryPathPrepend []string
 }
 
 // ComponentEnvProvider injects env vars contributed by installed components.
 // Passed in by callers so the env package does not need to import component.
 type ComponentEnvProvider func(vars map[string]string, tcDir string)
-
-type PathPrepend struct {
-	Entries []string
-}
 
 // NewEnvConfig returns an initialized empty EnvConfig.
 func NewEnvConfig() *EnvConfig {
@@ -28,7 +26,7 @@ func NewEnvConfig() *EnvConfig {
 // environment.
 func LoadToolchainEnv(tcDir string, componentEnv ComponentEnvProvider) *EnvConfig {
 	cfg := DeriveToolchainEnv(tcDir)
-	EnsureLibraryPath(cfg, tcDir)
+	EnsureLibraryPath(cfg)
 	applyComponentEnv(cfg, tcDir, componentEnv)
 	return cfg
 }
