@@ -14,7 +14,7 @@ import (
 
 func TestNewSelfCommandWiresSubcommandsAndUpdate(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv(config.EnvHome, home)
+	config.IsolateForTest(t, home)
 
 	cmd := NewSelfCommand("dev", "")
 
@@ -30,7 +30,7 @@ func TestNewSelfCommandWiresSubcommandsAndUpdate(t *testing.T) {
 
 func TestSelfUninstallDoesNotCleanPathWhenRemoveHomeFails(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv(config.EnvHome, home)
+	config.IsolateForTest(t, home)
 
 	oldYes := uninstallYes
 	oldEnsure := ensureSelfManagedExecutable

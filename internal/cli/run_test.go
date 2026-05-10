@@ -38,14 +38,14 @@ func TestResolveRunCommandFallsBackWhenMappedToolIsMissing(t *testing.T) {
 func TestRunRun_NoToolchain(t *testing.T) {
 	home := t.TempDir()
 	cwd := t.TempDir()
-	t.Setenv("CJV_HOME", home)
+	config.IsolateForTest(t, home)
 	t.Setenv("CJV_TOOLCHAIN", "")
 
 	t.Chdir(cwd)
 
 	settings := config.DefaultSettings()
 	settings.AutoInstall = false
-	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, "settings.toml")))
+	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 
 	cmd := &cobra.Command{}
 	err := runRun(cmd, []string{"cjc", "--version"})
@@ -54,13 +54,13 @@ func TestRunRun_NoToolchain(t *testing.T) {
 
 func TestRunRunExecutesFallbackCommandForInstalledToolchain(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv(config.EnvHome, home)
+	config.IsolateForTest(t, home)
 	t.Setenv(config.EnvToolchain, "")
 	require.NoError(t, config.EnsureDirs())
 	require.NoError(t, os.MkdirAll(filepath.Join(home, "toolchains", "lts-1.0.5"), 0o755))
 	settings := config.DefaultSettings()
 	settings.DefaultToolchain = "lts-1.0.5"
-	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, "settings.toml")))
+	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 
 	cmd := &cobra.Command{}
 	cmd.SetContext(context.Background())

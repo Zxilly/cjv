@@ -20,7 +20,7 @@ import (
 func TestRunWhich_FindsTool(t *testing.T) {
 	home := t.TempDir()
 	cwd := t.TempDir()
-	t.Setenv("CJV_HOME", home)
+	config.IsolateForTest(t, home)
 	require.NoError(t, config.EnsureDirs())
 
 	t.Chdir(cwd)
@@ -29,7 +29,7 @@ func TestRunWhich_FindsTool(t *testing.T) {
 	server := validMockServer(t)
 	settings := config.DefaultSettings()
 	settings.ManifestURL = server.URL + "/sdk-versions.json"
-	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, "settings.toml")))
+	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 	require.NoError(t, InstallToolchainWithOptions(context.Background(), "lts", false))
 
 	cmd := &cobra.Command{}
@@ -40,13 +40,13 @@ func TestRunWhich_FindsTool(t *testing.T) {
 func TestRunWhich_NoActiveToolchain(t *testing.T) {
 	home := t.TempDir()
 	cwd := t.TempDir()
-	t.Setenv("CJV_HOME", home)
+	config.IsolateForTest(t, home)
 	t.Setenv("CJV_TOOLCHAIN", "")
 
 	t.Chdir(cwd)
 
 	settings := config.DefaultSettings()
-	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, "settings.toml")))
+	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 
 	cmd := &cobra.Command{}
 	err := runWhich(cmd, []string{"cjc"})
@@ -56,7 +56,7 @@ func TestRunWhich_NoActiveToolchain(t *testing.T) {
 func TestRunWhich_ToolchainFileTargetsTriggerAutoInstall(t *testing.T) {
 	home := t.TempDir()
 	cwd := t.TempDir()
-	t.Setenv("CJV_HOME", home)
+	config.IsolateForTest(t, home)
 	t.Setenv("CJV_TOOLCHAIN", "")
 	require.NoError(t, config.EnsureDirs())
 	t.Chdir(cwd)
@@ -75,7 +75,7 @@ targets = ["ohos"]
 
 	settings := config.DefaultSettings()
 	settings.AutoInstall = true
-	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, "settings.toml")))
+	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 
 	oldAutoInstall := resolve.AutoInstallFunc
 	var gotInput string

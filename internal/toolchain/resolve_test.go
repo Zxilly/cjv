@@ -16,7 +16,7 @@ import (
 func TestResolveActiveToolchain_UsesDefault(t *testing.T) {
 	home := t.TempDir()
 	cwd := t.TempDir()
-	t.Setenv("CJV_HOME", home)
+	config.IsolateForTest(t, home)
 
 	t.Setenv("CJV_TOOLCHAIN", "")
 
@@ -28,7 +28,7 @@ func TestResolveActiveToolchain_UsesDefault(t *testing.T) {
 
 	settings := config.DefaultSettings()
 	settings.DefaultToolchain = "lts-1.0.5"
-	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, "settings.toml")))
+	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 
 	dir, name, source, err := ResolveActiveToolchain()
 	require.NoError(t, err)
@@ -40,7 +40,7 @@ func TestResolveActiveToolchain_UsesDefault(t *testing.T) {
 func TestResolveActiveToolchain_EnvVarOverridesDefault(t *testing.T) {
 	home := t.TempDir()
 	cwd := t.TempDir()
-	t.Setenv("CJV_HOME", home)
+	config.IsolateForTest(t, home)
 
 	t.Chdir(cwd)
 
@@ -50,7 +50,7 @@ func TestResolveActiveToolchain_EnvVarOverridesDefault(t *testing.T) {
 
 	settings := config.DefaultSettings()
 	settings.DefaultToolchain = "lts-1.0.5"
-	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, "settings.toml")))
+	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 
 	// CJV_TOOLCHAIN env var should override the default
 	t.Setenv("CJV_TOOLCHAIN", "sts-2.0.0")
@@ -65,14 +65,14 @@ func TestResolveActiveToolchain_EnvVarOverridesDefault(t *testing.T) {
 func TestResolveActiveToolchain_RejectsTargetVariant(t *testing.T) {
 	home := t.TempDir()
 	cwd := t.TempDir()
-	t.Setenv("CJV_HOME", home)
+	config.IsolateForTest(t, home)
 	t.Chdir(cwd)
 
 	name := "sts-2.0.0-win32-x64-ohos"
 	require.NoError(t, os.MkdirAll(filepath.Join(home, "toolchains", name), 0o755))
 	settings := config.DefaultSettings()
 	settings.DefaultToolchain = name
-	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, "settings.toml")))
+	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 	t.Setenv("CJV_TOOLCHAIN", name)
 
 	_, _, _, err := ResolveActiveToolchain()
@@ -83,7 +83,7 @@ func TestResolveActiveToolchain_RejectsTargetVariant(t *testing.T) {
 func TestResolveActiveToolchain_NoConfig(t *testing.T) {
 	home := t.TempDir()
 	cwd := t.TempDir()
-	t.Setenv("CJV_HOME", home)
+	config.IsolateForTest(t, home)
 
 	t.Setenv("CJV_TOOLCHAIN", "")
 
@@ -91,7 +91,7 @@ func TestResolveActiveToolchain_NoConfig(t *testing.T) {
 
 	// No default, no env var, no toolchain file
 	settings := config.DefaultSettings()
-	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, "settings.toml")))
+	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 
 	_, _, _, err := ResolveActiveToolchain()
 	assert.Error(t, err, "should error when no toolchain is configured")

@@ -18,7 +18,7 @@ import (
 
 func TestUpdateAll_NoToolchains(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("CJV_HOME", home)
+	config.IsolateForTest(t, home)
 
 	_, err := updateAll(context.Background())
 	assert.NoError(t, err, "no toolchains should be a no-op")
@@ -26,14 +26,14 @@ func TestUpdateAll_NoToolchains(t *testing.T) {
 
 func TestUpdateAll_WithInstalledToolchain(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("CJV_HOME", home)
+	config.IsolateForTest(t, home)
 	require.NoError(t, config.EnsureDirs())
 
 	// Install first
 	server := validMockServer(t)
 	settings := config.DefaultSettings()
 	settings.ManifestURL = server.URL + "/sdk-versions.json"
-	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, "settings.toml")))
+	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 	require.NoError(t, InstallToolchainWithOptions(context.Background(), "lts", false))
 
 	// Update all — should check for updates (already latest)
@@ -43,13 +43,13 @@ func TestUpdateAll_WithInstalledToolchain(t *testing.T) {
 
 func TestReinstallChannel_AlreadyUpToDate(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("CJV_HOME", home)
+	config.IsolateForTest(t, home)
 	require.NoError(t, config.EnsureDirs())
 
 	server := validMockServer(t)
 	settings := config.DefaultSettings()
 	settings.ManifestURL = server.URL + "/sdk-versions.json"
-	settingsPath := filepath.Join(home, "settings.toml")
+	settingsPath := filepath.Join(home, ".cjv", "settings.toml")
 	require.NoError(t, config.SaveSettings(&settings, settingsPath))
 	require.NoError(t, InstallToolchainWithOptions(context.Background(), "lts", false))
 
@@ -64,13 +64,13 @@ func TestReinstallChannel_AlreadyUpToDate(t *testing.T) {
 
 func TestUpdateSingle_ChannelName(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("CJV_HOME", home)
+	config.IsolateForTest(t, home)
 	require.NoError(t, config.EnsureDirs())
 
 	server := validMockServer(t)
 	settings := config.DefaultSettings()
 	settings.ManifestURL = server.URL + "/sdk-versions.json"
-	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, "settings.toml")))
+	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 	require.NoError(t, InstallToolchainWithOptions(context.Background(), "lts", false))
 
 	// Update by channel name
@@ -80,7 +80,7 @@ func TestUpdateSingle_ChannelName(t *testing.T) {
 
 func TestUpdateSingle_TargetVariantUpdatesVariant(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("CJV_HOME", home)
+	config.IsolateForTest(t, home)
 	require.NoError(t, config.EnsureDirs())
 
 	targetKey, err := dist.CurrentTargetTuple("", "ohos")
@@ -92,7 +92,7 @@ func TestUpdateSingle_TargetVariantUpdatesVariant(t *testing.T) {
 	server := mockServerWithTargetSDKs(t, toolchain.STS, "2.0.0", "ohos")
 	settings := config.DefaultSettings()
 	settings.ManifestURL = server.URL + "/sdk-versions.json"
-	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, "settings.toml")))
+	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 
 	_, err = updateSingle(context.Background(), oldName)
 	require.NoError(t, err)
@@ -105,7 +105,7 @@ func TestUpdateSingle_TargetVariantUpdatesVariant(t *testing.T) {
 
 func TestFindInstalledForChannel_Nightly(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("CJV_HOME", home)
+	config.IsolateForTest(t, home)
 
 	tcDir := filepath.Join(home, "toolchains")
 	require.NoError(t, os.MkdirAll(filepath.Join(tcDir, "nightly-20260301"), 0o755))
@@ -117,13 +117,13 @@ func TestFindInstalledForChannel_Nightly(t *testing.T) {
 
 func TestRunUpdate_WithSpecificName(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("CJV_HOME", home)
+	config.IsolateForTest(t, home)
 	require.NoError(t, config.EnsureDirs())
 
 	server := validMockServer(t)
 	settings := config.DefaultSettings()
 	settings.ManifestURL = server.URL + "/sdk-versions.json"
-	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, "settings.toml")))
+	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 	require.NoError(t, InstallToolchainWithOptions(context.Background(), "lts", false))
 
 	cmd := &cobra.Command{}
@@ -134,7 +134,7 @@ func TestRunUpdate_WithSpecificName(t *testing.T) {
 
 func TestReinstallChannel_UpgradesToNewerVersion(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("CJV_HOME", home)
+	config.IsolateForTest(t, home)
 	require.NoError(t, config.EnsureDirs())
 
 	// Fake an old installed version (just a directory)
@@ -146,7 +146,7 @@ func TestReinstallChannel_UpgradesToNewerVersion(t *testing.T) {
 	settings := config.DefaultSettings()
 	settings.ManifestURL = server.URL + "/sdk-versions.json"
 	settings.DefaultToolchain = "lts-1.0.0"
-	settingsPath := filepath.Join(home, "settings.toml")
+	settingsPath := filepath.Join(home, ".cjv", "settings.toml")
 	require.NoError(t, config.SaveSettings(&settings, settingsPath))
 
 	// Reinstall should upgrade from 1.0.0 to 1.0.5
@@ -165,7 +165,7 @@ func TestReinstallChannel_UpgradesToNewerVersion(t *testing.T) {
 
 func TestReinstallChannelForPlatform_UpdatesTargetVariant(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("CJV_HOME", home)
+	config.IsolateForTest(t, home)
 	require.NoError(t, config.EnsureDirs())
 
 	targetKey, err := dist.CurrentTargetTuple("", "ohos")
@@ -176,7 +176,7 @@ func TestReinstallChannelForPlatform_UpdatesTargetVariant(t *testing.T) {
 	server := mockServerWithTargetSDKs(t, toolchain.STS, "2.0.0", "ohos")
 	settings := config.DefaultSettings()
 	settings.ManifestURL = server.URL + "/sdk-versions.json"
-	settingsPath := filepath.Join(home, "settings.toml")
+	settingsPath := filepath.Join(home, ".cjv", "settings.toml")
 	require.NoError(t, config.SaveSettings(&settings, settingsPath))
 
 	sf := config.NewSettingsFile(settingsPath)
@@ -199,7 +199,7 @@ func TestReinstallChannelForPlatform_UpdatesTargetVariant(t *testing.T) {
 
 func TestReinstallChannel_UpdatesDefaultToolchain(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("CJV_HOME", home)
+	config.IsolateForTest(t, home)
 	require.NoError(t, config.EnsureDirs())
 
 	require.NoError(t, os.MkdirAll(filepath.Join(home, "toolchains", "lts-1.0.0"), 0o755))
@@ -208,7 +208,7 @@ func TestReinstallChannel_UpdatesDefaultToolchain(t *testing.T) {
 	settings := config.DefaultSettings()
 	settings.ManifestURL = server.URL + "/sdk-versions.json"
 	settings.DefaultToolchain = "lts-1.0.0"
-	settingsPath := filepath.Join(home, "settings.toml")
+	settingsPath := filepath.Join(home, ".cjv", "settings.toml")
 	require.NoError(t, config.SaveSettings(&settings, settingsPath))
 
 	sf2 := config.NewSettingsFile(settingsPath)
@@ -216,14 +216,14 @@ func TestReinstallChannel_UpdatesDefaultToolchain(t *testing.T) {
 	require.NoError(t, err)
 
 	// Default should be updated to new version
-	reloaded, _ := config.LoadSettings(filepath.Join(home, "settings.toml"))
+	reloaded, _ := config.LoadSettings(filepath.Join(home, ".cjv", "settings.toml"))
 	assert.Equal(t, "lts-1.0.5", reloaded.DefaultToolchain,
 		"default should be updated from old version to new version")
 }
 
 func TestReinstallChannel_UpdatesOverrides(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("CJV_HOME", home)
+	config.IsolateForTest(t, home)
 	require.NoError(t, config.EnsureDirs())
 
 	require.NoError(t, os.MkdirAll(filepath.Join(home, "toolchains", "lts-1.0.0"), 0o755))
@@ -233,14 +233,14 @@ func TestReinstallChannel_UpdatesOverrides(t *testing.T) {
 	settings.ManifestURL = server.URL + "/sdk-versions.json"
 	settings.Overrides["C:\\project-a"] = "lts-1.0.0"
 	settings.Overrides["C:\\project-b"] = "sts-2.0.0" // different channel, keep
-	settingsPath := filepath.Join(home, "settings.toml")
+	settingsPath := filepath.Join(home, ".cjv", "settings.toml")
 	require.NoError(t, config.SaveSettings(&settings, settingsPath))
 
 	sf3 := config.NewSettingsFile(settingsPath)
 	_, _, err := reinstallChannel(context.Background(), toolchain.LTS, "lts-1.0.0", &settings, sf3, newManifestFetcher(settings.ManifestURL))
 	require.NoError(t, err)
 
-	reloaded, _ := config.LoadSettings(filepath.Join(home, "settings.toml"))
+	reloaded, _ := config.LoadSettings(filepath.Join(home, ".cjv", "settings.toml"))
 	assert.Equal(t, "lts-1.0.5", reloaded.Overrides["C:\\project-a"],
 		"override should be updated to new version")
 	assert.Equal(t, "sts-2.0.0", reloaded.Overrides["C:\\project-b"],
@@ -251,7 +251,7 @@ func TestReinstallChannel_UpdatesOverrides(t *testing.T) {
 
 func TestRunUpdate_NoArgs(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("CJV_HOME", home)
+	config.IsolateForTest(t, home)
 
 	cmd := &cobra.Command{}
 	err := runUpdate(cmd, nil)
@@ -260,13 +260,13 @@ func TestRunUpdate_NoArgs(t *testing.T) {
 
 func TestRunUpdate_WithToolchain(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("CJV_HOME", home)
+	config.IsolateForTest(t, home)
 	require.NoError(t, config.EnsureDirs())
 
 	server := validMockServer(t)
 	settings := config.DefaultSettings()
 	settings.ManifestURL = server.URL + "/sdk-versions.json"
-	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, "settings.toml")))
+	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 	require.NoError(t, InstallToolchainWithOptions(context.Background(), "lts", false))
 
 	cmd := &cobra.Command{}
@@ -276,12 +276,12 @@ func TestRunUpdate_WithToolchain(t *testing.T) {
 
 func TestRunUpdateRunsSelfCheckWhenSettingsAvailable(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("CJV_HOME", home)
+	config.IsolateForTest(t, home)
 	require.NoError(t, config.EnsureDirs())
 	require.NoError(t, os.MkdirAll(filepath.Join(home, "toolchains", "local-sdk"), 0o755))
 	settings := config.DefaultSettings()
 	settings.AutoSelfUpdate = config.AutoSelfUpdateCheck
-	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, "settings.toml")))
+	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 
 	oldNoSelfUpdate := noSelfUpdate
 	noSelfUpdate = false
@@ -294,13 +294,13 @@ func TestRunUpdateRunsSelfCheckWhenSettingsAvailable(t *testing.T) {
 
 func TestRunUpdate_SingleToolchain(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("CJV_HOME", home)
+	config.IsolateForTest(t, home)
 	require.NoError(t, config.EnsureDirs())
 
 	server := validMockServer(t)
 	settings := config.DefaultSettings()
 	settings.ManifestURL = server.URL + "/sdk-versions.json"
-	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, "settings.toml")))
+	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 	require.NoError(t, InstallToolchainWithOptions(context.Background(), "lts", false))
 
 	cmd := &cobra.Command{}
@@ -312,14 +312,14 @@ func TestRunUpdate_SingleToolchain(t *testing.T) {
 
 func TestUpdateSingle_ExistingToolchain(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("CJV_HOME", home)
+	config.IsolateForTest(t, home)
 	require.NoError(t, config.EnsureDirs())
 
 	// Install a toolchain first
 	server := validMockServer(t)
 	settings := config.DefaultSettings()
 	settings.ManifestURL = server.URL + "/sdk-versions.json"
-	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, "settings.toml")))
+	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 	require.NoError(t, InstallToolchainWithOptions(context.Background(), "lts", false))
 
 	// Update the installed toolchain
@@ -329,7 +329,7 @@ func TestUpdateSingle_ExistingToolchain(t *testing.T) {
 
 func TestUpdateSingle_UnknownToolchain(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("CJV_HOME", home)
+	config.IsolateForTest(t, home)
 
 	_, err := updateSingle(context.Background(), "nonexistent-99.99")
 	assert.Error(t, err)
@@ -342,10 +342,10 @@ func TestUpdateSingleRejectsInvalidCustomMissingChannelAndMissingVariant(t *test
 	require.Error(t, err)
 
 	home := t.TempDir()
-	t.Setenv("CJV_HOME", home)
+	config.IsolateForTest(t, home)
 	require.NoError(t, config.EnsureDirs())
 	settings := config.DefaultSettings()
-	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, "settings.toml")))
+	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 
 	_, err = updateSingle(context.Background(), "lts")
 	require.Error(t, err)
@@ -363,7 +363,7 @@ func TestUpdateSingleRejectsInvalidCustomMissingChannelAndMissingVariant(t *test
 
 func TestFindInstalledForChannel_FindsLatest(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("CJV_HOME", home)
+	config.IsolateForTest(t, home)
 
 	tcDir := filepath.Join(home, "toolchains")
 	require.NoError(t, os.MkdirAll(filepath.Join(tcDir, "lts-1.0.0"), 0o755))
@@ -378,7 +378,7 @@ func TestFindInstalledForChannel_FindsLatest(t *testing.T) {
 
 func TestFindInstalledForChannel_IgnoresTargetVariants(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("CJV_HOME", home)
+	config.IsolateForTest(t, home)
 
 	targetKey, err := dist.CurrentTargetTuple("", "ohos")
 	require.NoError(t, err)
@@ -391,7 +391,7 @@ func TestFindInstalledForChannel_IgnoresTargetVariants(t *testing.T) {
 
 func TestFindInstalledForChannel_ChannelNotInstalled(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("CJV_HOME", home)
+	config.IsolateForTest(t, home)
 
 	require.NoError(t, os.MkdirAll(filepath.Join(home, "toolchains", "lts-1.0.5"), 0o755))
 
@@ -402,7 +402,7 @@ func TestFindInstalledForChannel_ChannelNotInstalled(t *testing.T) {
 
 func TestFindInstalledForChannel_NoToolchainsDir(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("CJV_HOME", home)
+	config.IsolateForTest(t, home)
 
 	name, err := findInstalledForChannel(toolchain.LTS)
 	require.NoError(t, err)

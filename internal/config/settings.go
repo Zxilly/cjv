@@ -31,6 +31,7 @@ const currentSettingsVersion = 1
 
 type Settings struct {
 	Version          int               `toml:"version"`
+	Home             string            `toml:"home,omitempty"`
 	DefaultToolchain string            `toml:"default_toolchain"`
 	ManifestURL      string            `toml:"manifest_url"`
 	AutoSelfUpdate   string            `toml:"auto_self_update"`

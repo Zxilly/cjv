@@ -27,13 +27,13 @@ func setupFakeToolchainForCLI(t *testing.T, home, name string) {
 
 func TestEnvsetupRun_NoToolchain(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("CJV_HOME", home)
+	config.IsolateForTest(t, home)
 	t.Setenv("CJV_TOOLCHAIN", "")
 	config.ResetDefaultSettingsFileCache()
 	config.ResetCachedUserHomeDir()
 
 	settings := config.DefaultSettings()
-	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, "settings.toml")))
+	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 
 	t.Chdir(t.TempDir())
 
@@ -44,7 +44,7 @@ func TestEnvsetupRun_NoToolchain(t *testing.T) {
 
 func TestEnvsetupRun_OutputContainsExport(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("CJV_HOME", home)
+	config.IsolateForTest(t, home)
 	t.Setenv("CJV_TOOLCHAIN", "")
 	config.ResetDefaultSettingsFileCache()
 	config.ResetCachedUserHomeDir()
@@ -55,7 +55,7 @@ func TestEnvsetupRun_OutputContainsExport(t *testing.T) {
 
 	settings := config.DefaultSettings()
 	settings.DefaultToolchain = "lts-1.0.5"
-	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, "settings.toml")))
+	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 
 	t.Chdir(t.TempDir())
 

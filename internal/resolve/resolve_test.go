@@ -87,10 +87,8 @@ func TestActiveRejectsTargetVariantAsActiveToolchain(t *testing.T) {
 func TestActiveAutoInstallsMissingTargetsAndComponents(t *testing.T) {
 	home := t.TempDir()
 	cwd := t.TempDir()
-	t.Setenv(config.EnvHome, home)
+	config.IsolateForTest(t, home)
 	t.Setenv(config.EnvToolchain, "")
-	config.ResetDefaultSettingsFileCache()
-	t.Cleanup(config.ResetDefaultSettingsFileCache)
 	require.NoError(t, config.EnsureDirs())
 	t.Chdir(cwd)
 
@@ -105,7 +103,7 @@ components = ["docs"]
 
 	settings := config.DefaultSettings()
 	settings.AutoInstall = true
-	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, "settings.toml")))
+	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 
 	oldInstall := AutoInstallFunc
 	oldComponents := AutoInstallComponentsFunc
@@ -146,10 +144,8 @@ components = ["docs"]
 
 func TestActiveReportsMissingComponentWhenAutoInstallDisabled(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv(config.EnvHome, home)
+	config.IsolateForTest(t, home)
 	t.Setenv(config.EnvToolchain, "")
-	config.ResetDefaultSettingsFileCache()
-	t.Cleanup(config.ResetDefaultSettingsFileCache)
 	require.NoError(t, config.EnsureDirs())
 
 	tcName := "lts-1.0.5"
@@ -157,7 +153,7 @@ func TestActiveReportsMissingComponentWhenAutoInstallDisabled(t *testing.T) {
 	settings := config.DefaultSettings()
 	settings.DefaultToolchain = tcName
 	settings.AutoInstall = false
-	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, "settings.toml")))
+	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 
 	err := ensureComponents(context.Background(), tcName, filepath.Join(home, "toolchains", tcName), &settings, []string{"docs"})
 
@@ -167,16 +163,14 @@ func TestActiveReportsMissingComponentWhenAutoInstallDisabled(t *testing.T) {
 
 func TestActiveAutoInstallsMissingHostToolchain(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv(config.EnvHome, home)
+	config.IsolateForTest(t, home)
 	t.Setenv(config.EnvToolchain, "")
-	config.ResetDefaultSettingsFileCache()
-	t.Cleanup(config.ResetDefaultSettingsFileCache)
 	require.NoError(t, config.EnsureDirs())
 
 	settings := config.DefaultSettings()
 	settings.DefaultToolchain = "lts-1.0.5"
 	settings.AutoInstall = true
-	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, "settings.toml")))
+	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 
 	oldInstall := AutoInstallFunc
 	var gotInput string
@@ -195,10 +189,8 @@ func TestActiveAutoInstallsMissingHostToolchain(t *testing.T) {
 
 func TestActiveRunsToolchainRecoveryBeforeResolving(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv(config.EnvHome, home)
+	config.IsolateForTest(t, home)
 	t.Setenv(config.EnvToolchain, "")
-	config.ResetDefaultSettingsFileCache()
-	t.Cleanup(config.ResetDefaultSettingsFileCache)
 	require.NoError(t, config.EnsureDirs())
 
 	backup := filepath.Join(home, "toolchains", ".fstx-crash", "0-lts-1.0.5")
@@ -208,7 +200,7 @@ func TestActiveRunsToolchainRecoveryBeforeResolving(t *testing.T) {
 	settings := config.DefaultSettings()
 	settings.DefaultToolchain = "lts"
 	settings.AutoInstall = false
-	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, "settings.toml")))
+	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 
 	active, err := Active(context.Background(), "")
 
@@ -219,16 +211,14 @@ func TestActiveRunsToolchainRecoveryBeforeResolving(t *testing.T) {
 
 func TestActiveAutoInstallFailureReportsToolchainMissing(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv(config.EnvHome, home)
+	config.IsolateForTest(t, home)
 	t.Setenv(config.EnvToolchain, "")
-	config.ResetDefaultSettingsFileCache()
-	t.Cleanup(config.ResetDefaultSettingsFileCache)
 	require.NoError(t, config.EnsureDirs())
 
 	settings := config.DefaultSettings()
 	settings.DefaultToolchain = "lts-1.0.5"
 	settings.AutoInstall = true
-	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, "settings.toml")))
+	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 
 	oldInstall := AutoInstallFunc
 	AutoInstallFunc = func(ctx context.Context, input string, targets []string) error {

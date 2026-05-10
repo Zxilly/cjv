@@ -20,13 +20,13 @@ func TestExecRun_NoArgs(t *testing.T) {
 
 func TestExecRun_NoToolchain(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("CJV_HOME", home)
+	config.IsolateForTest(t, home)
 	t.Setenv("CJV_TOOLCHAIN", "")
 	config.ResetDefaultSettingsFileCache()
 	config.ResetCachedUserHomeDir()
 
 	settings := config.DefaultSettings()
-	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, "settings.toml")))
+	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 
 	t.Chdir(t.TempDir())
 
@@ -55,7 +55,7 @@ func TestExtractPlusToolchainFromExecArgs(t *testing.T) {
 
 func TestExecRunExecutesCommandWithActiveToolchain(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv(config.EnvHome, home)
+	config.IsolateForTest(t, home)
 	t.Setenv(config.EnvToolchain, "")
 	config.ResetDefaultSettingsFileCache()
 	require.NoError(t, config.EnsureDirs())
@@ -63,7 +63,7 @@ func TestExecRunExecutesCommandWithActiveToolchain(t *testing.T) {
 
 	settings := config.DefaultSettings()
 	settings.DefaultToolchain = "lts-1.0.5"
-	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, "settings.toml")))
+	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 
 	cmd := &cobra.Command{}
 	cmd.SetContext(context.Background())

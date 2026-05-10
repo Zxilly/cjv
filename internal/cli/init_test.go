@@ -16,7 +16,7 @@ import (
 
 func TestRunInitNonInteractiveNoToolchainWritesManagedFiles(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv(config.EnvHome, home)
+	config.IsolateForTest(t, home)
 	config.ResetDefaultSettingsFileCache()
 
 	oldYes := initYes
@@ -46,7 +46,7 @@ func TestRunInitNonInteractiveNoToolchainWritesManagedFiles(t *testing.T) {
 		assert.FileExists(t, filepath.Join(home, "bin", proxy.PlatformBinaryName(tool)))
 	}
 
-	settings, err := config.LoadSettings(filepath.Join(home, "settings.toml"))
+	settings, err := config.LoadSettings(filepath.Join(home, ".cjv", "settings.toml"))
 	require.NoError(t, err)
 	assert.Equal(t, config.DefaultManifestURL, settings.ManifestURL)
 	assert.NoDirExists(t, filepath.Join(home, "toolchains", "lts-1.0.5"))
@@ -54,7 +54,7 @@ func TestRunInitNonInteractiveNoToolchainWritesManagedFiles(t *testing.T) {
 
 func TestRunInitContinuesWhenDefaultToolchainInstallFails(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv(config.EnvHome, home)
+	config.IsolateForTest(t, home)
 	config.ResetDefaultSettingsFileCache()
 
 	oldYes := initYes
@@ -80,7 +80,7 @@ func TestRunInitContinuesWhenDefaultToolchainInstallFails(t *testing.T) {
 
 func TestRunInitCoversAlreadyInstalledAndModifyPathBranches(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv(config.EnvHome, home)
+	config.IsolateForTest(t, home)
 	config.ResetDefaultSettingsFileCache()
 
 	oldYes := initYes
@@ -113,7 +113,7 @@ func TestRunInitCoversAlreadyInstalledAndModifyPathBranches(t *testing.T) {
 
 func TestRunInitPassesConfiguredComponentsToDefaultToolchainInstall(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv(config.EnvHome, home)
+	config.IsolateForTest(t, home)
 	config.ResetDefaultSettingsFileCache()
 
 	oldYes := initYes

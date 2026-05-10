@@ -37,7 +37,7 @@ func TestRun_RecursionLimitExceeded(t *testing.T) {
 func TestRun_NoToolchainConfigured(t *testing.T) {
 	home := t.TempDir()
 	cwd := t.TempDir()
-	t.Setenv("CJV_HOME", home)
+	config.IsolateForTest(t, home)
 
 	t.Setenv("CJV_TOOLCHAIN", "")
 	t.Setenv("CJV_RECURSION_COUNT", "")
@@ -47,7 +47,7 @@ func TestRun_NoToolchainConfigured(t *testing.T) {
 	// No default, no env var, no toolchain file → should error
 	settings := config.DefaultSettings()
 	settings.AutoInstall = false
-	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, "settings.toml")))
+	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 
 	err := Run(context.Background(), "cjc", nil)
 	assert.Error(t, err, "should error when no toolchain is configured")
@@ -56,7 +56,7 @@ func TestRun_NoToolchainConfigured(t *testing.T) {
 func TestRun_ToolchainNotInstalledNoAutoInstall(t *testing.T) {
 	home := t.TempDir()
 	cwd := t.TempDir()
-	t.Setenv("CJV_HOME", home)
+	config.IsolateForTest(t, home)
 
 	t.Setenv("CJV_TOOLCHAIN", "")
 	t.Setenv("CJV_RECURSION_COUNT", "")
@@ -68,7 +68,7 @@ func TestRun_ToolchainNotInstalledNoAutoInstall(t *testing.T) {
 	settings := config.DefaultSettings()
 	settings.DefaultToolchain = "lts-99.99.99"
 	settings.AutoInstall = false
-	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, "settings.toml")))
+	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 
 	err := Run(context.Background(), "cjc", nil)
 	assert.Error(t, err, "should error when toolchain is not installed and auto-install is off")
@@ -77,7 +77,7 @@ func TestRun_ToolchainNotInstalledNoAutoInstall(t *testing.T) {
 func TestRun_ToolNotFoundInToolchain(t *testing.T) {
 	home := t.TempDir()
 	cwd := t.TempDir()
-	t.Setenv("CJV_HOME", home)
+	config.IsolateForTest(t, home)
 
 	t.Setenv("CJV_TOOLCHAIN", "")
 	t.Setenv("CJV_RECURSION_COUNT", "")
@@ -88,7 +88,7 @@ func TestRun_ToolNotFoundInToolchain(t *testing.T) {
 	require.NoError(t, os.MkdirAll(filepath.Join(home, "toolchains", "lts-1.0.5"), 0o755))
 	settings := config.DefaultSettings()
 	settings.DefaultToolchain = "lts-1.0.5"
-	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, "settings.toml")))
+	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 
 	err := Run(context.Background(), "cjc", nil)
 	assert.Error(t, err, "should error when tool binary not found in toolchain")
@@ -97,7 +97,7 @@ func TestRun_ToolNotFoundInToolchain(t *testing.T) {
 func TestRun_PlusToolchainOverride(t *testing.T) {
 	home := t.TempDir()
 	cwd := t.TempDir()
-	t.Setenv("CJV_HOME", home)
+	config.IsolateForTest(t, home)
 
 	t.Setenv("CJV_RECURSION_COUNT", "")
 
@@ -107,7 +107,7 @@ func TestRun_PlusToolchainOverride(t *testing.T) {
 	require.NoError(t, os.MkdirAll(filepath.Join(home, "toolchains", "sts-2.0.0"), 0o755))
 	settings := config.DefaultSettings()
 	settings.AutoInstall = false
-	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, "settings.toml")))
+	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 
 	// "+sts-2.0.0" syntax overrides the toolchain for this invocation
 	err := Run(context.Background(), "cjc", []string{"+sts-2.0.0"})
@@ -122,7 +122,7 @@ func TestRun_ReachesBinaryExecution(t *testing.T) {
 	// will fail, but all the setup code should be covered.
 	home := t.TempDir()
 	cwd := t.TempDir()
-	t.Setenv("CJV_HOME", home)
+	config.IsolateForTest(t, home)
 
 	t.Setenv("CJV_TOOLCHAIN", "")
 	t.Setenv("CJV_RECURSION_COUNT", "")
@@ -141,7 +141,7 @@ func TestRun_ReachesBinaryExecution(t *testing.T) {
 	settings := config.DefaultSettings()
 	settings.DefaultToolchain = "lts-1.0.5"
 	settings.AutoInstall = false
-	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, "settings.toml")))
+	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 
 	// Run will find the binary and try to execute it.
 	// The stub is not a valid executable, so it will fail at execTool.
@@ -205,7 +205,7 @@ func TestRun_AutoInstallPath(t *testing.T) {
 	// This tests the auto-install code path in the proxy pipeline.
 	home := t.TempDir()
 	cwd := t.TempDir()
-	t.Setenv("CJV_HOME", home)
+	config.IsolateForTest(t, home)
 
 	t.Setenv("CJV_TOOLCHAIN", "")
 	t.Setenv("CJV_RECURSION_COUNT", "")
@@ -220,7 +220,7 @@ func TestRun_AutoInstallPath(t *testing.T) {
 	settings.DefaultToolchain = "lts"
 	settings.AutoInstall = true
 	settings.ManifestURL = server.URL + "/sdk-versions.json"
-	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, "settings.toml")))
+	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 
 	// Run will attempt auto-install when toolchain is not found.
 	// Whether auto-install succeeds depends on cli package integration,
@@ -232,7 +232,7 @@ func TestRun_AutoInstallPath(t *testing.T) {
 func TestRun_ToolchainFileTargetsTriggerAutoInstall(t *testing.T) {
 	home := t.TempDir()
 	cwd := t.TempDir()
-	t.Setenv("CJV_HOME", home)
+	config.IsolateForTest(t, home)
 	t.Setenv("CJV_TOOLCHAIN", "")
 	t.Setenv("CJV_RECURSION_COUNT", "")
 	t.Chdir(cwd)
@@ -248,7 +248,7 @@ targets = ["ohos", "android"]
 
 	settings := config.DefaultSettings()
 	settings.AutoInstall = true
-	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, "settings.toml")))
+	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 
 	var gotInput string
 	var gotTargets []string
@@ -275,7 +275,7 @@ targets = ["ohos", "android"]
 func TestRun_ToolchainFileTargetsMissingWithoutAutoInstallErrors(t *testing.T) {
 	home := t.TempDir()
 	cwd := t.TempDir()
-	t.Setenv("CJV_HOME", home)
+	config.IsolateForTest(t, home)
 	t.Setenv("CJV_TOOLCHAIN", "")
 	t.Setenv("CJV_RECURSION_COUNT", "")
 	t.Chdir(cwd)
@@ -291,7 +291,7 @@ targets = ["ohos"]
 
 	settings := config.DefaultSettings()
 	settings.AutoInstall = false
-	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, "settings.toml")))
+	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 
 	err := Run(context.Background(), "cjc", nil)
 	require.Error(t, err)

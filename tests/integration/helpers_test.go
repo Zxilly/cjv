@@ -158,11 +158,18 @@ func requireCI(t *testing.T) {
 // runCJVEnv runs the cjv binary with the given args and custom env additions.
 // This is the general-purpose runner; use runCJV for the common case with
 // CJV_NO_PATH_SETUP=1 automatically set.
+//
+// HOME and USERPROFILE are pinned to cjvHome so that the settings.toml the
+// subprocess reads/writes lives at <cjvHome>/.cjv/settings.toml — never the
+// developer's real home directory. This is required because settings.toml is
+// resolved from the OS user home, independently of CJV_HOME.
 func runCJVEnv(t *testing.T, binary, cjvHome string, extraEnv []string, args ...string) (string, string, error) {
 	t.Helper()
 	cmd := exec.Command(binary, args...)
 	cmd.Env = append(os.Environ(),
 		"CJV_HOME="+cjvHome,
+		"HOME="+cjvHome,
+		"USERPROFILE="+cjvHome,
 		"CJV_LANG=en",
 		"CJV_TOOLCHAIN=",
 	)
@@ -177,10 +184,15 @@ func runCJVEnv(t *testing.T, binary, cjvHome string, extraEnv []string, args ...
 }
 
 // installScriptEnv builds the env slice for install script exec.Commands.
+//
+// As with runCJVEnv, HOME and USERPROFILE are pinned to cjvHome so the
+// subprocess never reads or writes the developer's real settings.toml.
 func installScriptEnv(serverURL, cjvHome string, extra ...string) []string {
 	env := append(os.Environ(),
 		"CJV_UPDATE_ROOT="+serverURL,
 		"CJV_HOME="+cjvHome,
+		"HOME="+cjvHome,
+		"USERPROFILE="+cjvHome,
 		"CJV_LANG=en",
 		"CJV_NO_PATH_SETUP=1",
 	)

@@ -51,7 +51,11 @@ func setupIntegrationEnvWithoutManagedBinary(t *testing.T, serverURL string) str
 func writeIntegrationSettings(t *testing.T, cjvHome string, serverURL string) {
 	t.Helper()
 	settingsContent := fmt.Sprintf("manifest_url = %q\nauto_install = true\n", serverURL+"/sdk-versions.json")
-	require.NoError(t, os.WriteFile(filepath.Join(cjvHome, "settings.toml"), []byte(settingsContent), 0o644))
+	// Subprocesses run with HOME=cjvHome (see runCJVEnv), so settings.toml
+	// is resolved at <cjvHome>/.cjv/settings.toml.
+	settingsDir := filepath.Join(cjvHome, ".cjv")
+	require.NoError(t, os.MkdirAll(settingsDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(settingsDir, "settings.toml"), []byte(settingsContent), 0o644))
 }
 
 func copyBinary(t *testing.T, src, dst string) {

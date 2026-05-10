@@ -151,6 +151,9 @@ other = "Default toolchain: {{.Name}}"
 [SettingUpdated]
 other = "Setting '{{.Key}}' set to '{{.Value}}'"
 
+[SetHomeNoMigrate]
+other = "Note: existing data under the previous home is not migrated automatically. Move toolchains/downloads to {{.Path}} manually if needed."
+
 # === Check ===
 [AllUpToDate]
 other = "All toolchains are up to date"

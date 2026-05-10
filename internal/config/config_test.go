@@ -61,6 +61,9 @@ func TestPathFunctions_ConstructCorrectPaths(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("CJV_HOME", home)
 
+	// SettingsPath() is intentionally decoupled from CJV_HOME — it always
+	// lives under the OS user home so that the home path itself can be
+	// persisted as a setting. Tests for that live in home_resolve_test.go.
 	tests := []struct {
 		name   string
 		fn     func() (string, error)
@@ -71,7 +74,6 @@ func TestPathFunctions_ConstructCorrectPaths(t *testing.T) {
 		{"DownloadsDir", DownloadsDir, "downloads"},
 		{"DocsDir", DocsDir, "docs"},
 		{"StdxDir", StdxDir, "stdx"},
-		{"SettingsPath", SettingsPath, "settings.toml"},
 	}
 
 	for _, tt := range tests {
@@ -97,23 +99,24 @@ func TestPerToolchainPathFunctions(t *testing.T) {
 }
 
 func TestDefaultSettingsFileCachesByResolvedPath(t *testing.T) {
+	// SettingsPath() is now driven by the OS user home, so switch HOME (or
+	// USERPROFILE on Windows) to vary the resolved path and confirm the
+	// cache keys per resolved path rather than returning a stale instance.
 	home1 := t.TempDir()
 	home2 := t.TempDir()
-	ResetDefaultSettingsFileCache()
-	t.Cleanup(ResetDefaultSettingsFileCache)
 
-	t.Setenv(EnvHome, home1)
+	IsolateForTest(t, home1)
 	sf1, err := DefaultSettingsFile()
 	require.NoError(t, err)
 	sf1Again, err := DefaultSettingsFile()
 	require.NoError(t, err)
 	assert.Same(t, sf1, sf1Again)
 
-	t.Setenv(EnvHome, home2)
+	IsolateForTest(t, home2)
 	sf2, err := DefaultSettingsFile()
 	require.NoError(t, err)
 	assert.NotSame(t, sf1, sf2)
-	assert.Equal(t, filepath.Join(home2, "settings.toml"), sf2.Path())
+	assert.Equal(t, filepath.Join(home2, ".cjv", "settings.toml"), sf2.Path())
 }
 
 func TestResetCachedUserHomeDir(t *testing.T) {

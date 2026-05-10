@@ -11,9 +11,9 @@ import (
 )
 
 func TestOverrideSetPreservesBareVersion(t *testing.T) {
-	home := t.TempDir()
+	tmp := t.TempDir()
 	dir := t.TempDir()
-	t.Setenv(config.EnvHome, home)
+	config.IsolateForTest(t, tmp)
 
 	prev := overrideSetPath
 	overrideSetPath = dir
@@ -23,15 +23,17 @@ func TestOverrideSetPreservesBareVersion(t *testing.T) {
 
 	require.NoError(t, overrideSetCmd.RunE(overrideSetCmd, []string{"1.0.5"}))
 
-	settings, err := config.LoadSettings(filepath.Join(home, "settings.toml"))
+	settingsPath, err := config.SettingsPath()
+	require.NoError(t, err)
+	settings, err := config.LoadSettings(settingsPath)
 	require.NoError(t, err)
 	assert.Equal(t, "1.0.5", settings.Overrides[config.NormalizePath(dir)])
 }
 
 func TestOverrideSetRejectsTargetVariant(t *testing.T) {
-	home := t.TempDir()
+	tmp := t.TempDir()
 	dir := t.TempDir()
-	t.Setenv(config.EnvHome, home)
+	config.IsolateForTest(t, tmp)
 
 	prev := overrideSetPath
 	overrideSetPath = dir
@@ -43,7 +45,9 @@ func TestOverrideSetRejectsTargetVariant(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "target variant")
 
-	settings, err := config.LoadSettings(filepath.Join(home, "settings.toml"))
+	settingsPath, err := config.SettingsPath()
+	require.NoError(t, err)
+	settings, err := config.LoadSettings(settingsPath)
 	require.NoError(t, err)
 	assert.Empty(t, settings.Overrides)
 }
@@ -70,8 +74,8 @@ func TestResolveOverrideDir_FallsBackToCwd(t *testing.T) {
 // to directories that no longer exist on disk.
 
 func TestUnsetNonexistentOverrides_RemovesStale(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("CJV_HOME", home)
+	tmp := t.TempDir()
+	config.IsolateForTest(t, tmp)
 
 	existingDir := t.TempDir() // this dir exists
 	goneDir := filepath.Join(t.TempDir(), "gone")
@@ -80,7 +84,8 @@ func TestUnsetNonexistentOverrides_RemovesStale(t *testing.T) {
 	stg := config.DefaultSettings()
 	stg.Overrides[existingDir] = "lts-1.0.5"
 	stg.Overrides[goneDir] = "sts-2.0.0"
-	settingsPath := filepath.Join(home, "settings.toml")
+	settingsPath, err := config.SettingsPath()
+	require.NoError(t, err)
 	require.NoError(t, config.SaveSettings(&stg, settingsPath))
 
 	sf := config.NewSettingsFile(settingsPath)
@@ -93,8 +98,8 @@ func TestUnsetNonexistentOverrides_RemovesStale(t *testing.T) {
 }
 
 func TestUnsetNonexistentOverrides_NoOpWhenAllExist(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("CJV_HOME", home)
+	tmp := t.TempDir()
+	config.IsolateForTest(t, tmp)
 
 	dir1 := t.TempDir()
 	dir2 := t.TempDir()
@@ -102,7 +107,8 @@ func TestUnsetNonexistentOverrides_NoOpWhenAllExist(t *testing.T) {
 	stg := config.DefaultSettings()
 	stg.Overrides[dir1] = "lts-1.0.5"
 	stg.Overrides[dir2] = "sts-2.0.0"
-	settingsPath := filepath.Join(home, "settings.toml")
+	settingsPath, err := config.SettingsPath()
+	require.NoError(t, err)
 	require.NoError(t, config.SaveSettings(&stg, settingsPath))
 
 	sf := config.NewSettingsFile(settingsPath)
@@ -112,15 +118,15 @@ func TestUnsetNonexistentOverrides_NoOpWhenAllExist(t *testing.T) {
 }
 
 func TestOverrideUnsetCommandRemovesMatchingNormalizedPath(t *testing.T) {
-	home := t.TempDir()
+	tmp := t.TempDir()
 	dir := t.TempDir()
-	t.Setenv(config.EnvHome, home)
-	config.ResetDefaultSettingsFileCache()
-	t.Cleanup(config.ResetDefaultSettingsFileCache)
+	config.IsolateForTest(t, tmp)
 
 	settings := config.DefaultSettings()
 	settings.Overrides[config.NormalizePath(dir)] = "lts-1.0.5"
-	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, "settings.toml")))
+	settingsPath, err := config.SettingsPath()
+	require.NoError(t, err)
+	require.NoError(t, config.SaveSettings(&settings, settingsPath))
 
 	oldPath := overrideUnsetPath
 	oldNonexistent := overrideUnsetNonexistent
@@ -133,17 +139,15 @@ func TestOverrideUnsetCommandRemovesMatchingNormalizedPath(t *testing.T) {
 
 	require.NoError(t, overrideUnsetCmd.RunE(overrideUnsetCmd, nil))
 
-	got, err := config.LoadSettings(filepath.Join(home, "settings.toml"))
+	got, err := config.LoadSettings(settingsPath)
 	require.NoError(t, err)
 	assert.Empty(t, got.Overrides)
 }
 
 func TestOverrideUnsetCommandErrorsWhenMissing(t *testing.T) {
-	home := t.TempDir()
+	tmp := t.TempDir()
 	dir := t.TempDir()
-	t.Setenv(config.EnvHome, home)
-	config.ResetDefaultSettingsFileCache()
-	t.Cleanup(config.ResetDefaultSettingsFileCache)
+	config.IsolateForTest(t, tmp)
 
 	oldPath := overrideUnsetPath
 	oldNonexistent := overrideUnsetNonexistent
@@ -160,17 +164,17 @@ func TestOverrideUnsetCommandErrorsWhenMissing(t *testing.T) {
 }
 
 func TestOverrideListCommandHandlesEmptyAndSortedEntries(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv(config.EnvHome, home)
-	config.ResetDefaultSettingsFileCache()
-	t.Cleanup(config.ResetDefaultSettingsFileCache)
+	tmp := t.TempDir()
+	config.IsolateForTest(t, tmp)
 
 	require.NoError(t, overrideListCmd.RunE(overrideListCmd, nil))
 
 	settings := config.DefaultSettings()
-	settings.Overrides[filepath.Join(home, "b")] = "sts"
-	settings.Overrides[filepath.Join(home, "a")] = "lts"
-	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, "settings.toml")))
+	settings.Overrides[filepath.Join(tmp, "b")] = "sts"
+	settings.Overrides[filepath.Join(tmp, "a")] = "lts"
+	settingsPath, err := config.SettingsPath()
+	require.NoError(t, err)
+	require.NoError(t, config.SaveSettings(&settings, settingsPath))
 
 	require.NoError(t, overrideListCmd.RunE(overrideListCmd, nil))
 }

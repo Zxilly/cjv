@@ -83,13 +83,13 @@ func listRemoteMockServer(t *testing.T) *httptest.Server {
 func setupListRemote(t *testing.T) {
 	t.Helper()
 	home := t.TempDir()
-	t.Setenv("CJV_HOME", home)
+	config.IsolateForTest(t, home)
 	require.NoError(t, config.EnsureDirs())
 	server := listRemoteMockServer(t)
 	settings := config.DefaultSettings()
 	settings.ManifestURL = server.URL + "/sdk-versions.json"
 	settings.GitCodeAPIKey = "" // unset so nightly fetch returns the missing-key error
-	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, "settings.toml")))
+	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 }
 
 // resetListRemoteFlags clears state between subtests because flags are
@@ -332,7 +332,7 @@ func TestRunToolchainListRemote_AllPlatforms_NightlyOnly_NoManifestCall(t *testi
 	// A 500 from /sdk-versions.json proves the manifest endpoint is never hit
 	// when only nightly is requested.
 	home := t.TempDir()
-	t.Setenv("CJV_HOME", home)
+	config.IsolateForTest(t, home)
 	require.NoError(t, config.EnsureDirs())
 
 	mux := http.NewServeMux()
@@ -344,7 +344,7 @@ func TestRunToolchainListRemote_AllPlatforms_NightlyOnly_NoManifestCall(t *testi
 
 	settings := config.DefaultSettings()
 	settings.ManifestURL = server.URL + "/sdk-versions.json"
-	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, "settings.toml")))
+	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 
 	resetListRemoteFlags()
 	toolchainListRemoteAllPlatforms = true
@@ -429,7 +429,7 @@ func TestParseListRemoteChannel(t *testing.T) {
 
 func TestRunToolchainListRemote_TargetMutuallyExclusiveWithAllPlatforms(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("CJV_HOME", home)
+	config.IsolateForTest(t, home)
 	require.NoError(t, config.EnsureDirs())
 	resetListRemoteFlags()
 

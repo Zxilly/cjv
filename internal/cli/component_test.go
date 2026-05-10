@@ -19,7 +19,7 @@ import (
 func setupComponentCLITest(t *testing.T, tcName string) string {
 	t.Helper()
 	home := t.TempDir()
-	t.Setenv("CJV_HOME", home)
+	config.IsolateForTest(t, home)
 	config.ResetDefaultSettingsFileCache()
 	tcDir := filepath.Join(home, "toolchains", tcName)
 	require.NoError(t, os.MkdirAll(tcDir, 0o755))
@@ -53,7 +53,7 @@ func TestResolveToolchainArgValidationAndActiveFallback(t *testing.T) {
 	require.Error(t, err)
 
 	home := t.TempDir()
-	t.Setenv(config.EnvHome, home)
+	config.IsolateForTest(t, home)
 	config.ResetDefaultSettingsFileCache()
 	t.Cleanup(config.ResetDefaultSettingsFileCache)
 	require.NoError(t, config.EnsureDirs())
@@ -66,7 +66,7 @@ func TestResolveToolchainArgValidationAndActiveFallback(t *testing.T) {
 	require.NoError(t, os.MkdirAll(tcDir, 0o755))
 	settings := config.DefaultSettings()
 	settings.DefaultToolchain = tcName
-	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, "settings.toml")))
+	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 
 	gotDir, gotName, err := resolveToolchainArg("")
 

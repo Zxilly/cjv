@@ -6,13 +6,14 @@ import (
 	"runtime"
 	"testing"
 
+	"github.com/Zxilly/cjv/internal/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func TestPurgeDownloadsDirRemovesAll(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("CJV_HOME", home)
+	config.IsolateForTest(t, home)
 
 	downloads := filepath.Join(home, "downloads")
 	require.NoError(t, os.MkdirAll(downloads, 0o755))
@@ -35,7 +36,7 @@ func TestPurgeDownloadsDirRemovesAll(t *testing.T) {
 
 func TestPurgeDownloadsDirEmptyOrMissing(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("CJV_HOME", home)
+	config.IsolateForTest(t, home)
 
 	assert.NotPanics(t, func() {
 		removed, err := purgeDownloadsDir()
@@ -50,7 +51,7 @@ func TestPurgeDownloadsDirRemovesReadonlyEntry(t *testing.T) {
 	}
 
 	home := t.TempDir()
-	t.Setenv("CJV_HOME", home)
+	config.IsolateForTest(t, home)
 
 	cacheFile := filepath.Join(home, "downloads", "archive.zip")
 	require.NoError(t, os.MkdirAll(filepath.Dir(cacheFile), 0o755))

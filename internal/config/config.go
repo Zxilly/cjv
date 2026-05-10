@@ -1,10 +1,45 @@
 package config
 
 import (
+	"log/slog"
 	"os"
 	"path/filepath"
 	"sync"
 )
+
+// HomeSource indicates which mechanism resolved the active CJV_HOME.
+// The zero value HomeSourceUnknown signals "not yet resolved" so an
+// uninitialized value is never silently mistaken for a real source.
+type HomeSource int
+
+const (
+	HomeSourceUnknown HomeSource = iota
+	// HomeSourceDefault means the path fell back to <user-home>/.cjv.
+	HomeSourceDefault
+	// HomeSourcePersisted means the path came from settings.toml.
+	HomeSourcePersisted
+	// HomeSourceEnv means the CJV_HOME environment variable supplied the path.
+	HomeSourceEnv
+)
+
+func (s HomeSource) String() string {
+	switch s {
+	case HomeSourceEnv:
+		return "env"
+	case HomeSourcePersisted:
+		return "persisted"
+	case HomeSourceDefault:
+		return "default"
+	default:
+		return "unknown"
+	}
+}
+
+// MarshalText emits the symbolic name so JSON consumers see a stable string
+// even if the underlying iota order ever changes.
+func (s HomeSource) MarshalText() ([]byte, error) {
+	return []byte(s.String()), nil
+}
 
 const (
 	EnvHome             = "CJV_HOME"
@@ -36,16 +71,54 @@ func cachedUserHomeDir() (string, error) {
 	return userHomeDirVal, errUserHomeDir
 }
 
-// Home returns the CJV_HOME path. Uses CJV_HOME env var if set, otherwise defaults to ~/.cjv.
+// Home returns the CJV_HOME path. The resolution order is:
+//  1. CJV_HOME environment variable (highest)
+//  2. settings.home persisted in <user-home>/.cjv/settings.toml
+//  3. <user-home>/.cjv (default)
 func Home() (string, error) {
+	path, _, err := ResolveHomeWithSource()
+	return path, err
+}
+
+// ResolveHomeWithSource returns the CJV_HOME path along with the source that
+// produced it. Useful for surfacing provenance (e.g. in `cjv show home`).
+func ResolveHomeWithSource() (string, HomeSource, error) {
 	if h := os.Getenv(EnvHome); h != "" {
-		return filepath.Abs(h)
+		abs, err := filepath.Abs(h)
+		if err != nil {
+			return "", HomeSourceEnv, err
+		}
+		return abs, HomeSourceEnv, nil
+	}
+	if h := loadHomeFromSettings(); h != "" {
+		abs, err := filepath.Abs(h)
+		if err != nil {
+			return "", HomeSourcePersisted, err
+		}
+		return abs, HomeSourcePersisted, nil
 	}
 	home, err := cachedUserHomeDir()
 	if err != nil {
-		return "", err
+		return "", HomeSourceDefault, err
 	}
-	return filepath.Join(home, ".cjv"), nil
+	return filepath.Join(home, ".cjv"), HomeSourceDefault, nil
+}
+
+// loadHomeFromSettings reads settings.home from the persisted settings file.
+// IO and parse errors are logged at warn level and reported as an empty path
+// so the caller can fall back to defaults.
+func loadHomeFromSettings() string {
+	sf, err := DefaultSettingsFile()
+	if err != nil {
+		slog.Warn("failed to resolve settings file path while loading home", "error", err)
+		return ""
+	}
+	s, err := sf.Load()
+	if err != nil {
+		slog.Warn("failed to load settings file while resolving home", "path", sf.Path(), "error", err)
+		return ""
+	}
+	return s.Home
 }
 
 const (
@@ -120,12 +193,16 @@ func StdxDirFor(tcName string) (string, error) {
 	return filepath.Join(root, tcName), nil
 }
 
+// SettingsPath returns the location of the persisted settings file. It is
+// intentionally decoupled from Home(): settings.toml always lives at
+// <user-home>/.cjv/settings.toml so that the home path itself can be
+// persisted as a setting without creating a chicken-and-egg dependency.
 func SettingsPath() (string, error) {
-	h, err := Home()
+	h, err := cachedUserHomeDir()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(h, "settings.toml"), nil
+	return filepath.Join(h, ".cjv", "settings.toml"), nil
 }
 
 var (

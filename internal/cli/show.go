@@ -39,19 +39,22 @@ var showHomeCmd = &cobra.Command{
 	Use:   "home",
 	Short: "Show CJV_HOME path",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		home, err := config.Home()
+		home, src, err := config.ResolveHomeWithSource()
 		if err != nil {
 			return err
 		}
-		return output.RenderTo(cmdOutput(cmd), showHomeResult{Home: home})
+		return output.RenderTo(cmdOutput(cmd), showHomeResult{Home: home, Source: src})
 	},
 }
 
 type showHomeResult struct {
-	Home string `json:"home"`
+	Home   string            `json:"home"`
+	Source config.HomeSource `json:"source"`
 }
 
-func (r showHomeResult) Text() string { return r.Home }
+func (r showHomeResult) Text() string {
+	return fmt.Sprintf("%s (source: %s)", r.Home, r.Source)
+}
 
 type showActiveResult struct {
 	Name      string `json:"name"`

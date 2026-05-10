@@ -1,7 +1,6 @@
 package settings
 
 import (
-	"path/filepath"
 	"testing"
 
 	"github.com/Zxilly/cjv/internal/config"
@@ -10,17 +9,17 @@ import (
 )
 
 func TestSetCommandsUpdateSettings(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv(config.EnvHome, home)
-	config.ResetDefaultSettingsFileCache()
-	t.Cleanup(config.ResetDefaultSettingsFileCache)
+	tmp := t.TempDir()
+	config.IsolateForTest(t, tmp)
 
 	require.NoError(t, setAutoSelfUpdateCmd.RunE(setAutoSelfUpdateCmd, []string{config.AutoSelfUpdateDisable}))
 	require.NoError(t, setAutoInstallCmd.RunE(setAutoInstallCmd, []string{"false"}))
 	require.NoError(t, setDefaultHostCmd.RunE(setDefaultHostCmd, []string{"linux-amd64"}))
 	require.NoError(t, setGitCodeAPIKeyCmd.RunE(setGitCodeAPIKeyCmd, []string{"secret"}))
 
-	settings, err := config.LoadSettings(filepath.Join(home, "settings.toml"))
+	path, err := config.SettingsPath()
+	require.NoError(t, err)
+	settings, err := config.LoadSettings(path)
 	require.NoError(t, err)
 	assert.Equal(t, config.AutoSelfUpdateDisable, settings.AutoSelfUpdate)
 	assert.False(t, settings.AutoInstall)
@@ -29,10 +28,8 @@ func TestSetCommandsUpdateSettings(t *testing.T) {
 }
 
 func TestSetCommandsRejectInvalidValues(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv(config.EnvHome, home)
-	config.ResetDefaultSettingsFileCache()
-	t.Cleanup(config.ResetDefaultSettingsFileCache)
+	tmp := t.TempDir()
+	config.IsolateForTest(t, tmp)
 
 	require.Error(t, setAutoSelfUpdateCmd.RunE(setAutoSelfUpdateCmd, []string{"sometimes"}))
 	require.Error(t, setAutoInstallCmd.RunE(setAutoInstallCmd, []string{"maybe"}))

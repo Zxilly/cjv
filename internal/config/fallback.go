@@ -64,6 +64,9 @@ func loadFallbackSettings(path string) (*Settings, error) {
 // mergeFromFallback fills user-undefined fields from the fallback settings.
 // Only fields not explicitly set in the user's TOML file are merged.
 func mergeFromFallback(user, fallback *Settings, meta toml.MetaData) {
+	if !meta.IsDefined("home") && fallback.Home != "" {
+		user.Home = fallback.Home
+	}
 	if !meta.IsDefined("default_toolchain") && fallback.DefaultToolchain != "" {
 		user.DefaultToolchain = fallback.DefaultToolchain
 	}

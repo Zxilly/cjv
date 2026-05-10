@@ -18,14 +18,14 @@ import (
 
 func TestRunUninstall_RemovesToolchain(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("CJV_HOME", home)
+	config.IsolateForTest(t, home)
 	require.NoError(t, config.EnsureDirs())
 
 	// Install first using mock server
 	server := validMockServer(t)
 	settings := config.DefaultSettings()
 	settings.ManifestURL = server.URL + "/sdk-versions.json"
-	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, "settings.toml")))
+	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 	require.NoError(t, InstallToolchainWithOptions(context.Background(), "lts", false))
 
 	// Verify installed
@@ -43,7 +43,7 @@ func TestRunUninstall_RemovesToolchain(t *testing.T) {
 
 func TestRunUninstall_NotInstalled(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("CJV_HOME", home)
+	config.IsolateForTest(t, home)
 	require.NoError(t, os.MkdirAll(filepath.Join(home, "toolchains"), 0o755))
 
 	err := runUninstall(nil, []string{"nonexistent-99.99"})
@@ -56,7 +56,7 @@ func TestRunUninstall_PreservesSettingsWhenRemoveFails(t *testing.T) {
 	}
 
 	home := t.TempDir()
-	t.Setenv("CJV_HOME", home)
+	config.IsolateForTest(t, home)
 	require.NoError(t, config.EnsureDirs())
 
 	name := "lts-1.0.5"
@@ -67,7 +67,7 @@ func TestRunUninstall_PreservesSettingsWhenRemoveFails(t *testing.T) {
 	settings := config.DefaultSettings()
 	settings.DefaultToolchain = name
 	settings.Overrides[projectDir] = name
-	settingsPath := filepath.Join(home, "settings.toml")
+	settingsPath := filepath.Join(home, ".cjv", "settings.toml")
 	require.NoError(t, config.SaveSettings(&settings, settingsPath))
 
 	wd, err := os.Getwd()
@@ -89,7 +89,7 @@ func TestRunUninstall_PreservesSettingsWhenRemoveFails(t *testing.T) {
 
 func TestUpdateSettingsAfterUninstallDoesNotPromoteTargetVariantToDefault(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("CJV_HOME", home)
+	config.IsolateForTest(t, home)
 	config.ResetDefaultSettingsFileCache()
 	t.Cleanup(config.ResetDefaultSettingsFileCache)
 	require.NoError(t, config.EnsureDirs())
@@ -101,24 +101,24 @@ func TestUpdateSettingsAfterUninstallDoesNotPromoteTargetVariantToDefault(t *tes
 
 	settings := config.DefaultSettings()
 	settings.DefaultToolchain = name
-	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, "settings.toml")))
+	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 
 	require.NoError(t, updateSettingsAfterUninstall(name))
 
-	loaded, err := config.LoadSettings(filepath.Join(home, "settings.toml"))
+	loaded, err := config.LoadSettings(filepath.Join(home, ".cjv", "settings.toml"))
 	require.NoError(t, err)
 	assert.Empty(t, loaded.DefaultToolchain)
 }
 
 func TestRunUninstall_MultipleInstalled(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("CJV_HOME", home)
+	config.IsolateForTest(t, home)
 	require.NoError(t, config.EnsureDirs())
 
 	server := validMockServer(t)
 	settings := config.DefaultSettings()
 	settings.ManifestURL = server.URL + "/sdk-versions.json"
-	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, "settings.toml")))
+	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 
 	// Install lts
 	require.NoError(t, InstallToolchainWithOptions(context.Background(), "lts", false))

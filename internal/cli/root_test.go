@@ -24,12 +24,12 @@ func TestExecute_Help(t *testing.T) {
 
 func TestRootCommandRunListsInstalledAndMarksActive(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv(config.EnvHome, home)
+	config.IsolateForTest(t, home)
 	require.NoError(t, os.MkdirAll(filepath.Join(home, "toolchains", "lts-1.0.5"), 0o755))
 	require.NoError(t, os.MkdirAll(filepath.Join(home, "toolchains", "sts-2.0.0"), 0o755))
 	settings := config.DefaultSettings()
 	settings.DefaultToolchain = "lts-1.0.5"
-	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, "settings.toml")))
+	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 
 	stdout, err := captureStdout(t, func() error {
 		return rootCmd.RunE(rootCmd, nil)
@@ -43,7 +43,7 @@ func TestRootCommandRunListsInstalledAndMarksActive(t *testing.T) {
 
 func TestRootCommandRunWithNoToolchains(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv(config.EnvHome, home)
+	config.IsolateForTest(t, home)
 
 	stdout, err := captureStdout(t, func() error {
 		return rootCmd.RunE(rootCmd, nil)

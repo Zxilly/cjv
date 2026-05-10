@@ -17,7 +17,7 @@ import (
 
 func TestRunCheck_NoToolchains(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("CJV_HOME", home)
+	config.IsolateForTest(t, home)
 
 	cmd := &cobra.Command{}
 	err := runCheck(cmd, nil)
@@ -26,14 +26,14 @@ func TestRunCheck_NoToolchains(t *testing.T) {
 
 func TestRunCheck_WithInstalledToolchain(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("CJV_HOME", home)
+	config.IsolateForTest(t, home)
 	require.NoError(t, config.EnsureDirs())
 
 	// Install a toolchain first
 	server := validMockServer(t)
 	settings := config.DefaultSettings()
 	settings.ManifestURL = server.URL + "/sdk-versions.json"
-	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, "settings.toml")))
+	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 	require.NoError(t, InstallToolchainWithOptions(context.Background(), "lts", false))
 
 	// Run check — should compare against manifest
@@ -46,13 +46,13 @@ func TestRunCheck_WithInstalledToolchain(t *testing.T) {
 func TestRunCheck_UpToDate(t *testing.T) {
 	// Install latest, then check — should show "all up to date"
 	home := t.TempDir()
-	t.Setenv("CJV_HOME", home)
+	config.IsolateForTest(t, home)
 	require.NoError(t, config.EnsureDirs())
 
 	server := validMockServer(t)
 	settings := config.DefaultSettings()
 	settings.ManifestURL = server.URL + "/sdk-versions.json"
-	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, "settings.toml")))
+	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 
 	require.NoError(t, InstallToolchainWithOptions(context.Background(), "lts", false))
 	require.NoError(t, InstallToolchainWithOptions(context.Background(), "sts", false))
@@ -66,13 +66,13 @@ func TestRunCheck_UpToDate(t *testing.T) {
 func TestRunCheck_MixedVersions(t *testing.T) {
 	// One channel up to date, one outdated
 	home := t.TempDir()
-	t.Setenv("CJV_HOME", home)
+	config.IsolateForTest(t, home)
 	require.NoError(t, config.EnsureDirs())
 
 	server := validMockServer(t)
 	settings := config.DefaultSettings()
 	settings.ManifestURL = server.URL + "/sdk-versions.json"
-	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, "settings.toml")))
+	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 
 	// Install latest lts
 	require.NoError(t, InstallToolchainWithOptions(context.Background(), "lts", false))
@@ -89,7 +89,7 @@ func TestRunCheck_UpdateAvailable(t *testing.T) {
 	// Install an "old" version by creating the directory manually,
 	// then check against the manifest that has a newer version.
 	home := t.TempDir()
-	t.Setenv("CJV_HOME", home)
+	config.IsolateForTest(t, home)
 	require.NoError(t, config.EnsureDirs())
 
 	// Create a fake old installed LTS toolchain
@@ -99,7 +99,7 @@ func TestRunCheck_UpdateAvailable(t *testing.T) {
 	server := validMockServer(t)
 	settings := config.DefaultSettings()
 	settings.ManifestURL = server.URL + "/sdk-versions.json"
-	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, "settings.toml")))
+	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 
 	cmd := &cobra.Command{}
 	cmd.SetContext(context.Background())
@@ -109,7 +109,7 @@ func TestRunCheck_UpdateAvailable(t *testing.T) {
 
 func TestRunCheck_MultipleToolchains(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("CJV_HOME", home)
+	config.IsolateForTest(t, home)
 	require.NoError(t, config.EnsureDirs())
 
 	// Create both LTS and STS old versions
@@ -119,7 +119,7 @@ func TestRunCheck_MultipleToolchains(t *testing.T) {
 	server := validMockServer(t)
 	settings := config.DefaultSettings()
 	settings.ManifestURL = server.URL + "/sdk-versions.json"
-	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, "settings.toml")))
+	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 
 	cmd := &cobra.Command{}
 	cmd.SetContext(context.Background())
@@ -129,7 +129,7 @@ func TestRunCheck_MultipleToolchains(t *testing.T) {
 
 func TestRunCheck_CustomToolchainSkipped(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("CJV_HOME", home)
+	config.IsolateForTest(t, home)
 	require.NoError(t, config.EnsureDirs())
 
 	// Custom toolchains (non-standard names) should be skipped by check
@@ -139,7 +139,7 @@ func TestRunCheck_CustomToolchainSkipped(t *testing.T) {
 	server := validMockServer(t)
 	settings := config.DefaultSettings()
 	settings.ManifestURL = server.URL + "/sdk-versions.json"
-	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, "settings.toml")))
+	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 
 	cmd := &cobra.Command{}
 	cmd.SetContext(context.Background())

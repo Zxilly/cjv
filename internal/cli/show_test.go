@@ -14,12 +14,12 @@ import (
 func TestRunShowActiveShowsNotInstalledGracefully(t *testing.T) {
 	home := t.TempDir()
 	cwd := t.TempDir()
-	t.Setenv(config.EnvHome, home)
+	config.IsolateForTest(t, home)
 	t.Chdir(cwd)
 
 	settings := config.DefaultSettings()
 	settings.DefaultToolchain = "lts-1.0.5"
-	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, "settings.toml")))
+	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 
 	// Should succeed (not error) — uninstalled toolchains are shown with annotation
 	err := runShowActive(showActiveCmd, nil)
@@ -28,7 +28,7 @@ func TestRunShowActiveShowsNotInstalledGracefully(t *testing.T) {
 
 func TestRunShowInstalled_ListsToolchains(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("CJV_HOME", home)
+	config.IsolateForTest(t, home)
 
 	tcDir := filepath.Join(home, "toolchains")
 	require.NoError(t, os.MkdirAll(filepath.Join(tcDir, "lts-1.0.5"), 0o755))
@@ -41,7 +41,7 @@ func TestRunShowInstalled_ListsToolchains(t *testing.T) {
 
 func TestRunShowInstalled_NoToolchains(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("CJV_HOME", home)
+	config.IsolateForTest(t, home)
 
 	cmd := &cobra.Command{}
 	err := runShowInstalled(cmd, nil)
@@ -50,12 +50,12 @@ func TestRunShowInstalled_NoToolchains(t *testing.T) {
 
 func TestRunShowDefault_WithDefault(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("CJV_HOME", home)
+	config.IsolateForTest(t, home)
 	require.NoError(t, os.MkdirAll(filepath.Join(home, "toolchains", "lts-1.0.5"), 0o755))
 
 	settings := config.DefaultSettings()
 	settings.DefaultToolchain = "lts-1.0.5"
-	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, "settings.toml")))
+	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 
 	cmd := &cobra.Command{}
 	err := runShowDefault(cmd, nil)
@@ -64,7 +64,7 @@ func TestRunShowDefault_WithDefault(t *testing.T) {
 
 func TestRunShowDefault_NoToolchains(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("CJV_HOME", home)
+	config.IsolateForTest(t, home)
 
 	cmd := &cobra.Command{}
 	err := runShowDefault(cmd, nil)
@@ -74,14 +74,14 @@ func TestRunShowDefault_NoToolchains(t *testing.T) {
 func TestRunShowActive_WithActiveToolchain(t *testing.T) {
 	home := t.TempDir()
 	cwd := t.TempDir()
-	t.Setenv("CJV_HOME", home)
+	config.IsolateForTest(t, home)
 
 	t.Chdir(cwd)
 
 	require.NoError(t, os.MkdirAll(filepath.Join(home, "toolchains", "lts-1.0.5"), 0o755))
 	settings := config.DefaultSettings()
 	settings.DefaultToolchain = "lts-1.0.5"
-	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, "settings.toml")))
+	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 
 	cmd := &cobra.Command{}
 	err := runShowActive(cmd, nil)
@@ -91,13 +91,13 @@ func TestRunShowActive_WithActiveToolchain(t *testing.T) {
 func TestRunShowActive_NoActiveToolchain(t *testing.T) {
 	home := t.TempDir()
 	cwd := t.TempDir()
-	t.Setenv("CJV_HOME", home)
+	config.IsolateForTest(t, home)
 	t.Setenv("CJV_TOOLCHAIN", "")
 
 	t.Chdir(cwd)
 
 	settings := config.DefaultSettings()
-	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, "settings.toml")))
+	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 
 	cmd := &cobra.Command{}
 	err := runShowActive(cmd, nil)

@@ -233,14 +233,14 @@ func mockServerWithTargetSDKs(t *testing.T, channel toolchain.Channel, version s
 
 func TestInstallToolchainWithOptions_InstallsLTS(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("CJV_HOME", home)
+	config.IsolateForTest(t, home)
 	require.NoError(t, config.EnsureDirs())
 
 	server := validMockServer(t)
 
 	settings := config.DefaultSettings()
 	settings.ManifestURL = server.URL + "/sdk-versions.json"
-	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, "settings.toml")))
+	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 
 	err := InstallToolchainWithOptions(context.Background(), "lts", false)
 	require.NoError(t, err)
@@ -252,13 +252,13 @@ func TestInstallToolchainWithOptions_InstallsLTS(t *testing.T) {
 
 func TestInstallToolchainWithTargets_InstallsHostAndTargets(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("CJV_HOME", home)
+	config.IsolateForTest(t, home)
 	require.NoError(t, config.EnsureDirs())
 
 	server := mockServerWithTargetSDKs(t, toolchain.STS, "2.0.0", "ohos", "android")
 	settings := config.DefaultSettings()
 	settings.ManifestURL = server.URL + "/sdk-versions.json"
-	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, "settings.toml")))
+	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 
 	err := InstallToolchainWithTargets(context.Background(), "sts", []string{"ohos", "android"}, false)
 	require.NoError(t, err)
@@ -277,14 +277,14 @@ func TestInstallToolchainWithTargets_InstallsHostAndTargets(t *testing.T) {
 	assert.Contains(t, installed, "sts-2.0.0-"+ohosKey)
 	assert.Contains(t, installed, "sts-2.0.0-"+androidKey)
 
-	reloaded, err := config.LoadSettings(filepath.Join(home, "settings.toml"))
+	reloaded, err := config.LoadSettings(filepath.Join(home, ".cjv", "settings.toml"))
 	require.NoError(t, err)
 	assert.Equal(t, "sts-2.0.0", reloaded.DefaultToolchain)
 }
 
 func TestInstallToolchainWithTargets_FetchesManifestOnce(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv(config.EnvHome, home)
+	config.IsolateForTest(t, home)
 	require.NoError(t, config.EnsureDirs())
 
 	sdkData, sha := createMockSDK()
@@ -349,7 +349,7 @@ func TestInstallToolchainWithTargets_FetchesManifestOnce(t *testing.T) {
 
 	settings := config.DefaultSettings()
 	settings.ManifestURL = server.URL + "/sdk-versions.json"
-	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, "settings.toml")))
+	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 
 	require.NoError(t, InstallToolchainWithTargets(context.Background(), "sts", []string{"ohos", "android"}, false))
 	assert.Equal(t, int32(1), manifestRequests.Load())
@@ -357,13 +357,13 @@ func TestInstallToolchainWithTargets_FetchesManifestOnce(t *testing.T) {
 
 func TestInstallToolchainWithTargets_BareVersionResolvesChannel(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("CJV_HOME", home)
+	config.IsolateForTest(t, home)
 	require.NoError(t, config.EnsureDirs())
 
 	server := mockServerWithTargetSDKs(t, toolchain.STS, "2.0.0", "ohos")
 	settings := config.DefaultSettings()
 	settings.ManifestURL = server.URL + "/sdk-versions.json"
-	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, "settings.toml")))
+	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 
 	require.NoError(t, InstallToolchainWithTargets(context.Background(), "2.0.0", []string{"ohos"}, false))
 
@@ -377,13 +377,13 @@ func TestInstallToolchainWithTargets_BareVersionResolvesChannel(t *testing.T) {
 
 func TestInstallToolchainWithTargets_ExplicitVariantDoesNotSetDefault(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("CJV_HOME", home)
+	config.IsolateForTest(t, home)
 	require.NoError(t, config.EnsureDirs())
 
 	server := mockServerWithTargetSDKs(t, toolchain.STS, "2.0.0", "ohos")
 	settings := config.DefaultSettings()
 	settings.ManifestURL = server.URL + "/sdk-versions.json"
-	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, "settings.toml")))
+	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 
 	ohosKey, err := dist.CurrentTargetTuple("", "ohos")
 	require.NoError(t, err)
@@ -394,18 +394,18 @@ func TestInstallToolchainWithTargets_ExplicitVariantDoesNotSetDefault(t *testing
 	assert.Contains(t, installed, "sts-2.0.0-"+ohosKey)
 	assert.NotContains(t, installed, "sts-2.0.0")
 
-	reloaded, err := config.LoadSettings(filepath.Join(home, "settings.toml"))
+	reloaded, err := config.LoadSettings(filepath.Join(home, ".cjv", "settings.toml"))
 	require.NoError(t, err)
 	assert.Empty(t, reloaded.DefaultToolchain)
 }
 
 func TestInstallToolchainWithTargets_RejectsVariantPlusTargets(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("CJV_HOME", home)
+	config.IsolateForTest(t, home)
 	require.NoError(t, config.EnsureDirs())
 
 	settings := config.DefaultSettings()
-	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, "settings.toml")))
+	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 
 	ohosKey, err := dist.CurrentTargetTuple("", "ohos")
 	require.NoError(t, err)
@@ -416,14 +416,14 @@ func TestInstallToolchainWithTargets_RejectsVariantPlusTargets(t *testing.T) {
 
 func TestInstallToolchainWithOptions_AlreadyInstalled(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("CJV_HOME", home)
+	config.IsolateForTest(t, home)
 	require.NoError(t, config.EnsureDirs())
 
 	server := validMockServer(t)
 
 	settings := config.DefaultSettings()
 	settings.ManifestURL = server.URL + "/sdk-versions.json"
-	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, "settings.toml")))
+	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 
 	require.NoError(t, InstallToolchainWithOptions(context.Background(), "lts", false))
 
@@ -434,14 +434,14 @@ func TestInstallToolchainWithOptions_AlreadyInstalled(t *testing.T) {
 
 func TestInstallToolchainWithOptions_ForceReinstall(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("CJV_HOME", home)
+	config.IsolateForTest(t, home)
 	require.NoError(t, config.EnsureDirs())
 
 	server := validMockServer(t)
 
 	settings := config.DefaultSettings()
 	settings.ManifestURL = server.URL + "/sdk-versions.json"
-	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, "settings.toml")))
+	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 
 	require.NoError(t, InstallToolchainWithOptions(context.Background(), "lts", false))
 
@@ -451,18 +451,18 @@ func TestInstallToolchainWithOptions_ForceReinstall(t *testing.T) {
 
 func TestInstallToolchainWithOptions_SetsDefault(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("CJV_HOME", home)
+	config.IsolateForTest(t, home)
 	require.NoError(t, config.EnsureDirs())
 
 	server := validMockServer(t)
 
 	settings := config.DefaultSettings()
 	settings.ManifestURL = server.URL + "/sdk-versions.json"
-	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, "settings.toml")))
+	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 
 	require.NoError(t, InstallToolchainWithOptions(context.Background(), "lts", false))
 
-	reloaded, err := config.LoadSettings(filepath.Join(home, "settings.toml"))
+	reloaded, err := config.LoadSettings(filepath.Join(home, ".cjv", "settings.toml"))
 	require.NoError(t, err)
 	assert.NotEmpty(t, reloaded.DefaultToolchain,
 		"first install should set the default toolchain")
@@ -470,14 +470,14 @@ func TestInstallToolchainWithOptions_SetsDefault(t *testing.T) {
 
 func TestInstallToolchainWithOptions_BootstrapsManagedBinary(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("CJV_HOME", home)
+	config.IsolateForTest(t, home)
 	require.NoError(t, config.EnsureDirs())
 
 	server := validMockServer(t)
 
 	settings := config.DefaultSettings()
 	settings.ManifestURL = server.URL + "/sdk-versions.json"
-	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, "settings.toml")))
+	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 
 	binDir, err := config.BinDir()
 	require.NoError(t, err)
@@ -493,7 +493,7 @@ func TestInstallToolchainWithOptions_BootstrapsManagedBinary(t *testing.T) {
 
 func TestInstallToolchainWithOptions_FailsWhenEnvSetupMissing(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("CJV_HOME", home)
+	config.IsolateForTest(t, home)
 	require.NoError(t, config.EnsureDirs())
 
 	sdkData, sha := createMockSDKWithEnvSetup(false)
@@ -501,7 +501,7 @@ func TestInstallToolchainWithOptions_FailsWhenEnvSetupMissing(t *testing.T) {
 
 	settings := config.DefaultSettings()
 	settings.ManifestURL = server.URL + "/sdk-versions.json"
-	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, "settings.toml")))
+	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 
 	err := InstallToolchainWithOptions(context.Background(), "lts", false)
 	require.Error(t, err)
@@ -538,13 +538,13 @@ func TestFetchManifest_HTTPError(t *testing.T) {
 
 func TestInstallToolchainWithOptions_BareVersion(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("CJV_HOME", home)
+	config.IsolateForTest(t, home)
 	require.NoError(t, config.EnsureDirs())
 
 	server := validMockServer(t)
 	settings := config.DefaultSettings()
 	settings.ManifestURL = server.URL + "/sdk-versions.json"
-	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, "settings.toml")))
+	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 
 	// Install by bare version — system should discover channel from manifest
 	require.NoError(t, InstallToolchainWithOptions(context.Background(), "1.0.5", false))
@@ -556,13 +556,13 @@ func TestInstallToolchainWithOptions_BareVersion(t *testing.T) {
 
 func TestInstallToolchainWithOptions_BareVersionNotFound(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("CJV_HOME", home)
+	config.IsolateForTest(t, home)
 	require.NoError(t, config.EnsureDirs())
 
 	server := validMockServer(t)
 	settings := config.DefaultSettings()
 	settings.ManifestURL = server.URL + "/sdk-versions.json"
-	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, "settings.toml")))
+	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 
 	err := InstallToolchainWithOptions(context.Background(), "99.99.99", false)
 	assert.Error(t, err, "non-existent version should fail")
@@ -570,7 +570,7 @@ func TestInstallToolchainWithOptions_BareVersionNotFound(t *testing.T) {
 
 func TestInstallToolchainWithOptions_InvalidName(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("CJV_HOME", home)
+	config.IsolateForTest(t, home)
 
 	err := InstallToolchainWithOptions(context.Background(), "+invalid", false)
 	assert.Error(t, err, "invalid name starting with + should fail")
@@ -581,13 +581,13 @@ func TestInstallToolchainWithOptions_InvalidName(t *testing.T) {
 
 func TestInstallToolchainWithOptions_STS(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("CJV_HOME", home)
+	config.IsolateForTest(t, home)
 	require.NoError(t, config.EnsureDirs())
 
 	server := validMockServer(t)
 	settings := config.DefaultSettings()
 	settings.ManifestURL = server.URL + "/sdk-versions.json"
-	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, "settings.toml")))
+	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 
 	require.NoError(t, InstallToolchainWithOptions(context.Background(), "sts", false))
 
@@ -597,13 +597,13 @@ func TestInstallToolchainWithOptions_STS(t *testing.T) {
 
 func TestInstallToolchainWithOptions_SpecificVersion(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("CJV_HOME", home)
+	config.IsolateForTest(t, home)
 	require.NoError(t, config.EnsureDirs())
 
 	server := validMockServer(t)
 	settings := config.DefaultSettings()
 	settings.ManifestURL = server.URL + "/sdk-versions.json"
-	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, "settings.toml")))
+	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 
 	require.NoError(t, InstallToolchainWithOptions(context.Background(), "lts-1.0.5", false))
 
@@ -616,7 +616,7 @@ func TestInstallToolchainWithOptions_SpecificVersion(t *testing.T) {
 func TestFullLifecycle(t *testing.T) {
 	home := t.TempDir()
 	cwd := t.TempDir()
-	t.Setenv("CJV_HOME", home)
+	config.IsolateForTest(t, home)
 	require.NoError(t, config.EnsureDirs())
 
 	t.Chdir(cwd)
@@ -624,7 +624,7 @@ func TestFullLifecycle(t *testing.T) {
 	server := validMockServer(t)
 	settings := config.DefaultSettings()
 	settings.ManifestURL = server.URL + "/sdk-versions.json"
-	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, "settings.toml")))
+	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 
 	// Install
 	require.NoError(t, InstallToolchainWithOptions(context.Background(), "lts", false))
@@ -645,13 +645,13 @@ func TestFullLifecycle(t *testing.T) {
 
 func TestInstallToolchainWithOptions_BareVersionSTS(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("CJV_HOME", home)
+	config.IsolateForTest(t, home)
 	require.NoError(t, config.EnsureDirs())
 
 	server := validMockServer(t)
 	settings := config.DefaultSettings()
 	settings.ManifestURL = server.URL + "/sdk-versions.json"
-	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, "settings.toml")))
+	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 
 	require.NoError(t, InstallToolchainWithOptions(context.Background(), "2.0.0", false))
 
@@ -663,13 +663,13 @@ func TestInstallToolchainWithOptions_BareVersionSTS(t *testing.T) {
 
 func TestInstallBothChannels(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("CJV_HOME", home)
+	config.IsolateForTest(t, home)
 	require.NoError(t, config.EnsureDirs())
 
 	server := validMockServer(t)
 	settings := config.DefaultSettings()
 	settings.ManifestURL = server.URL + "/sdk-versions.json"
-	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, "settings.toml")))
+	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 
 	require.NoError(t, InstallToolchainWithOptions(context.Background(), "lts", false))
 	require.NoError(t, InstallToolchainWithOptions(context.Background(), "sts", false))
@@ -717,13 +717,13 @@ func TestValidateInstallation_EmptyDir(t *testing.T) {
 
 func TestRunInstall_WithoutForce(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("CJV_HOME", home)
+	config.IsolateForTest(t, home)
 	require.NoError(t, config.EnsureDirs())
 
 	server := validMockServer(t)
 	settings := config.DefaultSettings()
 	settings.ManifestURL = server.URL + "/sdk-versions.json"
-	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, "settings.toml")))
+	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 
 	cmd := &cobra.Command{}
 	cmd.Flags().BoolP("force", "f", false, "")
@@ -733,7 +733,7 @@ func TestRunInstall_WithoutForce(t *testing.T) {
 
 func TestRunInstall_InvalidName(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("CJV_HOME", home)
+	config.IsolateForTest(t, home)
 
 	cmd := &cobra.Command{}
 	cmd.Flags().BoolP("force", "f", false, "")
@@ -745,13 +745,13 @@ func TestRunInstall_InvalidName(t *testing.T) {
 
 func TestInstallToolchainWithOptions_Wrapper(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("CJV_HOME", home)
+	config.IsolateForTest(t, home)
 	require.NoError(t, config.EnsureDirs())
 
 	server := validMockServer(t)
 	settings := config.DefaultSettings()
 	settings.ManifestURL = server.URL + "/sdk-versions.json"
-	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, "settings.toml")))
+	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 
 	require.NoError(t, InstallToolchainWithOptions(context.Background(), "lts", false))
 
@@ -799,7 +799,7 @@ func TestInstallComponentsForToolchainRejectsInvalidAndMissingToolchain(t *testi
 	require.Error(t, err)
 
 	home := t.TempDir()
-	t.Setenv(config.EnvHome, home)
+	config.IsolateForTest(t, home)
 	config.ResetDefaultSettingsFileCache()
 	t.Cleanup(config.ResetDefaultSettingsFileCache)
 

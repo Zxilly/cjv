@@ -51,16 +51,14 @@ func setupFakeToolchain(t *testing.T, home, name string) string {
 
 func TestResolveRuntimeEnv_DefaultToolchain(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("CJV_HOME", home)
+	config.IsolateForTest(t, home)
 	t.Setenv("CJV_TOOLCHAIN", "")
-	config.ResetDefaultSettingsFileCache()
-	config.ResetCachedUserHomeDir()
 
 	setupFakeToolchain(t, home, "lts-1.0.5")
 
 	settings := config.DefaultSettings()
 	settings.DefaultToolchain = "lts-1.0.5"
-	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, "settings.toml")))
+	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 
 	result, err := env.ResolveRuntimeEnv(context.Background(), "", nil)
 	require.NoError(t, err)
@@ -74,16 +72,14 @@ func TestResolveRuntimeEnv_DefaultToolchain(t *testing.T) {
 
 func TestResolveRuntimeEnv_WithOverride(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("CJV_HOME", home)
+	config.IsolateForTest(t, home)
 	t.Setenv("CJV_TOOLCHAIN", "")
-	config.ResetDefaultSettingsFileCache()
-	config.ResetCachedUserHomeDir()
 
 	setupFakeToolchain(t, home, "sts-1.0.3")
 
 	settings := config.DefaultSettings()
 	settings.DefaultToolchain = "lts-1.0.5"
-	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, "settings.toml")))
+	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 
 	result, err := env.ResolveRuntimeEnv(context.Background(), "sts-1.0.3", nil)
 	require.NoError(t, err)
@@ -96,13 +92,11 @@ func TestResolveRuntimeEnv_WithOverride(t *testing.T) {
 
 func TestResolveRuntimeEnv_NoToolchain(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("CJV_HOME", home)
+	config.IsolateForTest(t, home)
 	t.Setenv("CJV_TOOLCHAIN", "")
-	config.ResetDefaultSettingsFileCache()
-	config.ResetCachedUserHomeDir()
 
 	settings := config.DefaultSettings()
-	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, "settings.toml")))
+	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 
 	_, err := env.ResolveRuntimeEnv(context.Background(), "", nil)
 	assert.Error(t, err)
@@ -111,10 +105,8 @@ func TestResolveRuntimeEnv_NoToolchain(t *testing.T) {
 func TestResolveRuntimeEnv_ToolchainFileTargetsTriggerAutoInstall(t *testing.T) {
 	home := t.TempDir()
 	cwd := t.TempDir()
-	t.Setenv("CJV_HOME", home)
+	config.IsolateForTest(t, home)
 	t.Setenv("CJV_TOOLCHAIN", "")
-	config.ResetDefaultSettingsFileCache()
-	config.ResetCachedUserHomeDir()
 	t.Chdir(cwd)
 
 	setupFakeToolchain(t, home, "sts-2.0.0")
@@ -125,7 +117,7 @@ targets = ["ohos"]
 
 	settings := config.DefaultSettings()
 	settings.AutoInstall = true
-	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, "settings.toml")))
+	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 
 	oldAutoInstall := resolve.AutoInstallFunc
 	var gotInput string

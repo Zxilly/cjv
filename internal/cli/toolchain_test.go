@@ -14,7 +14,7 @@ import (
 func TestToolchainLinkCommandCreatesCustomLinkAndProxyLinks(t *testing.T) {
 	home := t.TempDir()
 	target := t.TempDir()
-	t.Setenv(config.EnvHome, home)
+	config.IsolateForTest(t, home)
 
 	cjcPath := filepath.Join(target, "bin", proxy.PlatformBinaryName("cjc"))
 	require.NoError(t, os.MkdirAll(filepath.Dir(cjcPath), 0o755))
@@ -34,7 +34,7 @@ func TestToolchainLinkCommandCreatesCustomLinkAndProxyLinks(t *testing.T) {
 
 func TestToolchainLinkCommandRejectsInvalidInputs(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv(config.EnvHome, home)
+	config.IsolateForTest(t, home)
 
 	require.Error(t, toolchainLinkCmd.RunE(toolchainLinkCmd, []string{"lts", t.TempDir()}))
 	require.Error(t, toolchainLinkCmd.RunE(toolchainLinkCmd, []string{"bad/path", t.TempDir()}))
