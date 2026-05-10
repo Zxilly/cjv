@@ -222,6 +222,22 @@ func TestDownloadCached_NoChecksumUsesURLHash(t *testing.T) {
 	assert.NoError(t, err)
 }
 
+func TestDownloadDisplayNameUsesExplicitNameThenURLBasename(t *testing.T) {
+	assert.Equal(t, "cangjie-sdk-2.0.0.zip", downloadDisplayName("https://example.invalid/download/by-id", "cangjie-sdk-2.0.0.zip"))
+	assert.Equal(t, "cangjie-stdx-docs-html-1.1.0.1.tar.gz", downloadDisplayName("https://example.invalid/releases/cangjie-stdx-docs-html-1.1.0.1.tar.gz?token=abc", ""))
+	assert.Equal(t, "download", downloadDisplayName("https://example.invalid/", ""))
+}
+
+func TestFitProgressLabelCapsLongNames(t *testing.T) {
+	name := strings.Repeat("a", maxProgressNameWidth+20) + ".zip"
+
+	got := fitProgressLabel(name)
+
+	assert.LessOrEqual(t, len([]rune(got)), maxProgressNameWidth)
+	assert.NotEqual(t, name, got)
+	assert.Contains(t, got, "...")
+}
+
 func TestDownloadCachedNoChecksumRejectsInvalidArchive(t *testing.T) {
 	content := []byte("<html>not an archive</html>")
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

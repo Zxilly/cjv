@@ -10,16 +10,20 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"os"
+	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/Zxilly/cjv/internal/cjverr"
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/utils"
 	"github.com/mattn/go-isatty"
-	"github.com/schollz/progressbar/v3"
+	"github.com/vbauerster/mpb/v8"
+	"github.com/vbauerster/mpb/v8/decor"
 )
 
 // nonRetriableError wraps an error that should not be retried (e.g. permanent HTTP 4xx).
@@ -29,6 +33,11 @@ type nonRetriableError struct {
 
 func (e *nonRetriableError) Error() string { return e.err.Error() }
 func (e *nonRetriableError) Unwrap() error { return e.err }
+
+const (
+	maxProgressNameWidth = 48
+	downloadBarWidth     = 24
+)
 
 // getMaxDownloadRetries returns the number of download retry attempts.
 // Reads CJV_MAX_RETRIES at call time so tests can override via t.Setenv.
@@ -59,6 +68,12 @@ func cacheKey(url, sha256Hex string) string {
 // verifies, so repeated install attempts after an interruption do not
 // re-download.
 func DownloadCached(ctx context.Context, url, sha256Hex, cacheDir string) (string, error) {
+	return DownloadCachedWithName(ctx, url, sha256Hex, cacheDir, "")
+}
+
+// DownloadCachedWithName is like DownloadCached, but displayName controls the
+// interactive progress label. The staged filename remains hash-keyed.
+func DownloadCachedWithName(ctx context.Context, url, sha256Hex, cacheDir, displayName string) (string, error) {
 	sha256Hex = strings.ToLower(sha256Hex)
 	key := cacheKey(url, sha256Hex)
 	stagedPath := filepath.Join(cacheDir, key)
@@ -88,7 +103,7 @@ func DownloadCached(ctx context.Context, url, sha256Hex, cacheDir string) (strin
 			slog.Info("retrying download", "attempt", attempt+1, "max", getMaxDownloadRetries()+1)
 		}
 
-		lastErr = downloadOnce(ctx, url, partialPath, filepath.Base(stagedPath), sha256Hex)
+		lastErr = downloadOnce(ctx, url, partialPath, displayName, sha256Hex)
 		if lastErr == nil {
 			if sha256Hex == "" {
 				if err := verifyStagedFile(partialPath, sha256Hex); err != nil {
@@ -111,6 +126,34 @@ func DownloadCached(ctx context.Context, url, sha256Hex, cacheDir string) (strin
 	}
 	cleanupDownloadTemp(partialPath)
 	return "", lastErr
+}
+
+func downloadDisplayName(rawURL, explicitName string) string {
+	name := strings.TrimSpace(explicitName)
+	if name == "" {
+		if u, err := url.Parse(rawURL); err == nil {
+			base := path.Base(u.Path)
+			if base != "." && base != "/" {
+				name = base
+			}
+		}
+	}
+	if name == "" {
+		name = "download"
+	}
+	return fitProgressLabel(name)
+}
+
+func fitProgressLabel(name string) string {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return "download"
+	}
+	runes := []rune(name)
+	if len(runes) <= maxProgressNameWidth {
+		return name
+	}
+	return string(runes[:maxProgressNameWidth-3]) + "..."
 }
 
 // tryReuseStaged checks for a leftover staged file from a prior run. Returns
@@ -264,6 +307,7 @@ func promoteDownloadedFile(tmpPath, dest string) error {
 
 func downloadOnce(ctx context.Context, url, tmpPath, displayName, sha256Hex string) error {
 	client := HTTPClient()
+	displayName = downloadDisplayName(url, displayName)
 
 	// Check for existing partial file for resume.
 	var existingSize int64
@@ -360,27 +404,24 @@ func downloadOnce(ctx context.Context, url, tmpPath, displayName, sha256Hex stri
 		totalSize = resp.ContentLength + existingSize
 	}
 
-	reader := io.TeeReader(resp.Body, hasher)
-
 	// Suppress the animated progress bar in non-interactive contexts (CI, piped output).
 	interactive := isatty.IsTerminal(os.Stderr.Fd()) || isatty.IsCygwinTerminal(os.Stderr.Fd())
 
-	var dst io.Writer = f
-	if interactive {
-		bar := progressbar.NewOptions64(totalSize,
-			progressbar.OptionSetDescription(displayName),
-			progressbar.OptionShowBytes(true),
-			progressbar.OptionSetWriter(os.Stderr),
-			progressbar.OptionOnCompletion(func() { fmt.Fprint(os.Stderr, "\n") }),
-		)
-		if resumed && existingSize > 0 {
-			bar.Set64(existingSize) //nolint:errcheck // progress bar cosmetic
-		}
-		dst = io.MultiWriter(f, bar)
+	src := io.Reader(resp.Body)
+	var progressDone func(error)
+	if interactive && totalSize > 0 {
+		src, progressDone = newProgressReader(src, totalSize, existingSize, displayName)
 	}
 
-	if _, err := io.Copy(dst, reader); err != nil {
+	reader := io.TeeReader(src, hasher)
+	if _, err := io.Copy(f, reader); err != nil {
+		if progressDone != nil {
+			progressDone(err)
+		}
 		return fmt.Errorf("download write: %w", err)
+	}
+	if progressDone != nil {
+		progressDone(nil)
 	}
 
 	if err := verifyChecksum(hasher, sha256Hex); err != nil {
@@ -388,6 +429,38 @@ func downloadOnce(ctx context.Context, url, tmpPath, displayName, sha256Hex stri
 	}
 
 	return nil
+}
+
+func newProgressReader(src io.Reader, totalSize, existingSize int64, displayName string) (io.Reader, func(error)) {
+	p := mpb.New(
+		mpb.WithOutput(os.Stderr),
+		mpb.WithRefreshRate(100*time.Millisecond),
+	)
+	bar := p.New(totalSize,
+		mpb.BarStyle().Lbound("|").Filler("=").Tip(">").Padding(" ").Rbound("|"),
+		mpb.BarWidth(downloadBarWidth),
+		mpb.PrependDecorators(
+			decor.Name(displayName, decor.WC{C: decor.DindentRight | decor.DextraSpace}),
+			decor.Percentage(decor.WC{C: decor.DindentRight | decor.DextraSpace}),
+		),
+		mpb.AppendDecorators(
+			decor.CountersKibiByte("% .1f / % .1f"),
+		),
+	)
+	if existingSize > 0 {
+		bar.SetCurrent(existingSize)
+	}
+	proxyReader := bar.ProxyReader(src)
+	done := func(err error) {
+		if err != nil {
+			bar.Abort(false)
+		} else {
+			bar.SetTotal(totalSize, true)
+		}
+		_ = proxyReader.Close()
+		p.Wait()
+	}
+	return proxyReader, done
 }
 
 func validateContentRangeStart(header string, expectedStart int64) error {

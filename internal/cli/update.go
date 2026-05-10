@@ -7,12 +7,12 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"sync"
 
 	"github.com/Zxilly/cjv/internal/cjverr"
 	"github.com/Zxilly/cjv/internal/cli/output"
 	clisettings "github.com/Zxilly/cjv/internal/cli/settings"
 	"github.com/Zxilly/cjv/internal/config"
-	"github.com/Zxilly/cjv/internal/dist"
 	"github.com/Zxilly/cjv/internal/i18n"
 	"github.com/Zxilly/cjv/internal/proxy"
 	"github.com/Zxilly/cjv/internal/selfupdate"
@@ -152,6 +152,7 @@ func updateSingle(ctx context.Context, input string) ([]updateEntry, error) {
 			CurrentName:  currentName,
 			Settings:     settings,
 			SettingsFile: sf,
+			Fetcher:      newManifestFetcher(settings.ManifestURL),
 			PlatformKey:  name.PlatformKey,
 		})
 		return updateEntries(entry, updated), err
@@ -170,7 +171,7 @@ func updateSingle(ctx context.Context, input string) ([]updateEntry, error) {
 		if err != nil {
 			return nil, err
 		}
-		entry, updated, err := reinstallChannel(ctx, name.Channel, installed, settings, sf, nil)
+		entry, updated, err := reinstallChannel(ctx, name.Channel, installed, settings, sf, newManifestFetcher(settings.ManifestURL))
 		return updateEntries(entry, updated), err
 	}
 
@@ -203,9 +204,8 @@ func updateAll(ctx context.Context) (updateOutcome, error) {
 	}
 	outcome := updateOutcome{settingsFile: sf, settings: settings}
 
-	// Lazily fetch manifest only if there are non-nightly channels to update.
-	var manifest *dist.Manifest
-	var manifestErr error
+	fetcher := newManifestFetcher(settings.ManifestURL)
+	var manifestWarnOnce sync.Once
 
 	var errs []error
 	for _, name := range installed {
@@ -217,15 +217,13 @@ func updateAll(ctx context.Context) (updateOutcome, error) {
 		if parsed.IsCustom() || parsed.Channel == toolchain.UnknownChannel {
 			continue // skip custom/linked toolchains
 		}
-		if parsed.Channel != toolchain.Nightly && manifest == nil && manifestErr == nil {
-			noteStep(i18n.T("FetchingManifest", nil))
-			manifest, manifestErr = fetchManifest(ctx, settings.ManifestURL)
-			if manifestErr != nil {
-				slog.Warn("manifest fetch failed; skipping non-nightly updates", "error", manifestErr)
+		if parsed.Channel != toolchain.Nightly {
+			if _, err := fetcher.get(ctx); err != nil {
+				manifestWarnOnce.Do(func() {
+					slog.Warn("manifest fetch failed; skipping non-nightly updates", "error", err)
+				})
+				continue
 			}
-		}
-		if manifestErr != nil && parsed.Channel != toolchain.Nightly {
-			continue // manifest unavailable, can't resolve non-nightly
 		}
 
 		// Reload settings from the cached SettingsFile so each iteration sees
@@ -243,7 +241,7 @@ func updateAll(ctx context.Context) (updateOutcome, error) {
 			CurrentName:  name,
 			Settings:     settings,
 			SettingsFile: sf,
-			Manifest:     manifest,
+			Fetcher:      fetcher,
 			PlatformKey:  parsed.PlatformKey,
 		})
 		if err != nil {
@@ -263,22 +261,22 @@ type reinstallRequest struct {
 	CurrentName  string
 	Settings     *config.Settings
 	SettingsFile *config.SettingsFile
-	Manifest     *dist.Manifest
+	Fetcher      *manifestFetcher
 	PlatformKey  string
 }
 
-func reinstallChannel(ctx context.Context, channel toolchain.Channel, currentName string, settings *config.Settings, sf *config.SettingsFile, manifest *dist.Manifest) (updateEntry, bool, error) {
+func reinstallChannel(ctx context.Context, channel toolchain.Channel, currentName string, settings *config.Settings, sf *config.SettingsFile, fetcher *manifestFetcher) (updateEntry, bool, error) {
 	return reinstallChannelForPlatform(ctx, reinstallRequest{
 		Channel:      channel,
 		CurrentName:  currentName,
 		Settings:     settings,
 		SettingsFile: sf,
-		Manifest:     manifest,
+		Fetcher:      fetcher,
 	})
 }
 
 func reinstallChannelForPlatform(ctx context.Context, req reinstallRequest) (updateEntry, bool, error) {
-	resolved, err := resolveAndLocateWithPlatformKey(ctx, toolchain.ToolchainName{Channel: req.Channel}, req.Settings, req.Manifest, req.PlatformKey)
+	resolved, err := resolveAndLocateWithPlatformKey(ctx, toolchain.ToolchainName{Channel: req.Channel}, req.Settings, req.Fetcher, req.PlatformKey)
 	if err != nil {
 		return updateEntry{}, false, err
 	}

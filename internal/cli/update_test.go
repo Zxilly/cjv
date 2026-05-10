@@ -58,7 +58,7 @@ func TestReinstallChannel_AlreadyUpToDate(t *testing.T) {
 
 	// Reinstall same channel — should print "already up to date"
 	sf := config.NewSettingsFile(settingsPath)
-	_, _, err := reinstallChannel(context.Background(), toolchain.LTS, "lts-1.0.5", settings2, sf, nil)
+	_, _, err := reinstallChannel(context.Background(), toolchain.LTS, "lts-1.0.5", settings2, sf, newManifestFetcher(settings2.ManifestURL))
 	assert.NoError(t, err)
 }
 
@@ -151,7 +151,7 @@ func TestReinstallChannel_UpgradesToNewerVersion(t *testing.T) {
 
 	// Reinstall should upgrade from 1.0.0 to 1.0.5
 	sf := config.NewSettingsFile(settingsPath)
-	_, _, err := reinstallChannel(context.Background(), toolchain.LTS, "lts-1.0.0", &settings, sf, nil)
+	_, _, err := reinstallChannel(context.Background(), toolchain.LTS, "lts-1.0.0", &settings, sf, newManifestFetcher(settings.ManifestURL))
 	require.NoError(t, err)
 
 	// New version should be installed
@@ -185,6 +185,7 @@ func TestReinstallChannelForPlatform_UpdatesTargetVariant(t *testing.T) {
 		CurrentName:  oldName,
 		Settings:     &settings,
 		SettingsFile: sf,
+		Fetcher:      newManifestFetcher(settings.ManifestURL),
 		PlatformKey:  targetKey,
 	})
 	require.NoError(t, err)
@@ -211,7 +212,7 @@ func TestReinstallChannel_UpdatesDefaultToolchain(t *testing.T) {
 	require.NoError(t, config.SaveSettings(&settings, settingsPath))
 
 	sf2 := config.NewSettingsFile(settingsPath)
-	_, _, err := reinstallChannel(context.Background(), toolchain.LTS, "lts-1.0.0", &settings, sf2, nil)
+	_, _, err := reinstallChannel(context.Background(), toolchain.LTS, "lts-1.0.0", &settings, sf2, newManifestFetcher(settings.ManifestURL))
 	require.NoError(t, err)
 
 	// Default should be updated to new version
@@ -236,7 +237,7 @@ func TestReinstallChannel_UpdatesOverrides(t *testing.T) {
 	require.NoError(t, config.SaveSettings(&settings, settingsPath))
 
 	sf3 := config.NewSettingsFile(settingsPath)
-	_, _, err := reinstallChannel(context.Background(), toolchain.LTS, "lts-1.0.0", &settings, sf3, nil)
+	_, _, err := reinstallChannel(context.Background(), toolchain.LTS, "lts-1.0.0", &settings, sf3, newManifestFetcher(settings.ManifestURL))
 	require.NoError(t, err)
 
 	reloaded, _ := config.LoadSettings(filepath.Join(home, "settings.toml"))

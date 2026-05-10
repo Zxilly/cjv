@@ -13,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"sync/atomic"
 	"testing"
 
 	"github.com/Zxilly/cjv/internal/cjverr"
@@ -279,6 +280,79 @@ func TestInstallToolchainWithTargets_InstallsHostAndTargets(t *testing.T) {
 	reloaded, err := config.LoadSettings(filepath.Join(home, "settings.toml"))
 	require.NoError(t, err)
 	assert.Equal(t, "sts-2.0.0", reloaded.DefaultToolchain)
+}
+
+func TestInstallToolchainWithTargets_FetchesManifestOnce(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv(config.EnvHome, home)
+	require.NoError(t, config.EnsureDirs())
+
+	sdkData, sha := createMockSDK()
+	hostKey, err := dist.CurrentPlatformKey("")
+	require.NoError(t, err)
+	ohosKey, err := dist.CurrentPlatformKeyWithTarget("", "ohos")
+	require.NoError(t, err)
+	androidKey, err := dist.CurrentPlatformKeyWithTarget("", "android")
+	require.NoError(t, err)
+
+	var manifestRequests atomic.Int32
+	mux := http.NewServeMux()
+	server := httptest.NewServer(mux)
+	t.Cleanup(server.Close)
+
+	platforms := map[string]dist.DownloadInfo{
+		hostKey: {
+			Name:   "cangjie-sdk-2.0.0.zip",
+			SHA256: sha,
+			URL:    server.URL + "/download/cangjie-sdk-2.0.0.zip",
+		},
+		ohosKey: {
+			Name:   "cangjie-sdk-" + ohosKey + "-2.0.0.zip",
+			SHA256: sha,
+			URL:    server.URL + "/download/cangjie-sdk-" + ohosKey + "-2.0.0.zip",
+		},
+		androidKey: {
+			Name:   "cangjie-sdk-" + androidKey + "-2.0.0.zip",
+			SHA256: sha,
+			URL:    server.URL + "/download/cangjie-sdk-" + androidKey + "-2.0.0.zip",
+		},
+	}
+	var manifest dist.Manifest
+	manifest.Channels.LTS = dist.ChannelInfo{
+		Latest: "1.0.5",
+		Versions: map[string]map[string]dist.DownloadInfo{
+			"1.0.5": {
+				hostKey: {
+					Name:   "cangjie-sdk-1.0.5.zip",
+					SHA256: sha,
+					URL:    server.URL + "/download/cangjie-sdk-1.0.5.zip",
+				},
+			},
+		},
+	}
+	manifest.Channels.STS = dist.ChannelInfo{
+		Latest:   "2.0.0",
+		Versions: map[string]map[string]dist.DownloadInfo{"2.0.0": platforms},
+	}
+
+	mux.HandleFunc("/download/", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/octet-stream")
+		_, _ = w.Write(sdkData)
+	})
+	mux.HandleFunc("/sdk-versions.json", func(w http.ResponseWriter, r *http.Request) {
+		manifestRequests.Add(1)
+		w.Header().Set("Content-Type", "application/json")
+		if err := json.NewEncoder(w).Encode(manifest); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+	})
+
+	settings := config.DefaultSettings()
+	settings.ManifestURL = server.URL + "/sdk-versions.json"
+	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, "settings.toml")))
+
+	require.NoError(t, InstallToolchainWithTargets(context.Background(), "sts", []string{"ohos", "android"}, false))
+	assert.Equal(t, int32(1), manifestRequests.Load())
 }
 
 func TestInstallToolchainWithTargets_BareVersionResolvesChannel(t *testing.T) {
@@ -761,7 +835,7 @@ func TestResolveAndLocateDispatchesNightlyAndDefaultToolchainExistsInvalidName(t
 	resolved, err := resolveAndLocateWithPlatformKey(context.Background(), toolchain.ToolchainName{
 		Channel: toolchain.Nightly,
 		Version: "202501010000",
-	}, &settings, nil, "linux-x64")
+	}, &settings, newManifestFetcher(""), "linux-x64")
 
 	require.NoError(t, err)
 	assert.Equal(t, "nightly-202501010000", resolved.Name)

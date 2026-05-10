@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 
 	"github.com/Zxilly/cjv/internal/cjverr"
 	"github.com/Zxilly/cjv/internal/cli/output"
@@ -131,7 +132,9 @@ func InstallToolchainWithExtras(ctx context.Context, input string, targets, comp
 		return fmt.Errorf("cannot combine target variant toolchain name %q with --target; pass the host toolchain name and --target instead", input)
 	}
 
-	resolved, err := resolveAndLocate(ctx, name, settings, nil)
+	fetcher := newManifestFetcher(settings.ManifestURL)
+
+	resolved, err := resolveAndLocate(ctx, name, settings, fetcher)
 	if err != nil {
 		return err
 	}
@@ -147,7 +150,7 @@ func InstallToolchainWithExtras(ctx context.Context, input string, targets, comp
 	}
 
 	for _, target := range normalizedTargets {
-		resolvedTarget, err := resolveAndLocateWithTarget(ctx, name, settings, nil, target)
+		resolvedTarget, err := resolveAndLocateWithTarget(ctx, name, settings, fetcher, target)
 		if err != nil {
 			return err
 		}
@@ -162,6 +165,29 @@ func InstallToolchainWithExtras(ctx context.Context, input string, targets, comp
 		}
 	}
 	return nil
+}
+
+// manifestFetcher fetches the SDK manifest at most once per install operation.
+// The first call to get triggers the network fetch (and the FetchingManifest
+// status line); subsequent calls return the cached result, including any error.
+// The first caller's ctx is used for the actual fetch.
+type manifestFetcher struct {
+	once sync.Once
+	url  string
+	m    *dist.Manifest
+	err  error
+}
+
+func newManifestFetcher(url string) *manifestFetcher {
+	return &manifestFetcher{url: url}
+}
+
+func (f *manifestFetcher) get(ctx context.Context) (*dist.Manifest, error) {
+	f.once.Do(func() {
+		noteStep(i18n.T("FetchingManifest", nil))
+		f.m, f.err = fetchManifest(ctx, f.url)
+	})
+	return f.m, f.err
 }
 
 // InstallComponentsForToolchain backs the proxy auto_install path: it
@@ -251,9 +277,10 @@ func installComponentsList(ctx context.Context, resolvedName string, components 
 
 // resolvedToolchain holds the result of toolchain resolution.
 type resolvedToolchain struct {
-	Name   string // e.g. "lts-1.0.5"
-	URL    string // download URL
-	SHA256 string // expected checksum (empty for nightly)
+	Name        string // e.g. "lts-1.0.5"
+	URL         string // download URL
+	SHA256      string // expected checksum (empty for nightly)
+	ArchiveName string // display filename from the manifest when available
 }
 
 func installResolved(ctx context.Context, rt resolvedToolchain, settings *config.Settings, sf *config.SettingsFile, force bool) (retErr error) {
@@ -299,7 +326,7 @@ func installResolvedWithDefault(ctx context.Context, rt resolvedToolchain, setti
 		return fmt.Errorf("invalid toolchain download URL: %s", rt.URL)
 	}
 
-	archivePath, err := dist.DownloadCached(ctx, rt.URL, rt.SHA256, downloadsDir)
+	archivePath, err := dist.DownloadCachedWithName(ctx, rt.URL, rt.SHA256, downloadsDir, rt.ArchiveName)
 	if err != nil {
 		return err
 	}
@@ -400,11 +427,11 @@ func ensurePathConfigured() {
 	}
 }
 
-func resolveAndLocate(ctx context.Context, name toolchain.ToolchainName, settings *config.Settings, manifest *dist.Manifest) (resolvedToolchain, error) {
-	return resolveAndLocateWithTarget(ctx, name, settings, manifest, "")
+func resolveAndLocate(ctx context.Context, name toolchain.ToolchainName, settings *config.Settings, fetcher *manifestFetcher) (resolvedToolchain, error) {
+	return resolveAndLocateWithTarget(ctx, name, settings, fetcher, "")
 }
 
-func resolveAndLocateWithTarget(ctx context.Context, name toolchain.ToolchainName, settings *config.Settings, manifest *dist.Manifest, target string) (resolvedToolchain, error) {
+func resolveAndLocateWithTarget(ctx context.Context, name toolchain.ToolchainName, settings *config.Settings, fetcher *manifestFetcher, target string) (resolvedToolchain, error) {
 	platformKey := name.PlatformKey
 	if platformKey == "" {
 		var err error
@@ -413,10 +440,10 @@ func resolveAndLocateWithTarget(ctx context.Context, name toolchain.ToolchainNam
 			return resolvedToolchain{}, err
 		}
 	}
-	return resolveAndLocateWithPlatformKey(ctx, name, settings, manifest, platformKey)
+	return resolveAndLocateWithPlatformKey(ctx, name, settings, fetcher, platformKey)
 }
 
-func resolveAndLocateWithPlatformKey(ctx context.Context, name toolchain.ToolchainName, settings *config.Settings, manifest *dist.Manifest, platformKey string) (resolvedToolchain, error) {
+func resolveAndLocateWithPlatformKey(ctx context.Context, name toolchain.ToolchainName, settings *config.Settings, fetcher *manifestFetcher, platformKey string) (resolvedToolchain, error) {
 	if platformKey == "" {
 		var err error
 		platformKey, err = dist.CurrentPlatformKey(settings.DefaultHost)
@@ -428,13 +455,9 @@ func resolveAndLocateWithPlatformKey(ctx context.Context, name toolchain.Toolcha
 		return resolveNightlyWithPlatformKey(ctx, name, settings, platformKey)
 	}
 
-	if manifest == nil {
-		noteStep(i18n.T("FetchingManifest", nil))
-		var fetchErr error
-		manifest, fetchErr = fetchManifest(ctx, settings.ManifestURL)
-		if fetchErr != nil {
-			return resolvedToolchain{}, fetchErr
-		}
+	manifest, err := fetcher.get(ctx)
+	if err != nil {
+		return resolvedToolchain{}, err
 	}
 
 	channel := name.Channel
@@ -467,7 +490,7 @@ func resolveAndLocateWithPlatformKey(ctx context.Context, name toolchain.Toolcha
 		return resolvedToolchain{}, err
 	}
 
-	return resolvedToolchain{Name: resolved.String(), URL: info.URL, SHA256: info.SHA256}, nil
+	return resolvedToolchain{Name: resolved.String(), URL: info.URL, SHA256: info.SHA256, ArchiveName: info.Name}, nil
 }
 
 func resolveNightlyWithPlatformKey(ctx context.Context, name toolchain.ToolchainName, settings *config.Settings, platformKey string) (resolvedToolchain, error) {
