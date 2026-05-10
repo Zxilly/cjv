@@ -236,7 +236,7 @@ func newMockSDKServer(t *testing.T, sdkArchive []byte, sdkHash string) *httptest
 	mux := http.NewServeMux()
 	server := httptest.NewServer(mux)
 
-	platformKey, err := dist.CurrentPlatformKey("")
+	platformKey, err := dist.CurrentTargetTuple("", "")
 	require.NoError(t, err, "failed to get platform key")
 
 	var manifest dist.Manifest

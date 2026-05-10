@@ -24,7 +24,7 @@ func TestSmokeRealComponentDownloads_LTSSTS(t *testing.T) {
 	defer cancel()
 
 	manifest := fetchSmokeManifest(t, ctx)
-	platformKey, err := dist.CurrentPlatformKey("")
+	platformKey, err := dist.CurrentTargetTuple("", "")
 	require.NoError(t, err)
 
 	downloadsDir := t.TempDir()
