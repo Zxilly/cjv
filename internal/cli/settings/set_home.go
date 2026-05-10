@@ -2,11 +2,9 @@ package settings
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 
 	"github.com/Zxilly/cjv/internal/config"
-	"github.com/Zxilly/cjv/internal/i18n"
 	"github.com/spf13/cobra"
 )
 
@@ -31,20 +29,12 @@ var setHomeCmd = &cobra.Command{
 		if display == "" {
 			display = "(unset)"
 		}
-		changed := false
-		if err := updateSetting("home", display, func(s *config.Settings) bool {
+		return updateSetting("home", display, func(s *config.Settings) bool {
 			if s.Home == stored {
 				return false
 			}
 			s.Home = stored
-			changed = true
 			return true
-		}); err != nil {
-			return err
-		}
-		if changed && stored != "" {
-			fmt.Fprintf(os.Stderr, "\n%s\n", i18n.T("SetHomeNoMigrate", i18n.MsgData{"Path": stored}))
-		}
-		return nil
+		})
 	},
 }

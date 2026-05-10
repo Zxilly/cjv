@@ -148,9 +148,6 @@ other = "默认工具链: {{.Name}}"
 [SettingUpdated]
 other = "设置 '{{.Key}}' 已更新为 '{{.Value}}'"
 
-[SetHomeNoMigrate]
-other = "提示：原 home 目录下的数据不会自动迁移。如需保留，请手动将 toolchains/downloads 等目录移动到 {{.Path}}。"
-
 # === 检查 ===
 [AllUpToDate]
 other = "所有工具链均为最新版本"

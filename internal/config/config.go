@@ -58,6 +58,14 @@ var (
 	userHomeDirOnce sync.Once
 	userHomeDirVal  string
 	errUserHomeDir  error
+
+	// userHomeDirOverrideMu guards userHomeDirOverride. The override is used
+	// only by tests (set via IsolateForTest) so they can redirect the user
+	// home dir resolution without touching the OS HOME/USERPROFILE env vars
+	// — touching those leaks into subprocesses (e.g. `go` writing telemetry
+	// to <tmp>/Library/Application Support, racing with t.TempDir cleanup).
+	userHomeDirOverrideMu sync.RWMutex
+	userHomeDirOverride   string
 )
 
 // cachedUserHomeDir returns the user's home directory, caching the result.
@@ -65,6 +73,12 @@ var (
 // permanently for the lifetime of the process. This is acceptable for a
 // short-lived CLI tool.
 func cachedUserHomeDir() (string, error) {
+	userHomeDirOverrideMu.RLock()
+	override := userHomeDirOverride
+	userHomeDirOverrideMu.RUnlock()
+	if override != "" {
+		return override, nil
+	}
 	userHomeDirOnce.Do(func() {
 		userHomeDirVal, errUserHomeDir = os.UserHomeDir()
 	})
@@ -243,6 +257,17 @@ func ResetCachedUserHomeDir() {
 	userHomeDirOnce = sync.Once{}
 	userHomeDirVal = ""
 	errUserHomeDir = nil
+}
+
+// SetUserHomeDirOverrideForTest installs a value that cachedUserHomeDir will
+// return until the override is cleared (passing "" clears it). Used by tests
+// to redirect SettingsPath() and the default-home branch of Home() without
+// modifying the OS HOME/USERPROFILE env vars — those leak into subprocesses
+// the test launches (e.g. `go` writing telemetry into the test's tmp dir).
+func SetUserHomeDirOverrideForTest(path string) {
+	userHomeDirOverrideMu.Lock()
+	userHomeDirOverride = path
+	userHomeDirOverrideMu.Unlock()
 }
 
 func EnsureDirs() error {
