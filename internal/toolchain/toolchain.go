@@ -79,7 +79,7 @@ func FindInstalled(name ToolchainName) (string, error) {
 					continue
 				}
 				parsed, err := ParseToolchainName(e.Name())
-				if err != nil || parsed.PlatformKey != "" {
+				if err != nil || parsed.Target != "" {
 					continue
 				}
 				candidates = append(candidates, e.Name())

@@ -38,10 +38,10 @@ func docsBundleBase() string {
 	return DefaultDocsBundleBaseURL
 }
 
-// ResolveAssetURL requires platformKey for stdx (host key, no target suffix)
-// and ignores it for docs / stdx-docs. Returns ComponentNotAvailableForChannelError
+// ResolveAssetURL requires a host tuple (no environment suffix) for stdx and
+// ignores tuple for docs / stdx-docs. Returns ComponentNotAvailableForChannelError
 // when the component does not ship offline for tc.Channel.
-func ResolveAssetURL(spec Spec, tc toolchain.ToolchainName, platformKey string) (string, error) {
+func ResolveAssetURL(spec Spec, tc toolchain.ToolchainName, tuple string) (string, error) {
 	if !spec.SupportsChannel(tc.Channel) {
 		return "", &cjverr.ComponentNotAvailableForChannelError{
 			Component: string(spec.Name),
@@ -54,7 +54,7 @@ func ResolveAssetURL(spec Spec, tc toolchain.ToolchainName, platformKey string) 
 
 	switch spec.Name {
 	case Stdx:
-		return stdxURL(tc, platformKey)
+		return stdxURL(tc, tuple)
 	case Docs:
 		return docsURL(tc)
 	case StdxDocs:
@@ -64,18 +64,18 @@ func ResolveAssetURL(spec Spec, tc toolchain.ToolchainName, platformKey string) 
 	}
 }
 
-func stdxURL(tc toolchain.ToolchainName, platformKey string) (string, error) {
-	if platformKey == "" {
-		return "", fmt.Errorf("stdx requires a host platform key")
+func stdxURL(tc toolchain.ToolchainName, tuple string) (string, error) {
+	if tuple == "" {
+		return "", fmt.Errorf("stdx requires a host tuple")
 	}
-	hostKey, err := sdktarget.HostKeyOnly(platformKey)
+	host, err := sdktarget.HostPartOf(tuple)
 	if err != nil {
 		return "", err
 	}
-	if hostKey != platformKey {
-		return "", fmt.Errorf("stdx is not target-specific; got toolchain key %q", platformKey)
+	if host != tuple {
+		return "", fmt.Errorf("stdx is not target-specific; got target tuple %q", tuple)
 	}
-	parts, err := sdktarget.ParseToolchainKey(hostKey)
+	parts, err := sdktarget.ParseTuple(host)
 	if err != nil {
 		return "", err
 	}

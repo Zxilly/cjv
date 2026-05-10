@@ -38,7 +38,7 @@ func TestAllErrorTypes_ProduceReadableMessages(t *testing.T) {
 		},
 		{
 			"VersionNotAvailable",
-			&VersionNotAvailableError{Version: "1.0.0", Platform: "linux-arm64"},
+			&VersionNotAvailableError{Version: "1.0.0", Target: "linux-arm64"},
 			[]string{"1.0.0", "linux-arm64"},
 		},
 		{

@@ -176,7 +176,7 @@ func proxyMockServer(t *testing.T) *httptest.Server {
 	sdkData := buf.Bytes()
 	hash := sha256.Sum256(sdkData)
 	sha := hex.EncodeToString(hash[:])
-	pk, _ := dist.CurrentPlatformKey("")
+	pk, _ := dist.CurrentHostTuple("")
 
 	var serverURL string
 	mux := http.NewServeMux()
@@ -257,9 +257,9 @@ targets = ["ohos", "android"]
 		gotInput = input
 		gotTargets = append([]string(nil), targets...)
 		for _, target := range targets {
-			key, err := dist.CurrentPlatformKeyWithTarget(settings.DefaultHost, target)
+			key, err := dist.CurrentTargetTuple(settings.DefaultHost, target)
 			require.NoError(t, err)
-			name := toolchain.ToolchainName{Channel: toolchain.STS, Version: "2.0.0", PlatformKey: key}.String()
+			name := toolchain.ToolchainName{Channel: toolchain.STS, Version: "2.0.0", Target: key}.String()
 			require.NoError(t, os.MkdirAll(filepath.Join(home, "toolchains", name), 0o755))
 		}
 		return nil

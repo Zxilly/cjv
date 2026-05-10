@@ -86,8 +86,8 @@ func NightlyDownloadURL(baseURL, version, goos, goarch string) (string, error) {
 	return nightlyDownloadURL(baseURL, version, filename)
 }
 
-func NightlyDownloadURLForPlatform(baseURL, version, platformKey string) (string, error) {
-	filename, err := NightlyFilenameForPlatform(platformKey, version)
+func NightlyDownloadURLForTuple(baseURL, version, tuple string) (string, error) {
+	filename, err := NightlyFilenameForTuple(tuple, version)
 	if err != nil {
 		return "", err
 	}

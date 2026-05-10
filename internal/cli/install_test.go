@@ -69,7 +69,7 @@ func createMockSDKWithEnvSetup(includeEnvSetup bool) ([]byte, string) {
 func validMockServer(t *testing.T) *httptest.Server {
 	t.Helper()
 	sdkData, sha := createMockSDK()
-	pk, err := dist.CurrentPlatformKey("")
+	pk, err := dist.CurrentHostTuple("")
 	require.NoError(t, err)
 
 	mux := http.NewServeMux()
@@ -118,7 +118,7 @@ func validMockServer(t *testing.T) *httptest.Server {
 
 func mockServerWithSDK(t *testing.T, sdkData []byte, sha string) *httptest.Server {
 	t.Helper()
-	pk, err := dist.CurrentPlatformKey("")
+	pk, err := dist.CurrentHostTuple("")
 	require.NoError(t, err)
 
 	mux := http.NewServeMux()
@@ -156,7 +156,7 @@ func mockServerWithSDK(t *testing.T, sdkData []byte, sha string) *httptest.Serve
 func mockServerWithTargetSDKs(t *testing.T, channel toolchain.Channel, version string, targets ...string) *httptest.Server {
 	t.Helper()
 	sdkData, sha := createMockSDK()
-	hostKey, err := dist.CurrentPlatformKey("")
+	hostKey, err := dist.CurrentHostTuple("")
 	require.NoError(t, err)
 
 	platforms := map[string]dist.DownloadInfo{
@@ -167,7 +167,7 @@ func mockServerWithTargetSDKs(t *testing.T, channel toolchain.Channel, version s
 		},
 	}
 	for _, target := range targets {
-		key, err := dist.CurrentPlatformKeyWithTarget("", target)
+		key, err := dist.CurrentTargetTuple("", target)
 		require.NoError(t, err)
 		platforms[key] = dist.DownloadInfo{
 			Name:   "cangjie-sdk-" + key + "-" + version + ".zip",
@@ -263,11 +263,11 @@ func TestInstallToolchainWithTargets_InstallsHostAndTargets(t *testing.T) {
 	err := InstallToolchainWithTargets(context.Background(), "sts", []string{"ohos", "android"}, false)
 	require.NoError(t, err)
 
-	hostKey, err := dist.CurrentPlatformKey("")
+	hostKey, err := dist.CurrentHostTuple("")
 	require.NoError(t, err)
-	ohosKey, err := dist.CurrentPlatformKeyWithTarget("", "ohos")
+	ohosKey, err := dist.CurrentTargetTuple("", "ohos")
 	require.NoError(t, err)
-	androidKey, err := dist.CurrentPlatformKeyWithTarget("", "android")
+	androidKey, err := dist.CurrentTargetTuple("", "android")
 	require.NoError(t, err)
 
 	installed, err := toolchain.ListInstalled()
@@ -288,11 +288,11 @@ func TestInstallToolchainWithTargets_FetchesManifestOnce(t *testing.T) {
 	require.NoError(t, config.EnsureDirs())
 
 	sdkData, sha := createMockSDK()
-	hostKey, err := dist.CurrentPlatformKey("")
+	hostKey, err := dist.CurrentHostTuple("")
 	require.NoError(t, err)
-	ohosKey, err := dist.CurrentPlatformKeyWithTarget("", "ohos")
+	ohosKey, err := dist.CurrentTargetTuple("", "ohos")
 	require.NoError(t, err)
-	androidKey, err := dist.CurrentPlatformKeyWithTarget("", "android")
+	androidKey, err := dist.CurrentTargetTuple("", "android")
 	require.NoError(t, err)
 
 	var manifestRequests atomic.Int32
@@ -367,7 +367,7 @@ func TestInstallToolchainWithTargets_BareVersionResolvesChannel(t *testing.T) {
 
 	require.NoError(t, InstallToolchainWithTargets(context.Background(), "2.0.0", []string{"ohos"}, false))
 
-	ohosKey, err := dist.CurrentPlatformKeyWithTarget("", "ohos")
+	ohosKey, err := dist.CurrentTargetTuple("", "ohos")
 	require.NoError(t, err)
 	installed, err := toolchain.ListInstalled()
 	require.NoError(t, err)
@@ -385,7 +385,7 @@ func TestInstallToolchainWithTargets_ExplicitVariantDoesNotSetDefault(t *testing
 	settings.ManifestURL = server.URL + "/sdk-versions.json"
 	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, "settings.toml")))
 
-	ohosKey, err := dist.CurrentPlatformKeyWithTarget("", "ohos")
+	ohosKey, err := dist.CurrentTargetTuple("", "ohos")
 	require.NoError(t, err)
 	require.NoError(t, InstallToolchainWithTargets(context.Background(), "sts-2.0.0-"+ohosKey, nil, false))
 
@@ -407,7 +407,7 @@ func TestInstallToolchainWithTargets_RejectsVariantPlusTargets(t *testing.T) {
 	settings := config.DefaultSettings()
 	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, "settings.toml")))
 
-	ohosKey, err := dist.CurrentPlatformKeyWithTarget("", "ohos")
+	ohosKey, err := dist.CurrentTargetTuple("", "ohos")
 	require.NoError(t, err)
 	err = InstallToolchainWithTargets(context.Background(), "sts-2.0.0-"+ohosKey, []string{"android"}, false)
 	require.Error(t, err)
@@ -764,7 +764,7 @@ func TestResolveNightlyWithSpecificVersionSkipsLatestLookup(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	resolved, err := resolveNightlyWithPlatformKey(ctx, toolchain.ToolchainName{
+	resolved, err := resolveNightlyWithTuple(ctx, toolchain.ToolchainName{
 		Channel: toolchain.Nightly,
 		Version: "202501010000",
 	}, &settings, "linux-x64")
@@ -821,7 +821,7 @@ func TestInstallComponentsListInputValidationAndAlreadyInstalled(t *testing.T) {
 	require.Error(t, err)
 
 	oldInstall := componentInstallFunc
-	componentInstallFunc = func(ctx context.Context, roots componentlib.Roots, tc toolchain.ToolchainName, name componentlib.Name, platformKey, downloadsDir string, force bool) error {
+	componentInstallFunc = func(ctx context.Context, roots componentlib.Roots, tc toolchain.ToolchainName, name componentlib.Name, tuple, downloadsDir string, force bool) error {
 		return &cjverr.ComponentAlreadyInstalledError{Toolchain: tc.String(), Component: string(name)}
 	}
 	t.Cleanup(func() { componentInstallFunc = oldInstall })
@@ -832,7 +832,7 @@ func TestInstallComponentsListInputValidationAndAlreadyInstalled(t *testing.T) {
 
 func TestResolveAndLocateDispatchesNightlyAndDefaultToolchainExistsInvalidName(t *testing.T) {
 	settings := config.DefaultSettings()
-	resolved, err := resolveAndLocateWithPlatformKey(context.Background(), toolchain.ToolchainName{
+	resolved, err := resolveAndLocateWithTuple(context.Background(), toolchain.ToolchainName{
 		Channel: toolchain.Nightly,
 		Version: "202501010000",
 	}, &settings, newManifestFetcher(""), "linux-x64")

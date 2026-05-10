@@ -52,7 +52,7 @@ func Active(ctx context.Context, tcOverride string) (ActiveToolchain, error) {
 	if err != nil {
 		return ActiveToolchain{}, err
 	}
-	if parsed.PlatformKey != "" {
+	if parsed.Target != "" {
 		hostName := toolchain.ToolchainName{
 			Channel: parsed.Channel,
 			Version: parsed.Version,
@@ -143,14 +143,14 @@ func ensureTargets(ctx context.Context, tcInput, tcDir string, settings *config.
 	var missingTargets []string
 	var missingNames []string
 	for _, target := range targets {
-		platformKey, err := targetPlatformKey(settings, target)
+		tuple, err := targetPlatformKey(settings, target)
 		if err != nil {
 			return err
 		}
 		name := toolchain.ToolchainName{
 			Channel:     host.Channel,
 			Version:     host.Version,
-			PlatformKey: platformKey,
+			Target: tuple,
 		}
 		if _, err := toolchain.FindInstalled(name); err != nil {
 			if !errors.Is(err, os.ErrNotExist) {
@@ -254,5 +254,5 @@ func targetPlatformKey(settings *config.Settings, target string) (string, error)
 	if settings != nil {
 		defaultHost = settings.DefaultHost
 	}
-	return dist.CurrentPlatformKeyWithTarget(defaultHost, target)
+	return dist.CurrentTargetTuple(defaultHost, target)
 }

@@ -140,7 +140,7 @@ func nextDefaultAfterUninstall(name string) (string, error) {
 			return false
 		}
 		parsed, err := toolchain.ParseToolchainName(r)
-		return err == nil && parsed.PlatformKey == ""
+		return err == nil && parsed.Target == ""
 	})
 	if idx < 0 {
 		return "", nil

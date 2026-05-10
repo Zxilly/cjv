@@ -4,9 +4,12 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"sort"
+	"strings"
 
 	"github.com/Zxilly/cjv/internal/cjverr"
 	"github.com/Zxilly/cjv/internal/toolchain"
+	goversion "github.com/hashicorp/go-version"
 )
 
 type DownloadInfo struct {
@@ -38,7 +41,7 @@ func ParseManifest(data []byte) (*Manifest, error) {
 	return &m, nil
 }
 
-func (m *Manifest) GetDownloadInfo(channel toolchain.Channel, version, platformKey string) (*DownloadInfo, error) {
+func (m *Manifest) GetDownloadInfo(channel toolchain.Channel, version, tuple string) (*DownloadInfo, error) {
 	ch, err := m.getChannel(channel)
 	if err != nil {
 		return nil, err
@@ -49,9 +52,9 @@ func (m *Manifest) GetDownloadInfo(channel toolchain.Channel, version, platformK
 		return nil, &cjverr.VersionNotFoundError{Version: version}
 	}
 
-	info, ok := platforms[platformKey]
+	info, ok := platforms[tuple]
 	if !ok {
-		return nil, &cjverr.VersionNotAvailableError{Version: version, Platform: platformKey}
+		return nil, &cjverr.VersionNotAvailableError{Version: version, Target: tuple}
 	}
 
 	return &info, nil
@@ -66,6 +69,73 @@ func (m *Manifest) GetLatestVersion(channel toolchain.Channel) (string, error) {
 		return "", fmt.Errorf("channel %s has no latest version", channel)
 	}
 	return ch.Latest, nil
+}
+
+// ListVersions returns the versions of the given channel, sorted descending by
+// semver (entries that fail to parse fall back to lexical order). When
+// tuple is non-empty, only versions that have a build for that key are
+// returned; the empty string disables platform filtering.
+func (m *Manifest) ListVersions(channel toolchain.Channel, tuple string) ([]string, error) {
+	ch, err := m.getChannel(channel)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]string, 0, len(ch.Versions))
+	for v, platforms := range ch.Versions {
+		if tuple != "" {
+			if _, ok := platforms[tuple]; !ok {
+				continue
+			}
+		}
+		out = append(out, v)
+	}
+	sortVersionsDesc(out)
+	return out, nil
+}
+
+// VersionsByTuple returns a map from each observed target tuple in the
+// channel to the descending semver-sorted list of versions that ship a build
+// for it. Used by the --all-platforms listing mode.
+func (m *Manifest) VersionsByTuple(channel toolchain.Channel) (map[string][]string, error) {
+	ch, err := m.getChannel(channel)
+	if err != nil {
+		return nil, err
+	}
+	result := make(map[string][]string)
+	for v, tuples := range ch.Versions {
+		for tuple := range tuples {
+			result[tuple] = append(result[tuple], v)
+		}
+	}
+	for tuple := range result {
+		sortVersionsDesc(result[tuple])
+	}
+	return result, nil
+}
+
+func sortVersionsDesc(versions []string) {
+	sort.SliceStable(versions, func(i, j int) bool {
+		return compareSemVerDesc(versions[i], versions[j])
+	})
+}
+
+// compareSemVerDesc reports whether a should sort before b in a descending
+// listing. Mirrors internal/toolchain/toolchain.go:compareSemVer semantics:
+// values that parse as semver are compared as such; unparseable values fall
+// back to string comparison; parseable values sort ahead of unparseable ones.
+func compareSemVerDesc(a, b string) bool {
+	va, aErr := goversion.NewVersion(a)
+	vb, bErr := goversion.NewVersion(b)
+	switch {
+	case aErr == nil && bErr == nil:
+		return va.Compare(vb) > 0
+	case aErr == nil:
+		return true
+	case bErr == nil:
+		return false
+	default:
+		return strings.Compare(a, b) > 0
+	}
 }
 
 // FindVersionChannel searches for a version across channels (LTS first, then STS).

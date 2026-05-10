@@ -20,7 +20,7 @@ func TestPlatformKeyFromGo(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.goos+"-"+tt.goarch, func(t *testing.T) {
-			key, err := PlatformKey(tt.goos, tt.goarch)
+			key, err := HostTupleFromGo(tt.goos, tt.goarch)
 			require.NoError(t, err)
 			assert.Equal(t, tt.expected, key)
 		})
@@ -28,7 +28,7 @@ func TestPlatformKeyFromGo(t *testing.T) {
 }
 
 func TestPlatformKeyUnsupported(t *testing.T) {
-	_, err := PlatformKey("freebsd", "amd64")
+	_, err := HostTupleFromGo("freebsd", "amd64")
 	assert.Error(t, err)
 }
 
@@ -58,38 +58,38 @@ func TestArchiveExt(t *testing.T) {
 	assert.Equal(t, ".tar.gz", ArchiveExt("linux"))
 }
 
-// --- Tests merged from quick_coverage_test.go (CurrentPlatformKey is in platform.go) ---
+// --- Tests merged from quick_coverage_test.go (CurrentHostTuple is in platform.go) ---
 
 func TestCurrentPlatformKey_ReturnsValid(t *testing.T) {
 	// On any supported platform, this should succeed.
-	key, err := CurrentPlatformKey("")
+	key, err := CurrentHostTuple("")
 	assert.NoError(t, err)
 	assert.NotEmpty(t, key)
 }
 
 func TestCurrentPlatformKeyWithTarget(t *testing.T) {
-	key, err := CurrentPlatformKeyWithTarget("linux-amd64", "ohos")
+	key, err := CurrentTargetTuple("linux-amd64", "ohos")
 	require.NoError(t, err)
 	assert.Equal(t, "linux-x64-ohos", key)
 }
 
 func TestNightlyFilenameForPlatformWithTarget(t *testing.T) {
-	name, err := NightlyFilenameForPlatform("win32-x64-ohos-arm32", "1.1.0-alpha.20260429010057")
+	name, err := NightlyFilenameForTuple("win32-x64-ohos-arm32", "1.1.0-alpha.20260429010057")
 	require.NoError(t, err)
 	assert.Equal(t, "cangjie-sdk-windows-x64-ohos-arm32-1.1.0-alpha.20260429010057.zip", name)
 }
 
 func TestPlatformHelpersErrorAndMappingBranches(t *testing.T) {
-	_, err := CurrentPlatformKey("unsupported-host")
+	_, err := CurrentHostTuple("unsupported-host")
 	require.Error(t, err)
 
-	_, err = CurrentPlatformKeyWithTarget("unsupported-host", "ohos")
+	_, err = CurrentTargetTuple("unsupported-host", "ohos")
 	require.Error(t, err)
 
 	_, err = NightlyFilename("plan9", "amd64", "1.0.0")
 	require.Error(t, err)
 
-	_, err = NightlyFilenameForPlatform("unsupported-host", "1.0.0")
+	_, err = NightlyFilenameForTuple("unsupported-host", "1.0.0")
 	require.Error(t, err)
 
 	assert.Equal(t, "windows", NightlyGOOS("windows"))

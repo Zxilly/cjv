@@ -32,7 +32,7 @@ other = "No toolchains installed. Use 'cjv install lts' to install one."
 other = "Version '{{.Version}}' not found in any channel"
 
 [VersionNotAvailable]
-other = "Version {{.Version}} is not available for your platform ({{.Platform}})"
+other = "Version {{.Version}} is not available for target tuple {{.Target}}"
 
 [FetchingManifest]
 other = "Fetching SDK version manifest..."
@@ -155,8 +155,8 @@ other = "Setting '{{.Key}}' set to '{{.Value}}'"
 [AllUpToDate]
 other = "All toolchains are up to date"
 
-[UpdateAvailableButNotForPlatform]
-other = "Update available ({{.Current}} → {{.Latest}}) but not for your platform ({{.Platform}})"
+[UpdateAvailableButNotForTarget]
+other = "Update available ({{.Current}} → {{.Latest}}) but not for target tuple {{.Target}}"
 
 # === Settings ===
 [UnknownSettingsField]
@@ -371,3 +371,26 @@ other = "Force re-download and re-install even if already installed"
 
 [StatusInstalled]
 other = "installed"
+
+# === Toolchain list-remote ===
+
+[ListRemoteChannelHeader]
+other = "Channel: {{.Channel}}"
+
+[ListRemoteChannelHeaderWithLatest]
+other = "Channel: {{.Channel}} (latest {{.Latest}})"
+
+[ListRemoteChannelHeaderTarget]
+other = "Channel: {{.Channel}} (latest {{.Latest}}) — {{.Target}}"
+
+[ListRemoteNoVersionsForTarget]
+other = "no builds for {{.Target}}; try a different --host or omit --target"
+
+[ListRemoteHint]
+other = "Tip: install with 'cjv install <channel>-<version>'"
+
+[ListRemoteHintAllPlatforms]
+other = "Tip: install with 'cjv install <channel>-<version>' (use --target for cross-compile builds)"
+
+[ListRemoteUnknownChannelFlag]
+other = "Unknown channel '{{.Value}}'; expected one of: all, lts, sts, nightly"

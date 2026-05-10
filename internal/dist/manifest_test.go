@@ -269,6 +269,140 @@ func TestValidateDownloadInfo_Valid(t *testing.T) {
 	assert.NoError(t, err)
 }
 
+// --- Tests for ListVersions / VersionsByTuple / compareSemVerDesc ---
+
+func loadFixtureManifest(t *testing.T) *Manifest {
+	t.Helper()
+	data, err := os.ReadFile("testdata/sdk-versions.json")
+	require.NoError(t, err)
+	m, err := ParseManifest(data)
+	require.NoError(t, err)
+	return m
+}
+
+func TestManifestListVersions_AllSortedDesc(t *testing.T) {
+	m := loadFixtureManifest(t)
+	versions, err := m.ListVersions(toolchain.LTS, "")
+	require.NoError(t, err)
+	// fixture LTS has 1.0.0 and 1.0.5
+	assert.Equal(t, []string{"1.0.5", "1.0.0"}, versions)
+}
+
+func TestManifestListVersions_FilterByPlatformKey(t *testing.T) {
+	m := loadFixtureManifest(t)
+	versions, err := m.ListVersions(toolchain.LTS, "win32-x64")
+	require.NoError(t, err)
+	assert.Equal(t, []string{"1.0.5", "1.0.0"}, versions)
+
+	versions, err = m.ListVersions(toolchain.LTS, "freebsd-amd64")
+	require.NoError(t, err)
+	assert.Empty(t, versions)
+}
+
+func TestManifestListVersions_PartialPlatformMatch(t *testing.T) {
+	validHash := strings.Repeat("ab", 32)
+	json := `{
+  "channels": {
+    "lts": {
+      "latest": "1.0.5",
+      "versions": {
+        "1.0.0": {"linux-x64": {"name":"a","sha256":"` + validHash + `","url":"http://x"}},
+        "1.0.5": {
+          "linux-x64": {"name":"a","sha256":"` + validHash + `","url":"http://x"},
+          "linux-x64-ohos": {"name":"b","sha256":"` + validHash + `","url":"http://y"}
+        }
+      }
+    },
+    "sts": {
+      "latest": "2.0.0",
+      "versions": {"2.0.0": {"linux-x64": {"name":"a","sha256":"` + validHash + `","url":"http://x"}}}
+    }
+  }
+}`
+	m, err := ParseManifest([]byte(json))
+	require.NoError(t, err)
+
+	hostOnly, err := m.ListVersions(toolchain.LTS, "linux-x64")
+	require.NoError(t, err)
+	assert.Equal(t, []string{"1.0.5", "1.0.0"}, hostOnly)
+
+	withTarget, err := m.ListVersions(toolchain.LTS, "linux-x64-ohos")
+	require.NoError(t, err)
+	assert.Equal(t, []string{"1.0.5"}, withTarget, "ohos build only present for 1.0.5")
+}
+
+func TestManifestListVersions_UnknownChannel(t *testing.T) {
+	m := loadFixtureManifest(t)
+	_, err := m.ListVersions(toolchain.Nightly, "")
+	require.Error(t, err)
+}
+
+func TestManifestListVersions_DoubleDigitMinorOrdersBySemver(t *testing.T) {
+	validHash := strings.Repeat("ab", 32)
+	json := `{
+  "channels": {
+    "lts": {
+      "latest": "1.10.0",
+      "versions": {
+        "1.10.0": {"linux-x64": {"name":"a","sha256":"` + validHash + `","url":"http://x"}},
+        "1.2.0":  {"linux-x64": {"name":"a","sha256":"` + validHash + `","url":"http://x"}},
+        "1.1.0-beta.1": {"linux-x64": {"name":"a","sha256":"` + validHash + `","url":"http://x"}}
+      }
+    },
+    "sts": {"latest":"2.0.0","versions":{"2.0.0":{"linux-x64":{"name":"a","sha256":"` + validHash + `","url":"http://x"}}}}
+  }
+}`
+	m, err := ParseManifest([]byte(json))
+	require.NoError(t, err)
+
+	versions, err := m.ListVersions(toolchain.LTS, "")
+	require.NoError(t, err)
+	// Critical: 1.10.0 must precede 1.2.0 (semver, not lexical).
+	assert.Equal(t, []string{"1.10.0", "1.2.0", "1.1.0-beta.1"}, versions)
+}
+
+func TestManifestListVersions_PrereleaseOrdering(t *testing.T) {
+	validHash := strings.Repeat("ab", 32)
+	json := `{
+  "channels": {
+    "lts": {
+      "latest": "1.0.0",
+      "versions": {
+        "1.0.0": {"linux-x64": {"name":"a","sha256":"` + validHash + `","url":"http://x"}},
+        "1.0.0-beta.1": {"linux-x64": {"name":"a","sha256":"` + validHash + `","url":"http://x"}}
+      }
+    },
+    "sts": {"latest":"2.0.0","versions":{"2.0.0":{"linux-x64":{"name":"a","sha256":"` + validHash + `","url":"http://x"}}}}
+  }
+}`
+	m, err := ParseManifest([]byte(json))
+	require.NoError(t, err)
+
+	versions, err := m.ListVersions(toolchain.LTS, "")
+	require.NoError(t, err)
+	// SemVer rule: 1.0.0-beta.1 < 1.0.0
+	assert.Equal(t, []string{"1.0.0", "1.0.0-beta.1"}, versions)
+}
+
+func TestManifestVersionsByTuple_All(t *testing.T) {
+	m := loadFixtureManifest(t)
+	got, err := m.VersionsByTuple(toolchain.LTS)
+	require.NoError(t, err)
+
+	expected := map[string][]string{
+		"win32-x64":    {"1.0.5", "1.0.0"},
+		"darwin-arm64": {"1.0.5", "1.0.0"},
+		"linux-x64":    {"1.0.5", "1.0.0"},
+	}
+	assert.Equal(t, expected, got)
+}
+
+func TestManifestVersionsByTuple_UnknownChannel(t *testing.T) {
+	m := loadFixtureManifest(t)
+	_, err := m.VersionsByTuple(toolchain.Nightly)
+	require.Error(t, err)
+}
+
 func TestParseManifest_ValidManifest(t *testing.T) {
 	validHash := strings.Repeat("ab", 32)
 	json := `{

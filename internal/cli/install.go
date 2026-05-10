@@ -128,7 +128,7 @@ func InstallToolchainWithExtras(ctx context.Context, input string, targets, comp
 	if err != nil {
 		return err
 	}
-	if name.PlatformKey != "" && len(normalizedTargets) > 0 {
+	if name.Target != "" && len(normalizedTargets) > 0 {
 		return fmt.Errorf("cannot combine target variant toolchain name %q with --target; pass the host toolchain name and --target instead", input)
 	}
 
@@ -139,7 +139,7 @@ func InstallToolchainWithExtras(ctx context.Context, input string, targets, comp
 		return err
 	}
 
-	if name.PlatformKey != "" {
+	if name.Target != "" {
 		if err := installResolvedNoDefault(ctx, resolved, settings, sf, force); err != nil {
 			return err
 		}
@@ -219,7 +219,7 @@ func installComponentsList(ctx context.Context, resolvedName string, components 
 	if err != nil {
 		return err
 	}
-	if resolvedTC.PlatformKey != "" {
+	if resolvedTC.Target != "" {
 		return fmt.Errorf("target variant %q cannot be used for component installation; use host toolchain %q", resolvedName, toolchain.ToolchainName{
 			Channel: resolvedTC.Channel,
 			Version: resolvedTC.Version,
@@ -236,7 +236,7 @@ func installComponentsList(ctx context.Context, resolvedName string, components 
 	if err != nil {
 		return err
 	}
-	platformKey, err := dist.CurrentPlatformKey(settings.DefaultHost)
+	tuple, err := dist.CurrentHostTuple(settings.DefaultHost)
 	if err != nil {
 		return err
 	}
@@ -254,7 +254,7 @@ func installComponentsList(ctx context.Context, resolvedName string, components 
 	}
 	defer snap.Cleanup() //nolint:errcheck // best-effort cleanup
 	for _, c := range parsed {
-		if err := componentInstallFunc(ctx, roots, resolvedTC, c, platformKey, downloadsDir, force); err != nil {
+		if err := componentInstallFunc(ctx, roots, resolvedTC, c, tuple, downloadsDir, force); err != nil {
 			var alreadyErr *cjverr.ComponentAlreadyInstalledError
 			if errors.As(err, &alreadyErr) {
 				if !quiet && !output.IsJSON() {
@@ -432,27 +432,27 @@ func resolveAndLocate(ctx context.Context, name toolchain.ToolchainName, setting
 }
 
 func resolveAndLocateWithTarget(ctx context.Context, name toolchain.ToolchainName, settings *config.Settings, fetcher *manifestFetcher, target string) (resolvedToolchain, error) {
-	platformKey := name.PlatformKey
-	if platformKey == "" {
+	tuple := name.Target
+	if tuple == "" {
 		var err error
-		platformKey, err = dist.CurrentPlatformKeyWithTarget(settings.DefaultHost, target)
+		tuple, err = dist.CurrentTargetTuple(settings.DefaultHost, target)
 		if err != nil {
 			return resolvedToolchain{}, err
 		}
 	}
-	return resolveAndLocateWithPlatformKey(ctx, name, settings, fetcher, platformKey)
+	return resolveAndLocateWithTuple(ctx, name, settings, fetcher, tuple)
 }
 
-func resolveAndLocateWithPlatformKey(ctx context.Context, name toolchain.ToolchainName, settings *config.Settings, fetcher *manifestFetcher, platformKey string) (resolvedToolchain, error) {
-	if platformKey == "" {
+func resolveAndLocateWithTuple(ctx context.Context, name toolchain.ToolchainName, settings *config.Settings, fetcher *manifestFetcher, tuple string) (resolvedToolchain, error) {
+	if tuple == "" {
 		var err error
-		platformKey, err = dist.CurrentPlatformKey(settings.DefaultHost)
+		tuple, err = dist.CurrentHostTuple(settings.DefaultHost)
 		if err != nil {
 			return resolvedToolchain{}, err
 		}
 	}
 	if name.Channel == toolchain.Nightly {
-		return resolveNightlyWithPlatformKey(ctx, name, settings, platformKey)
+		return resolveNightlyWithTuple(ctx, name, settings, tuple)
 	}
 
 	manifest, err := fetcher.get(ctx)
@@ -481,11 +481,11 @@ func resolveAndLocateWithPlatformKey(ctx context.Context, name toolchain.Toolcha
 	}
 
 	resolved := toolchain.ToolchainName{Channel: channel, Version: version}
-	if parts, err := sdktarget.ParseToolchainKey(platformKey); err == nil && parts.Target != "" {
-		resolved.PlatformKey = platformKey
+	if parts, err := sdktarget.ParseTuple(tuple); err == nil && parts.Environment != "" {
+		resolved.Target = tuple
 	}
 
-	info, err := manifest.GetDownloadInfo(channel, version, platformKey)
+	info, err := manifest.GetDownloadInfo(channel, version, tuple)
 	if err != nil {
 		return resolvedToolchain{}, err
 	}
@@ -493,10 +493,10 @@ func resolveAndLocateWithPlatformKey(ctx context.Context, name toolchain.Toolcha
 	return resolvedToolchain{Name: resolved.String(), URL: info.URL, SHA256: info.SHA256, ArchiveName: info.Name}, nil
 }
 
-func resolveNightlyWithPlatformKey(ctx context.Context, name toolchain.ToolchainName, settings *config.Settings, platformKey string) (resolvedToolchain, error) {
-	if platformKey == "" {
+func resolveNightlyWithTuple(ctx context.Context, name toolchain.ToolchainName, settings *config.Settings, tuple string) (resolvedToolchain, error) {
+	if tuple == "" {
 		var err error
-		platformKey, err = dist.CurrentPlatformKey(settings.DefaultHost)
+		tuple, err = dist.CurrentHostTuple(settings.DefaultHost)
 		if err != nil {
 			return resolvedToolchain{}, err
 		}
@@ -513,11 +513,11 @@ func resolveNightlyWithPlatformKey(ctx context.Context, name toolchain.Toolchain
 	}
 
 	resolved := toolchain.ToolchainName{Channel: toolchain.Nightly, Version: version}
-	if parts, err := sdktarget.ParseToolchainKey(platformKey); err == nil && parts.Target != "" {
-		resolved.PlatformKey = platformKey
+	if parts, err := sdktarget.ParseTuple(tuple); err == nil && parts.Environment != "" {
+		resolved.Target = tuple
 	}
 
-	url, err := dist.NightlyDownloadURLForPlatform(dist.DefaultNightlyBaseURL, version, platformKey)
+	url, err := dist.NightlyDownloadURLForTuple(dist.DefaultNightlyBaseURL, version, tuple)
 	if err != nil {
 		return resolvedToolchain{}, err
 	}

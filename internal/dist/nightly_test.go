@@ -18,7 +18,7 @@ func TestNightlyDownloadURL(t *testing.T) {
 }
 
 func TestNightlyDownloadURLForPlatformTarget(t *testing.T) {
-	url, err := NightlyDownloadURLForPlatform("https://example.com/releases/download", "1.1.0-alpha.20260429010057", "win32-x64-ohos-arm32")
+	url, err := NightlyDownloadURLForTuple("https://example.com/releases/download", "1.1.0-alpha.20260429010057", "win32-x64-ohos-arm32")
 	require.NoError(t, err)
 	assert.Equal(t, "https://example.com/releases/download/1.1.0-alpha.20260429010057/cangjie-sdk-windows-x64-ohos-arm32-1.1.0-alpha.20260429010057.zip", url)
 }

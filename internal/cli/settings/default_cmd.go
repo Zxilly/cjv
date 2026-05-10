@@ -66,7 +66,7 @@ func runDefault(cmd *cobra.Command, args []string) error {
 }
 
 func ensureActiveToolchainName(input string, parsed toolchain.ToolchainName) error {
-	if parsed.PlatformKey == "" {
+	if parsed.Target == "" {
 		return nil
 	}
 	hostName := toolchain.ToolchainName{

@@ -46,7 +46,7 @@ func ParseChannel(s string) (Channel, bool) {
 type ToolchainName struct {
 	Channel     Channel
 	Version     string // empty means "latest"
-	PlatformKey string // non-empty for installed target SDK variants (e.g. linux-x64-ohos)
+	Target string // non-empty for installed target SDK variants (e.g. linux-x64-ohos)
 	Custom      string // non-empty for custom/linked toolchain names (e.g. "my-sdk")
 }
 
@@ -66,14 +66,14 @@ func (n ToolchainName) String() string {
 		return n.Channel.String()
 	}
 	name := n.Channel.String() + "-" + n.Version
-	if n.PlatformKey != "" {
-		name += "-" + n.PlatformKey
+	if n.Target != "" {
+		name += "-" + n.Target
 	}
 	return name
 }
 
 func (n ToolchainName) IsChannelOnly() bool {
-	return n.Custom == "" && n.Version == "" && n.PlatformKey == ""
+	return n.Custom == "" && n.Version == "" && n.Target == ""
 }
 
 // ParseToolchainName parses user input into a ToolchainName.
@@ -105,8 +105,8 @@ func ParseToolchainName(input string) (ToolchainName, error) {
 			if version == "" {
 				return ToolchainName{}, fmt.Errorf("empty version in toolchain name '%s'", input)
 			}
-			version, platformKey := target.SplitVariantSuffix(version)
-			return ToolchainName{Channel: ch, Version: version, PlatformKey: platformKey}, nil
+			version, tuple := target.SplitVariantSuffix(version)
+			return ToolchainName{Channel: ch, Version: version, Target: tuple}, nil
 		}
 	}
 

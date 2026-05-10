@@ -44,7 +44,7 @@ func TestNormalizeListRejectsEmptyTargetEntries(t *testing.T) {
 	assert.Error(t, err)
 }
 
-func TestHostKey(t *testing.T) {
+func TestHostTuple(t *testing.T) {
 	tests := []struct {
 		goos, goarch string
 		want         string
@@ -57,67 +57,67 @@ func TestHostKey(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.goos+"-"+tt.goarch, func(t *testing.T) {
-			got, err := HostKey(tt.goos, tt.goarch)
+			got, err := HostTuple(tt.goos, tt.goarch)
 			require.NoError(t, err)
 			assert.Equal(t, tt.want, got)
 		})
 	}
 }
 
-func TestToolchainKey(t *testing.T) {
-	key, err := ToolchainKey("linux-x64", "")
+func TestBuildTuple(t *testing.T) {
+	tuple, err := BuildTuple("linux-x64", "")
 	require.NoError(t, err)
-	assert.Equal(t, "linux-x64", key)
+	assert.Equal(t, "linux-x64", tuple)
 
-	key, err = ToolchainKey("linux-x64", "ohos")
+	tuple, err = BuildTuple("linux-x64", "ohos")
 	require.NoError(t, err)
-	assert.Equal(t, "linux-x64-ohos", key)
+	assert.Equal(t, "linux-x64-ohos", tuple)
 
-	_, err = ToolchainKey("linux-x64-ohos", "android")
+	_, err = BuildTuple("linux-x64-ohos", "android")
 	assert.Error(t, err)
 
-	_, err = ToolchainKey("unknown-host", "ohos")
+	_, err = BuildTuple("unknown-host", "ohos")
 	assert.Error(t, err)
 }
 
-func TestCurrentHostKeyAndHostKeyOnly(t *testing.T) {
-	key, err := CurrentHostKey("linux-amd64")
+func TestCurrentHostTupleAndHostPartOf(t *testing.T) {
+	tuple, err := CurrentHostTuple("linux-amd64")
 	require.NoError(t, err)
-	assert.Equal(t, "linux-x64", key)
+	assert.Equal(t, "linux-x64", tuple)
 
-	_, err = CurrentHostKey("linux")
+	_, err = CurrentHostTuple("linux")
 	assert.Error(t, err)
 
-	host, err := HostKeyOnly("linux-x64-ohos")
+	host, err := HostPartOf("linux-x64-ohos")
 	require.NoError(t, err)
 	assert.Equal(t, "linux-x64", host)
 }
 
-func TestParseToolchainKey(t *testing.T) {
-	key, err := ParseToolchainKey("linux-x64-ohos-arm32")
+func TestParseTuple(t *testing.T) {
+	parts, err := ParseTuple("linux-x64-ohos-arm32")
 	require.NoError(t, err)
-	assert.Equal(t, "linux-x64", key.HostKey)
-	assert.Equal(t, "ohos-arm32", key.Target)
+	assert.Equal(t, "linux-x64", parts.Host)
+	assert.Equal(t, "ohos-arm32", parts.Environment)
 
-	native, err := ParseToolchainKey("darwin-arm64")
+	native, err := ParseTuple("darwin-arm64")
 	require.NoError(t, err)
-	assert.Equal(t, "darwin-arm64", native.HostKey)
-	assert.Empty(t, native.Target)
+	assert.Equal(t, "darwin-arm64", native.Host)
+	assert.Empty(t, native.Environment)
 }
 
-func TestParseToolchainKeyRejectsMalformedTargetSuffix(t *testing.T) {
-	for _, key := range []string{"linux-x64-", "linux-x64-ohos--arm32"} {
-		_, err := ParseToolchainKey(key)
-		assert.Error(t, err, "should reject %q", key)
+func TestParseTupleRejectsMalformedTargetSuffix(t *testing.T) {
+	for _, tuple := range []string{"linux-x64-", "linux-x64-ohos--arm32"} {
+		_, err := ParseTuple(tuple)
+		assert.Error(t, err, "should reject %q", tuple)
 	}
 }
 
-func TestSplitVariantSuffixRequiresValidToolchainKey(t *testing.T) {
-	version, platformKey := SplitVariantSuffix("1.1.0-beta-linux-x64-ohos")
+func TestSplitVariantSuffixRequiresValidTuple(t *testing.T) {
+	version, tuple := SplitVariantSuffix("1.1.0-beta-linux-x64-ohos")
 	assert.Equal(t, "1.1.0-beta", version)
-	assert.Equal(t, "linux-x64-ohos", platformKey)
+	assert.Equal(t, "linux-x64-ohos", tuple)
 
-	version, platformKey = SplitVariantSuffix("1.1.0-beta-linux-x64ohos")
+	version, tuple = SplitVariantSuffix("1.1.0-beta-linux-x64ohos")
 	assert.Equal(t, "1.1.0-beta-linux-x64ohos", version)
-	assert.Empty(t, platformKey)
+	assert.Empty(t, tuple)
 }

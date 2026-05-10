@@ -83,9 +83,9 @@ targets = ["ohos"]
 	resolve.AutoInstallFunc = func(ctx context.Context, input string, targets []string) error {
 		gotInput = input
 		gotTargets = append([]string(nil), targets...)
-		key, err := dist.CurrentPlatformKeyWithTarget(settings.DefaultHost, "ohos")
+		key, err := dist.CurrentTargetTuple(settings.DefaultHost, "ohos")
 		require.NoError(t, err)
-		name := toolchain.ToolchainName{Channel: toolchain.STS, Version: "2.0.0", PlatformKey: key}.String()
+		name := toolchain.ToolchainName{Channel: toolchain.STS, Version: "2.0.0", Target: key}.String()
 		require.NoError(t, os.MkdirAll(filepath.Join(home, "toolchains", name), 0o755))
 		return nil
 	}

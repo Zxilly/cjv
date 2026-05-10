@@ -229,18 +229,18 @@ func runComponentList(cmd *cobra.Command, args []string) error {
 
 	var available []componentlib.Name
 	if !tcName.IsCustom() {
-		platformKey := tcName.PlatformKey
-		if platformKey == "" {
+		tuple := tcName.Target
+		if tuple == "" {
 			_, settings, err := clisettings.LoadSettings()
 			if err != nil {
 				return err
 			}
-			platformKey, err = dist.CurrentPlatformKey(settings.DefaultHost)
+			tuple, err = dist.CurrentHostTuple(settings.DefaultHost)
 			if err != nil {
 				return err
 			}
 		}
-		available = componentlib.AvailableComponents(tcName, platformKey)
+		available = componentlib.AvailableComponents(tcName, tuple)
 	}
 
 	result := componentListResult{Toolchain: tcName.String()}

@@ -80,7 +80,7 @@ func TestInstallComponentsListRollsBackPreviousComponentOnLaterFailure(t *testin
 	tcDir := setupComponentCLITest(t, tcName)
 
 	oldInstall := componentInstallFunc
-	componentInstallFunc = func(ctx context.Context, roots componentlib.Roots, tc toolchain.ToolchainName, name componentlib.Name, platformKey, downloadsDir string, force bool) error {
+	componentInstallFunc = func(ctx context.Context, roots componentlib.Roots, tc toolchain.ToolchainName, name componentlib.Name, tuple, downloadsDir string, force bool) error {
 		if name == componentlib.Docs {
 			return errors.New("docs failed")
 		}
@@ -153,7 +153,7 @@ func TestRunComponentAddInstallsForResolvedToolchain(t *testing.T) {
 	componentToolchain = tcName
 	componentAddForce = true
 	var gotForce bool
-	componentInstallFunc = func(ctx context.Context, roots componentlib.Roots, tc toolchain.ToolchainName, name componentlib.Name, platformKey, downloadsDir string, force bool) error {
+	componentInstallFunc = func(ctx context.Context, roots componentlib.Roots, tc toolchain.ToolchainName, name componentlib.Name, tuple, downloadsDir string, force bool) error {
 		gotForce = force
 		return componentlib.WriteManifest(roots.TcDir, name, []string{"index.html"})
 	}
@@ -247,7 +247,7 @@ func TestInstallComponentsForToolchainUsesInstalledToolchain(t *testing.T) {
 	tcDir := setupComponentCLITest(t, tcName)
 
 	oldInstall := componentInstallFunc
-	componentInstallFunc = func(ctx context.Context, roots componentlib.Roots, tc toolchain.ToolchainName, name componentlib.Name, platformKey, downloadsDir string, force bool) error {
+	componentInstallFunc = func(ctx context.Context, roots componentlib.Roots, tc toolchain.ToolchainName, name componentlib.Name, tuple, downloadsDir string, force bool) error {
 		return componentlib.WriteManifest(roots.TcDir, name, []string{"index.html"})
 	}
 	t.Cleanup(func() { componentInstallFunc = oldInstall })

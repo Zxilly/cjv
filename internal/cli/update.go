@@ -135,7 +135,7 @@ func updateSingle(ctx context.Context, input string) ([]updateEntry, error) {
 	if name.IsCustom() {
 		return nil, fmt.Errorf("cannot update custom toolchain '%s'", input)
 	}
-	if name.PlatformKey != "" {
+	if name.Target != "" {
 		currentName := name.String()
 		if _, err := toolchain.FindInstalled(name); err != nil {
 			if errors.Is(err, os.ErrNotExist) {
@@ -153,7 +153,7 @@ func updateSingle(ctx context.Context, input string) ([]updateEntry, error) {
 			Settings:     settings,
 			SettingsFile: sf,
 			Fetcher:      newManifestFetcher(settings.ManifestURL),
-			PlatformKey:  name.PlatformKey,
+			Target:  name.Target,
 		})
 		return updateEntries(entry, updated), err
 	}
@@ -242,7 +242,7 @@ func updateAll(ctx context.Context) (updateOutcome, error) {
 			Settings:     settings,
 			SettingsFile: sf,
 			Fetcher:      fetcher,
-			PlatformKey:  parsed.PlatformKey,
+			Target:  parsed.Target,
 		})
 		if err != nil {
 			slog.Warn("failed to update toolchain", "name", name, "error", err)
@@ -262,7 +262,7 @@ type reinstallRequest struct {
 	Settings     *config.Settings
 	SettingsFile *config.SettingsFile
 	Fetcher      *manifestFetcher
-	PlatformKey  string
+	Target  string
 }
 
 func reinstallChannel(ctx context.Context, channel toolchain.Channel, currentName string, settings *config.Settings, sf *config.SettingsFile, fetcher *manifestFetcher) (updateEntry, bool, error) {
@@ -276,7 +276,7 @@ func reinstallChannel(ctx context.Context, channel toolchain.Channel, currentNam
 }
 
 func reinstallChannelForPlatform(ctx context.Context, req reinstallRequest) (updateEntry, bool, error) {
-	resolved, err := resolveAndLocateWithPlatformKey(ctx, toolchain.ToolchainName{Channel: req.Channel}, req.Settings, req.Fetcher, req.PlatformKey)
+	resolved, err := resolveAndLocateWithTuple(ctx, toolchain.ToolchainName{Channel: req.Channel}, req.Settings, req.Fetcher, req.Target)
 	if err != nil {
 		return updateEntry{}, false, err
 	}
@@ -296,7 +296,7 @@ func reinstallChannelForPlatform(ctx context.Context, req reinstallRequest) (upd
 	}))
 	update := updateEntry{From: req.CurrentName, To: resolved.Name}
 
-	if req.PlatformKey == "" {
+	if req.Target == "" {
 		if err := installResolved(ctx, resolved, req.Settings, req.SettingsFile, false); err != nil {
 			return updateEntry{}, false, err
 		}
@@ -306,7 +306,7 @@ func reinstallChannelForPlatform(ctx context.Context, req reinstallRequest) (upd
 		}
 	}
 
-	if req.PlatformKey == "" {
+	if req.Target == "" {
 		if req.Settings.DefaultToolchain == req.CurrentName {
 			req.Settings.DefaultToolchain = resolved.Name
 		}

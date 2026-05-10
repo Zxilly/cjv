@@ -14,9 +14,9 @@ import (
 )
 
 // Install downloads and unpacks a component for the given toolchain.
-// platformKey is required for stdx (host key, no target suffix) and ignored
-// for docs / stdx-docs. force=true reinstalls over an existing manifest.
-func Install(ctx context.Context, roots Roots, tc toolchain.ToolchainName, name Name, platformKey, downloadsDir string, force bool) (retErr error) {
+// tuple is required for stdx (must be a host tuple, no environment suffix)
+// and ignored for docs / stdx-docs. force=true reinstalls over an existing manifest.
+func Install(ctx context.Context, roots Roots, tc toolchain.ToolchainName, name Name, tuple, downloadsDir string, force bool) (retErr error) {
 	spec, err := SpecFor(name)
 	if err != nil {
 		return err
@@ -36,7 +36,7 @@ func Install(ctx context.Context, roots Roots, tc toolchain.ToolchainName, name 
 		}
 	}
 
-	assetURL, err := ResolveAssetURL(spec, tc, platformKey)
+	assetURL, err := ResolveAssetURL(spec, tc, tuple)
 	if err != nil {
 		return err
 	}

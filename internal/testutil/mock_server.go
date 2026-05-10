@@ -23,9 +23,9 @@ func MockDistServer(t testing.TB) *httptest.Server {
 	mux := http.NewServeMux()
 	server := httptest.NewServer(mux)
 
-	platformKey, err := dist.CurrentPlatformKey("")
+	tuple, err := dist.CurrentHostTuple("")
 	if err != nil {
-		t.Fatalf("failed to get platform key: %v", err)
+		t.Fatalf("failed to get host tuple: %v", err)
 	}
 
 	var manifest dist.Manifest
@@ -33,7 +33,7 @@ func MockDistServer(t testing.TB) *httptest.Server {
 		Latest: "1.0.5",
 		Versions: map[string]map[string]dist.DownloadInfo{
 			"1.0.5": {
-				platformKey: {
+				tuple: {
 					Name:   "cangjie-sdk-1.0.5.zip",
 					SHA256: hash,
 					URL:    server.URL + "/download/cangjie-sdk-1.0.5.zip",
@@ -45,7 +45,7 @@ func MockDistServer(t testing.TB) *httptest.Server {
 		Latest: "1.1.0-beta.1",
 		Versions: map[string]map[string]dist.DownloadInfo{
 			"1.1.0-beta.1": {
-				platformKey: {
+				tuple: {
 					Name:   "cangjie-sdk-1.1.0-beta.1.zip",
 					SHA256: hash,
 					URL:    server.URL + "/download/cangjie-sdk-1.1.0-beta.1.zip",

@@ -83,7 +83,7 @@ func TestUpdateSingle_TargetVariantUpdatesVariant(t *testing.T) {
 	t.Setenv("CJV_HOME", home)
 	require.NoError(t, config.EnsureDirs())
 
-	targetKey, err := dist.CurrentPlatformKeyWithTarget("", "ohos")
+	targetKey, err := dist.CurrentTargetTuple("", "ohos")
 	require.NoError(t, err)
 	oldName := "sts-1.0.0-" + targetKey
 	oldDir := filepath.Join(home, "toolchains", oldName)
@@ -168,7 +168,7 @@ func TestReinstallChannelForPlatform_UpdatesTargetVariant(t *testing.T) {
 	t.Setenv("CJV_HOME", home)
 	require.NoError(t, config.EnsureDirs())
 
-	targetKey, err := dist.CurrentPlatformKeyWithTarget("", "ohos")
+	targetKey, err := dist.CurrentTargetTuple("", "ohos")
 	require.NoError(t, err)
 	oldName := "sts-1.0.0-" + targetKey
 	require.NoError(t, os.MkdirAll(filepath.Join(home, "toolchains", oldName), 0o755))
@@ -186,7 +186,7 @@ func TestReinstallChannelForPlatform_UpdatesTargetVariant(t *testing.T) {
 		Settings:     &settings,
 		SettingsFile: sf,
 		Fetcher:      newManifestFetcher(settings.ManifestURL),
-		PlatformKey:  targetKey,
+		Target:  targetKey,
 	})
 	require.NoError(t, err)
 
@@ -351,7 +351,7 @@ func TestUpdateSingleRejectsInvalidCustomMissingChannelAndMissingVariant(t *test
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "lts")
 
-	targetKey, err := dist.CurrentPlatformKeyWithTarget("", "ohos")
+	targetKey, err := dist.CurrentTargetTuple("", "ohos")
 	require.NoError(t, err)
 	_, err = updateSingle(context.Background(), "sts-2.0.0-"+targetKey)
 	require.Error(t, err)
@@ -380,7 +380,7 @@ func TestFindInstalledForChannel_IgnoresTargetVariants(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("CJV_HOME", home)
 
-	targetKey, err := dist.CurrentPlatformKeyWithTarget("", "ohos")
+	targetKey, err := dist.CurrentTargetTuple("", "ohos")
 	require.NoError(t, err)
 	require.NoError(t, os.MkdirAll(filepath.Join(home, "toolchains", "lts-1.0.5-"+targetKey), 0o755))
 

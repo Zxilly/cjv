@@ -31,7 +31,7 @@ other = "未安装任何工具链。使用 'cjv install lts' 安装。"
 other = "版本 '{{.Version}}' 未在任何通道中找到"
 
 [VersionNotAvailable]
-other = "版本 {{.Version}} 在你的平台 ({{.Platform}}) 上不可用"
+other = "版本 {{.Version}} 没有 {{.Target}} 的构建"
 
 [FetchingManifest]
 other = "正在获取 SDK 版本清单..."
@@ -152,8 +152,8 @@ other = "设置 '{{.Key}}' 已更新为 '{{.Value}}'"
 [AllUpToDate]
 other = "所有工具链均为最新版本"
 
-[UpdateAvailableButNotForPlatform]
-other = "有更新可用 ({{.Current}} → {{.Latest}})，但不支持当前平台 ({{.Platform}})"
+[UpdateAvailableButNotForTarget]
+other = "有更新可用 ({{.Current}} → {{.Latest}})，但 {{.Target}} 不在发布列表中"
 
 # === 设置 ===
 [UnknownSettingsField]
@@ -368,3 +368,26 @@ other = "强制重新下载并重装，即使已安装"
 
 [StatusInstalled]
 other = "已安装"
+
+# === 远程工具链列表 ===
+
+[ListRemoteChannelHeader]
+other = "Channel: {{.Channel}}"
+
+[ListRemoteChannelHeaderWithLatest]
+other = "Channel: {{.Channel}}（最新 {{.Latest}}）"
+
+[ListRemoteChannelHeaderTarget]
+other = "Channel: {{.Channel}}（最新 {{.Latest}}）— {{.Target}}"
+
+[ListRemoteNoVersionsForTarget]
+other = "{{.Target}} 没有可用的 build；请尝试其它 --host 或去掉 --target"
+
+[ListRemoteHint]
+other = "提示：使用 'cjv install <channel>-<version>' 安装"
+
+[ListRemoteHintAllPlatforms]
+other = "提示：使用 'cjv install <channel>-<version>' 安装（交叉编译 build 请配合 --target）"
+
+[ListRemoteUnknownChannelFlag]
+other = "未知的 channel '{{.Value}}'，可选值：all、lts、sts、nightly"

@@ -63,12 +63,12 @@ func TestActiveRejectsTargetVariantAsActiveToolchain(t *testing.T) {
 	t.Setenv("CJV_TOOLCHAIN", "")
 	require.NoError(t, config.EnsureDirs())
 
-	key, err := dist.CurrentPlatformKeyWithTarget("", "ohos")
+	key, err := dist.CurrentTargetTuple("", "ohos")
 	require.NoError(t, err)
 	name := toolchain.ToolchainName{
 		Channel:     toolchain.STS,
 		Version:     "2.0.0",
-		PlatformKey: key,
+		Target: key,
 	}.String()
 	require.NoError(t, os.MkdirAll(filepath.Join(home, "toolchains", name), 0o755))
 	require.NoError(t, config.SaveSettings(&config.Settings{
@@ -116,9 +116,9 @@ components = ["docs"]
 	AutoInstallFunc = func(ctx context.Context, input string, targets []string) error {
 		gotInput = input
 		gotTargets = append([]string(nil), targets...)
-		key, err := dist.CurrentPlatformKeyWithTarget(settings.DefaultHost, "ohos")
+		key, err := dist.CurrentTargetTuple(settings.DefaultHost, "ohos")
 		require.NoError(t, err)
-		targetName := toolchain.ToolchainName{Channel: toolchain.STS, Version: "2.0.0", PlatformKey: key}.String()
+		targetName := toolchain.ToolchainName{Channel: toolchain.STS, Version: "2.0.0", Target: key}.String()
 		return os.MkdirAll(filepath.Join(home, "toolchains", targetName), 0o755)
 	}
 	AutoInstallComponentsFunc = func(ctx context.Context, input string, components []string) error {

@@ -25,8 +25,8 @@ type checkEntry struct {
 	Name            string `json:"name"`
 	Latest          string `json:"latest,omitempty"`
 	UpdateAvailable bool   `json:"update_available"`
-	NotForPlatform  bool   `json:"not_for_platform,omitempty"`
-	Platform        string `json:"platform,omitempty"`
+	NotForTarget    bool   `json:"not_for_target,omitempty"`
+	Target     string `json:"target,omitempty"`
 	Error           string `json:"error,omitempty"`
 }
 
@@ -46,11 +46,11 @@ func (r checkResult) Text() string {
 		switch {
 		case e.Error != "":
 			fmt.Fprintf(&b, "  %s: %s\n", e.Name, e.Error)
-		case e.NotForPlatform:
-			fmt.Fprintf(&b, "  %s: %s\n", e.Name, i18n.T("UpdateAvailableButNotForPlatform", i18n.MsgData{
+		case e.NotForTarget:
+			fmt.Fprintf(&b, "  %s: %s\n", e.Name, i18n.T("UpdateAvailableButNotForTarget", i18n.MsgData{
 				"Current":  e.Name,
 				"Latest":   e.Latest,
-				"Platform": e.Platform,
+				"Target": e.Target,
 			}))
 		case e.UpdateAvailable:
 			b.WriteString(color.YellowString("  %s → %s", e.Name, e.Latest))
@@ -93,7 +93,7 @@ func runCheck(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	platformKey, err := dist.CurrentPlatformKey(settings.DefaultHost)
+	tuple, err := dist.CurrentHostTuple(settings.DefaultHost)
 	if err != nil {
 		return err
 	}
@@ -117,7 +117,7 @@ func runCheck(cmd *cobra.Command, args []string) error {
 			latestName := toolchain.ToolchainName{
 				Channel:     toolchain.Nightly,
 				Version:     latestNightly,
-				PlatformKey: parsed.PlatformKey,
+				Target: parsed.Target,
 			}.String()
 			entry := checkEntry{Name: name, Latest: latestName}
 			if latestName != name {
@@ -141,18 +141,18 @@ func runCheck(cmd *cobra.Command, args []string) error {
 		}
 
 		latestName := toolchain.ToolchainName{Channel: parsed.Channel, Version: latest}.String()
-		infoPlatformKey := platformKey
-		if parsed.PlatformKey != "" {
-			latestName = toolchain.ToolchainName{Channel: parsed.Channel, Version: latest, PlatformKey: parsed.PlatformKey}.String()
-			infoPlatformKey = parsed.PlatformKey
+		infoTuple := tuple
+		if parsed.Target != "" {
+			latestName = toolchain.ToolchainName{Channel: parsed.Channel, Version: latest, Target: parsed.Target}.String()
+			infoTuple = parsed.Target
 		}
 		entry := checkEntry{Name: name, Latest: latestName}
 		if latestName != name {
-			_, err = manifest.GetDownloadInfo(parsed.Channel, latest, infoPlatformKey)
+			_, err = manifest.GetDownloadInfo(parsed.Channel, latest, infoTuple)
 			if err != nil {
 				if _, ok := errors.AsType[*cjverr.VersionNotAvailableError](err); ok {
-					entry.NotForPlatform = true
-					entry.Platform = infoPlatformKey
+					entry.NotForTarget = true
+					entry.Target = infoTuple
 				}
 				result.Toolchains = append(result.Toolchains, entry)
 				continue

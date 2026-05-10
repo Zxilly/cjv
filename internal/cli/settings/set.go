@@ -60,7 +60,7 @@ var setDefaultHostCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		val := args[0]
-		if _, err := dist.CurrentPlatformKey(val); err != nil {
+		if _, err := dist.CurrentHostTuple(val); err != nil {
 			return fmt.Errorf("invalid default-host %q: %w", val, err)
 		}
 		return updateSetting("default-host", val, func(s *config.Settings) bool {

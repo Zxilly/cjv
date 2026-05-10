@@ -81,18 +81,18 @@ func (e *VersionNotFoundError) Details() map[string]any { return map[string]any{
 // VersionNotAvailableError indicates a version is not available for the platform.
 type VersionNotAvailableError struct {
 	Version  string
-	Platform string
+	Target string
 }
 
 func (e *VersionNotAvailableError) Error() string {
 	return i18n.T("VersionNotAvailable", i18n.MsgData{
 		"Version":  e.Version,
-		"Platform": e.Platform,
+		"Target": e.Target,
 	})
 }
 func (e *VersionNotAvailableError) Code() ErrorCode { return ErrorCodeVersionNotAvailable }
 func (e *VersionNotAvailableError) Details() map[string]any {
-	return map[string]any{"version": e.Version, "platform": e.Platform}
+	return map[string]any{"version": e.Version, "target": e.Target}
 }
 
 // NoToolchainConfiguredError indicates no toolchain has been configured.

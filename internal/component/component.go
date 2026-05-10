@@ -134,14 +134,14 @@ func KnownComponents() []Name {
 	return names
 }
 
-func AvailableComponents(tc toolchain.ToolchainName, platformKey string) []Name {
+func AvailableComponents(tc toolchain.ToolchainName, tuple string) []Name {
 	var out []Name
 	for _, n := range KnownComponents() {
 		spec, err := SpecFor(n)
 		if err != nil || !spec.SupportsChannel(tc.Channel) {
 			continue
 		}
-		if _, err := ResolveAssetURL(spec, tc, platformKey); err != nil {
+		if _, err := ResolveAssetURL(spec, tc, tuple); err != nil {
 			continue
 		}
 		out = append(out, n)

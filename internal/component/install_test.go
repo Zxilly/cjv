@@ -259,7 +259,7 @@ func TestInstall_DocsDoesNotRequestChecksumSidecar(t *testing.T) {
 func TestInstall_AllComponentsWithMockArchives(t *testing.T) {
 	const version = "1.0.5"
 
-	platformKey := "linux-arm64"
+	tuple := "linux-arm64"
 	stdxVersion := version + ".1"
 	stdxArchiveName := "cangjie-stdx-linux-aarch64-" + stdxVersion + ".zip"
 	stdxBuilder := func(t *testing.T, dir string) string {
@@ -269,7 +269,7 @@ func TestInstall_AllComponentsWithMockArchives(t *testing.T) {
 		})
 	}
 	if runtime.GOOS == "windows" {
-		platformKey = "win32-x64"
+		tuple = "win32-x64"
 		stdxArchiveName = "cangjie-stdx-windows-x64-" + stdxVersion + ".zip"
 		stdxBuilder = func(t *testing.T, dir string) string {
 			return buildZip(t, dir, stdxArchiveName, map[string]string{
@@ -338,7 +338,7 @@ func TestInstall_AllComponentsWithMockArchives(t *testing.T) {
 			roots := Roots{TcDir: t.TempDir(), DocsDir: t.TempDir(), StdxDir: t.TempDir()}
 			pk := ""
 			if name == Stdx {
-				pk = platformKey
+				pk = tuple
 			}
 
 			require.NoError(t, Install(context.Background(), roots, tc, name, pk, t.TempDir(), false))
