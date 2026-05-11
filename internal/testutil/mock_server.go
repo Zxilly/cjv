@@ -103,4 +103,3 @@ func CreateMockSDKZip(version string) ([]byte, string) {
 	hash := hex.EncodeToString(sum[:])
 	return data, hash
 }
-

@@ -19,11 +19,14 @@ main() {
         USE_MIRROR=0
     fi
 
-    INIT_ARGS=""
-    for arg in "$@"; do
+    remaining=$#
+    while [ "$remaining" -gt 0 ]; do
+        arg=$1
+        shift
+        remaining=$((remaining - 1))
         case "$arg" in
             --mirror) USE_MIRROR=1 ;;
-            *) INIT_ARGS="$INIT_ARGS $arg" ;;
+            *) set -- "$@" "$arg" ;;
         esac
     done
 
@@ -42,7 +45,7 @@ main() {
         warn "macOS x86_64 has limited support; some LTS and STS releases may not include prebuilt SDK for macOS x86_64."
     fi
 
-    download_and_install
+    download_and_install "$@"
 }
 
 detect_platform() {
@@ -82,8 +85,7 @@ download_and_install() {
     tar -xzf "$_tmpdir/cjv.tar.gz" -C "$_tmpdir"
 
     say "running cjv init"
-    # shellcheck disable=SC2086
-    "$_tmpdir/$BINARY" init $INIT_ARGS
+    "$_tmpdir/$BINARY" init "$@"
 }
 
 say() {

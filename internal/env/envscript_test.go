@@ -152,6 +152,32 @@ func TestWriteBatEnvScriptEscapesPercentExpansion(t *testing.T) {
 	}
 }
 
+func TestWriteBatEnvScriptChecksExactPathEntry(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "env.bat")
+	binDir := `C:\Users\testuser\.cjv\bin`
+
+	if err := WriteBatEnvScript(path, binDir); err != nil {
+		t.Fatalf("WriteBatEnvScript failed: %v", err)
+	}
+
+	content, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(content)
+
+	if strings.Contains(s, "find /I") {
+		t.Fatal("env.bat uses substring matching instead of exact PATH entry matching")
+	}
+	if !strings.Contains(s, `for %%P in ("%PATH:;=" "%") do (`) {
+		t.Fatal("env.bat does not iterate over PATH entries before checking for duplicates")
+	}
+	if !strings.Contains(s, `if /I "%%~P"=="%cjvBin%"`) {
+		t.Fatal("env.bat does not compare complete PATH entries")
+	}
+}
+
 func TestWriteEnvScripts(t *testing.T) {
 	dir := t.TempDir()
 	binDir := "/home/testuser/.cjv/bin"

@@ -3,8 +3,10 @@ package proxy
 import (
 	"path/filepath"
 	"runtime"
+	"strings"
 
 	"github.com/Zxilly/cjv/internal/config"
+	sdktarget "github.com/Zxilly/cjv/internal/target"
 	"github.com/Zxilly/cjv/internal/utils"
 )
 
@@ -37,4 +39,15 @@ func PlatformBinaryName(name string) string {
 		return name + ".exe"
 	}
 	return name
+}
+
+func PlatformBinaryNameForTuple(name, tuple string) (string, error) {
+	parts, err := sdktarget.ParseTuple(tuple)
+	if err != nil {
+		return "", err
+	}
+	if strings.HasPrefix(parts.Host, "win32-") {
+		return name + ".exe", nil
+	}
+	return name, nil
 }

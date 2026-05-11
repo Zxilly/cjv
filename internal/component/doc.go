@@ -161,4 +161,3 @@ func safeDocRel(topic string) (string, bool) {
 	}
 	return clean, true
 }
-

@@ -124,6 +124,12 @@ function findEntry(os: string, arch: string): PlatformEntry | undefined {
 
 const ALL_BINARIES: BinaryInfo[] = PLATFORMS.map(toBinaryInfo)
 
+function binaryForEntry(entry: PlatformEntry): BinaryInfo {
+  const binary = ALL_BINARIES.find(b => b.goos === entry.goos && b.goarch === entry.goarch)
+  if (!binary) throw new Error(`missing binary for ${entry.goos}_${entry.goarch}`)
+  return binary
+}
+
 const METHODS: InstallMethod[] = [
   { label: 'Linux / macOS', command: SH_CMD, mirrorCommand: SH_MIRROR_CMD },
   { label: 'Windows (PowerShell)', command: PS_CMD, mirrorCommand: PS_MIRROR_CMD },
@@ -150,7 +156,7 @@ export function computePlatformResult(os: string, arch: string): PlatformResult 
       otherMethods: METHODS.filter(m => m.command !== info.command),
       state: 'ready',
       info,
-      binary: ALL_BINARIES[PLATFORMS.indexOf(entry)],
+      binary: binaryForEntry(entry),
     }
   }
   return {

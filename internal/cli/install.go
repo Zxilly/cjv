@@ -281,6 +281,7 @@ type resolvedToolchain struct {
 	URL         string // download URL
 	SHA256      string // expected checksum (empty for nightly)
 	ArchiveName string // display filename from the manifest when available
+	Tuple       string // manifest platform tuple used to select the archive
 }
 
 func installResolved(ctx context.Context, rt resolvedToolchain, settings *config.Settings, sf *config.SettingsFile, force bool) (retErr error) {
@@ -352,7 +353,7 @@ func installResolvedWithDefault(ctx context.Context, rt resolvedToolchain, setti
 		return err
 	}
 
-	if err := validateInstallation(stagingDir); err != nil {
+	if err := validateInstallation(stagingDir, rt.Tuple); err != nil {
 		return err
 	}
 
@@ -473,7 +474,7 @@ func resolveAndLocateWithTuple(ctx context.Context, name toolchain.ToolchainName
 	}
 
 	if version == "" {
-		v, err := manifest.GetLatestVersion(channel)
+		v, err := latestVersionForTuple(manifest, channel, tuple)
 		if err != nil {
 			return resolvedToolchain{}, err
 		}
@@ -490,7 +491,25 @@ func resolveAndLocateWithTuple(ctx context.Context, name toolchain.ToolchainName
 		return resolvedToolchain{}, err
 	}
 
-	return resolvedToolchain{Name: resolved.String(), URL: info.URL, SHA256: info.SHA256, ArchiveName: info.Name}, nil
+	return resolvedToolchain{Name: resolved.String(), URL: info.URL, SHA256: info.SHA256, ArchiveName: info.Name, Tuple: tuple}, nil
+}
+
+func latestVersionForTuple(manifest *dist.Manifest, channel toolchain.Channel, tuple string) (string, error) {
+	if tuple == "" {
+		return manifest.GetLatestVersion(channel)
+	}
+	versions, err := manifest.ListVersions(channel, tuple)
+	if err != nil {
+		return "", err
+	}
+	if len(versions) > 0 {
+		return versions[0], nil
+	}
+	latest, err := manifest.GetLatestVersion(channel)
+	if err != nil {
+		return "", err
+	}
+	return "", &cjverr.VersionNotAvailableError{Version: latest, Target: tuple}
 }
 
 func resolveNightlyWithTuple(ctx context.Context, name toolchain.ToolchainName, settings *config.Settings, tuple string) (resolvedToolchain, error) {
@@ -526,7 +545,7 @@ func resolveNightlyWithTuple(ctx context.Context, name toolchain.ToolchainName, 
 	if sha256 == "" {
 		noteStep(i18n.T("NightlyNoChecksum", nil))
 	}
-	return resolvedToolchain{Name: resolved.String(), URL: url, SHA256: sha256}, nil
+	return resolvedToolchain{Name: resolved.String(), URL: url, SHA256: sha256, Tuple: tuple}, nil
 }
 
 func fetchManifest(ctx context.Context, manifestURL string) (*dist.Manifest, error) {
@@ -575,8 +594,14 @@ func defaultToolchainExists(name string) bool {
 }
 
 // validateInstallation checks that the installed SDK has essential binaries.
-func validateInstallation(dir string) error {
-	if _, err := proxy.ResolveInstalledToolBinary(dir, "cjc"); err != nil {
+func validateInstallation(dir, tuple string) error {
+	var err error
+	if tuple == "" {
+		_, err = proxy.ResolveInstalledToolBinary(dir, "cjc")
+	} else {
+		_, err = proxy.ResolveInstalledToolBinaryForTuple(dir, "cjc", tuple)
+	}
+	if err != nil {
 		return fmt.Errorf("installation validation failed: %w", err)
 	}
 	return nil

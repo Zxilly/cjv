@@ -186,7 +186,7 @@ func TestReinstallChannelForPlatform_UpdatesTargetVariant(t *testing.T) {
 		Settings:     &settings,
 		SettingsFile: sf,
 		Fetcher:      newManifestFetcher(settings.ManifestURL),
-		Target:  targetKey,
+		Target:       targetKey,
 	})
 	require.NoError(t, err)
 

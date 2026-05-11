@@ -44,10 +44,10 @@ func ParseChannel(s string) (Channel, bool) {
 
 // ToolchainName represents a parsed toolchain identifier.
 type ToolchainName struct {
-	Channel     Channel
-	Version     string // empty means "latest"
-	Target string // non-empty for installed target SDK variants (e.g. linux-x64-ohos)
-	Custom      string // non-empty for custom/linked toolchain names (e.g. "my-sdk")
+	Channel Channel
+	Version string // empty means "latest"
+	Target  string // non-empty for installed target SDK variants (e.g. linux-x64-ohos)
+	Custom  string // non-empty for custom/linked toolchain names (e.g. "my-sdk")
 }
 
 // IsCustom returns true if this is a custom/linked toolchain name.

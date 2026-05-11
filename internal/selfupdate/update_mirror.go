@@ -104,8 +104,8 @@ func (s *gitCodeSource) DownloadReleaseAsset(ctx context.Context, rel *go_selfup
 func newGitCodeSourceRelease(base, tag string) go_selfupdate.SourceRelease {
 	name := mirrorAssetName(runtime.GOOS, runtime.GOARCH)
 	return &gitCodeRelease{
-		tag:  tag,
-		url:  base + "/tag/" + tag,
+		tag: tag,
+		url: base + "/tag/" + tag,
 		asset: &gitCodeAsset{
 			name: name,
 			url:  base + "/download/" + tag + "/" + name,
@@ -118,14 +118,14 @@ type gitCodeRelease struct {
 	asset    go_selfupdate.SourceAsset
 }
 
-func (r *gitCodeRelease) GetID() int64                { return 0 }
-func (r *gitCodeRelease) GetTagName() string          { return r.tag }
-func (r *gitCodeRelease) GetDraft() bool              { return false }
-func (r *gitCodeRelease) GetPrerelease() bool         { return false }
-func (r *gitCodeRelease) GetPublishedAt() time.Time   { return time.Time{} }
-func (r *gitCodeRelease) GetReleaseNotes() string     { return "" }
-func (r *gitCodeRelease) GetName() string             { return r.tag }
-func (r *gitCodeRelease) GetURL() string              { return r.url }
+func (r *gitCodeRelease) GetID() int64              { return 0 }
+func (r *gitCodeRelease) GetTagName() string        { return r.tag }
+func (r *gitCodeRelease) GetDraft() bool            { return false }
+func (r *gitCodeRelease) GetPrerelease() bool       { return false }
+func (r *gitCodeRelease) GetPublishedAt() time.Time { return time.Time{} }
+func (r *gitCodeRelease) GetReleaseNotes() string   { return "" }
+func (r *gitCodeRelease) GetName() string           { return r.tag }
+func (r *gitCodeRelease) GetURL() string            { return r.url }
 func (r *gitCodeRelease) GetAssets() []go_selfupdate.SourceAsset {
 	return []go_selfupdate.SourceAsset{r.asset}
 }
@@ -134,9 +134,9 @@ type gitCodeAsset struct {
 	name, url string
 }
 
-func (a *gitCodeAsset) GetID() int64              { return 0 }
-func (a *gitCodeAsset) GetName() string           { return a.name }
-func (a *gitCodeAsset) GetSize() int              { return 0 }
+func (a *gitCodeAsset) GetID() int64                  { return 0 }
+func (a *gitCodeAsset) GetName() string               { return a.name }
+func (a *gitCodeAsset) GetSize() int                  { return 0 }
 func (a *gitCodeAsset) GetBrowserDownloadURL() string { return a.url }
 
 func gitCodeReleasesBase(rawURL string) (string, error) {

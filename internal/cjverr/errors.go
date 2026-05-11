@@ -80,14 +80,14 @@ func (e *VersionNotFoundError) Details() map[string]any { return map[string]any{
 
 // VersionNotAvailableError indicates a version is not available for the platform.
 type VersionNotAvailableError struct {
-	Version  string
-	Target string
+	Version string
+	Target  string
 }
 
 func (e *VersionNotAvailableError) Error() string {
 	return i18n.T("VersionNotAvailable", i18n.MsgData{
-		"Version":  e.Version,
-		"Target": e.Target,
+		"Version": e.Version,
+		"Target":  e.Target,
 	})
 }
 func (e *VersionNotAvailableError) Code() ErrorCode { return ErrorCodeVersionNotAvailable }

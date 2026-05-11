@@ -66,9 +66,9 @@ func TestActiveRejectsTargetVariantAsActiveToolchain(t *testing.T) {
 	key, err := dist.CurrentTargetTuple("", "ohos")
 	require.NoError(t, err)
 	name := toolchain.ToolchainName{
-		Channel:     toolchain.STS,
-		Version:     "2.0.0",
-		Target: key,
+		Channel: toolchain.STS,
+		Version: "2.0.0",
+		Target:  key,
 	}.String()
 	require.NoError(t, os.MkdirAll(filepath.Join(home, "toolchains", name), 0o755))
 	require.NoError(t, config.SaveSettings(&config.Settings{

@@ -153,7 +153,7 @@ func updateSingle(ctx context.Context, input string) ([]updateEntry, error) {
 			Settings:     settings,
 			SettingsFile: sf,
 			Fetcher:      newManifestFetcher(settings.ManifestURL),
-			Target:  name.Target,
+			Target:       name.Target,
 		})
 		return updateEntries(entry, updated), err
 	}
@@ -242,7 +242,7 @@ func updateAll(ctx context.Context) (updateOutcome, error) {
 			Settings:     settings,
 			SettingsFile: sf,
 			Fetcher:      fetcher,
-			Target:  parsed.Target,
+			Target:       parsed.Target,
 		})
 		if err != nil {
 			slog.Warn("failed to update toolchain", "name", name, "error", err)
@@ -262,7 +262,7 @@ type reinstallRequest struct {
 	Settings     *config.Settings
 	SettingsFile *config.SettingsFile
 	Fetcher      *manifestFetcher
-	Target  string
+	Target       string
 }
 
 func reinstallChannel(ctx context.Context, channel toolchain.Channel, currentName string, settings *config.Settings, sf *config.SettingsFile, fetcher *manifestFetcher) (updateEntry, bool, error) {

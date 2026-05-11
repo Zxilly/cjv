@@ -138,7 +138,7 @@ func moveStagedFiles(stageDir, destDir string, paths []string) ([]string, error)
 }
 
 func cleanupComponentMeta(tcDir string, name Name) error {
-	err1 := os.Remove(metaPath(tcDir, "manifest-"+string(name)))
+	err1 := os.Remove(manifestPath(tcDir, name))
 	if err1 != nil && !os.IsNotExist(err1) {
 		return err1
 	}

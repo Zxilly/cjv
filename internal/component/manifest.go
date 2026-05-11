@@ -16,14 +16,19 @@ import (
 const MetaDir = ".cjv/components"
 
 const componentsFile = "components"
+const manifestPrefix = "manifest-"
 
 func metaPath(tcDir string, parts ...string) string {
 	all := append([]string{tcDir, MetaDir}, parts...)
 	return filepath.Join(all...)
 }
 
+func manifestPath(tcDir string, name Name) string {
+	return metaPath(tcDir, manifestPrefix+string(name))
+}
+
 func IsInstalled(tcDir string, name Name) bool {
-	_, err := os.Stat(metaPath(tcDir, "manifest-"+string(name)))
+	_, err := os.Stat(manifestPath(tcDir, name))
 	return err == nil
 }
 
@@ -58,7 +63,7 @@ func ListInstalled(tcDir string) ([]Name, error) {
 
 // ReadManifest returns paths in forward-slash form, rooted at spec.InstallRoot.
 func ReadManifest(tcDir string, name Name) ([]string, error) {
-	data, err := os.ReadFile(metaPath(tcDir, "manifest-"+string(name)))
+	data, err := os.ReadFile(manifestPath(tcDir, name))
 	if err != nil {
 		return nil, err
 	}
@@ -84,7 +89,7 @@ func WriteManifest(tcDir string, name Name, relPaths []string) error {
 	if body != "" {
 		body += "\n"
 	}
-	if err := utils.WriteFileAtomic(filepath.Join(dir, "manifest-"+string(name)), []byte(body), 0o644); err != nil {
+	if err := utils.WriteFileAtomic(filepath.Join(dir, manifestPrefix+string(name)), []byte(body), 0o644); err != nil {
 		return err
 	}
 	return addToComponentsIndex(tcDir, name)
@@ -163,7 +168,7 @@ func Remove(roots Roots, name Name) error {
 	if err := removePaths(roots, name, myPaths); err != nil {
 		return err
 	}
-	if err := os.Remove(metaPath(roots.TcDir, "manifest-"+string(name))); err != nil && !errors.Is(err, os.ErrNotExist) {
+	if err := os.Remove(manifestPath(roots.TcDir, name)); err != nil && !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
 	return removeFromComponentsIndex(roots.TcDir, name)

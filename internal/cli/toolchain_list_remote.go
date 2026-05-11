@@ -46,13 +46,13 @@ type toolchainListRemoteEntry struct {
 }
 
 type toolchainListRemoteResult struct {
-	Target string                     `json:"target"`
-	Channels    []toolchainListRemoteEntry `json:"channels"`
+	Target   string                     `json:"target"`
+	Channels []toolchainListRemoteEntry `json:"channels"`
 }
 
 type platformVersionsEntry struct {
-	Target string   `json:"target"`
-	Versions    []string `json:"versions"`
+	Target   string   `json:"target"`
+	Versions []string `json:"versions"`
 }
 
 // LTS/STS populate Platforms; nightly populates Versions (single tag) — the
@@ -107,8 +107,8 @@ func runToolchainListRemoteSingle(ctx context.Context, cmd *cobra.Command, setti
 	}
 
 	result := toolchainListRemoteResult{
-		Target: tuple,
-		Channels:    []toolchainListRemoteEntry{},
+		Target:   tuple,
+		Channels: []toolchainListRemoteEntry{},
 	}
 
 	needLTS := allChannels || channel == toolchain.LTS
@@ -248,8 +248,8 @@ func buildAllPlatformsChannelEntry(m *dist.Manifest, ch toolchain.Channel) toolc
 			versions = versions[:toolchainListRemoteLimit]
 		}
 		platforms = append(platforms, platformVersionsEntry{
-			Target: pk,
-			Versions:    versions,
+			Target:   pk,
+			Versions: versions,
 		})
 	}
 	entry.Platforms = platforms
@@ -293,9 +293,9 @@ func writeSingleChannelHeader(b *strings.Builder, e toolchainListRemoteEntry, tu
 	switch {
 	case withPlatform:
 		fmt.Fprintln(b, i18n.T("ListRemoteChannelHeaderTarget", i18n.MsgData{
-			"Channel":     e.Channel,
-			"Latest":      e.Latest,
-			"Target": tuple,
+			"Channel": e.Channel,
+			"Latest":  e.Latest,
+			"Target":  tuple,
 		}))
 	case e.Latest != "":
 		fmt.Fprintln(b, i18n.T("ListRemoteChannelHeaderWithLatest", i18n.MsgData{

@@ -148,9 +148,9 @@ func ensureTargets(ctx context.Context, tcInput, tcDir string, settings *config.
 			return err
 		}
 		name := toolchain.ToolchainName{
-			Channel:     host.Channel,
-			Version:     host.Version,
-			Target: tuple,
+			Channel: host.Channel,
+			Version: host.Version,
+			Target:  tuple,
 		}
 		if _, err := toolchain.FindInstalled(name); err != nil {
 			if !errors.Is(err, os.ErrNotExist) {

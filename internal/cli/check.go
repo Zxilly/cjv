@@ -26,7 +26,7 @@ type checkEntry struct {
 	Latest          string `json:"latest,omitempty"`
 	UpdateAvailable bool   `json:"update_available"`
 	NotForTarget    bool   `json:"not_for_target,omitempty"`
-	Target     string `json:"target,omitempty"`
+	Target          string `json:"target,omitempty"`
 	Error           string `json:"error,omitempty"`
 }
 
@@ -48,9 +48,9 @@ func (r checkResult) Text() string {
 			fmt.Fprintf(&b, "  %s: %s\n", e.Name, e.Error)
 		case e.NotForTarget:
 			fmt.Fprintf(&b, "  %s: %s\n", e.Name, i18n.T("UpdateAvailableButNotForTarget", i18n.MsgData{
-				"Current":  e.Name,
-				"Latest":   e.Latest,
-				"Target": e.Target,
+				"Current": e.Name,
+				"Latest":  e.Latest,
+				"Target":  e.Target,
 			}))
 		case e.UpdateAvailable:
 			b.WriteString(color.YellowString("  %s → %s", e.Name, e.Latest))
@@ -115,9 +115,9 @@ func runCheck(cmd *cobra.Command, args []string) error {
 				continue
 			}
 			latestName := toolchain.ToolchainName{
-				Channel:     toolchain.Nightly,
-				Version:     latestNightly,
-				Target: parsed.Target,
+				Channel: toolchain.Nightly,
+				Version: latestNightly,
+				Target:  parsed.Target,
 			}.String()
 			entry := checkEntry{Name: name, Latest: latestName}
 			if latestName != name {
@@ -135,17 +135,26 @@ func runCheck(cmd *cobra.Command, args []string) error {
 			return manifestErr
 		}
 
-		latest, err := manifest.GetLatestVersion(parsed.Channel)
+		infoTuple := tuple
+		target := ""
+		if parsed.Target != "" {
+			infoTuple = parsed.Target
+			target = parsed.Target
+		}
+
+		latest, err := latestVersionForTuple(manifest, parsed.Channel, infoTuple)
 		if err != nil {
+			entry := checkEntry{Name: name}
+			if unavailable, ok := errors.AsType[*cjverr.VersionNotAvailableError](err); ok {
+				entry.Latest = toolchain.ToolchainName{Channel: parsed.Channel, Version: unavailable.Version, Target: target}.String()
+				entry.NotForTarget = true
+				entry.Target = infoTuple
+				result.Toolchains = append(result.Toolchains, entry)
+			}
 			continue
 		}
 
-		latestName := toolchain.ToolchainName{Channel: parsed.Channel, Version: latest}.String()
-		infoTuple := tuple
-		if parsed.Target != "" {
-			latestName = toolchain.ToolchainName{Channel: parsed.Channel, Version: latest, Target: parsed.Target}.String()
-			infoTuple = parsed.Target
-		}
+		latestName := toolchain.ToolchainName{Channel: parsed.Channel, Version: latest, Target: target}.String()
 		entry := checkEntry{Name: name, Latest: latestName}
 		if latestName != name {
 			_, err = manifest.GetDownloadInfo(parsed.Channel, latest, infoTuple)

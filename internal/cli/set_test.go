@@ -89,4 +89,3 @@ func TestUpdateSettingsAfterUninstall_NoChangeWhenUnrelated(t *testing.T) {
 	assert.Equal(t, "sts-2.0.0", reloaded.DefaultToolchain)
 	assert.Equal(t, "sts-2.0.0", reloaded.Overrides["C:\\dir"])
 }
-

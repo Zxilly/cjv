@@ -71,10 +71,32 @@ func ResolveToolBinary(toolchainDir, toolName string) (string, error) {
 	return PlatformBinaryName(filepath.Join(toolchainDir, relPath)), nil
 }
 
+func ResolveToolBinaryForTuple(toolchainDir, toolName, tuple string) (string, error) {
+	relPath := ToolRelativePath(toolName)
+	if relPath == "" {
+		return "", &cjverr.UnknownToolError{Name: toolName}
+	}
+	return PlatformBinaryNameForTuple(filepath.Join(toolchainDir, relPath), tuple)
+}
+
 // ResolveInstalledToolBinary returns the full path to a proxy tool and verifies
 // that the binary exists in the resolved toolchain.
 func ResolveInstalledToolBinary(toolchainDir, toolName string) (string, error) {
 	binary, err := ResolveToolBinary(toolchainDir, toolName)
+	if err != nil {
+		return "", err
+	}
+	if _, err := os.Stat(binary); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return "", &cjverr.ToolNotInToolchainError{Tool: toolName, Path: binary}
+		}
+		return "", err
+	}
+	return binary, nil
+}
+
+func ResolveInstalledToolBinaryForTuple(toolchainDir, toolName, tuple string) (string, error) {
+	binary, err := ResolveToolBinaryForTuple(toolchainDir, toolName, tuple)
 	if err != nil {
 		return "", err
 	}

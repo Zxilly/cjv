@@ -42,11 +42,15 @@ func WriteBatEnvScript(path, binDir string) error {
 	escapedBinDir := batchLiteral(binDir)
 	content := fmt.Sprintf(`@echo off
 rem cjv shell setup (managed by cjv, do not edit)
-echo %%PATH%% | find /I "%s" >nul
-if errorlevel 1 (
-    set "PATH=%s;%%PATH%%"
+set "cjvBin=%s"
+set "cjvFound="
+for %%%%P in ("%%PATH:;=" "%%") do (
+    if /I "%%%%~P"=="%%cjvBin%%" set "cjvFound=1"
 )
-`, escapedBinDir, escapedBinDir)
+if not defined cjvFound (
+    set "PATH=%%cjvBin%%;%%PATH%%"
+)
+`, escapedBinDir)
 	return utils.WriteFileAtomic(path, []byte(content), 0o644)
 }
 
