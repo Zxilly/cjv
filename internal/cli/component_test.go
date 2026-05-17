@@ -242,6 +242,97 @@ func TestRunComponentListNonQuietShowsInstalledAndAvailable(t *testing.T) {
 	assert.Contains(t, stdout, "stdx")
 }
 
+func TestRunComponentLinkInvokesLinkFunc(t *testing.T) {
+	tcName := "lts-1.0.5"
+	tcDir := setupComponentCLITest(t, tcName)
+	src := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(src, "dynamic"), 0o755))
+	require.NoError(t, os.MkdirAll(filepath.Join(src, "static"), 0o755))
+
+	oldToolchain := componentToolchain
+	oldForce := componentLinkForce
+	oldLink := componentLinkFunc
+	componentToolchain = tcName
+	componentLinkForce = true
+	var gotForce bool
+	var gotSource string
+	var gotTcDir string
+	componentLinkFunc = func(roots componentlib.Roots, name componentlib.Name, source string, force bool) (string, error) {
+		gotForce = force
+		gotSource = source
+		gotTcDir = roots.TcDir
+		return source, componentlib.WriteManifest(roots.TcDir, name, []string{"dynamic", "static"})
+	}
+	t.Cleanup(func() {
+		componentToolchain = oldToolchain
+		componentLinkForce = oldForce
+		componentLinkFunc = oldLink
+	})
+
+	err := runComponentLink(&cobra.Command{}, []string{"stdx", src})
+
+	require.NoError(t, err)
+	assert.True(t, gotForce)
+	assert.Equal(t, src, gotSource)
+	assert.Equal(t, tcDir, gotTcDir)
+	assert.True(t, componentlib.IsInstalled(tcDir, componentlib.Stdx))
+}
+
+func TestRunComponentLinkRejectsNonStdxComponent(t *testing.T) {
+	tcName := "lts-1.0.5"
+	setupComponentCLITest(t, tcName)
+
+	oldToolchain := componentToolchain
+	componentToolchain = tcName
+	t.Cleanup(func() { componentToolchain = oldToolchain })
+
+	err := runComponentLink(&cobra.Command{}, []string{"docs", t.TempDir()})
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "docs")
+}
+
+func TestRunComponentLinkRejectsUnknownComponentName(t *testing.T) {
+	tcName := "lts-1.0.5"
+	setupComponentCLITest(t, tcName)
+
+	oldToolchain := componentToolchain
+	componentToolchain = tcName
+	t.Cleanup(func() { componentToolchain = oldToolchain })
+
+	err := runComponentLink(&cobra.Command{}, []string{"bogus", t.TempDir()})
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "bogus")
+}
+
+func TestRunComponentLinkAllowsCustomToolchain(t *testing.T) {
+	tcName := "local-sdk"
+	tcDir := setupComponentCLITest(t, tcName)
+	src := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(src, "dynamic"), 0o755))
+	require.NoError(t, os.MkdirAll(filepath.Join(src, "static"), 0o755))
+
+	oldToolchain := componentToolchain
+	oldLink := componentLinkFunc
+	componentToolchain = tcName
+	var called bool
+	componentLinkFunc = func(roots componentlib.Roots, name componentlib.Name, source string, force bool) (string, error) {
+		called = true
+		return source, componentlib.WriteManifest(roots.TcDir, name, []string{"dynamic", "static"})
+	}
+	t.Cleanup(func() {
+		componentToolchain = oldToolchain
+		componentLinkFunc = oldLink
+	})
+
+	err := runComponentLink(&cobra.Command{}, []string{"stdx", src})
+
+	require.NoError(t, err)
+	assert.True(t, called, "Link should not be gated by IsCustom")
+	assert.True(t, componentlib.IsInstalled(tcDir, componentlib.Stdx))
+}
+
 func TestInstallComponentsForToolchainUsesInstalledToolchain(t *testing.T) {
 	tcName := "lts-1.0.5"
 	tcDir := setupComponentCLITest(t, tcName)

@@ -790,6 +790,9 @@ func TestResolveNightlyWithSpecificVersionSkipsLatestLookup(t *testing.T) {
 }
 
 func TestInstallToolchainWithExtrasRejectsCustomAndTargetVariantWithTargets(t *testing.T) {
+	home := t.TempDir()
+	config.IsolateForTest(t, home)
+
 	err := InstallToolchainWithExtras(context.Background(), "local-sdk", nil, nil, false)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "custom toolchain")

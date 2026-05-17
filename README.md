@@ -58,6 +58,7 @@ cjv run sts cjc --version
 | `cjv toolchain link <name> <path>`                    | 将自定义工具链链接到本地目录                  |
 | `cjv toolchain uninstall <name>`                      | 卸载工具链                                    |
 | `cjv component add <name>... [--toolchain <tc>]`      | 为工具链安装 component（如 stdx）             |
+| `cjv component link stdx <path> [--toolchain <tc>]`   | 将本地 stdx 目录链接到工具链（支持 custom）   |
 | `cjv component remove <name>... [--toolchain <tc>]`   | 从工具链卸载 component                        |
 | `cjv component list [--toolchain <tc>] [--installed]` | 列出 component 的安装与可用情况               |
 | `cjv doc [--path] [--toolchain <tc>] [topic]`         | 在浏览器中打开当前工具链的离线文档            |
@@ -135,6 +136,23 @@ cjv component add stdx --toolchain lts
 cjv component remove stdx-docs
 cjv component list --toolchain nightly
 ```
+
+### 链接本地 stdx
+
+对于通过 `cjv toolchain link` 链接的 custom 工具链，`cjv component add stdx` 无法工作（custom 工具链没有对应的 release 资产）。可以改用 `cjv component link stdx <path>` 把本地 stdx 目录挂上去：
+
+```bash
+# 先链接一个本地编译/获取的 SDK
+cjv toolchain link mysdk /path/to/local/sdk
+
+# 再把本地 stdx 链接到这个工具链
+cjv component link stdx /path/to/local/stdx --toolchain mysdk
+
+# 标准 channel 也可用 link 替代下载（如离线环境、调试自编译 stdx）
+cjv component link stdx /path/to/local/stdx --toolchain lts --force
+```
+
+`<path>` 必须是一个包含 `dynamic/` 和 `static/` 两个子目录的目录（即解压后的 stdx 布局）。link 后 cjv 会在 `<CJV_HOME>/stdx/<tc>/` 下创建两个符号链接（Windows 上 fallback 到 directory junction），`CANGJIE_STDX_PATH_DYNAMIC` 与 `CANGJIE_STDX_PATH_STATIC` 仍按常规注入。`cjv component remove stdx` 和 `cjv toolchain uninstall` 都只会删除符号链接，不会触及用户原始数据。
 
 `cangjie-sdk.toml` 中的 `components` 字段同样会被识别；当 `auto_install` 开启时，代理执行将按需补齐缺失的 component：
 

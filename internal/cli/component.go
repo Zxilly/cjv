@@ -84,12 +84,30 @@ func (r componentRemoveResult) Text() string {
 	return b.String()
 }
 
+type componentLinkResult struct {
+	Toolchain string `json:"toolchain"`
+	Component string `json:"component"`
+	Path      string `json:"path"`
+}
+
+func (r componentLinkResult) Text() string {
+	return color.GreenString(i18n.T("ComponentLinked", i18n.MsgData{
+		"Component": r.Component,
+		"Path":      r.Path,
+		"Toolchain": r.Toolchain,
+	}))
+}
+
 var (
 	componentToolchain         string
 	componentAddForce          bool
+	componentLinkForce         bool
 	componentListInstalledOnly bool
 	componentListQuiet         bool
 )
+
+// componentLinkFunc is the seam tests use to stub out component.Link.
+var componentLinkFunc = componentlib.Link
 
 var componentCmd = &cobra.Command{
 	Use:   "component",
@@ -119,15 +137,24 @@ var componentListCmd = &cobra.Command{
 	RunE:  runComponentList,
 }
 
+var componentLinkCmd = &cobra.Command{
+	Use:   "link <name> <path>",
+	Short: i18n.T("ComponentLinkShort", nil),
+	Args:  cobra.ExactArgs(2),
+	RunE:  runComponentLink,
+}
+
 func init() {
 	componentCmd.PersistentFlags().StringVar(&componentToolchain, "toolchain", "", i18n.T("ComponentFlagToolchain", nil))
 	componentAddCmd.Flags().BoolVar(&componentAddForce, "force", false, i18n.T("InstallFlagForce", nil))
 	componentListCmd.Flags().BoolVar(&componentListInstalledOnly, "installed", false, i18n.T("ComponentFlagInstalled", nil))
 	componentListCmd.Flags().BoolVarP(&componentListQuiet, "quiet", "q", false, i18n.T("ComponentFlagQuiet", nil))
+	componentLinkCmd.Flags().BoolVar(&componentLinkForce, "force", false, i18n.T("ComponentLinkFlagForce", nil))
 
 	componentCmd.AddCommand(componentAddCmd)
 	componentCmd.AddCommand(componentRemoveCmd)
 	componentCmd.AddCommand(componentListCmd)
+	componentCmd.AddCommand(componentLinkCmd)
 	rootCmd.AddCommand(componentCmd)
 }
 
@@ -214,6 +241,39 @@ func runComponentRemove(cmd *cobra.Command, args []string) error {
 		return joinErr
 	}
 	return output.RenderTo(cmdOutput(cmd), result)
+}
+
+func runComponentLink(cmd *cobra.Command, args []string) error {
+	name, err := componentlib.ParseName(args[0])
+	if err != nil {
+		return err
+	}
+
+	tcDir, _, err := resolveToolchainArg(componentToolchain)
+	if err != nil {
+		return err
+	}
+	toolchainName := filepath.Base(tcDir)
+
+	roots, err := componentlib.RootsFor(toolchainName)
+	if err != nil {
+		return err
+	}
+
+	if !output.IsJSON() {
+		fmt.Println(i18n.T("InstallingComponent", i18n.MsgData{"Component": string(name)}))
+	}
+
+	absPath, err := componentLinkFunc(roots, name, args[1], componentLinkForce)
+	if err != nil {
+		return err
+	}
+
+	return output.RenderTo(cmdOutput(cmd), componentLinkResult{
+		Toolchain: toolchainName,
+		Component: string(name),
+		Path:      absPath,
+	})
 }
 
 func runComponentList(cmd *cobra.Command, args []string) error {

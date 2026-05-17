@@ -156,7 +156,7 @@ func TestValidAutoSelfUpdate_RejectsArbitraryStrings(t *testing.T) {
 
 func TestLoadSettings_ReturnsDefaultsWhenNoFile(t *testing.T) {
 	tmpDir := t.TempDir()
-	t.Setenv("CJV_HOME", tmpDir)
+	IsolateForTest(t, tmpDir)
 
 	path, err := SettingsPath()
 	require.NoError(t, err)
@@ -168,7 +168,7 @@ func TestLoadSettings_ReturnsDefaultsWhenNoFile(t *testing.T) {
 func TestLoadSettings_PathMatchesSettingsPath(t *testing.T) {
 	// SettingsPath() should return a consistent path that points to settings.toml.
 	tmpDir := t.TempDir()
-	t.Setenv("CJV_HOME", tmpDir)
+	IsolateForTest(t, tmpDir)
 
 	path, err := SettingsPath()
 	require.NoError(t, err)

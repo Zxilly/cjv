@@ -58,6 +58,7 @@ cjv run sts cjc --version
 | `cjv toolchain link <name> <path>`                  | Link a custom toolchain to a local directory            |
 | `cjv toolchain uninstall <name>`                    | Uninstall a toolchain                                   |
 | `cjv component add <name>... [--toolchain <tc>]`    | Install a component (e.g. stdx) onto a toolchain        |
+| `cjv component link stdx <path> [--toolchain <tc>]` | Link a local stdx directory onto a toolchain (custom OK)|
 | `cjv component remove <name>... [--toolchain <tc>]` | Remove a component from a toolchain                     |
 | `cjv component list [--toolchain <tc>] [--installed]` | List installed and available components               |
 | `cjv doc [--path] [--toolchain <tc>] [topic]`       | Open the toolchain's offline documentation in your browser |
@@ -135,6 +136,23 @@ cjv component add stdx --toolchain lts
 cjv component remove stdx-docs
 cjv component list --toolchain nightly
 ```
+
+### Linking a local stdx
+
+`cjv component add stdx` does not work for custom toolchains created via `cjv toolchain link` because there is no matching release asset. Use `cjv component link stdx <path>` to point cjv at a local stdx directory instead:
+
+```bash
+# Link a locally built / fetched SDK first
+cjv toolchain link mysdk /path/to/local/sdk
+
+# Then point a local stdx directory at it
+cjv component link stdx /path/to/local/stdx --toolchain mysdk
+
+# Standard channels can also use link instead of download (offline boxes, stdx debugging, etc.)
+cjv component link stdx /path/to/local/stdx --toolchain lts --force
+```
+
+`<path>` must contain `dynamic/` and `static/` subdirectories (the standard stdx layout). cjv creates two symlinks under `<CJV_HOME>/stdx/<tc>/` (falling back to directory junctions on Windows when symlinks need elevation), and the `CANGJIE_STDX_PATH_*` env vars are injected the same way. Both `cjv component remove stdx` and `cjv toolchain uninstall` only remove the symlinks — your original directory is never touched.
 
 `cangjie-sdk.toml` recognises a `components` field; when `auto_install` is enabled, missing components are installed transparently during proxy execution:
 

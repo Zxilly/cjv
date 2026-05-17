@@ -30,6 +30,8 @@ const (
 	ErrorCodeComponentAlreadyInstalled       ErrorCode = "COMPONENT_ALREADY_INSTALLED"
 	ErrorCodeComponentNotAvailableForChannel ErrorCode = "COMPONENT_NOT_AVAILABLE_FOR_CHANNEL"
 	ErrorCodeComponentRequiresHost           ErrorCode = "COMPONENT_REQUIRES_HOST"
+	ErrorCodeComponentLinkNotSupported       ErrorCode = "COMPONENT_LINK_NOT_SUPPORTED"
+	ErrorCodeComponentLinkInvalidPath        ErrorCode = "COMPONENT_LINK_INVALID_PATH"
 	ErrorCodeDocsNotInstalled                ErrorCode = "DOCS_NOT_INSTALLED"
 	ErrorCodeDocsTopicNotFound               ErrorCode = "DOCS_TOPIC_NOT_FOUND"
 )
@@ -303,6 +305,40 @@ func (e *ComponentRequiresHostError) Error() string {
 func (e *ComponentRequiresHostError) Code() ErrorCode { return ErrorCodeComponentRequiresHost }
 func (e *ComponentRequiresHostError) Details() map[string]any {
 	return map[string]any{"component": e.Component}
+}
+
+// ComponentLinkNotSupportedError indicates the user invoked `cjv component
+// link` on a component that does not support filesystem linking. Only stdx
+// currently supports link; docs / stdx-docs must use `cjv component add`.
+type ComponentLinkNotSupportedError struct {
+	Component string
+}
+
+func (e *ComponentLinkNotSupportedError) Error() string {
+	return i18n.T("ComponentLinkNotSupported", i18n.MsgData{"Component": e.Component})
+}
+func (e *ComponentLinkNotSupportedError) Code() ErrorCode {
+	return ErrorCodeComponentLinkNotSupported
+}
+func (e *ComponentLinkNotSupportedError) Details() map[string]any {
+	return map[string]any{"component": e.Component}
+}
+
+// ComponentLinkInvalidPathError indicates the user-supplied stdx source path
+// failed structural validation (missing, not a directory, or missing the
+// required dynamic / static subdirectories).
+type ComponentLinkInvalidPathError struct {
+	Reason string
+}
+
+func (e *ComponentLinkInvalidPathError) Error() string {
+	return i18n.T("ComponentLinkInvalidPath", i18n.MsgData{"Reason": e.Reason})
+}
+func (e *ComponentLinkInvalidPathError) Code() ErrorCode {
+	return ErrorCodeComponentLinkInvalidPath
+}
+func (e *ComponentLinkInvalidPathError) Details() map[string]any {
+	return map[string]any{"reason": e.Reason}
 }
 
 // DocsNotInstalledError indicates `cjv doc` was invoked on a toolchain that

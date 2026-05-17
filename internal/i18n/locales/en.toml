@@ -296,6 +296,21 @@ other = "Component '{{.Component}}' is not installed for toolchain '{{.Toolchain
 [ComponentRequiresHost]
 other = "Component '{{.Component}}' cannot be installed on a custom or linked toolchain."
 
+[ComponentLinkNotSupported]
+other = "Linking component '{{.Component}}' is not supported (only 'stdx' can be linked)."
+
+[ComponentLinkInvalidPath]
+other = "Invalid stdx source: {{.Reason}}"
+
+[ComponentLinked]
+other = "Component '{{.Component}}' linked to {{.Path}} for toolchain '{{.Toolchain}}'"
+
+[ComponentLinkShort]
+other = "Link a component to a local directory instead of downloading"
+
+[ComponentLinkFlagForce]
+other = "Replace any existing component install (linked or downloaded)"
+
 [ComponentNotAvailableForChannel]
 other = "Component '{{.Component}}' is not available offline on channel '{{.Channel}}'."
 
