@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/Zxilly/cjv/internal/cjverr"
 	"github.com/Zxilly/cjv/internal/component"
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/dist"
@@ -82,6 +83,45 @@ func TestActiveRejectsTargetVariantAsActiveToolchain(t *testing.T) {
 	_, err = Active(t.Context(), "")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "target variant")
+}
+
+func TestActiveTargetResolvesInstalledTargetSDK(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("CJV_HOME", home)
+	t.Setenv("CJV_TOOLCHAIN", "")
+	require.NoError(t, config.EnsureDirs())
+
+	hostName := "sts-2.0.0"
+	require.NoError(t, os.MkdirAll(filepath.Join(home, "toolchains", hostName), 0o755))
+
+	tuple, err := dist.CurrentTargetTuple("", "ohos")
+	require.NoError(t, err)
+	targetName := toolchain.ToolchainName{Channel: toolchain.STS, Version: "2.0.0", Target: tuple}.String()
+	targetDir := filepath.Join(home, "toolchains", targetName)
+	require.NoError(t, os.MkdirAll(targetDir, 0o755))
+
+	active, err := ActiveTarget(t.Context(), hostName, "ohos")
+	require.NoError(t, err)
+	// Name is the host toolchain identity; Dir/root is the target SDK.
+	assert.Equal(t, hostName, active.Name)
+	assert.Equal(t, targetDir, active.Dir)
+	assert.Equal(t, []string{"ohos"}, active.Targets)
+	assert.Nil(t, active.Components)
+}
+
+func TestActiveTargetErrorsWhenTargetSDKMissing(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("CJV_HOME", home)
+	t.Setenv("CJV_TOOLCHAIN", "")
+	require.NoError(t, config.EnsureDirs())
+
+	hostName := "sts-2.0.0"
+	require.NoError(t, os.MkdirAll(filepath.Join(home, "toolchains", hostName), 0o755))
+
+	_, err := ActiveTarget(t.Context(), hostName, "ohos")
+	require.Error(t, err)
+	var notInstalled *cjverr.ToolchainNotInstalledError
+	assert.True(t, errors.As(err, &notInstalled))
 }
 
 func TestActiveAutoInstallsMissingTargetsAndComponents(t *testing.T) {

@@ -282,6 +282,71 @@ func TestInstallToolchainWithTargets_InstallsHostAndTargets(t *testing.T) {
 	assert.Equal(t, "sts-2.0.0", reloaded.DefaultToolchain)
 }
 
+func TestInstallToolchainWithTargets_PinsTargetToHostVersion(t *testing.T) {
+	home := t.TempDir()
+	config.IsolateForTest(t, home)
+	require.NoError(t, config.EnsureDirs())
+
+	sdkData, sha := createMockSDK()
+	hostKey, err := dist.CurrentHostTuple("")
+	require.NoError(t, err)
+	ohosKey, err := dist.CurrentTargetTuple("", "ohos")
+	require.NoError(t, err)
+
+	mux := http.NewServeMux()
+	server := httptest.NewServer(mux)
+	t.Cleanup(server.Close)
+
+	dl := func(name string) dist.DownloadInfo {
+		return dist.DownloadInfo{Name: name, SHA256: sha, URL: server.URL + "/download/" + name}
+	}
+	// STS latest is 2.1.0 (host only); the ohos target build lags at 2.0.0.
+	// Resolving host and target independently would install sts-2.1.0 and
+	// sts-2.0.0-<ohos> — a version skew that later breaks `envsetup --target`.
+	// The fix pins the target to the host's resolved version (2.1.0), where no
+	// ohos build exists, so install must fail clearly rather than silently
+	// install a mismatched target.
+	//
+	// LTS must also be populated: manifest validation (validateChannel) requires
+	// every channel to have a latest version, so an LTS-less manifest would fail
+	// to parse and the host install would never run — making this test vacuous.
+	var manifest dist.Manifest
+	manifest.Channels.LTS = dist.ChannelInfo{
+		Latest:   "1.0.5",
+		Versions: map[string]map[string]dist.DownloadInfo{"1.0.5": {hostKey: dl("lts-1.0.5.zip")}},
+	}
+	manifest.Channels.STS = dist.ChannelInfo{
+		Latest: "2.1.0",
+		Versions: map[string]map[string]dist.DownloadInfo{
+			"2.0.0": {hostKey: dl("sts-2.0.0.zip"), ohosKey: dl("sts-2.0.0-ohos.zip")},
+			"2.1.0": {hostKey: dl("sts-2.1.0.zip")},
+		},
+	}
+	mux.HandleFunc("/download/", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/octet-stream")
+		_, _ = w.Write(sdkData)
+	})
+	mux.HandleFunc("/sdk-versions.json", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		require.NoError(t, json.NewEncoder(w).Encode(manifest))
+	})
+
+	settings := config.DefaultSettings()
+	settings.ManifestURL = server.URL + "/sdk-versions.json"
+	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
+
+	err = InstallToolchainWithTargets(context.Background(), "sts", []string{"ohos"}, false)
+	require.Error(t, err, "install must fail when the target SDK lacks the host's resolved version")
+
+	installed, err := toolchain.ListInstalled()
+	require.NoError(t, err)
+	// Anti-vacuity: the host (sts-2.1.0) must have been installed, proving the
+	// manifest parsed and the host-install path ran so the target-pin code was
+	// actually exercised — otherwise this test would pass for the wrong reason.
+	assert.Contains(t, installed, "sts-2.1.0", "host toolchain should have installed before the target failure")
+	assert.NotContains(t, installed, "sts-2.0.0-"+ohosKey, "must not install a version-skewed target SDK")
+}
+
 func TestInstallToolchainWithTargets_FetchesManifestOnce(t *testing.T) {
 	home := t.TempDir()
 	config.IsolateForTest(t, home)
