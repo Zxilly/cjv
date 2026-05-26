@@ -164,6 +164,7 @@ func InstallToolchainWithExtras(ctx context.Context, input string, targets, comp
 		targetBase = toolchain.ToolchainName{Channel: hostResolved.Channel, Version: hostResolved.Version}
 	}
 
+	var targetNames []string
 	for _, target := range normalizedTargets {
 		resolvedTarget, err := resolveAndLocateWithTarget(ctx, targetBase, settings, fetcher, target)
 		if err != nil {
@@ -172,10 +173,19 @@ func InstallToolchainWithExtras(ctx context.Context, input string, targets, comp
 		if err := installResolvedNoDefault(ctx, resolvedTarget, settings, sf, force); err != nil {
 			return err
 		}
+		targetNames = append(targetNames, resolvedTarget.Name)
 	}
 
 	if len(components) > 0 {
-		if err := installComponentsList(ctx, resolved.Name, components, force, false); err != nil {
+		if len(normalizedTargets) > 0 {
+			// When cross-compiling, components (notably stdx) belong to the
+			// target SDK, so install them against each target's resolved name.
+			for _, targetName := range targetNames {
+				if err := installComponentsList(ctx, targetName, components, force, false); err != nil {
+					return err
+				}
+			}
+		} else if err := installComponentsList(ctx, resolved.Name, components, force, false); err != nil {
 			return err
 		}
 	}
@@ -234,12 +244,6 @@ func installComponentsList(ctx context.Context, resolvedName string, components 
 	if err != nil {
 		return err
 	}
-	if resolvedTC.Target != "" {
-		return fmt.Errorf("target variant %q cannot be used for component installation; use host toolchain %q", resolvedName, toolchain.ToolchainName{
-			Channel: resolvedTC.Channel,
-			Version: resolvedTC.Version,
-		}.String())
-	}
 	if resolvedTC.IsCustom() {
 		return &cjverr.ComponentRequiresHostError{Component: strings.Join(components, ", ")}
 	}
@@ -251,9 +255,14 @@ func installComponentsList(ctx context.Context, resolvedName string, components 
 	if err != nil {
 		return err
 	}
-	tuple, err := dist.CurrentHostTuple(settings.DefaultHost)
-	if err != nil {
-		return err
+	// For a target-variant resolved name (e.g. "lts-1.0.5-linux-x64-ohos") the
+	// target tuple is encoded in the name; otherwise install against the host.
+	tuple := resolvedTC.Target
+	if tuple == "" {
+		tuple, err = dist.CurrentHostTuple(settings.DefaultHost)
+		if err != nil {
+			return err
+		}
 	}
 	downloadsDir, err := config.DownloadsDir()
 	if err != nil {

@@ -100,13 +100,28 @@ func TestInstallComponentsListRollsBackPreviousComponentOnLaterFailure(t *testin
 	assert.NoFileExists(t, filepath.Join(stdxDir, "dynamic", "libfoo.so"))
 }
 
-func TestInstallComponentsListRejectsTargetVariantToolchain(t *testing.T) {
-	setupComponentCLITest(t, "lts-1.0.5-linux-x64-ohos")
+func TestInstallComponentsListUsesTargetTupleForTargetVariant(t *testing.T) {
+	const targetName = "lts-1.0.5-linux-x64-ohos"
+	setupComponentCLITest(t, targetName)
 
-	err := installComponentsList(context.Background(), "lts-1.0.5-linux-x64-ohos", []string{"stdx"}, false, true)
+	var gotTuple string
+	var gotTcDir string
+	oldInstall := componentInstallFunc
+	componentInstallFunc = func(_ context.Context, roots componentlib.Roots, _ toolchain.ToolchainName, _ componentlib.Name, tuple, _ string, _ bool) error {
+		gotTuple = tuple
+		gotTcDir = roots.TcDir
+		return nil
+	}
+	t.Cleanup(func() { componentInstallFunc = oldInstall })
 
-	require.Error(t, err)
-	assert.True(t, strings.Contains(err.Error(), "target variant") || strings.Contains(err.Error(), "linux-x64-ohos"))
+	err := installComponentsList(context.Background(), targetName, []string{"stdx"}, false, true)
+	require.NoError(t, err)
+
+	// The target tuple encoded in the resolved name drives the stdx download,
+	// not the host tuple.
+	assert.Equal(t, "linux-x64-ohos", gotTuple)
+	// Roots (and thus the manifest + StdxDir) are keyed by the full target name.
+	assert.Equal(t, targetName, filepath.Base(gotTcDir))
 }
 
 func TestRunComponentListQuietShowsInstalledThenAvailable(t *testing.T) {

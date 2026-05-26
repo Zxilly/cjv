@@ -39,6 +39,8 @@ var (
 		"ohos-arm64",
 		"ohos-x64",
 	}
+
+	stdxArchByEnvSuffix = map[string]string{"aarch64": "aarch64", "arm64": "aarch64", "x64": "x64", "arm32": "arm32"}
 )
 
 // TupleParts decomposes a target tuple into its host portion plus an optional
@@ -189,4 +191,25 @@ func SplitVariantSuffix(versionWithMaybeTuple string) (version, tuple string) {
 func hostByHostTuple(host string) (TupleParts, bool) {
 	parts, ok := hostByTuple[host]
 	return parts, ok
+}
+
+// StdxPlatformForEnvironment maps a cross-compile target environment (the
+// trailing suffix of a target tuple, e.g. "ohos", "ohos-x64", "ios-simulator-x64")
+// to the stdx archive platform token "{os}-{arch}". Environments with no
+// recognised trailing arch default to aarch64.
+func StdxPlatformForEnvironment(environment string) (string, error) {
+	env := strings.ToLower(strings.TrimSpace(environment))
+	if env == "" {
+		return "", fmt.Errorf("stdx target environment cannot be empty")
+	}
+	osPart, arch := env, "aarch64"
+	if i := strings.LastIndex(env, "-"); i >= 0 {
+		if a, ok := stdxArchByEnvSuffix[env[i+1:]]; ok {
+			osPart, arch = env[:i], a
+		}
+	}
+	if osPart == "" {
+		return "", fmt.Errorf("invalid stdx target environment %q", environment)
+	}
+	return osPart + "-" + arch, nil
 }

@@ -40,10 +40,48 @@ func TestResolveAssetURL_Stdx(t *testing.T) {
 	}
 }
 
-func TestResolveAssetURL_StdxRejectsTargetSuffix(t *testing.T) {
+func TestResolveAssetURL_StdxTarget(t *testing.T) {
+	spec, err := SpecFor(Stdx)
+	require.NoError(t, err)
+
+	tests := []struct {
+		name    string
+		tc      toolchain.ToolchainName
+		tuple   string
+		wantURL string
+	}{
+		{
+			name:    "sts ohos default arch",
+			tc:      toolchain.ToolchainName{Channel: toolchain.STS, Version: "1.1.0"},
+			tuple:   "linux-x64-ohos",
+			wantURL: "https://gitcode.com/Cangjie/cangjie_stdx/releases/download/v1.1.0.1/cangjie-stdx-ohos-aarch64-1.1.0.1.zip",
+		},
+		{
+			name:    "lts ohos x64",
+			tc:      toolchain.ToolchainName{Channel: toolchain.LTS, Version: "1.0.5"},
+			tuple:   "linux-x64-ohos-x64",
+			wantURL: "https://gitcode.com/Cangjie/cangjie_stdx/releases/download/v1.0.5.1/cangjie-stdx-ohos-x64-1.0.5.1.zip",
+		},
+		{
+			name:    "sts android arm32",
+			tc:      toolchain.ToolchainName{Channel: toolchain.STS, Version: "1.0.5"},
+			tuple:   "linux-x64-android-arm32",
+			wantURL: "https://gitcode.com/Cangjie/cangjie_stdx/releases/download/v1.0.5.1/cangjie-stdx-android-arm32-1.0.5.1.zip",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := ResolveAssetURL(spec, tt.tc, tt.tuple)
+			require.NoError(t, err)
+			assert.Equal(t, tt.wantURL, got)
+		})
+	}
+}
+
+func TestResolveAssetURL_StdxRequiresTuple(t *testing.T) {
 	spec, _ := SpecFor(Stdx)
 	tc := toolchain.ToolchainName{Channel: toolchain.LTS, Version: "1.0.5"}
-	_, err := ResolveAssetURL(spec, tc, "linux-x64-ohos")
+	_, err := ResolveAssetURL(spec, tc, "")
 	assert.Error(t, err)
 }
 
@@ -93,7 +131,8 @@ func TestAvailableComponentsFiltersBySelectedPlatform(t *testing.T) {
 
 	got := AvailableComponents(tc, "linux-x64-ohos")
 
-	assert.NotContains(t, got, Stdx)
+	// stdx is now available for cross-compile target tuples (target stdx).
+	assert.Contains(t, got, Stdx)
 	assert.Contains(t, got, Docs)
 	assert.Contains(t, got, StdxDocs)
 }

@@ -38,9 +38,11 @@ func docsBundleBase() string {
 	return DefaultDocsBundleBaseURL
 }
 
-// ResolveAssetURL requires a host tuple (no environment suffix) for stdx and
-// ignores tuple for docs / stdx-docs. Returns ComponentNotAvailableForChannelError
-// when the component does not ship offline for tc.Channel.
+// ResolveAssetURL requires a tuple for stdx — a host tuple selects the host
+// stdx, a target tuple (with environment suffix) selects the matching
+// cross-compile target stdx — and ignores tuple for docs / stdx-docs. Returns
+// ComponentNotAvailableForChannelError when the component does not ship offline
+// for tc.Channel.
 func ResolveAssetURL(spec Spec, tc toolchain.ToolchainName, tuple string) (string, error) {
 	if !spec.SupportsChannel(tc.Channel) {
 		return "", &cjverr.ComponentNotAvailableForChannelError{
@@ -68,20 +70,23 @@ func stdxURL(tc toolchain.ToolchainName, tuple string) (string, error) {
 	if tuple == "" {
 		return "", fmt.Errorf("stdx requires a host tuple")
 	}
-	host, err := sdktarget.HostPartOf(tuple)
+	parts, err := sdktarget.ParseTuple(tuple)
 	if err != nil {
 		return "", err
 	}
-	if host != tuple {
-		return "", fmt.Errorf("stdx is not target-specific; got target tuple %q", tuple)
-	}
-	parts, err := sdktarget.ParseTuple(host)
-	if err != nil {
-		return "", err
+	var platform string
+	if parts.Environment == "" {
+		// Host stdx: platform token derives from the host OS/arch.
+		platform = parts.NightlyOS + "-" + parts.NightlyArch
+	} else {
+		// Cross-target stdx: platform token derives from the target environment.
+		platform, err = sdktarget.StdxPlatformForEnvironment(parts.Environment)
+		if err != nil {
+			return "", err
+		}
 	}
 	stdxVersion := tc.Version + ".1"
-	asset := fmt.Sprintf("cangjie-stdx-%s-%s-%s.zip",
-		parts.NightlyOS, parts.NightlyArch, stdxVersion)
+	asset := fmt.Sprintf("cangjie-stdx-%s-%s.zip", platform, stdxVersion)
 
 	switch tc.Channel {
 	case toolchain.Nightly:
