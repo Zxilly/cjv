@@ -106,6 +106,64 @@ func loadSettings() (*config.Settings, error) {
 	return sf.Load()
 }
 
+// ActiveTarget resolves the installed cross-compilation target SDK for the
+// given target suffix, layered on the host toolchain selected by tcOverride.
+// Unlike Active (which rejects target variants as the active toolchain), this
+// returns an ActiveToolchain whose Dir is the target SDK's own directory so
+// callers can derive a standalone cross-compile environment from it, exactly
+// as the host toolchain is derived. Name remains the host toolchain identity
+// (e.g. "lts-1.0.5") — the logical toolchain being used — while Dir/root is the
+// target SDK and Targets names the cross target. The target SDK must already be
+// installed (cjv install <toolchain> --target <suffix>); this does not
+// auto-install it.
+func ActiveTarget(ctx context.Context, tcOverride, target string) (ActiveToolchain, error) {
+	host, err := Active(ctx, tcOverride)
+	if err != nil {
+		return ActiveToolchain{}, err
+	}
+
+	parsed, err := toolchain.ParseToolchainName(host.Name)
+	if err != nil {
+		return ActiveToolchain{}, err
+	}
+	if parsed.IsCustom() || parsed.Channel == toolchain.UnknownChannel || parsed.Version == "" {
+		return ActiveToolchain{}, fmt.Errorf("cannot resolve target %q: host toolchain %q has no channel/version", target, host.Name)
+	}
+
+	settings, settingsErr := loadSettings()
+	if settingsErr != nil {
+		slog.Warn("failed to load settings", "error", settingsErr)
+	}
+	tuple, err := targetPlatformKey(settings, target)
+	if err != nil {
+		return ActiveToolchain{}, err
+	}
+
+	name := toolchain.ToolchainName{
+		Channel: parsed.Channel,
+		Version: parsed.Version,
+		Target:  tuple,
+	}
+	tcDir, err := toolchain.FindInstalled(name)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return ActiveToolchain{}, &cjverr.ToolchainNotInstalledError{Name: name.String()}
+		}
+		return ActiveToolchain{}, err
+	}
+
+	return ActiveToolchain{
+		Dir:    tcDir,
+		Name:   host.Name,
+		Source: host.Source,
+		// Components are not carried over: they were only ensured on the host,
+		// not verified against the target SDK dir, so claiming them here would
+		// mislabel the target SDK's component set.
+		Targets:    []string{target},
+		Components: nil,
+	}, nil
+}
+
 func resolveName(settings *config.Settings, settingsErr error, tcOverride string) (string, config.OverrideSource, []string, []string, error) {
 	if tcOverride != "" {
 		return tcOverride, config.SourceUnknown, nil, nil, nil

@@ -149,8 +149,23 @@ func InstallToolchainWithExtras(ctx context.Context, input string, targets, comp
 		}
 	}
 
+	// Pin cross-compile target SDKs to the host's resolved concrete version so
+	// the host toolchain and its target SDKs always share a version. A
+	// channel-alias / latest install otherwise resolves each target's version
+	// independently (latestVersionForTuple), which can diverge from the host
+	// (e.g. a lagging target build) and later break `envsetup --target`, which
+	// reconstructs the target name from the host version.
+	targetBase := name
+	if len(normalizedTargets) > 0 {
+		hostResolved, err := toolchain.ParseToolchainName(resolved.Name)
+		if err != nil {
+			return err
+		}
+		targetBase = toolchain.ToolchainName{Channel: hostResolved.Channel, Version: hostResolved.Version}
+	}
+
 	for _, target := range normalizedTargets {
-		resolvedTarget, err := resolveAndLocateWithTarget(ctx, name, settings, fetcher, target)
+		resolvedTarget, err := resolveAndLocateWithTarget(ctx, targetBase, settings, fetcher, target)
 		if err != nil {
 			return err
 		}

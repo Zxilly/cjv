@@ -72,7 +72,7 @@ func stripJSONModeFlagPrefix(args []string, allowAfterPlusToolchain bool) ([]str
 
 func newEnvsetupCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "envsetup [+toolchain] [--shell=TYPE]",
+		Use:   "envsetup [+toolchain] [--target=SUFFIX] [--shell=TYPE]",
 		Short: "Print shell commands to configure Cangjie runtime environment",
 		Long: `Output shell commands that set environment variables for the active Cangjie toolchain.
 
@@ -87,15 +87,17 @@ Usage:
 	// so it lets cobra parse flags normally: --json is the global persistent
 	// flag and +toolchain is an ordinary positional argument.
 	cmd.Flags().String("shell", "", "shell type to format for (bash, fish, powershell, cmd)")
+	cmd.Flags().String("target", "", "cross-compilation target suffix (e.g. ohos) to emit the environment for the installed target SDK")
 	return cmd
 }
 
 func envsetupRun(cmd *cobra.Command, args []string) error {
 	shellFlag, _ := cmd.Flags().GetString("shell")
+	targetFlag, _ := cmd.Flags().GetString("target")
 	if output.IsJSON() {
-		return envsetupRunJSON(cmd, args)
+		return envsetupRunJSON(cmd, args, targetFlag)
 	}
-	return envsetupRunWithShell(cmd, args, shellFlag)
+	return envsetupRunWithShell(cmd, args, shellFlag, targetFlag)
 }
 
 type envsetupData struct {
@@ -144,12 +146,18 @@ type envsetupLibraryPathJSON struct {
 
 func (r envsetupJSONResult) Text() string { return "" }
 
-func loadEnvsetupData(ctx context.Context, tcOverride string) (envsetupData, error) {
+func loadEnvsetupData(ctx context.Context, tcOverride, target string) (envsetupData, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
 
-	active, err := resolve.Active(ctx, tcOverride)
+	var active resolve.ActiveToolchain
+	var err error
+	if target != "" {
+		active, err = resolve.ActiveTarget(ctx, tcOverride, target)
+	} else {
+		active, err = resolve.Active(ctx, tcOverride)
+	}
 	if err != nil {
 		return envsetupData{}, err
 	}
@@ -247,21 +255,21 @@ func envsetupResultFromData(data envsetupData) envsetupJSONResult {
 	}
 }
 
-func envsetupRunJSON(cmd *cobra.Command, args []string) error {
+func envsetupRunJSON(cmd *cobra.Command, args []string, target string) error {
 	ctx := cmd.Context()
 	if ctx == nil {
 		ctx = context.Background()
 	}
 	tcOverride, _ := extractPlusToolchainFromArgs(args)
 
-	data, err := loadEnvsetupData(ctx, tcOverride)
+	data, err := loadEnvsetupData(ctx, tcOverride, target)
 	if err != nil {
 		return err
 	}
 	return output.RenderTo(cmdOutput(cmd), envsetupResultFromData(data))
 }
 
-func envsetupRunWithShell(cmd *cobra.Command, args []string, shellFlag string) error {
+func envsetupRunWithShell(cmd *cobra.Command, args []string, shellFlag, target string) error {
 	ctx := cmd.Context()
 	if ctx == nil {
 		ctx = context.Background()
@@ -284,7 +292,7 @@ func envsetupRunWithShell(cmd *cobra.Command, args []string, shellFlag string) e
 		shellType = st
 	}
 
-	data, err := loadEnvsetupData(ctx, tcOverride)
+	data, err := loadEnvsetupData(ctx, tcOverride, target)
 	if err != nil {
 		return err
 	}

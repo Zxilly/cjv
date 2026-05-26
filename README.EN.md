@@ -48,7 +48,7 @@ cjv run sts cjc --version
 | `cjv show home`                                     | Show CJV_HOME path                                      |
 | `cjv run <toolchain> <command> [args...]`           | Run a command with a specific toolchain                 |
 | `cjv exec [+toolchain] <command> [args...]`         | Run a command with Cangjie runtime environment          |
-| `cjv envsetup [+toolchain] [--shell=TYPE]`          | Print shell commands to configure Cangjie runtime environment |
+| `cjv envsetup [+toolchain] [--target=SUFFIX] [--shell=TYPE]` | Print shell commands to configure Cangjie runtime environment |
 | `cjv which <command>`                               | Show the path of an SDK tool for the active toolchain   |
 | `cjv check`                                         | Check for available updates without installing          |
 | `cjv override set <toolchain>`                      | Set a toolchain override for the current directory      |
@@ -197,6 +197,8 @@ cjv envsetup | Invoke-Expression
 ```
 
 Both commands use the same toolchain resolution priority as proxy mode and support `+toolchain` syntax to specify a toolchain. `cjv envsetup` auto-detects the current shell type, or you can override it with `--shell=TYPE` (supported: `bash`, `fish`, `powershell`, `cmd`).
+
+For cross-compilation, use `--target=SUFFIX` (e.g. `ohos`) to emit the environment of an installed target SDK (standalone-SDK model: `CANGJIE_HOME` points at the target SDK directory, with PATH/library paths taken from it). Install the target SDK first with `cjv install <toolchain> --target <suffix>`.
 
 ## Environment Variables
 

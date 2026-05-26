@@ -48,7 +48,7 @@ cjv run sts cjc --version
 | `cjv show home`                                       | 显示 CJV_HOME 路径                            |
 | `cjv run <toolchain> <command> [args...]`             | 使用指定工具链运行命令                        |
 | `cjv exec [+toolchain] <command> [args...]`           | 使用仓颉运行时环境执行命令                    |
-| `cjv envsetup [+toolchain] [--shell=TYPE]`            | 输出配置仓颉运行时环境的 shell 命令           |
+| `cjv envsetup [+toolchain] [--target=SUFFIX] [--shell=TYPE]` | 输出配置仓颉运行时环境的 shell 命令           |
 | `cjv which <command>`                                 | 显示活跃工具链中 SDK 工具的路径               |
 | `cjv check`                                           | 检查可用更新（不安装）                        |
 | `cjv override set <toolchain>`                        | 为当前目录设置工具链覆盖                      |
@@ -197,6 +197,8 @@ cjv envsetup | Invoke-Expression
 ```
 
 两个命令都使用与代理模式相同的工具链解析优先级，支持 `+toolchain` 语法指定工具链。`cjv envsetup` 会自动检测当前 shell 类型，也可通过 `--shell=TYPE` 手动指定（支持 `bash`、`fish`、`powershell`、`cmd`）。
+
+交叉编译场景下，可用 `--target=SUFFIX`（如 `ohos`）输出已安装目标 SDK 的环境（独立 SDK 模型：`CANGJIE_HOME` 指向目标 SDK 目录，PATH/库路径均取自该目录）。目标 SDK 需先通过 `cjv install <toolchain> --target <suffix>` 安装。
 
 ## 环境变量
 

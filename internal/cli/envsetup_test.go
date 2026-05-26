@@ -13,6 +13,8 @@ import (
 	"github.com/Zxilly/cjv/internal/cli/output"
 	componentlib "github.com/Zxilly/cjv/internal/component"
 	"github.com/Zxilly/cjv/internal/config"
+	"github.com/Zxilly/cjv/internal/dist"
+	"github.com/Zxilly/cjv/internal/toolchain"
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -174,6 +176,43 @@ func TestEnvsetupRunJSONOutputsIngredients(t *testing.T) {
 		assert.True(t, *got.Env.LibraryPath.Key == "LD_LIBRARY_PATH" || *got.Env.LibraryPath.Key == "DYLD_LIBRARY_PATH")
 		assert.NotEmpty(t, got.Env.LibraryPath.Prepend)
 	}
+}
+
+func TestEnvsetupRunJSONTargetSDK(t *testing.T) {
+	home := t.TempDir()
+	config.IsolateForTest(t, home)
+	t.Setenv("CJV_TOOLCHAIN", "")
+	config.ResetDefaultSettingsFileCache()
+	config.ResetCachedUserHomeDir()
+
+	setupFakeToolchainForCLI(t, home, "lts-1.0.5")
+	require.NoError(t, os.MkdirAll(filepath.Join(home, "bin"), 0o755))
+
+	tuple, err := dist.CurrentTargetTuple("", "ohos")
+	require.NoError(t, err)
+	targetName := toolchain.ToolchainName{Channel: toolchain.LTS, Version: "1.0.5", Target: tuple}.String()
+	targetDir := setupFakeToolchainForCLI(t, home, targetName)
+
+	settings := config.DefaultSettings()
+	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
+
+	t.Chdir(t.TempDir())
+
+	// --target re-roots the emitted environment at the installed target SDK
+	// (standalone-SDK model): CANGJIE_HOME and PATH point at the target dir,
+	// not the host toolchain.
+	raw, err := executeEnvsetup(t, "--json", "+lts-1.0.5", "--target", "ohos")
+	require.NoError(t, err)
+
+	var got envsetupJSONResult
+	require.NoError(t, json.Unmarshal([]byte(raw), &got))
+	// name is the host toolchain identity (version-bearing); root + CANGJIE_HOME
+	// are the target SDK dir; targets names the cross target.
+	assert.Equal(t, "lts-1.0.5", got.Toolchain.Name)
+	assert.Equal(t, targetDir, got.Toolchain.Root)
+	assert.Equal(t, targetDir, got.Env.Vars["CANGJIE_HOME"])
+	assert.Equal(t, []string{"ohos"}, got.Toolchain.Targets)
+	assert.Contains(t, got.Env.Path.Prepend, filepath.Join(targetDir, "bin"))
 }
 
 func TestEnvsetupRunJSONUsesDefaultSource(t *testing.T) {
