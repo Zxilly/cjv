@@ -282,6 +282,104 @@ func TestInstallToolchainWithTargets_InstallsHostAndTargets(t *testing.T) {
 	assert.Equal(t, "sts-2.0.0", reloaded.DefaultToolchain)
 }
 
+// buildStdxZip writes a minimal stdx zip whose single top-level directory is
+// stripped on install, leaving dynamic/ and static/ at the StdxDir root.
+func buildStdxZip(t *testing.T, topLevel string) []byte {
+	t.Helper()
+	var buf bytes.Buffer
+	w := zip.NewWriter(&buf)
+	entries := map[string]string{
+		topLevel + "/dynamic/libfoo.so": "dynamic",
+		topLevel + "/static/libfoo.a":   "static",
+	}
+	for name, content := range entries {
+		f, err := w.Create(name)
+		require.NoError(t, err)
+		_, err = f.Write([]byte(content))
+		require.NoError(t, err)
+	}
+	require.NoError(t, w.Close())
+	return buf.Bytes()
+}
+
+func TestInstallToolchainWithExtras_InstallsTargetStdx(t *testing.T) {
+	home := t.TempDir()
+	config.IsolateForTest(t, home)
+	require.NoError(t, config.EnsureDirs())
+
+	const version = "2.0.0"
+	ohosKey, err := dist.CurrentTargetTuple("", "ohos")
+	require.NoError(t, err)
+
+	// The target tuple's environment "ohos" maps to the stdx platform token
+	// "ohos-aarch64", so the asset name is fixed regardless of the host arch.
+	stdxVersion := version + ".1"
+	stdxAsset := "cangjie-stdx-ohos-aarch64-" + stdxVersion + ".zip"
+	stdxData := buildStdxZip(t, "cangjie-stdx-ohos-aarch64-"+stdxVersion)
+
+	sdkData, sha := createMockSDK()
+	hostKey, err := dist.CurrentHostTuple("")
+	require.NoError(t, err)
+
+	mux := http.NewServeMux()
+	server := httptest.NewServer(mux)
+	t.Cleanup(server.Close)
+
+	platforms := map[string]dist.DownloadInfo{
+		hostKey: {Name: "cangjie-sdk-" + version + ".zip", SHA256: sha, URL: server.URL + "/download/cangjie-sdk-" + version + ".zip"},
+		ohosKey: {Name: "cangjie-sdk-" + ohosKey + "-" + version + ".zip", SHA256: sha, URL: server.URL + "/download/cangjie-sdk-" + ohosKey + "-" + version + ".zip"},
+	}
+	var manifest dist.Manifest
+	manifest.Channels.LTS = dist.ChannelInfo{
+		Latest:   "1.0.5",
+		Versions: map[string]map[string]dist.DownloadInfo{"1.0.5": {hostKey: {Name: "cangjie-sdk-1.0.5.zip", SHA256: sha, URL: server.URL + "/download/cangjie-sdk-1.0.5.zip"}}},
+	}
+	manifest.Channels.STS = dist.ChannelInfo{
+		Latest:   version,
+		Versions: map[string]map[string]dist.DownloadInfo{version: platforms},
+	}
+
+	mux.HandleFunc("/download/", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/octet-stream")
+		if filepath.Base(r.URL.Path) == stdxAsset {
+			_, _ = w.Write(stdxData)
+			return
+		}
+		_, _ = w.Write(sdkData)
+	})
+	mux.HandleFunc("/sdk-versions.json", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		require.NoError(t, json.NewEncoder(w).Encode(manifest))
+	})
+
+	// Point the stdx release base at our mock server so the target stdx asset
+	// resolves to /download/<stdxAsset>.
+	componentlib.SetStdxReleaseBaseForTest(t, server.URL+"/download")
+
+	settings := config.DefaultSettings()
+	settings.ManifestURL = server.URL + "/sdk-versions.json"
+	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
+
+	require.NoError(t, InstallToolchainWithExtras(context.Background(), "sts", []string{"ohos"}, []string{"stdx"}, false))
+
+	targetName := "sts-" + version + "-" + ohosKey
+
+	// stdx manifest must live under the TARGET toolchain dir, not the host.
+	roots, err := componentlib.RootsFor(targetName)
+	require.NoError(t, err)
+	assert.True(t, componentlib.IsInstalled(roots.TcDir, componentlib.Stdx),
+		"stdx manifest should exist under the target toolchain dir")
+
+	hostRoots, err := componentlib.RootsFor("sts-" + version)
+	require.NoError(t, err)
+	assert.False(t, componentlib.IsInstalled(hostRoots.TcDir, componentlib.Stdx),
+		"stdx must NOT be installed against the host toolchain when cross-compiling")
+
+	// stdx files must land under the per-target StdxDir.
+	assert.FileExists(t, filepath.Join(roots.StdxDir, "dynamic", "libfoo.so"))
+	assert.FileExists(t, filepath.Join(roots.StdxDir, "static", "libfoo.a"))
+}
+
 func TestInstallToolchainWithTargets_PinsTargetToHostVersion(t *testing.T) {
 	home := t.TempDir()
 	config.IsolateForTest(t, home)

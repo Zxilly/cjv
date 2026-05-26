@@ -112,6 +112,31 @@ func TestParseTupleRejectsMalformedTargetSuffix(t *testing.T) {
 	}
 }
 
+func TestStdxPlatformForEnvironment(t *testing.T) {
+	tests := []struct {
+		environment string
+		want        string
+	}{
+		{"ohos", "ohos-aarch64"},
+		{"ohos-x64", "ohos-x64"},
+		{"android", "android-aarch64"},
+		{"android-arm32", "android-arm32"},
+		{"ios", "ios-aarch64"},
+		{"ios-simulator", "ios-simulator-aarch64"},
+		{"ios-simulator-x64", "ios-simulator-x64"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.environment, func(t *testing.T) {
+			got, err := StdxPlatformForEnvironment(tt.environment)
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+
+	_, err := StdxPlatformForEnvironment("")
+	assert.Error(t, err)
+}
+
 func TestSplitVariantSuffixRequiresValidTuple(t *testing.T) {
 	version, tuple := SplitVariantSuffix("1.1.0-beta-linux-x64-ohos")
 	assert.Equal(t, "1.1.0-beta", version)

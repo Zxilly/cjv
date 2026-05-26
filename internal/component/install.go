@@ -14,8 +14,9 @@ import (
 )
 
 // Install downloads and unpacks a component for the given toolchain.
-// tuple is required for stdx (must be a host tuple, no environment suffix)
-// and ignored for docs / stdx-docs. force=true reinstalls over an existing manifest.
+// tuple is required for stdx (a host tuple selects the host stdx, a target
+// tuple selects the matching cross-compile target stdx) and ignored for
+// docs / stdx-docs. force=true reinstalls over an existing manifest.
 func Install(ctx context.Context, roots Roots, tc toolchain.ToolchainName, name Name, tuple, downloadsDir string, force bool) (retErr error) {
 	spec, err := SpecFor(name)
 	if err != nil {
