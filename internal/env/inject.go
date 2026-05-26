@@ -122,6 +122,89 @@ func BuildProxyEnv(baseEnv []string, ctx ProxyEnvContext) []string {
 	return result
 }
 
+// BuildToolchainEnv constructs the environment for an interactive shell
+// session that wants the SDK/runtime paths directly available. Unlike
+// BuildProxyEnv it does not add CJV_HOME/bin and does not set proxy-internal
+// CJV_* variables.
+func BuildToolchainEnv(baseEnv []string, cfg *EnvConfig) []string {
+	if cfg == nil {
+		cfg = NewEnvConfig()
+	}
+
+	envMap := make(map[string]string)
+	displayKeys := make(map[string]string)
+	pathKey := canonicalEnvKey("PATH")
+	var order []string
+	var hiddenEntries []string
+
+	setEnv := func(key, value string) {
+		canonical := canonicalEnvKey(key)
+		if _, exists := displayKeys[canonical]; !exists {
+			displayKeys[canonical] = key
+			order = append(order, canonical)
+		}
+		envMap[canonical] = value
+	}
+
+	for _, e := range baseEnv {
+		k, v, ok := strings.Cut(e, "=")
+		if !ok {
+			continue
+		}
+		if k == "" {
+			hiddenEntries = append(hiddenEntries, e)
+			continue
+		}
+		setEnv(k, v)
+		if strings.EqualFold(k, "PATH") {
+			pathKey = canonicalEnvKey(k)
+		}
+	}
+
+	for k, v := range cfg.Vars {
+		setEnv(k, v)
+	}
+
+	var entries []string
+	if path, ok := envMap[pathKey]; ok {
+		entries = strings.Split(path, string(os.PathListSeparator))
+	} else {
+		displayKeys[pathKey] = "PATH"
+		order = append(order, pathKey)
+	}
+
+	existingSet := make(map[string]bool, len(entries)+len(cfg.PathPrepend)+len(cfg.PathAppend))
+	all := make([]string, 0, len(cfg.PathPrepend)+len(entries)+len(cfg.PathAppend))
+	appendUnique := func(entry string) {
+		if entry == "" {
+			return
+		}
+		key := canonicalEnvKey(entry)
+		if existingSet[key] {
+			return
+		}
+		existingSet[key] = true
+		all = append(all, entry)
+	}
+	for _, e := range cfg.PathPrepend {
+		appendUnique(e)
+	}
+	for _, e := range entries {
+		appendUnique(e)
+	}
+	for _, e := range cfg.PathAppend {
+		appendUnique(e)
+	}
+	envMap[pathKey] = strings.Join(all, string(os.PathListSeparator))
+
+	result := make([]string, 0, len(order)+len(hiddenEntries))
+	for _, k := range order {
+		result = append(result, displayKeys[k]+"="+envMap[k])
+	}
+	result = append(result, hiddenEntries...)
+	return result
+}
+
 func canonicalEnvKey(key string) string {
 	if runtime.GOOS == "windows" {
 		return strings.ToUpper(key)

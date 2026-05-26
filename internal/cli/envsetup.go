@@ -7,10 +7,11 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/Zxilly/cjv/internal/cjverr"
 	"github.com/Zxilly/cjv/internal/cli/output"
 	componentlib "github.com/Zxilly/cjv/internal/component"
+	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/env"
+	"github.com/Zxilly/cjv/internal/resolve"
 	"github.com/spf13/cobra"
 )
 
@@ -38,21 +39,6 @@ func applyJSONModeFlag(arg string) (bool, error) {
 	}
 	output.SetJSONMode(value)
 	return true, nil
-}
-
-func stripJSONModeFlags(args []string) ([]string, error) {
-	out := make([]string, 0, len(args))
-	for _, arg := range args {
-		matched, err := applyJSONModeFlag(arg)
-		if err != nil {
-			return nil, err
-		}
-		if matched {
-			continue
-		}
-		out = append(out, arg)
-	}
-	return out, nil
 }
 
 func stripJSONModeFlagPrefix(args []string, allowAfterPlusToolchain bool) ([]string, error) {
@@ -84,43 +70,195 @@ func stripJSONModeFlagPrefix(args []string, allowAfterPlusToolchain bool) ([]str
 	return out, nil
 }
 
-var envsetupCmd = &cobra.Command{
-	Use:   "envsetup [+toolchain] [--shell=TYPE]",
-	Short: "Print shell commands to configure Cangjie runtime environment",
-	Long: `Output shell commands that set environment variables for the active Cangjie toolchain.
+func newEnvsetupCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "envsetup [+toolchain] [--shell=TYPE]",
+		Short: "Print shell commands to configure Cangjie runtime environment",
+		Long: `Output shell commands that set environment variables for the active Cangjie toolchain.
 
 Usage:
   eval "$(cjv envsetup)"          # bash/zsh
   cjv envsetup | source           # fish
   cjv envsetup | Invoke-Expression  # powershell`,
-	Args:               cobra.ArbitraryArgs,
-	RunE:               envsetupRun,
-	DisableFlagParsing: true,
+		Args: cobra.ArbitraryArgs,
+		RunE: envsetupRun,
+	}
+	// Unlike exec/run, envsetup does not forward arguments to a child process,
+	// so it lets cobra parse flags normally: --json is the global persistent
+	// flag and +toolchain is an ordinary positional argument.
+	cmd.Flags().String("shell", "", "shell type to format for (bash, fish, powershell, cmd)")
+	return cmd
 }
 
 func envsetupRun(cmd *cobra.Command, args []string) error {
-	var err error
-	args, err = stripJSONModeFlags(args)
+	shellFlag, _ := cmd.Flags().GetString("shell")
+	if output.IsJSON() {
+		return envsetupRunJSON(cmd, args)
+	}
+	return envsetupRunWithShell(cmd, args, shellFlag)
+}
+
+type envsetupData struct {
+	active resolve.ActiveToolchain
+	cfg    *env.EnvConfig
+	home   string
+	bin    string
+	source string
+}
+
+type envsetupJSONResult struct {
+	SchemaVersion int                     `json:"schema_version"`
+	Toolchain     envsetupToolchainJSON   `json:"toolchain"`
+	CJV           envsetupCJVJSON         `json:"cjv"`
+	Env           envsetupEnvironmentJSON `json:"env"`
+}
+
+type envsetupToolchainJSON struct {
+	Name       string   `json:"name"`
+	Root       string   `json:"root"`
+	Source     string   `json:"source"`
+	Targets    []string `json:"targets"`
+	Components []string `json:"components"`
+}
+
+type envsetupCJVJSON struct {
+	Home string `json:"home"`
+	Bin  string `json:"bin"`
+}
+
+type envsetupEnvironmentJSON struct {
+	Vars        map[string]string       `json:"vars"`
+	Path        envsetupPathJSON        `json:"path"`
+	LibraryPath envsetupLibraryPathJSON `json:"library_path"`
+}
+
+type envsetupPathJSON struct {
+	Prepend []string `json:"prepend"`
+	Append  []string `json:"append"`
+}
+
+type envsetupLibraryPathJSON struct {
+	Key     *string  `json:"key"`
+	Prepend []string `json:"prepend"`
+}
+
+func (r envsetupJSONResult) Text() string { return "" }
+
+func loadEnvsetupData(ctx context.Context, tcOverride string) (envsetupData, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	active, err := resolve.Active(ctx, tcOverride)
+	if err != nil {
+		return envsetupData{}, err
+	}
+	cfg := env.LoadToolchainEnv(active.Dir, componentlib.ApplyEnv)
+
+	home, err := config.Home()
+	if err != nil {
+		return envsetupData{}, err
+	}
+	bin, err := config.BinDir()
+	if err != nil {
+		return envsetupData{}, err
+	}
+
+	return envsetupData{
+		active: active,
+		cfg:    cfg,
+		home:   home,
+		bin:    bin,
+		source: envsetupSource(tcOverride, active.Source),
+	}, nil
+}
+
+func envsetupSource(tcOverride string, source config.OverrideSource) string {
+	if tcOverride != "" {
+		return "argument"
+	}
+	switch source {
+	case config.SourceEnv:
+		return "env"
+	case config.SourceOverride:
+		return "override"
+	case config.SourceToolchainFile:
+		return "toolchain-file"
+	case config.SourceDefault:
+		return "default"
+	default:
+		return "unknown"
+	}
+}
+
+func envsetupVarsForJSON(cfg *env.EnvConfig) map[string]string {
+	vars := make(map[string]string)
+	if cfg == nil {
+		return vars
+	}
+	libraryKey := env.RuntimeLibraryPathKey()
+	for k, v := range cfg.Vars {
+		if k == "" || k == config.EnvToolchain || k == config.EnvRecursionCount || k == libraryKey {
+			continue
+		}
+		vars[k] = v
+	}
+	return vars
+}
+
+// jsonStrings normalizes a slice for JSON output so an empty or nil input
+// serializes as [] rather than null, keeping the schema's array fields a
+// stable shape for typed consumers.
+func jsonStrings(s []string) []string {
+	return append(make([]string, 0, len(s)), s...)
+}
+
+func envsetupResultFromData(data envsetupData) envsetupJSONResult {
+	libraryKey := env.RuntimeLibraryPathKey()
+	var libraryKeyPtr *string
+	if libraryKey != "" {
+		libraryKeyPtr = &libraryKey
+	}
+
+	return envsetupJSONResult{
+		SchemaVersion: 1,
+		Toolchain: envsetupToolchainJSON{
+			Name:       data.active.Name,
+			Root:       data.active.Dir,
+			Source:     data.source,
+			Targets:    jsonStrings(data.active.Targets),
+			Components: jsonStrings(data.active.Components),
+		},
+		CJV: envsetupCJVJSON{
+			Home: data.home,
+			Bin:  data.bin,
+		},
+		Env: envsetupEnvironmentJSON{
+			Vars: envsetupVarsForJSON(data.cfg),
+			Path: envsetupPathJSON{
+				Prepend: jsonStrings(data.cfg.PathPrepend),
+				Append:  jsonStrings(data.cfg.PathAppend),
+			},
+			LibraryPath: envsetupLibraryPathJSON{
+				Key:     libraryKeyPtr,
+				Prepend: jsonStrings(env.ExistingLibraryPathEntries(data.cfg)),
+			},
+		},
+	}
+}
+
+func envsetupRunJSON(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	tcOverride, _ := extractPlusToolchainFromArgs(args)
+
+	data, err := loadEnvsetupData(ctx, tcOverride)
 	if err != nil {
 		return err
 	}
-	if output.IsJSON() {
-		return &cjverr.UnsupportedForJSONError{Command: "envsetup"}
-	}
-	// Manual flag parsing since DisableFlagParsing is true.
-	shellFlag := ""
-	var remaining []string
-	for _, a := range args {
-		switch {
-		case a == "--help" || a == "-h":
-			return cmd.Help()
-		case strings.HasPrefix(a, "--shell="):
-			shellFlag = strings.TrimPrefix(a, "--shell=")
-		default:
-			remaining = append(remaining, a)
-		}
-	}
-	return envsetupRunWithShell(cmd, remaining, shellFlag)
+	return output.RenderTo(cmdOutput(cmd), envsetupResultFromData(data))
 }
 
 func envsetupRunWithShell(cmd *cobra.Command, args []string, shellFlag string) error {
@@ -131,7 +269,6 @@ func envsetupRunWithShell(cmd *cobra.Command, args []string, shellFlag string) e
 
 	tcOverride, _ := extractPlusToolchainFromArgs(args)
 
-	// Determine shell type
 	var shellType env.ShellType
 	if shellFlag != "" {
 		st, err := env.ParseShellFlag(shellFlag)
@@ -147,13 +284,13 @@ func envsetupRunWithShell(cmd *cobra.Command, args []string, shellFlag string) e
 		shellType = st
 	}
 
-	baseEnv := os.Environ()
-
-	runtimeEnv, err := env.ResolveRuntimeEnv(ctx, tcOverride, componentlib.ApplyEnv)
+	data, err := loadEnvsetupData(ctx, tcOverride)
 	if err != nil {
 		return err
 	}
 
+	baseEnv := os.Environ()
+	runtimeEnv := env.BuildToolchainEnv(baseEnv, data.cfg)
 	diff := env.ComputeEnvDiff(baseEnv, runtimeEnv)
 	if len(diff) == 0 {
 		return nil
@@ -165,5 +302,5 @@ func envsetupRunWithShell(cmd *cobra.Command, args []string, shellFlag string) e
 }
 
 func init() {
-	rootCmd.AddCommand(envsetupCmd)
+	rootCmd.AddCommand(newEnvsetupCmd())
 }
