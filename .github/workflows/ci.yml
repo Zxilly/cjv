@@ -19,8 +19,6 @@ jobs:
             race: -race
           - os: windows-2025
             race: -race
-          - os: windows-11-arm
-            race: ''
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout repository
@@ -118,7 +116,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
-          node-version: lts/*
+          node-version: 22
           cache: pnpm
           cache-dependency-path: web/pnpm-lock.yaml
       - name: Install dependencies
@@ -130,6 +128,7 @@ jobs:
 
   web-test:
     runs-on: ubuntu-24.04
+    timeout-minutes: 15
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -141,113 +140,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
-          node-version: lts/*
-          cache: pnpm
-          cache-dependency-path: web/pnpm-lock.yaml
-      - name: Install dependencies
-        working-directory: web
-        run: pnpm install --frozen-lockfile
-      - name: Resolve Playwright version
-        id: playwright-version
-        working-directory: web
-        run: echo "version=$(node -p 'require(\"playwright/package.json\").version')" >> "$GITHUB_OUTPUT"
-      - name: Cache Playwright browsers
-        id: playwright-cache
-        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
-        with:
-          path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-chromium-${{ steps.playwright-version.outputs.version }}
-      - name: Install Playwright Chromium
-        if: steps.playwright-cache.outputs.cache-hit != 'true'
-        working-directory: web
-        run: pnpm exec playwright install --with-deps chromium
-      - name: Install Playwright system deps
-        if: steps.playwright-cache.outputs.cache-hit == 'true'
-        working-directory: web
-        run: pnpm exec playwright install-deps chromium
-      - name: Run coverage
-        working-directory: web
-        run: pnpm coverage
-
-  web-browser-integration:
-    name: Web integration (${{ matrix.runner }}, ${{ matrix.browser }})
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - runner: windows-11-arm
-            runner_arch: arm64
-            browser: firefox
-            playwright_browser: firefox
-            platform_os: Windows
-            platform_arch: arm64
-            expected_state: unsupported
-            expected_label: Windows arm64
-            expected_binary_goos: ''
-            expected_binary_goarch: ''
-          - runner: macos-26-intel
-            runner_arch: amd64
-            browser: safari
-            playwright_browser: webkit
-            platform_os: Mac OS
-            platform_arch: ''
-            expected_state: unknown
-            expected_label: macOS 未知架构
-            expected_binary_goos: ''
-            expected_binary_goarch: ''
-          - runner: macos-26
-            runner_arch: arm64
-            browser: safari
-            playwright_browser: webkit
-            platform_os: Mac OS
-            platform_arch: ''
-            expected_state: unknown
-            expected_label: macOS 未知架构
-            expected_binary_goos: ''
-            expected_binary_goarch: ''
-          - runner: windows-2025
-            runner_arch: amd64
-            browser: chromium
-            playwright_browser: chromium
-            platform_os: Windows
-            platform_arch: amd64
-            expected_state: ready
-            expected_label: Windows x86_64
-            expected_binary_goos: windows
-            expected_binary_goarch: amd64
-          - runner: ubuntu-24.04
-            runner_arch: amd64
-            browser: chromium
-            playwright_browser: chromium
-            platform_os: Linux
-            platform_arch: amd64
-            expected_state: ready
-            expected_label: Linux x86_64
-            expected_binary_goos: linux
-            expected_binary_goarch: amd64
-          - runner: ubuntu-24.04-arm
-            runner_arch: arm64
-            browser: chromium
-            playwright_browser: chromium
-            platform_os: Linux
-            platform_arch: arm64
-            expected_state: ready
-            expected_label: Linux ARM64
-            expected_binary_goos: linux
-            expected_binary_goarch: arm64
-    runs-on: ${{ matrix.runner }}
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-      - name: Set up pnpm
-        uses: pnpm/action-setup@8912a9102ac27614460f54aedde9e1e7f9aec20d # v6.0.5
-        with:
-          version: latest
-          run_install: false
-      - name: Set up Node.js
-        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
-        with:
-          node-version: lts/*
+          node-version: 22
           cache: pnpm
           cache-dependency-path: web/pnpm-lock.yaml
       - name: Install dependencies
@@ -257,42 +150,146 @@ jobs:
         id: playwright-version
         working-directory: web
         shell: bash
-        run: echo "version=$(node -p 'require(\"playwright/package.json\").version')" >> "$GITHUB_OUTPUT"
-      - name: Cache Playwright browsers
-        id: playwright-cache
+        run: |
+          version=$(node -p "require('playwright/package.json').version")
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - name: Cache Playwright Chromium
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-chromium-${{ steps.playwright-version.outputs.version }}
+      - name: Install Playwright Chromium
+        working-directory: web
+        timeout-minutes: 15
+        env:
+          DEBUG: pw:install
+          PLAYWRIGHT_SKIP_BROWSER_GC: '1'
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Run coverage
+        working-directory: web
+        env:
+          VITEST_BROWSER: chromium
+        run: pnpm coverage
+
+  web-browser-integration:
+    name: Web integration (${{ matrix.runner.os }}, ${{ matrix.browser }})
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, firefox, webkit]
+        runner:
+          - os: windows-11-arm
+            arch: arm64
+            platform_os: Windows
+            platform_arch: arm64
+            expected_state: unsupported
+            expected_label: Windows arm64
+            expected_binary_goos: ''
+            expected_binary_goarch: ''
+          - os: macos-26-intel
+            arch: amd64
+            platform_os: Mac OS
+            platform_arch: ''
+            expected_state: unknown
+            expected_label: macOS 未知架构
+            expected_binary_goos: ''
+            expected_binary_goarch: ''
+          - os: macos-26
+            arch: arm64
+            platform_os: Mac OS
+            platform_arch: ''
+            expected_state: unknown
+            expected_label: macOS 未知架构
+            expected_binary_goos: ''
+            expected_binary_goarch: ''
+          - os: windows-2025
+            arch: amd64
+            platform_os: Windows
+            platform_arch: amd64
+            expected_state: ready
+            expected_label: Windows x86_64
+            expected_binary_goos: windows
+            expected_binary_goarch: amd64
+          - os: ubuntu-24.04
+            arch: amd64
+            platform_os: Linux
+            platform_arch: amd64
+            expected_state: ready
+            expected_label: Linux x86_64
+            expected_binary_goos: linux
+            expected_binary_goarch: amd64
+          - os: ubuntu-24.04-arm
+            arch: arm64
+            platform_os: Linux
+            platform_arch: arm64
+            expected_state: ready
+            expected_label: Linux ARM64
+            expected_binary_goos: linux
+            expected_binary_goarch: arm64
+    runs-on: ${{ matrix.runner.os }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Set up pnpm
+        uses: pnpm/action-setup@8912a9102ac27614460f54aedde9e1e7f9aec20d # v6.0.5
+        with:
+          version: latest
+          run_install: false
+      - name: Set up Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+      - name: Install dependencies
+        working-directory: web
+        run: pnpm install --frozen-lockfile
+      - name: Resolve Playwright version
+        id: playwright-version
+        working-directory: web
+        shell: bash
+        run: |
+          version=$(node -p "require('playwright/package.json').version")
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - name: Cache Playwright browser
         uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         with:
           path: |
             ~/.cache/ms-playwright
             ~/Library/Caches/ms-playwright
             ~/AppData/Local/ms-playwright
-          key: playwright-${{ matrix.runner }}-${{ matrix.playwright_browser }}-${{ steps.playwright-version.outputs.version }}
+          key: playwright-${{ matrix.runner.os }}-${{ matrix.browser }}-${{ steps.playwright-version.outputs.version }}
       - name: Install Playwright browser with Linux deps
-        if: runner.os == 'Linux' && steps.playwright-cache.outputs.cache-hit != 'true'
+        if: runner.os == 'Linux'
         working-directory: web
-        run: pnpm exec playwright install --with-deps ${{ matrix.playwright_browser }}
-      - name: Install Playwright system deps
-        if: runner.os == 'Linux' && steps.playwright-cache.outputs.cache-hit == 'true'
-        working-directory: web
-        run: pnpm exec playwright install-deps ${{ matrix.playwright_browser }}
+        timeout-minutes: 15
+        env:
+          DEBUG: pw:install
+          PLAYWRIGHT_SKIP_BROWSER_GC: '1'
+        run: pnpm exec playwright install --with-deps ${{ matrix.browser }}
       - name: Install Playwright browser
-        if: runner.os != 'Linux' && steps.playwright-cache.outputs.cache-hit != 'true'
+        if: runner.os != 'Linux'
         working-directory: web
-        run: pnpm exec playwright install ${{ matrix.playwright_browser }}
+        timeout-minutes: 15
+        env:
+          DEBUG: pw:install
+          PLAYWRIGHT_SKIP_BROWSER_GC: '1'
+        run: pnpm exec playwright install ${{ matrix.browser }}
       - name: Run platform integration tests
         working-directory: web
         env:
-          VITEST_BROWSER: ${{ matrix.playwright_browser }}
-          VITE_EXPECTED_BINARY_GOARCH: ${{ matrix.expected_binary_goarch }}
-          VITE_EXPECTED_BINARY_GOOS: ${{ matrix.expected_binary_goos }}
+          VITEST_BROWSER: ${{ matrix.browser }}
+          VITE_EXPECTED_BINARY_GOARCH: ${{ matrix.runner.expected_binary_goarch }}
+          VITE_EXPECTED_BINARY_GOOS: ${{ matrix.runner.expected_binary_goos }}
           VITE_EXPECTED_BROWSER: ${{ matrix.browser }}
-          VITE_EXPECTED_LABEL: ${{ matrix.expected_label }}
-          VITE_EXPECTED_PLATFORM_ARCH: ${{ matrix.platform_arch }}
-          VITE_EXPECTED_PLATFORM_OS: ${{ matrix.platform_os }}
-          VITE_EXPECTED_PLAYWRIGHT_BROWSER: ${{ matrix.playwright_browser }}
-          VITE_EXPECTED_RUNNER: ${{ matrix.runner }}
-          VITE_EXPECTED_RUNNER_ARCH: ${{ matrix.runner_arch }}
-          VITE_EXPECTED_STATE: ${{ matrix.expected_state }}
+          VITE_EXPECTED_LABEL: ${{ matrix.runner.expected_label }}
+          VITE_EXPECTED_PLATFORM_ARCH: ${{ matrix.runner.platform_arch }}
+          VITE_EXPECTED_PLATFORM_OS: ${{ matrix.runner.platform_os }}
+          VITE_EXPECTED_PLAYWRIGHT_BROWSER: ${{ matrix.browser }}
+          VITE_EXPECTED_RUNNER: ${{ matrix.runner.os }}
+          VITE_EXPECTED_RUNNER_ARCH: ${{ matrix.runner.arch }}
+          VITE_EXPECTED_STATE: ${{ matrix.runner.expected_state }}
         run: pnpm test:integration
 
   integration:
@@ -309,8 +306,6 @@ jobs:
             race: -race
           - os: windows-2025
             race: -race
-          - os: windows-11-arm
-            race: ''
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout repository

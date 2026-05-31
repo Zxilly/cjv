@@ -158,12 +158,8 @@ describe('App platform detection integration', () => {
     const env = expectedEnv()
     if (!env.VITE_EXPECTED_RUNNER) return
 
-    expect(env.VITE_EXPECTED_BROWSER).toMatch(/^(chromium|firefox|safari)$/)
+    expect(env.VITE_EXPECTED_BROWSER).toMatch(/^(chromium|firefox|webkit)$/)
     expect(server.browser).toBe(env.VITE_EXPECTED_PLAYWRIGHT_BROWSER)
-    if (env.VITE_EXPECTED_RUNNER.startsWith('macos-')) {
-      expect(env.VITE_EXPECTED_BROWSER).toBe('safari')
-      expect(env.VITE_EXPECTED_PLAYWRIGHT_BROWSER).toBe('webkit')
-    }
     expect(env.VITE_EXPECTED_RUNNER_ARCH).toMatch(/^(amd64|arm64)$/)
 
     const platformResult = computePlatformResult(
