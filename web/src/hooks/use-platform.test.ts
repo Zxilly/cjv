@@ -1,5 +1,19 @@
 import { describe, expect, it } from 'vitest'
-import { computePlatformResult, usePlatform, type PlatformResult } from './use-platform'
+import { renderHook, waitFor } from '@testing-library/react'
+import {
+  computeBrowserPlatformResult,
+  computePlatformResult,
+  detectBrowserPlatformResult,
+  usePlatform,
+  type PlatformResult,
+} from './use-platform'
+
+const MAC_DESKTOP_UA =
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Safari/605.1.15'
+const WINDOWS_DESKTOP_UA =
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
+const WINDOWS_ARM64_UA =
+  'Mozilla/5.0 (Windows NT 10.0; Win64; ARM64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
 
 function asReady(r: PlatformResult) {
   if (r.state !== 'ready') throw new Error(`expected ready, got ${r.state}`)
@@ -41,6 +55,13 @@ describe('computePlatformResult', () => {
       expect(r.info.label).toBe(`${os} ${arch}`)
       expect(r.binary).toBeNull()
     }
+  })
+
+  it('does not guess a CPU architecture when a desktop OS hides it', () => {
+    const r = computePlatformResult('Mac OS', '')
+    expect(r.state).toBe('unknown')
+    expect(r.info.label).toBe('macOS 未知架构')
+    expect(r.binary).toBeNull()
   })
 
   it('detects Linux ARM64', () => {
@@ -116,9 +137,90 @@ describe('computePlatformResult', () => {
   })
 })
 
+describe('computeBrowserPlatformResult', () => {
+  it('does not infer macOS Intel when the browser hides the CPU architecture', () => {
+    const r = computeBrowserPlatformResult({
+      maxTouchPoints: 0,
+      platform: 'MacIntel',
+      userAgent: MAC_DESKTOP_UA,
+    })
+
+    expect(r.state).toBe('unknown')
+    expect(r.info.label).toBe('macOS 未知架构')
+    expect(r.binary).toBeNull()
+  })
+
+  it('marks iPadOS desktop mode as unsupported instead of macOS', () => {
+    const r = computeBrowserPlatformResult({
+      maxTouchPoints: 5,
+      platform: 'MacIntel',
+      userAgent: MAC_DESKTOP_UA,
+    })
+
+    expect(r.state).toBe('unsupported')
+    expect(r.info.label).toBe('iOS')
+    expect(r.binary).toBeNull()
+  })
+
+  it('detects Windows ARM64 UA tokens as unsupported Windows arm64', () => {
+    const r = computeBrowserPlatformResult({
+      maxTouchPoints: 0,
+      platform: 'Win32',
+      userAgent: WINDOWS_ARM64_UA,
+    })
+
+    expect(r.state).toBe('unsupported')
+    expect(r.info.label).toBe('Windows arm64')
+    expect(r.binary).toBeNull()
+  })
+
+  it('uses UA Client Hints to detect macOS ARM64 when Chromium exposes them', async () => {
+    const r = await detectBrowserPlatformResult({
+      maxTouchPoints: 0,
+      platform: 'MacIntel',
+      userAgent: MAC_DESKTOP_UA,
+      userAgentData: {
+        platform: 'macOS',
+        getHighEntropyValues: async hints => {
+          expect(hints).toEqual(['architecture', 'bitness', 'platform'])
+          return { architecture: 'arm', bitness: '64', platform: 'macOS' }
+        },
+      },
+    })
+
+    const ready = asReady(r)
+    expect(ready.info.label).toBe('macOS ARM64')
+    expect(ready.binary.goos).toBe('darwin')
+    expect(ready.binary.goarch).toBe('arm64')
+  })
+
+  it('uses UA Client Hints to detect macOS x86_64 when Chromium exposes them', async () => {
+    const r = await detectBrowserPlatformResult({
+      maxTouchPoints: 0,
+      platform: 'MacIntel',
+      userAgent: MAC_DESKTOP_UA,
+      userAgentData: {
+        platform: 'macOS',
+        getHighEntropyValues: async () => ({ architecture: 'x86', bitness: '64', platform: 'macOS' }),
+      },
+    })
+
+    const ready = asReady(r)
+    expect(ready.info.label).toBe('macOS x86_64')
+    expect(ready.info.warning).toMatch(/x86_64/)
+  })
+})
+
 describe('usePlatform', () => {
   it('exposes the same shape as computePlatformResult', () => {
-    const r = usePlatform()
+    const input = {
+      maxTouchPoints: 0,
+      platform: 'Win32',
+      userAgent: WINDOWS_DESKTOP_UA,
+    }
+    const { result } = renderHook(() => usePlatform(input))
+
+    const r = result.current
     expect(r).toMatchObject({
       state: expect.any(String),
       info: expect.any(Object),
@@ -128,5 +230,22 @@ describe('usePlatform', () => {
       allBinaries: expect.any(Array),
     })
     expect(r.allBinaries).toHaveLength(5)
+  })
+
+  it('updates when asynchronous UA Client Hints refine a macOS architecture', async () => {
+    const input = {
+      maxTouchPoints: 0,
+      platform: 'MacIntel',
+      userAgent: MAC_DESKTOP_UA,
+      userAgentData: {
+        platform: 'macOS',
+        getHighEntropyValues: async () => ({ architecture: 'arm', bitness: '64', platform: 'macOS' }),
+      },
+    }
+    const { result } = renderHook(() => usePlatform(input))
+
+    expect(result.current.state).toBe('unknown')
+    await waitFor(() => expect(result.current.state).toBe('ready'))
+    expect(result.current.info.label).toBe('macOS ARM64')
   })
 })

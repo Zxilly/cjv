@@ -8,7 +8,19 @@ jobs:
   test:
     strategy:
       matrix:
-        os: [ubuntu-latest, ubuntu-24.04-arm, macos-latest, macos-15-intel, windows-latest]
+        include:
+          - os: ubuntu-24.04
+            race: -race
+          - os: ubuntu-24.04-arm
+            race: -race
+          - os: macos-26
+            race: -race
+          - os: macos-26-intel
+            race: -race
+          - os: windows-2025
+            race: -race
+          - os: windows-11-arm
+            race: ''
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout repository
@@ -22,16 +34,16 @@ jobs:
       - name: Build mirror variant
         run: go build -tags=mirror ./...
       - name: Run tests
-        run: go test -race -count=1 -timeout 300s ./...
+        run: go test ${{ matrix.race }} -count=1 -timeout 300s ./...
       - name: Run mirror tests
-        run: go test -tags=mirror -race -count=1 -timeout 300s ./internal/selfupdate/...
+        run: go test -tags=mirror ${{ matrix.race }} -count=1 -timeout 300s ./internal/selfupdate/...
       - name: Run go vet
         run: go vet ./...
       - name: Run go vet (mirror)
         run: go vet -tags=mirror ./...
 
   lint:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -52,7 +64,7 @@ jobs:
         exclude:
           - goos: windows
             goarch: arm64
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -64,7 +76,7 @@ jobs:
         run: GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} go build -o /dev/null ./cmd/cjv/
 
   mod-check:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -80,7 +92,7 @@ jobs:
         run: go mod verify
 
   vuln-check:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -94,7 +106,7 @@ jobs:
         run: govulncheck ./...
 
   web-build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -117,7 +129,7 @@ jobs:
         run: pnpm build
 
   web-test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -138,7 +150,7 @@ jobs:
       - name: Resolve Playwright version
         id: playwright-version
         working-directory: web
-        run: echo "version=$(node -p "require('playwright/package.json').version")" >> "$GITHUB_OUTPUT"
+        run: echo "version=$(node -p 'require(\"playwright/package.json\").version')" >> "$GITHUB_OUTPUT"
       - name: Cache Playwright browsers
         id: playwright-cache
         uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
@@ -157,10 +169,148 @@ jobs:
         working-directory: web
         run: pnpm coverage
 
+  web-browser-integration:
+    name: Web integration (${{ matrix.runner }}, ${{ matrix.browser }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: windows-11-arm
+            runner_arch: arm64
+            browser: firefox
+            playwright_browser: firefox
+            platform_os: Windows
+            platform_arch: arm64
+            expected_state: unsupported
+            expected_label: Windows arm64
+            expected_binary_goos: ''
+            expected_binary_goarch: ''
+          - runner: macos-26-intel
+            runner_arch: amd64
+            browser: safari
+            playwright_browser: webkit
+            platform_os: Mac OS
+            platform_arch: ''
+            expected_state: unknown
+            expected_label: macOS 未知架构
+            expected_binary_goos: ''
+            expected_binary_goarch: ''
+          - runner: macos-26
+            runner_arch: arm64
+            browser: safari
+            playwright_browser: webkit
+            platform_os: Mac OS
+            platform_arch: ''
+            expected_state: unknown
+            expected_label: macOS 未知架构
+            expected_binary_goos: ''
+            expected_binary_goarch: ''
+          - runner: windows-2025
+            runner_arch: amd64
+            browser: chromium
+            playwright_browser: chromium
+            platform_os: Windows
+            platform_arch: amd64
+            expected_state: ready
+            expected_label: Windows x86_64
+            expected_binary_goos: windows
+            expected_binary_goarch: amd64
+          - runner: ubuntu-24.04
+            runner_arch: amd64
+            browser: chromium
+            playwright_browser: chromium
+            platform_os: Linux
+            platform_arch: amd64
+            expected_state: ready
+            expected_label: Linux x86_64
+            expected_binary_goos: linux
+            expected_binary_goarch: amd64
+          - runner: ubuntu-24.04-arm
+            runner_arch: arm64
+            browser: chromium
+            playwright_browser: chromium
+            platform_os: Linux
+            platform_arch: arm64
+            expected_state: ready
+            expected_label: Linux ARM64
+            expected_binary_goos: linux
+            expected_binary_goarch: arm64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Set up pnpm
+        uses: pnpm/action-setup@8912a9102ac27614460f54aedde9e1e7f9aec20d # v6.0.5
+        with:
+          version: latest
+          run_install: false
+      - name: Set up Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: lts/*
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+      - name: Install dependencies
+        working-directory: web
+        run: pnpm install --frozen-lockfile
+      - name: Resolve Playwright version
+        id: playwright-version
+        working-directory: web
+        shell: bash
+        run: echo "version=$(node -p 'require(\"playwright/package.json\").version')" >> "$GITHUB_OUTPUT"
+      - name: Cache Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: |
+            ~/.cache/ms-playwright
+            ~/Library/Caches/ms-playwright
+            ~/AppData/Local/ms-playwright
+          key: playwright-${{ matrix.runner }}-${{ matrix.playwright_browser }}-${{ steps.playwright-version.outputs.version }}
+      - name: Install Playwright browser with Linux deps
+        if: runner.os == 'Linux' && steps.playwright-cache.outputs.cache-hit != 'true'
+        working-directory: web
+        run: pnpm exec playwright install --with-deps ${{ matrix.playwright_browser }}
+      - name: Install Playwright system deps
+        if: runner.os == 'Linux' && steps.playwright-cache.outputs.cache-hit == 'true'
+        working-directory: web
+        run: pnpm exec playwright install-deps ${{ matrix.playwright_browser }}
+      - name: Install Playwright browser
+        if: runner.os != 'Linux' && steps.playwright-cache.outputs.cache-hit != 'true'
+        working-directory: web
+        run: pnpm exec playwright install ${{ matrix.playwright_browser }}
+      - name: Run platform integration tests
+        working-directory: web
+        env:
+          VITEST_BROWSER: ${{ matrix.playwright_browser }}
+          VITE_EXPECTED_BINARY_GOARCH: ${{ matrix.expected_binary_goarch }}
+          VITE_EXPECTED_BINARY_GOOS: ${{ matrix.expected_binary_goos }}
+          VITE_EXPECTED_BROWSER: ${{ matrix.browser }}
+          VITE_EXPECTED_LABEL: ${{ matrix.expected_label }}
+          VITE_EXPECTED_PLATFORM_ARCH: ${{ matrix.platform_arch }}
+          VITE_EXPECTED_PLATFORM_OS: ${{ matrix.platform_os }}
+          VITE_EXPECTED_PLAYWRIGHT_BROWSER: ${{ matrix.playwright_browser }}
+          VITE_EXPECTED_RUNNER: ${{ matrix.runner }}
+          VITE_EXPECTED_RUNNER_ARCH: ${{ matrix.runner_arch }}
+          VITE_EXPECTED_STATE: ${{ matrix.expected_state }}
+        run: pnpm test:integration
+
   integration:
     strategy:
       matrix:
-        os: [ubuntu-latest, ubuntu-24.04-arm, macos-latest, macos-15-intel, windows-latest]
+        include:
+          - os: ubuntu-24.04
+            race: -race
+          - os: ubuntu-24.04-arm
+            race: -race
+          - os: macos-26
+            race: -race
+          - os: macos-26-intel
+            race: -race
+          - os: windows-2025
+            race: -race
+          - os: windows-11-arm
+            race: ''
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout repository
@@ -170,4 +320,4 @@ jobs:
         with:
           go-version: stable
       - name: Run integration tests
-        run: go test -race -v -tags integration -count=1 ./tests/integration/
+        run: go test ${{ matrix.race }} -v -tags integration -count=1 ./tests/integration/

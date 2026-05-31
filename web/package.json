@@ -7,6 +7,7 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "test": "vitest run",
+    "test:integration": "vitest run src/App.platform.integration.test.tsx",
     "test:watch": "vitest",
     "coverage": "vitest run --coverage"
   },

@@ -116,6 +116,15 @@ other = "Toolchain '{{.Name}}' not installed. Auto-installing..."
 other = "Auto-install of toolchain '{{.Name}}' failed: {{.Err}}"
 
 # === Root command ===
+[RootCmdShort]
+other = "Cangjie SDK manager"
+
+[RootCmdLong]
+other = "cjv is an SDK manager for the Cangjie programming language."
+
+[RootFlagJSON]
+other = "output machine-readable JSON"
+
 [RootNoToolchains]
 other = "No toolchains installed. Use 'cjv install lts' to install one."
 
@@ -378,14 +387,70 @@ other = "Print the path or URL to the documentation instead of opening it"
 [DocFlagToolchain]
 other = "Toolchain whose documentation to open (defaults to active toolchain)"
 
+[InstallCmdShort]
+other = "Install a Cangjie SDK toolchain"
+
 [InstallFlagComponent]
 other = "Component to install (repeatable, comma-separated)"
 
 [InstallFlagForce]
 other = "Force re-download and re-install even if already installed"
 
+[InstallFlagTarget]
+other = "Cross-compilation target suffix to install (repeatable, comma-separated)"
+
 [StatusInstalled]
 other = "installed"
+
+# === Help output ===
+
+[HelpUsageHeader]
+other = "Usage:"
+
+[HelpAliasesHeader]
+other = "Aliases:"
+
+[HelpExamplesHeader]
+other = "Examples:"
+
+[HelpAvailableCommandsHeader]
+other = "Available Commands:"
+
+[HelpAdditionalCommandsHeader]
+other = "Additional Commands:"
+
+[HelpFlagsHeader]
+other = "Flags:"
+
+[HelpGlobalFlagsHeader]
+other = "Global Flags:"
+
+[HelpAdditionalHelpTopicsHeader]
+other = "Additional help topics:"
+
+[HelpUseCommandHelp]
+other = "Use \"{{.Command}} {{.CommandPlaceholder}} --help\" for more information about a command."
+
+[HelpFlag]
+other = "help for {{.Command}}"
+
+[HelpVersionFlag]
+other = "version for {{.Command}}"
+
+[HelpThisCommand]
+other = "this command"
+
+[HelpCommandPlaceholder]
+other = "[command]"
+
+[HelpFlagsPlaceholder]
+other = "[flags]"
+
+[HelpCommandShort]
+other = "Help about any command"
+
+[HelpCommandLong]
+other = "Help provides help for any command in the application.\nSimply type {{.Command}} help [path to command] for full details."
 
 # === Toolchain list-remote ===
 

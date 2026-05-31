@@ -3,6 +3,8 @@ import react from '@vitejs/plugin-react'
 import { playwright } from '@vitest/browser-playwright'
 import path from 'node:path'
 
+const browserName = (process.env.VITEST_BROWSER || 'chromium') as 'chromium' | 'firefox' | 'webkit'
+
 export default defineConfig({
   plugins: [react()],
   resolve: {
@@ -17,7 +19,7 @@ export default defineConfig({
       enabled: true,
       provider: playwright(),
       headless: true,
-      instances: [{ browser: 'chromium' }],
+      instances: [{ browser: browserName }],
       screenshotFailures: false,
     },
     coverage: {

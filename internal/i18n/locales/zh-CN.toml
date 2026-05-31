@@ -114,6 +114,15 @@ other = "工具链 '{{.Name}}' 未安装，正在自动安装..."
 other = "自动安装工具链 '{{.Name}}' 失败: {{.Err}}"
 
 # === Root 命令 ===
+[RootCmdShort]
+other = "仓颉 SDK 管理器"
+
+[RootCmdLong]
+other = "cjv 是仓颉编程语言的 SDK 管理器。"
+
+[RootFlagJSON]
+other = "输出机器可读的 JSON"
+
 [RootNoToolchains]
 other = "未安装任何工具链。使用 'cjv install lts' 安装。"
 
@@ -375,14 +384,70 @@ other = "只打印文档路径或 URL，不打开浏览器"
 [DocFlagToolchain]
 other = "要打开文档的工具链（默认为当前活跃工具链）"
 
+[InstallCmdShort]
+other = "安装仓颉 SDK 工具链"
+
 [InstallFlagComponent]
 other = "需要附加安装的 component（可重复或逗号分隔）"
 
 [InstallFlagForce]
 other = "强制重新下载并重装，即使已安装"
 
+[InstallFlagTarget]
+other = "需要附加安装的交叉编译目标后缀（可重复或逗号分隔）"
+
 [StatusInstalled]
 other = "已安装"
+
+# === 帮助输出 ===
+
+[HelpUsageHeader]
+other = "用法:"
+
+[HelpAliasesHeader]
+other = "别名:"
+
+[HelpExamplesHeader]
+other = "示例:"
+
+[HelpAvailableCommandsHeader]
+other = "可用命令:"
+
+[HelpAdditionalCommandsHeader]
+other = "其他命令:"
+
+[HelpFlagsHeader]
+other = "选项:"
+
+[HelpGlobalFlagsHeader]
+other = "全局选项:"
+
+[HelpAdditionalHelpTopicsHeader]
+other = "其他帮助主题:"
+
+[HelpUseCommandHelp]
+other = "使用 \"{{.Command}} {{.CommandPlaceholder}} --help\" 查看命令的更多信息。"
+
+[HelpFlag]
+other = "显示 {{.Command}} 的帮助信息"
+
+[HelpVersionFlag]
+other = "显示 {{.Command}} 的版本信息"
+
+[HelpThisCommand]
+other = "此命令"
+
+[HelpCommandPlaceholder]
+other = "[命令]"
+
+[HelpFlagsPlaceholder]
+other = "[选项]"
+
+[HelpCommandShort]
+other = "显示任意命令的帮助"
+
+[HelpCommandLong]
+other = "显示应用中任意命令的帮助。\n直接输入 {{.Command}} help [命令路径] 查看完整详情。"
 
 # === 远程工具链列表 ===
 

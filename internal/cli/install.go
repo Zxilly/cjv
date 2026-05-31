@@ -48,14 +48,14 @@ var (
 
 func init() {
 	installCmd.Flags().BoolVar(&forceInstall, "force", false, i18n.T("InstallFlagForce", nil))
-	installCmd.Flags().StringSliceVarP(&installTargets, "target", "t", nil, "Cross-compilation target suffix to install (repeatable, comma-separated)")
+	installCmd.Flags().StringSliceVarP(&installTargets, "target", "t", nil, i18n.T("InstallFlagTarget", nil))
 	installCmd.Flags().StringSliceVarP(&installComponents, "component", "c", nil, i18n.T("InstallFlagComponent", nil))
 	rootCmd.AddCommand(installCmd)
 }
 
 var installCmd = &cobra.Command{
 	Use:   "install <toolchain>",
-	Short: "Install a Cangjie SDK toolchain",
+	Short: i18n.T("InstallCmdShort", nil),
 	Args:  cobra.ExactArgs(1),
 	RunE:  runInstall,
 }

@@ -51,8 +51,8 @@ func (r rootResult) Text() string {
 
 var rootCmd = &cobra.Command{
 	Use:           "cjv",
-	Short:         "Cangjie SDK manager",
-	Long:          "cjv is an SDK manager for the Cangjie programming language.",
+	Short:         i18n.T("RootCmdShort", nil),
+	Long:          i18n.T("RootCmdLong", nil),
 	SilenceUsage:  true,
 	SilenceErrors: true,
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
@@ -77,10 +77,11 @@ func Execute(ver, updURL string) error {
 	updateURL = updURL
 	rootCmd.Version = ver
 	rootCmd.SetVersionTemplate(color.CyanString("cjv {{.Version}}") + "\n")
-	rootCmd.PersistentFlags().BoolVar(&jsonFlag, "json", false, "output machine-readable JSON")
+	rootCmd.PersistentFlags().BoolVar(&jsonFlag, "json", false, i18n.T("RootFlagJSON", nil))
 
 	settings.RegisterCommands(rootCmd)
 	rootCmd.AddCommand(selfmgmt.NewSelfCommand(ver, updURL))
+	configureCobraHelp(rootCmd)
 
 	err := rootCmd.Execute()
 	if err != nil {
