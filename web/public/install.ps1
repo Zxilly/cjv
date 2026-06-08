@@ -1,4 +1,3 @@
-#Requires -Version 5.1
 <#
 .SYNOPSIS
     Installs cjv - Cangjie Version Manager
@@ -26,13 +25,23 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+$script:CjvInstallTmpDir = $null
 
 if ($env:CJV_MIRROR -eq "1") {
     $Mirror = $true
 }
 
-$CjvGithubRoot  = if ($env:CJV_GITHUB_ROOT)  { $env:CJV_GITHUB_ROOT }  else { "https://github.com/Zxilly/cjv/releases/latest/download" }
-$CjvGitcodeRoot = if ($env:CJV_GITCODE_ROOT) { $env:CJV_GITCODE_ROOT } else { "https://gitcode.com/Zxilly/cjv/releases/latest/download" }
+if ($env:CJV_GITHUB_ROOT) {
+    $CjvGithubRoot = $env:CJV_GITHUB_ROOT
+} else {
+    $CjvGithubRoot = "https://github.com/Zxilly/cjv/releases/latest/download"
+}
+
+if ($env:CJV_GITCODE_ROOT) {
+    $CjvGitcodeRoot = $env:CJV_GITCODE_ROOT
+} else {
+    $CjvGitcodeRoot = "https://gitcode.com/Zxilly/cjv/releases/latest/download"
+}
 
 if ($env:CJV_UPDATE_ROOT) {
     $CjvUpdateRoot = $env:CJV_UPDATE_ROOT
@@ -42,64 +51,149 @@ if ($env:CJV_UPDATE_ROOT) {
     $CjvUpdateRoot = $CjvGithubRoot
 }
 
-$BinaryName = if ($Mirror) { "cjv-mirror" } else { "cjv" }
+if ($Mirror) {
+    $BinaryName = "cjv-mirror"
+} else {
+    $BinaryName = "cjv"
+}
+
+function Cleanup-CjvInstall {
+    if ($script:CjvInstallTmpDir -and (Test-Path $script:CjvInstallTmpDir)) {
+        Remove-Item -Path $script:CjvInstallTmpDir -Recurse -Force -ErrorAction SilentlyContinue
+        $script:CjvInstallTmpDir = $null
+    }
+}
+
+function Fail {
+    param([string]$Message)
+    [Console]::Error.WriteLine("cjv-install: error: " + $Message)
+    Cleanup-CjvInstall
+    exit 1
+}
+
+trap {
+    [Console]::Error.WriteLine($_)
+    Cleanup-CjvInstall
+    exit 1
+}
 
 function Get-Architecture {
-    $arch = if ($env:PROCESSOR_ARCHITEW6432) { $env:PROCESSOR_ARCHITEW6432 } else { $env:PROCESSOR_ARCHITECTURE }
+    if ($env:PROCESSOR_ARCHITEW6432) {
+        $arch = $env:PROCESSOR_ARCHITEW6432
+    } else {
+        $arch = $env:PROCESSOR_ARCHITECTURE
+    }
     switch ($arch) {
         "AMD64" { return "amd64" }
-        "ARM64" { Write-Error "Windows ARM64 is not currently supported"; exit 1 }
-        default { Write-Error "Unsupported architecture: $arch"; exit 1 }
+        "ARM64" { Fail "Windows ARM64 is not currently supported" }
+        default { Fail "Unsupported architecture: $arch" }
+    }
+}
+
+function Enable-Tls12 {
+    $protocols = [Enum]::GetNames([Net.SecurityProtocolType])
+    if ($protocols -contains "Tls12") {
+        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+    }
+}
+
+function Has-Command {
+    param([string]$Name)
+    $cmd = Get-Command $Name -ErrorAction SilentlyContinue
+    return $cmd -ne $null
+}
+
+function Download-File {
+    param(
+        [string]$Uri,
+        [string]$OutFile
+    )
+
+    Enable-Tls12
+
+    if (Has-Command "Invoke-WebRequest") {
+        $savedProgress = $global:ProgressPreference
+        $global:ProgressPreference = "SilentlyContinue"
+        Invoke-WebRequest -Uri $Uri -OutFile $OutFile -UseBasicParsing
+        $global:ProgressPreference = $savedProgress
+        return
+    }
+
+    $client = New-Object Net.WebClient
+    $client.DownloadFile($Uri, $OutFile)
+    $client.Dispose()
+}
+
+function Expand-ZipArchive {
+    param(
+        [string]$ZipPath,
+        [string]$DestinationPath,
+        [string]$ExpectedFile
+    )
+
+    if (Has-Command "Expand-Archive") {
+        Expand-Archive -Path $ZipPath -DestinationPath $DestinationPath -Force
+        return
+    }
+
+    $shell = New-Object -ComObject Shell.Application
+    $zip = $shell.NameSpace($ZipPath)
+    if ($zip -eq $null) {
+        Fail "failed to open downloaded archive: $ZipPath"
+    }
+
+    $dest = $shell.NameSpace($DestinationPath)
+    if ($dest -eq $null) {
+        Fail "failed to open extraction directory: $DestinationPath"
+    }
+
+    $dest.CopyHere($zip.Items(), 20)
+
+    $expectedPath = Join-Path $DestinationPath $ExpectedFile
+    $deadline = [DateTime]::UtcNow.AddSeconds(60)
+    while ((-not (Test-Path $expectedPath)) -and ([DateTime]::UtcNow -lt $deadline)) {
+        Start-Sleep -Seconds 1
+    }
+
+    if (-not (Test-Path $expectedPath)) {
+        Fail "timed out extracting $ExpectedFile from downloaded archive"
     }
 }
 
 function Install-Cjv {
     $arch = Get-Architecture
     $url = "$CjvUpdateRoot/${BinaryName}_windows_$arch.zip"
-    $tmpDir = Join-Path ([System.IO.Path]::GetTempPath()) "cjv-install-$([System.Guid]::NewGuid().ToString('N').Substring(0, 8))"
+    $tmpName = "cjv-install-" + [System.Guid]::NewGuid().ToString("N").Substring(0, 8)
+    $script:CjvInstallTmpDir = Join-Path ([System.IO.Path]::GetTempPath()) $tmpName
+    New-Item -ItemType Directory -Path $script:CjvInstallTmpDir -Force | Out-Null
 
-    try {
-        New-Item -ItemType Directory -Path $tmpDir -Force | Out-Null
-        $zipPath = Join-Path $tmpDir "cjv.zip"
+    $zipPath = Join-Path $script:CjvInstallTmpDir "cjv.zip"
 
-        Write-Host "cjv-install: downloading cjv from $url"
-        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+    Write-Host "cjv-install: downloading cjv from $url"
+    Download-File -Uri $url -OutFile $zipPath
 
-        # PS 5.1's Write-Progress slows Invoke-WebRequest / Expand-Archive
-        # ~100x for binary payloads.
-        $savedProgress = $global:ProgressPreference
-        try {
-            $global:ProgressPreference = 'SilentlyContinue'
-            Invoke-WebRequest -Uri $url -OutFile $zipPath -UseBasicParsing
+    Write-Host "cjv-install: extracting"
+    Expand-ZipArchive -ZipPath $zipPath -DestinationPath $script:CjvInstallTmpDir -ExpectedFile "$BinaryName.exe"
 
-            Write-Host "cjv-install: extracting"
-            Expand-Archive -Path $zipPath -DestinationPath $tmpDir -Force
-        }
-        finally {
-            $global:ProgressPreference = $savedProgress
-        }
-
-        $cjvExe = Join-Path $tmpDir "$BinaryName.exe"
-        if (-not (Test-Path $cjvExe)) {
-            Write-Error "$BinaryName.exe not found in downloaded archive"
-            exit 1
-        }
-
-        Write-Host "cjv-install: running cjv init"
-        $initArgs = @("init")
-        if ($Yes)          { $initArgs += "-y" }
-        if ($NoModifyPath) { $initArgs += "--no-modify-path" }
-        if ($DefaultToolchain -ne "lts") { $initArgs += "--default-toolchain"; $initArgs += $DefaultToolchain }
-
-        & $cjvExe @initArgs
-        if ($LASTEXITCODE -ne 0) {
-            exit $LASTEXITCODE
-        }
+    $cjvExe = Join-Path $script:CjvInstallTmpDir "$BinaryName.exe"
+    if (-not (Test-Path $cjvExe)) {
+        Fail "$BinaryName.exe not found in downloaded archive"
     }
-    finally {
-        if (Test-Path $tmpDir) {
-            Remove-Item -Path $tmpDir -Recurse -Force -ErrorAction SilentlyContinue
-        }
+
+    Write-Host "cjv-install: running cjv init"
+    $initArgs = @("init")
+    if ($Yes) { $initArgs += "-y" }
+    if ($NoModifyPath) { $initArgs += "--no-modify-path" }
+    if ($DefaultToolchain -ne "lts") {
+        $initArgs += "--default-toolchain"
+        $initArgs += $DefaultToolchain
+    }
+
+    & $cjvExe $initArgs
+    $exitCode = $LASTEXITCODE
+    Cleanup-CjvInstall
+    if ($exitCode -ne 0) {
+        exit $exitCode
     }
 }
 
