@@ -51,12 +51,15 @@ func loadFallbackSettings(path string) (*Settings, error) {
 	if err != nil {
 		return nil, err
 	}
-	s := DefaultSettings()
-	if err := toml.Unmarshal(data, &s); err != nil {
+	// Decode and validate through the same gate as user settings so the
+	// fallback file is held to the same version-compatibility check and
+	// unknown-key warnings instead of being parsed more permissively.
+	s, md, err := decodeSettingsTOML(data)
+	if err != nil {
 		return nil, err
 	}
-	if s.Overrides == nil {
-		s.Overrides = make(map[string]string)
+	if err := applyDecodedSettings(&s, md); err != nil {
+		return nil, err
 	}
 	return &s, nil
 }

@@ -1,10 +1,14 @@
 package config
 
 import (
+	"errors"
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
+
+	"github.com/Zxilly/cjv/internal/i18n"
 )
 
 // HomeSource indicates which mechanism resolved the active CJV_HOME.
@@ -52,6 +56,11 @@ const (
 	EnvNoPathSetup      = "CJV_NO_PATH_SETUP"
 	EnvGitCodeAPIKey    = "CJV_GITCODE_API_KEY"
 	EnvFallbackSettings = "CJV_FALLBACK_SETTINGS"
+	// EnvAllowInsecureManifest, when set to "1", permits fetching the toolchain
+	// manifest over plain HTTP from a non-loopback host (trusted internal
+	// mirrors). HTTPS is required by default because the manifest carries both
+	// the download URL and its checksum.
+	EnvAllowInsecureManifest = "CJV_ALLOW_INSECURE_MANIFEST"
 )
 
 var (
@@ -97,19 +106,30 @@ func Home() (string, error) {
 // ResolveHomeWithSource returns the CJV_HOME path along with the source that
 // produced it. Useful for surfacing provenance (e.g. in `cjv show home`).
 func ResolveHomeWithSource() (string, HomeSource, error) {
-	if h := os.Getenv(EnvHome); h != "" {
-		abs, err := filepath.Abs(h)
-		if err != nil {
-			return "", HomeSourceEnv, err
+	if raw := os.Getenv(EnvHome); strings.TrimSpace(raw) != "" {
+		h := strings.TrimSpace(raw)
+		// Require an absolute path. A relative CJV_HOME would be resolved
+		// against the current working directory, so the same installation
+		// would resolve to a different home depending on where cjv is invoked
+		// (toolchains installed from one directory would be invisible from
+		// another). Fail loudly instead of silently creating a stray home.
+		if !filepath.IsAbs(h) {
+			return "", HomeSourceEnv, errors.New(i18n.T("HomeMustBeAbsolute", i18n.MsgData{"Path": h}))
 		}
-		return abs, HomeSourceEnv, nil
+		return filepath.Clean(h), HomeSourceEnv, nil
 	}
-	if h := loadHomeFromSettings(); h != "" {
-		abs, err := filepath.Abs(h)
-		if err != nil {
-			return "", HomeSourcePersisted, err
+	if raw := loadHomeFromSettings(); strings.TrimSpace(raw) != "" {
+		h := strings.TrimSpace(raw)
+		// A relative persisted/fallback home (e.g. injected via the system
+		// fallback settings file) would be resolved against the cwd, making the
+		// home cwd-dependent. Ignore it and fall through to the default rather
+		// than resolving non-deterministically — same invariant the env-var
+		// branch enforces, but non-fatal here so a stale settings file does not
+		// brick cjv.
+		if filepath.IsAbs(h) {
+			return filepath.Clean(h), HomeSourcePersisted, nil
 		}
-		return abs, HomeSourcePersisted, nil
+		slog.Warn("ignoring non-absolute home from settings; using default", "home", h)
 	}
 	home, err := cachedUserHomeDir()
 	if err != nil {

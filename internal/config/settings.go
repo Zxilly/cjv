@@ -67,10 +67,38 @@ func loadSettingsWithMeta(path string) (*Settings, toml.MetaData, error) {
 		}
 		return nil, toml.MetaData{}, fmt.Errorf("failed to read settings from %s: %w", path, err)
 	}
-	md, err := toml.NewDecoder(bytes.NewReader(data)).Decode(&s)
+	s, md, err := decodeSettingsTOML(data)
 	if err != nil {
 		return nil, toml.MetaData{}, fmt.Errorf("failed to parse settings from %s: %w", path, err)
 	}
+	if err := applyDecodedSettings(&s, md); err != nil {
+		return nil, toml.MetaData{}, err
+	}
+	return &s, md, nil
+}
+
+// decodeSettingsTOML decodes TOML data onto a DefaultSettings base, shared by
+// the user and fallback load paths. Callers run applyDecodedSettings and wrap
+// the error with their own context (so e.g. the version error stays unwrapped
+// where the user path wraps decode errors with the file name).
+func decodeSettingsTOML(data []byte) (Settings, toml.MetaData, error) {
+	s := DefaultSettings()
+	md, err := toml.NewDecoder(bytes.NewReader(data)).Decode(&s)
+	return s, md, err
+}
+
+// applyDecodedSettings runs the validation and normalization shared by the user
+// settings path and the system fallback path: warn on unrecognized keys,
+// restore defaults, default/validate the version, and apply in-memory
+// migrations. It is the single gate both paths flow through, so a future
+// settings version or a typo'd key is caught identically wherever the file
+// lives.
+//
+// It deliberately does NOT inject environment overrides (e.g. the GitCode API
+// key); those are resolved at access time via ResolveGitCodeAPIKey so an
+// ephemeral env-provided secret is never persisted back into settings.toml by
+// a later Save.
+func applyDecodedSettings(s *Settings, md toml.MetaData) error {
 	for _, key := range md.Undecoded() {
 		slog.Warn(i18n.T("UnknownSettingsField", i18n.MsgData{
 			"Field": key.String(),
@@ -88,17 +116,25 @@ func loadSettingsWithMeta(path string) (*Settings, toml.MetaData, error) {
 		s.Version = 1
 	}
 	if s.Version > currentSettingsVersion {
-		return nil, toml.MetaData{}, fmt.Errorf("%s", i18n.T("UnsupportedSettingsVersion", i18n.MsgData{
+		return fmt.Errorf("%s", i18n.T("UnsupportedSettingsVersion", i18n.MsgData{
 			"Version": strconv.Itoa(s.Version),
 		}))
 	}
-	migrateSettings(&s)
-	// Environment variable fallback so CI/deployment can inject credentials
-	// without modifying settings files.
-	if s.GitCodeAPIKey == "" {
-		s.GitCodeAPIKey = os.Getenv(EnvGitCodeAPIKey)
+	migrateSettings(s)
+	return nil
+}
+
+// ResolveGitCodeAPIKey returns the GitCode API token, preferring the
+// CJV_GITCODE_API_KEY environment variable over the persisted setting so
+// CI/deployment can inject the credential without it being written back to
+// settings.toml. The env value is never stored on the Settings struct, so a
+// later Save cannot leak it to disk, and it always wins over a value merged
+// from the system fallback file.
+func (s *Settings) ResolveGitCodeAPIKey() string {
+	if v := os.Getenv(EnvGitCodeAPIKey); v != "" {
+		return v
 	}
-	return &s, md, nil
+	return s.GitCodeAPIKey
 }
 
 // migrateSettings applies in-memory migrations from older settings versions
