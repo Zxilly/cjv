@@ -79,11 +79,15 @@ func execRun(cmd *cobra.Command, args []string) error {
 	c.Stdout = os.Stdout
 	c.Stderr = os.Stderr
 
+	// Intercept termination signals before Start so a supervisor's SIGTERM in
+	// the gap is buffered and forwarded to the child instead of killing only
+	// the parent.
+	forwarder := proxy.NewTerminationForwarder()
+	defer forwarder.Stop()
 	if err := c.Start(); err != nil {
 		return err
 	}
-	stopForward := proxy.ForwardTerminationSignals(c.Process)
-	defer stopForward()
+	forwarder.Attach(c.Process)
 
 	if err := c.Wait(); err != nil {
 		if exitErr, ok := errors.AsType[*exec.ExitError](err); ok {
