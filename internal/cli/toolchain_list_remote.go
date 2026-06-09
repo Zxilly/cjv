@@ -27,15 +27,10 @@ var (
 
 var toolchainListRemoteCmd = &cobra.Command{
 	Use:   "list-remote",
-	Short: "List all toolchain versions available remotely",
-	Long: `List Cangjie toolchain versions available from the remote SDK manifest.
-
-By default lists versions for the current host target tuple across all
-channels (lts, sts, nightly). Pass --target <suffix> to query a cross-compile
-build (matching ` + "`cjv install --target`" + `), or --all-platforms to enumerate
-every target tuple present in the manifest.`,
-	Args: cobra.NoArgs,
-	RunE: runToolchainListRemote,
+	Short: i18n.T("ToolchainListRemoteShort", nil),
+	Long:  i18n.T("ToolchainListRemoteLong", nil),
+	Args:  cobra.NoArgs,
+	RunE:  runToolchainListRemote,
 }
 
 type toolchainListRemoteEntry struct {
@@ -178,7 +173,7 @@ func buildNightlyEntry(ctx context.Context, settings *config.Settings) toolchain
 		Channel:  toolchain.Nightly.String(),
 		Versions: []string{},
 	}
-	tag, err := dist.FetchLatestNightly(ctx, dist.DefaultNightlyAPIURL, settings.GitCodeAPIKey)
+	tag, err := dist.FetchLatestNightly(ctx, dist.DefaultNightlyAPIURL, settings.ResolveGitCodeAPIKey())
 	if err != nil {
 		entry.Error = err.Error()
 		return entry
@@ -258,7 +253,7 @@ func buildAllPlatformsChannelEntry(m *dist.Manifest, ch toolchain.Channel) toolc
 
 func buildNightlyAllPlatformsEntry(ctx context.Context, settings *config.Settings) toolchainListRemoteAllPlatformsEntry {
 	entry := toolchainListRemoteAllPlatformsEntry{Channel: toolchain.Nightly.String()}
-	tag, err := dist.FetchLatestNightly(ctx, dist.DefaultNightlyAPIURL, settings.GitCodeAPIKey)
+	tag, err := dist.FetchLatestNightly(ctx, dist.DefaultNightlyAPIURL, settings.ResolveGitCodeAPIKey())
 	if err != nil {
 		entry.Error = err.Error()
 		entry.Versions = []string{}

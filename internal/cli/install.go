@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -116,7 +117,7 @@ func InstallToolchainWithExtras(ctx context.Context, input string, targets, comp
 		return err
 	}
 	if name.IsCustom() {
-		return fmt.Errorf("cannot install custom toolchain '%s': use 'cjv toolchain link' instead", input)
+		return errors.New(i18n.T("InstallCustomToolchain", i18n.MsgData{"Name": input}))
 	}
 
 	sf, settings, err := clisettings.LoadSettings()
@@ -536,6 +537,10 @@ func latestVersionForTuple(manifest *dist.Manifest, channel toolchain.Channel, t
 	return "", &cjverr.VersionNotAvailableError{Version: latest, Target: tuple}
 }
 
+// fetchNightlySHA256 is a package-level seam so tests can resolve a nightly
+// toolchain without reaching the network for the checksum sidecar.
+var fetchNightlySHA256 = dist.FetchNightlySHA256
+
 func resolveNightlyWithTuple(ctx context.Context, name toolchain.ToolchainName, settings *config.Settings, tuple string) (resolvedToolchain, error) {
 	if tuple == "" {
 		var err error
@@ -548,7 +553,7 @@ func resolveNightlyWithTuple(ctx context.Context, name toolchain.ToolchainName, 
 
 	if version == "" {
 		noteStep(i18n.T("FetchingNightly", nil))
-		v, err := dist.FetchLatestNightly(ctx, dist.DefaultNightlyAPIURL, settings.GitCodeAPIKey)
+		v, err := dist.FetchLatestNightly(ctx, dist.DefaultNightlyAPIURL, settings.ResolveGitCodeAPIKey())
 		if err != nil {
 			return resolvedToolchain{}, err
 		}
@@ -565,7 +570,13 @@ func resolveNightlyWithTuple(ctx context.Context, name toolchain.ToolchainName, 
 		return resolvedToolchain{}, err
 	}
 
-	sha256 := dist.FetchNightlySHA256(ctx, url)
+	sha256, err := fetchNightlySHA256(ctx, url)
+	if err != nil {
+		// A fetch failure (network/HTTP/malformed) must not silently downgrade
+		// to an unverified install — abort. Only a genuine 404 (no checksum
+		// published) yields ("", nil) and proceeds with an explicit notice.
+		return resolvedToolchain{}, err
+	}
 	if sha256 == "" {
 		noteStep(i18n.T("NightlyNoChecksum", nil))
 	}
@@ -577,11 +588,21 @@ func fetchManifest(ctx context.Context, manifestURL string) (*dist.Manifest, err
 	if err != nil {
 		return nil, fmt.Errorf("invalid manifest URL: %w", err)
 	}
-	if u.Scheme != "https" && u.Scheme != "http" {
+	switch u.Scheme {
+	case "https":
+		// ok
+	case "http":
+		// The manifest carries both the download URL and its sha256, so an
+		// attacker who can tamper with an unauthenticated HTTP manifest can
+		// swap both and defeat checksum verification. Only permit HTTP for
+		// loopback addresses (local mirrors / tests) unless the operator opts
+		// in for a trusted internal mirror.
+		if !isLoopbackHost(u.Hostname()) && os.Getenv(config.EnvAllowInsecureManifest) != "1" {
+			return nil, fmt.Errorf("refusing to fetch manifest over insecure HTTP from %q: use HTTPS, or set %s=1 to trust an internal mirror", u.Host, config.EnvAllowInsecureManifest)
+		}
+		slog.Warn("fetching manifest over insecure HTTP", "url", manifestURL)
+	default:
 		return nil, fmt.Errorf("invalid manifest URL scheme %q: only https and http are supported", u.Scheme)
-	}
-	if u.Scheme == "http" {
-		slog.Warn("manifest URL uses insecure HTTP; consider using HTTPS", "url", manifestURL)
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, manifestURL, nil)
@@ -605,6 +626,18 @@ func fetchManifest(ctx context.Context, manifestURL string) (*dist.Manifest, err
 	}
 
 	return dist.ParseManifest(data)
+}
+
+// isLoopbackHost reports whether host refers to the local machine, so an HTTP
+// manifest served from a local mirror or test server is still permitted.
+func isLoopbackHost(host string) bool {
+	if host == "localhost" {
+		return true
+	}
+	if ip := net.ParseIP(host); ip != nil {
+		return ip.IsLoopback()
+	}
+	return false
 }
 
 // defaultToolchainExists checks whether the configured default toolchain is still installed.

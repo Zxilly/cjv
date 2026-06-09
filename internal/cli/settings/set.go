@@ -5,17 +5,18 @@ import (
 
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/dist"
+	"github.com/Zxilly/cjv/internal/i18n"
 	"github.com/spf13/cobra"
 )
 
 var setCmd = &cobra.Command{
 	Use:   "set",
-	Short: "Modify cjv settings",
+	Short: i18n.T("SetCmdShort", nil),
 }
 
 var setAutoSelfUpdateCmd = &cobra.Command{
 	Use:       "auto-self-update <enable|disable|check>",
-	Short:     "Set auto-self-update behavior",
+	Short:     i18n.T("SetAutoSelfUpdateShort", nil),
 	Args:      cobra.ExactArgs(1),
 	ValidArgs: []string{config.AutoSelfUpdateEnable, config.AutoSelfUpdateDisable, config.AutoSelfUpdateCheck},
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -35,7 +36,7 @@ var setAutoSelfUpdateCmd = &cobra.Command{
 
 var setAutoInstallCmd = &cobra.Command{
 	Use:       "auto-install <true|false>",
-	Short:     "Set whether to auto-install missing toolchains in proxy mode",
+	Short:     i18n.T("SetAutoInstallShort", nil),
 	Args:      cobra.ExactArgs(1),
 	ValidArgs: []string{"true", "false"},
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -56,7 +57,7 @@ var setAutoInstallCmd = &cobra.Command{
 
 var setDefaultHostCmd = &cobra.Command{
 	Use:   "default-host <goos-goarch>",
-	Short: "Set the default host platform triple",
+	Short: i18n.T("SetDefaultHostShort", nil),
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		val := args[0]
@@ -75,11 +76,13 @@ var setDefaultHostCmd = &cobra.Command{
 
 var setGitCodeAPIKeyCmd = &cobra.Command{
 	Use:   "gitcode-api-key <key>",
-	Short: "Set the GitCode API access token for nightly builds",
+	Short: i18n.T("SetGitCodeAPIKeyShort", nil),
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		val := args[0]
-		return updateSetting("gitcode-api-key", val, func(s *config.Settings) bool {
+		// Display a masked value: the token is a secret and updateSetting
+		// echoes the display value to stdout (scrollback, CI logs, screen shares).
+		return updateSetting("gitcode-api-key", maskSecret(val), func(s *config.Settings) bool {
 			if s.GitCodeAPIKey == val {
 				return false
 			}
@@ -87,4 +90,13 @@ var setGitCodeAPIKeyCmd = &cobra.Command{
 			return true
 		})
 	},
+}
+
+// maskSecret redacts a secret value for display, revealing neither its content
+// nor its length.
+func maskSecret(s string) string {
+	if s == "" {
+		return ""
+	}
+	return "********"
 }

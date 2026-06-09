@@ -938,10 +938,15 @@ func TestInstallToolchainWithOptions_Wrapper(t *testing.T) {
 
 func TestResolveNightlyWithSpecificVersionSkipsLatestLookup(t *testing.T) {
 	settings := config.DefaultSettings()
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	// No GitCode API key is configured: a specific version must skip the latest
+	// lookup (which requires the key and a network call), so resolution
+	// succeeds offline. Stub the checksum fetch — it now reports a hard error on
+	// network failure instead of silently returning an empty digest.
+	orig := fetchNightlySHA256
+	fetchNightlySHA256 = func(context.Context, string) (string, error) { return "", nil }
+	t.Cleanup(func() { fetchNightlySHA256 = orig })
 
-	resolved, err := resolveNightlyWithTuple(ctx, toolchain.ToolchainName{
+	resolved, err := resolveNightlyWithTuple(context.Background(), toolchain.ToolchainName{
 		Channel: toolchain.Nightly,
 		Version: "202501010000",
 	}, &settings, "linux-x64")
