@@ -14,6 +14,10 @@ const WINDOWS_AMD64_UA =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
 const WINDOWS_ARM64_UA =
   'Mozilla/5.0 (Windows NT 10.0; ARM64; rv:148.0) Gecko/20100101 Firefox/148.0'
+const IPHONE_UA =
+  'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1'
+const ANDROID_UA =
+  'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36'
 
 interface NavigatorPatch {
   maxTouchPoints: number
@@ -77,8 +81,12 @@ function assertPlatformResult(result: PlatformResult, env: ExpectedPlatformEnv) 
   expect(result.info.label).toBe(env.VITE_EXPECTED_LABEL)
 
   if (result.state === 'ready') {
-    expect(result.binary.goos).toBe(env.VITE_EXPECTED_BINARY_GOOS)
-    expect(result.binary.goarch).toBe(env.VITE_EXPECTED_BINARY_GOARCH)
+    if (env.VITE_EXPECTED_BINARY_GOOS) {
+      expect(result.binary?.goos).toBe(env.VITE_EXPECTED_BINARY_GOOS)
+      expect(result.binary?.goarch).toBe(env.VITE_EXPECTED_BINARY_GOARCH)
+    } else {
+      expect(result.binary).toBeNull()
+    }
   } else {
     expect(result.binary).toBeNull()
   }
@@ -103,12 +111,18 @@ function navigatorPatchForExpectedPlatform(env: ExpectedPlatformEnv): NavigatorP
   if (os === 'Mac OS' && arch === '') {
     return { maxTouchPoints: 0, platform: 'MacIntel', userAgent: MAC_DESKTOP_UA, userAgentData: null }
   }
+  if (os === 'iOS') {
+    return { maxTouchPoints: 5, platform: 'iPhone', userAgent: IPHONE_UA, userAgentData: null }
+  }
+  if (os === 'Android') {
+    return { maxTouchPoints: 5, platform: 'Linux armv8l', userAgent: ANDROID_UA, userAgentData: null }
+  }
 
   throw new Error(`unsupported expected CI platform: ${os}/${arch}`)
 }
 
 describe('App platform detection integration', () => {
-  it('does not render macOS x86_64 when macOS browsers hide the CPU architecture', () => {
+  it('keeps macOS command install ready without guessing x86_64 when browsers hide the CPU architecture', () => {
     stubNavigator({
       maxTouchPoints: 0,
       platform: 'MacIntel',
@@ -118,7 +132,8 @@ describe('App platform detection integration', () => {
 
     render(<App />)
 
-    expect(screen.getByText(/无法识别你的平台/)).toBeInTheDocument()
+    expect(screen.getByText('检测到你的平台：macOS')).toBeInTheDocument()
+    expect(screen.queryByText(/无法识别你的平台/)).not.toBeInTheDocument()
     expect(screen.queryByText(/macOS x86_64/)).not.toBeInTheDocument()
   })
 
@@ -135,6 +150,36 @@ describe('App platform detection integration', () => {
     expect(screen.getByText(/cjv 暂不支持/)).toBeInTheDocument()
     expect(screen.getByText('iOS')).toBeInTheDocument()
     expect(screen.queryByText(/macOS x86_64/)).not.toBeInTheDocument()
+  })
+
+  it('renders iOS unsupported messaging for an iPhone browser', () => {
+    stubNavigator({
+      maxTouchPoints: 5,
+      platform: 'iPhone',
+      userAgent: IPHONE_UA,
+      userAgentData: null,
+    })
+
+    render(<App />)
+
+    expect(screen.getByText(/cjv 暂不支持/)).toBeInTheDocument()
+    expect(screen.getByText('iOS')).toBeInTheDocument()
+    expect(screen.queryByRole('tablist')).not.toBeInTheDocument()
+  })
+
+  it('renders Android unsupported messaging for an Android phone browser', () => {
+    stubNavigator({
+      maxTouchPoints: 5,
+      platform: 'Linux armv8l',
+      userAgent: ANDROID_UA,
+      userAgentData: null,
+    })
+
+    render(<App />)
+
+    expect(screen.getByText(/cjv 暂不支持/)).toBeInTheDocument()
+    expect(screen.getByText('Android')).toBeInTheDocument()
+    expect(screen.queryByRole('tablist')).not.toBeInTheDocument()
   })
 
   it('updates to macOS ARM64 when Chromium UA Client Hints expose Apple Silicon', async () => {

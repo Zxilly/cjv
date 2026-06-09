@@ -217,7 +217,7 @@ jobs:
         run: pnpm coverage
 
   web-browser-integration:
-    name: Web integration (${{ matrix.runner.os }}, ${{ matrix.browser }})
+    name: Web integration (${{ matrix.runner.os }} · ${{ matrix.runner.platform_os }}, ${{ matrix.browser }})
     timeout-minutes: 30
     strategy:
       fail-fast: false
@@ -236,16 +236,16 @@ jobs:
             arch: amd64
             platform_os: Mac OS
             platform_arch: ''
-            expected_state: unknown
-            expected_label: macOS 未知架构
+            expected_state: ready
+            expected_label: macOS
             expected_binary_goos: ''
             expected_binary_goarch: ''
           - os: macos-26
             arch: arm64
             platform_os: Mac OS
             platform_arch: ''
-            expected_state: unknown
-            expected_label: macOS 未知架构
+            expected_state: ready
+            expected_label: macOS
             expected_binary_goos: ''
             expected_binary_goarch: ''
           - os: windows-2025
@@ -272,6 +272,22 @@ jobs:
             expected_label: Linux ARM64
             expected_binary_goos: linux
             expected_binary_goarch: arm64
+          - os: ubuntu-24.04
+            arch: amd64
+            platform_os: iOS
+            platform_arch: ''
+            expected_state: unsupported
+            expected_label: iOS
+            expected_binary_goos: ''
+            expected_binary_goarch: ''
+          - os: ubuntu-24.04
+            arch: amd64
+            platform_os: Android
+            platform_arch: ''
+            expected_state: unsupported
+            expected_label: Android
+            expected_binary_goos: ''
+            expected_binary_goarch: ''
     runs-on: ${{ matrix.runner.os }}
     steps:
       - name: Checkout repository
