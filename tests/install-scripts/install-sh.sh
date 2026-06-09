@@ -11,6 +11,7 @@ TEST_SHELL_NAME=$(basename "$TEST_SHELL")
 
 TMP_PARENT=${TMPDIR:-/tmp}
 TMP_ROOT=$(mktemp -d "$TMP_PARENT/cjv-install-script.XXXXXX")
+TMP_ROOT=$(CDPATH= cd "$TMP_ROOT" && pwd -P)
 
 cleanup() {
     rm -rf "$TMP_ROOT"
