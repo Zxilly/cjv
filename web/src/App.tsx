@@ -117,7 +117,7 @@ export default function App() {
       <TabsContent forceMount value="source" className={TAB_CONTENT_CLS}>
         <div className="p-6 text-center">
           <p className="text-base text-gray-500 dark:text-gray-400 mb-4">使用 Go 从源码编译安装：</p>
-          <CodeBlock command={sourceMethod.command} primary />
+          <CodeBlock command={mirror && sourceMethod.mirrorCommand ? sourceMethod.mirrorCommand : sourceMethod.command} primary />
           <p className="mt-4 text-sm text-gray-400 dark:text-gray-500">需要本机已安装 Go 环境。</p>
         </div>
       </TabsContent>
@@ -216,12 +216,25 @@ export default function App() {
                 <p className="text-base text-gray-500 dark:text-gray-400">
                   cjv 暂不支持 <strong className="text-gray-700 dark:text-gray-300">{platform.info.label}</strong> 平台。
                 </p>
-                <p className="mt-2 text-sm text-gray-400 dark:text-gray-500">cjv 目前仅在 Linux、macOS 和 Windows 桌面系统上提供。</p>
-                <p className="mt-3 text-sm text-gray-400 dark:text-gray-500">
-                  请在桌面设备上访问此页面，或查看{' '}
-                  <a href="https://github.com/Zxilly/cjv" target="_blank" rel="noopener noreferrer" className="text-cj dark:text-cj-light hover:underline">GitHub</a>{' '}
-                  了解更多。
-                </p>
+                {platform.info.reason === 'arch' ? (
+                  <>
+                    <p className="mt-2 text-sm text-gray-400 dark:text-gray-500">该架构暂无预编译版本。</p>
+                    <p className="mt-3 text-sm text-gray-400 dark:text-gray-500">
+                      你可以尝试 x86_64（amd64）版本（多数情况下可通过系统模拟运行），或从{' '}
+                      <a href="https://github.com/Zxilly/cjv/releases" target="_blank" rel="noopener noreferrer" className="text-cj dark:text-cj-light hover:underline">Releases</a>{' '}
+                      手动下载。
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <p className="mt-2 text-sm text-gray-400 dark:text-gray-500">cjv 目前仅在 Linux、macOS 和 Windows 桌面系统上提供。</p>
+                    <p className="mt-3 text-sm text-gray-400 dark:text-gray-500">
+                      请在桌面设备上访问此页面，或查看{' '}
+                      <a href="https://github.com/Zxilly/cjv" target="_blank" rel="noopener noreferrer" className="text-cj dark:text-cj-light hover:underline">GitHub</a>{' '}
+                      了解更多。
+                    </p>
+                  </>
+                )}
               </div>
               <Collapsible
                 open={otherMethodsOpen}

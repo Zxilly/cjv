@@ -15,10 +15,21 @@ export interface ReadyInfo {
   command: string
   mirrorCommand: string
   warning?: string
+  // A ready result is by definition supported, so it never carries an unsupported
+  // reason. Declaring the field as `never` keeps `info.reason` accessible across the
+  // ReadyInfo | BasicInfo union without widening what a ready result may hold.
+  reason?: never
 }
+
+// Why a visitor is unsupported, so the UI can tailor its advice:
+//   'mobile' — a phone/tablet OS (iOS/Android/HarmonyOS); ask them to use a desktop.
+//   'arch'   — a known desktop OS whose CPU architecture has no prebuilt binary
+//              (e.g. Windows arm64); suggest the amd64 build or a manual download.
+export type UnsupportedReason = 'mobile' | 'arch'
 
 export interface BasicInfo {
   label: string
+  reason?: UnsupportedReason
 }
 
 export interface InstallMethod {
@@ -200,6 +211,7 @@ function otherMethodsFor(detected: BinaryInfo['goos']): InstallMethod[] {
 const SOURCE_METHOD: InstallMethod = {
   label: '从源码编译',
   command: 'go install github.com/Zxilly/cjv/cmd/cjv@latest',
+  mirrorCommand: 'GOPROXY=https://goproxy.cn,direct go install github.com/Zxilly/cjv/cmd/cjv@latest',
 }
 
 export function computePlatformResult(os: string, arch: string): PlatformResult {
@@ -235,17 +247,21 @@ export function computePlatformResult(os: string, arch: string): PlatformResult 
       binary: null,
     }
   }
+  const isMobile = UNSUPPORTED.has(os)
+  const isUnsupportedArch = knownDesktopOS && hasArch
   const state: 'unsupported' | 'unknown' =
-    UNSUPPORTED.has(os) || (knownDesktopOS && hasArch) ? 'unsupported' : 'unknown'
+    isMobile || isUnsupportedArch ? 'unsupported' : 'unknown'
   return {
     ...common,
     state,
     info: {
       label:
-        UNSUPPORTED.has(os) ? os
-        : knownDesktopOS && hasArch ? `${displayOS(os)} ${arch}`
+        isMobile ? os
+        : isUnsupportedArch ? `${displayOS(os)} ${arch}`
         : knownDesktopOS ? `${displayOS(os)} 未知架构`
         : '未知平台',
+      // Only set on the 'unsupported' branch; 'unknown' carries no reason.
+      reason: isMobile ? 'mobile' : isUnsupportedArch ? 'arch' : undefined,
     },
     binary: null,
   }
@@ -266,7 +282,13 @@ function isIPadOSDesktopMode(input: BrowserPlatformInput): boolean {
   return input.platform === 'MacIntel' && (input.maxTouchPoints || 0) > 1
 }
 
+// ua-parser-modern only emits OS name 'HarmonyOS' when the UA carries both 'android' and
+// 'harmonyos'. HarmonyOS NEXT drops the Android token, so it parses as undefined or
+// 'Linux' and would otherwise land in 'unknown' (or worse, 'Linux'), showing a Harmony
+// phone user a wall of desktop commands. The 'harmonyos'/'openharmony' tokens only appear
+// in genuine Harmony UAs, so matching them in the raw UA is a reliable override.
 function parseBrowserOS(input: BrowserPlatformInput): string {
+  if (/harmonyos|openharmony/i.test(input.userAgent ?? '')) return 'HarmonyOS'
   return parseOS(input.userAgent).name || normalizeClientHintOS(input.userAgentData?.platform)
 }
 
