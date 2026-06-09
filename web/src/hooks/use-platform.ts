@@ -178,10 +178,24 @@ function binaryForEntry(entry: PlatformEntry): BinaryInfo {
   return binary
 }
 
-const METHODS: InstallMethod[] = [
-  { label: 'Linux / macOS', command: SH_CMD, mirrorCommand: SH_MIRROR_CMD },
-  { label: 'Windows (PowerShell)', command: PS_CMD, mirrorCommand: PS_MIRROR_CMD },
-]
+const UNIX_METHOD: InstallMethod = { label: 'Linux / macOS', command: SH_CMD, mirrorCommand: SH_MIRROR_CMD }
+const WINDOWS_METHOD: InstallMethod = { label: 'Windows (PowerShell)', command: PS_CMD, mirrorCommand: PS_MIRROR_CMD }
+
+const METHODS: InstallMethod[] = [UNIX_METHOD, WINDOWS_METHOD]
+
+// install.sh installs on both Linux and macOS, so for a non-Unix visitor we keep the
+// single combined "Linux / macOS" row. But when the visitor IS on Linux or macOS, that
+// combined row is their own platform — filtering it out would also drop the sibling Unix
+// OS from 其他平台. So we name the remaining sibling explicitly instead.
+function otherMethodsFor(detected: BinaryInfo['goos']): InstallMethod[] {
+  if (detected === 'windows') return [UNIX_METHOD]
+  const sibling: InstallMethod = {
+    label: detected === 'linux' ? 'macOS' : 'Linux',
+    command: SH_CMD,
+    mirrorCommand: SH_MIRROR_CMD,
+  }
+  return [sibling, WINDOWS_METHOD]
+}
 
 const SOURCE_METHOD: InstallMethod = {
   label: '从源码编译',
@@ -203,7 +217,7 @@ export function computePlatformResult(os: string, arch: string): PlatformResult 
     const info = toReadyInfo(entry)
     return {
       ...common,
-      otherMethods: METHODS.filter(m => m.command !== info.command),
+      otherMethods: otherMethodsFor(entry.goos),
       state: 'ready',
       info,
       binary: binaryForEntry(entry),
@@ -215,7 +229,7 @@ export function computePlatformResult(os: string, arch: string): PlatformResult 
     const info: ReadyInfo = { label: 'macOS', hint: SH_HINT, command: SH_CMD, mirrorCommand: SH_MIRROR_CMD }
     return {
       ...common,
-      otherMethods: METHODS.filter(m => m.command !== info.command),
+      otherMethods: otherMethodsFor('darwin'),
       state: 'ready',
       info,
       binary: null,

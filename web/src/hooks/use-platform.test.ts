@@ -129,15 +129,22 @@ describe('computePlatformResult', () => {
     expect(r.methods.map(m => m.label)).not.toContain(r.sourceMethod.label)
   })
 
-  it('drops the current platform from otherMethods when ready', () => {
+  it('lists the other platforms in otherMethods, naming the Unix sibling for Linux/macOS visitors', () => {
+    // A non-Unix visitor keeps the combined "Linux / macOS" row (one shared command).
     const win = computePlatformResult('Windows', 'amd64')
     expect(win.otherMethods.map(m => m.label)).toEqual(['Linux / macOS'])
 
+    // A macOS visitor still needs Linux listed, named explicitly so it is not dropped
+    // along with their own platform's combined row.
     const mac = computePlatformResult('macOS', 'arm64')
-    expect(mac.otherMethods.map(m => m.label)).toEqual(['Windows (PowerShell)'])
+    expect(mac.otherMethods.map(m => m.label)).toEqual(['Linux', 'Windows (PowerShell)'])
 
     const macUnknownArch = computePlatformResult('macOS', '')
-    expect(macUnknownArch.otherMethods.map(m => m.label)).toEqual(['Windows (PowerShell)'])
+    expect(macUnknownArch.otherMethods.map(m => m.label)).toEqual(['Linux', 'Windows (PowerShell)'])
+
+    // Symmetric: a Linux visitor sees macOS named as the sibling.
+    const linux = computePlatformResult('Linux', 'arm64')
+    expect(linux.otherMethods.map(m => m.label)).toEqual(['macOS', 'Windows (PowerShell)'])
   })
 
   it('keeps every method in otherMethods when state is not ready', () => {
