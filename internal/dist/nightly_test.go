@@ -40,11 +40,12 @@ func TestFetchNightlySHA256(t *testing.T) {
 	}))
 	defer server.Close()
 
-	got := FetchNightlySHA256(context.Background(), server.URL+"/sdk.zip")
+	got, err := FetchNightlySHA256(context.Background(), server.URL+"/sdk.zip")
+	require.NoError(t, err)
 	assert.Equal(t, digest, got)
 }
 
-func TestFetchNightlySHA256BestEffortFallbacks(t *testing.T) {
+func TestFetchNightlySHA256MissingAndMalformed(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/missing.zip.sha256":
@@ -57,11 +58,20 @@ func TestFetchNightlySHA256BestEffortFallbacks(t *testing.T) {
 	}))
 	defer server.Close()
 
-	assert.Empty(t, FetchNightlySHA256(context.Background(), server.URL+"/missing.zip"))
-	assert.Empty(t, FetchNightlySHA256(context.Background(), server.URL+"/invalid.zip"))
+	// A genuine 404 means no checksum was published: empty digest, no error.
+	got, err := FetchNightlySHA256(context.Background(), server.URL+"/missing.zip")
+	require.NoError(t, err)
+	assert.Empty(t, got)
 
+	// A malformed sidecar must surface an error rather than silently disabling
+	// integrity verification.
+	_, err = FetchNightlySHA256(context.Background(), server.URL+"/invalid.zip")
+	assert.Error(t, err)
+
+	// A network failure must also surface an error, not an empty digest.
 	server.Close()
-	assert.Empty(t, FetchNightlySHA256(context.Background(), server.URL+"/network-failure.zip"))
+	_, err = FetchNightlySHA256(context.Background(), server.URL+"/network-failure.zip")
+	assert.Error(t, err)
 }
 
 func TestFetchLatestNightly(t *testing.T) {

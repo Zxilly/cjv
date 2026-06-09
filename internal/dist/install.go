@@ -142,7 +142,23 @@ func copyEntry(srcRoot, src, dst string) error {
 		if targetInfo, err := os.Stat(src); err == nil && targetInfo.IsDir() {
 			return utils.SymlinkOrJunction(target, dst)
 		}
-		return os.Symlink(target, dst)
+		if err := os.Symlink(target, dst); err == nil {
+			return nil
+		} else {
+			// Creating a symlink can fail without privileges (e.g. Windows
+			// without Developer Mode). The target was validated to stay inside
+			// the install root above, so materialize it by copying the resolved
+			// file instead of aborting the whole install. A dangling symlink
+			// has nothing to copy, so surface the original error.
+			resolved, statErr := os.Stat(src)
+			if statErr != nil {
+				return err
+			}
+			if resolved.IsDir() {
+				return utils.SymlinkOrJunction(target, dst)
+			}
+			return utils.CopyFile(src, dst, resolved.Mode().Perm())
+		}
 	}
 
 	if info.IsDir() {

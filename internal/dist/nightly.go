@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -114,26 +115,61 @@ func parseSHA256(content string) string {
 	return strings.ToLower(digest)
 }
 
-func FetchNightlySHA256(ctx context.Context, assetURL string) string {
+// errChecksumSidecarMalformed marks a non-transient sidecar failure (the body
+// parsed but was not a valid digest), so it is not retried.
+var errChecksumSidecarMalformed = errors.New("nightly checksum sidecar is malformed (expected 64 hex chars)")
+
+// FetchNightlySHA256 fetches the published sha256 sidecar for assetURL.
+//
+// It distinguishes "no checksum published" from "fetch failed": a 404 returns
+// ("", nil) so the caller can proceed with an explicit no-checksum notice,
+// while any other failure (network error, non-200, malformed body) returns a
+// non-nil error. This prevents a transient failure or a MITM that drops the
+// sidecar request from silently downgrading the install to no integrity check.
+//
+// Transient failures (network/HTTP) are retried with the same policy as the
+// main archive download so a momentary blip on the sidecar does not abort an
+// install the larger download would have recovered; a malformed body is not
+// retried.
+func FetchNightlySHA256(ctx context.Context, assetURL string) (string, error) {
+	var sha string
+	err := utils.RetryWithBackoff(getMaxDownloadRetries()+1,
+		func(e error) bool { return !errors.Is(e, errChecksumSidecarMalformed) },
+		func() error {
+			var ferr error
+			sha, ferr = fetchNightlySHA256Once(ctx, assetURL)
+			return ferr
+		})
+	return sha, err
+}
+
+func fetchNightlySHA256Once(ctx context.Context, assetURL string) (string, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, assetURL+".sha256", nil)
 	if err != nil {
-		return ""
+		return "", err
 	}
 	resp, err := HTTPClient().Do(req)
 	if err != nil {
-		return ""
+		return "", fmt.Errorf("failed to fetch nightly checksum: %w", err)
 	}
 	defer resp.Body.Close() //nolint:errcheck // best-effort cleanup
 
+	if resp.StatusCode == http.StatusNotFound {
+		return "", nil
+	}
 	if resp.StatusCode != http.StatusOK {
-		return ""
+		return "", fmt.Errorf("failed to fetch nightly checksum: HTTP %d", resp.StatusCode)
 	}
 
 	body, err := io.ReadAll(io.LimitReader(resp.Body, MaxResponseSize))
 	if err != nil {
-		return ""
+		return "", err
 	}
-	return parseSHA256(string(body))
+	sha := parseSHA256(string(body))
+	if sha == "" {
+		return "", errChecksumSidecarMalformed
+	}
+	return sha, nil
 }
 
 // gitCodeRelease matches the JSON object returned by GitCode GET .../releases/latest
