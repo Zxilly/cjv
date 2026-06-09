@@ -39,6 +39,16 @@ describe('App (ready / Windows)', () => {
     expect(screen.getByText(/^go install /)).toBeInTheDocument()
   })
 
+  it('applies the mirror toggle to the source-build command', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+    await user.click(screen.getByRole('tab', { name: '编译安装' }))
+    expect(screen.getByText(/^go install /)).toBeInTheDocument()
+
+    await user.click(screen.getByRole('switch'))
+    expect(await screen.findByText(/GOPROXY=https:\/\/goproxy\.cn/)).toBeInTheDocument()
+  })
+
   it('toggling the mirror switch flips the primary command to the mirror variant', async () => {
     const user = userEvent.setup()
     render(<App />)
@@ -59,6 +69,12 @@ describe('App (unsupported / iOS)', () => {
     expect(screen.queryByRole('tablist')).not.toBeInTheDocument()
   })
 
+  it('asks mobile visitors to use a desktop device', () => {
+    render(<App />)
+    expect(screen.getByText(/请在桌面设备上访问/)).toBeInTheDocument()
+    expect(screen.queryByText(/该架构暂无预编译版本/)).not.toBeInTheDocument()
+  })
+
   it('expands the install card when the user opens "查看其他平台的安装方式"', async () => {
     const user = userEvent.setup()
     render(<App />)
@@ -68,6 +84,27 @@ describe('App (unsupported / iOS)', () => {
 
     expect(screen.getByRole('tablist')).toBeInTheDocument()
     expect(screen.getByRole('tab', { name: '命令安装' })).toBeInTheDocument()
+  })
+})
+
+describe('App (unsupported arch / Windows arm64)', () => {
+  beforeEach(() => setPlatform('Windows', 'arm64'))
+
+  it('explains the missing prebuilt and suggests amd64 / manual download instead of a desktop redirect', () => {
+    render(<App />)
+    expect(screen.getByText(/cjv 暂不支持/)).toBeInTheDocument()
+    expect(screen.getByText('Windows arm64')).toBeInTheDocument()
+    expect(screen.getByText(/该架构暂无预编译版本/)).toBeInTheDocument()
+    expect(screen.getByText(/x86_64（amd64）/)).toBeInTheDocument()
+    // The self-contradictory "please use a desktop device" copy must not appear here.
+    expect(screen.queryByText(/请在桌面设备上访问/)).not.toBeInTheDocument()
+  })
+
+  it('still lets the user expand the cross-platform install methods', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+    await user.click(screen.getByRole('button', { name: /查看其他平台的安装方式/ }))
+    expect(screen.getByRole('tablist')).toBeInTheDocument()
   })
 })
 

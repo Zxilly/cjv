@@ -14,6 +14,12 @@ const WINDOWS_DESKTOP_UA =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
 const WINDOWS_ARM64_UA =
   'Mozilla/5.0 (Windows NT 10.0; Win64; ARM64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
+// HarmonyOS NEXT drops the 'Android' token ua-parser-modern needs to name the OS,
+// so without a raw-UA fallback it would parse as undefined/Linux.
+const HARMONYOS_NEXT_UA =
+  'Mozilla/5.0 (Phone; OpenHarmony 5.0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36 ArkWeb/4.1.6.1 Mobile HuaweiBrowser/5.0.0.300'
+const HARMONYOS_LEGACY_UA =
+  'Mozilla/5.0 (Linux; Android 12; ALN-AL00; HMSCore 6.13.0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 HarmonyOS Mobile Safari/537.36'
 
 function asReady(r: PlatformResult) {
   if (r.state !== 'ready') throw new Error(`expected ready, got ${r.state}`)
@@ -129,6 +135,24 @@ describe('computePlatformResult', () => {
     expect(r.methods.map(m => m.label)).not.toContain(r.sourceMethod.label)
   })
 
+  it('offers a GOPROXY mirror variant for the source-build method', () => {
+    const r = computePlatformResult('Windows', 'amd64')
+    expect(r.sourceMethod.mirrorCommand).toBe(
+      'GOPROXY=https://goproxy.cn,direct go install github.com/Zxilly/cjv/cmd/cjv@latest',
+    )
+  })
+
+  it('tags mobile OSes with reason "mobile" and unsupported desktop archs with reason "arch"', () => {
+    expect(computePlatformResult('iOS', 'arm64').info.reason).toBe('mobile')
+    expect(computePlatformResult('Android', 'arm64').info.reason).toBe('mobile')
+    expect(computePlatformResult('HarmonyOS', 'arm64').info.reason).toBe('mobile')
+    expect(computePlatformResult('Windows', 'arm64').info.reason).toBe('arch')
+    expect(computePlatformResult('Linux', 'mips64').info.reason).toBe('arch')
+    // Unknown and ready states do not carry an unsupported reason.
+    expect(computePlatformResult('FreeBSD', 'amd64').info.reason).toBeUndefined()
+    expect(computePlatformResult('Windows', 'amd64').info.reason).toBeUndefined()
+  })
+
   it('lists the other platforms in otherMethods, naming the Unix sibling for Linux/macOS visitors', () => {
     // A non-Unix visitor keeps the combined "Linux / macOS" row (one shared command).
     const win = computePlatformResult('Windows', 'amd64')
@@ -186,7 +210,33 @@ describe('computeBrowserPlatformResult', () => {
 
     expect(r.state).toBe('unsupported')
     expect(r.info.label).toBe('Windows arm64')
+    expect(r.info.reason).toBe('arch')
     expect(r.binary).toBeNull()
+  })
+
+  it('treats a HarmonyOS NEXT / OpenHarmony UA as an unsupported mobile platform', () => {
+    const r = computeBrowserPlatformResult({
+      maxTouchPoints: 5,
+      platform: 'Linux aarch64',
+      userAgent: HARMONYOS_NEXT_UA,
+    })
+
+    expect(r.state).toBe('unsupported')
+    expect(r.info.label).toBe('HarmonyOS')
+    expect(r.info.reason).toBe('mobile')
+    expect(r.binary).toBeNull()
+  })
+
+  it('treats a legacy (Android-token) HarmonyOS UA as unsupported mobile too', () => {
+    const r = computeBrowserPlatformResult({
+      maxTouchPoints: 5,
+      platform: 'Linux armv8l',
+      userAgent: HARMONYOS_LEGACY_UA,
+    })
+
+    expect(r.state).toBe('unsupported')
+    expect(r.info.label).toBe('HarmonyOS')
+    expect(r.info.reason).toBe('mobile')
   })
 
   it('uses UA Client Hints to detect macOS ARM64 when Chromium exposes them', async () => {

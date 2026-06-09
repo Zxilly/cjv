@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Check, Copy } from 'lucide-react'
+import { Check, Copy, X } from 'lucide-react'
 import { motion, AnimatePresence, type Transition } from 'framer-motion'
 import { cn } from '@/lib/utils'
 
@@ -8,30 +8,68 @@ interface CodeBlockProps {
   primary?: boolean
 }
 
+type CopyStatus = 'idle' | 'copied' | 'error'
+
 const COMMAND_TRANSITION: Transition = { duration: 0.18, ease: [0.4, 0, 0.2, 1] as const }
 const ICON_TRANSITION: Transition = { duration: 0.15 }
 
+// Fallback for non-secure contexts (HTTP) or browsers/permissions that block the async
+// Clipboard API: drop a hidden textarea, select it, and ask execCommand to copy.
+function legacyCopy(text: string): boolean {
+  if (typeof document === 'undefined') return false
+  const textarea = document.createElement('textarea')
+  textarea.value = text
+  textarea.setAttribute('readonly', '')
+  textarea.style.position = 'fixed'
+  textarea.style.top = '-9999px'
+  textarea.style.opacity = '0'
+  document.body.appendChild(textarea)
+  textarea.select()
+  let ok = false
+  try {
+    ok = document.execCommand('copy')
+  } catch {
+    ok = false
+  }
+  document.body.removeChild(textarea)
+  return ok
+}
+
+async function copyToClipboard(text: string): Promise<boolean> {
+  if (navigator.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(text)
+      return true
+    } catch {
+      // fall through to the legacy path below
+    }
+  }
+  return legacyCopy(text)
+}
+
 export function CodeBlock({ command, primary }: CodeBlockProps) {
-  const [copied, setCopied] = useState(false)
+  const [status, setStatus] = useState<CopyStatus>('idle')
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined)
   const iconCls = primary ? 'w-4 h-4' : 'w-3.5 h-3.5'
 
   useEffect(() => () => { if (timer.current) clearTimeout(timer.current) }, [])
   useEffect(() => {
-    setCopied(false)
+    setStatus('idle')
     if (timer.current) {
       clearTimeout(timer.current)
       timer.current = undefined
     }
   }, [command])
 
-  function copy() {
-    navigator.clipboard.writeText(command).then(() => {
-      setCopied(true)
-      if (timer.current) clearTimeout(timer.current)
-      timer.current = setTimeout(() => setCopied(false), 1500)
-    })
+  async function copy() {
+    const ok = await copyToClipboard(command)
+    setStatus(ok ? 'copied' : 'error')
+    if (timer.current) clearTimeout(timer.current)
+    timer.current = setTimeout(() => setStatus('idle'), ok ? 1500 : 2500)
   }
+
+  const copied = status === 'copied'
+  const errored = status === 'error'
 
   return (
     <div
@@ -59,6 +97,7 @@ export function CodeBlock({ command, primary }: CodeBlockProps) {
       </div>
       <button
         type="button"
+        aria-label="复制命令"
         title="复制"
         onClick={copy}
         className={cn(
@@ -68,19 +107,28 @@ export function CodeBlock({ command, primary }: CodeBlockProps) {
       >
         <AnimatePresence mode="wait" initial={false}>
           <motion.span
-            key={copied ? 'check' : 'copy'}
+            key={status}
             initial={{ scale: 0.6, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             exit={{ scale: 0.6, opacity: 0 }}
             transition={ICON_TRANSITION}
-            className={cn('block', copied && 'text-cj dark:text-cj-light')}
+            className={cn(
+              'block',
+              copied && 'text-cj dark:text-cj-light',
+              errored && 'text-red-500 dark:text-red-400',
+            )}
           >
             {copied
               ? <Check className={iconCls} strokeWidth={2.5} />
-              : <Copy className={iconCls} strokeWidth={2} />}
+              : errored
+                ? <X className={iconCls} strokeWidth={2.5} />
+                : <Copy className={iconCls} strokeWidth={2} />}
           </motion.span>
         </AnimatePresence>
       </button>
+      <span aria-live="polite" className="sr-only">
+        {copied ? '已复制' : errored ? '复制失败，请手动复制' : ''}
+      </span>
     </div>
   )
 }
