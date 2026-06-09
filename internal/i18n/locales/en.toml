@@ -209,7 +209,7 @@ other = "The `cjc`, `cjpm`, `cjfmt`, `cjlint` and other commands will be added t
 other = "This path will then be added to your PATH environment variable by modifying the profile files located at:"
 
 [InitRegistryPath]
-other = "This path will then be added to your PATH environment variable by modifying the HKCU\\Environment registry key."
+other = "This path will then be added to your PATH environment variable automatically."
 
 [InitPathNeedManual]
 other = "This path needs to be in your PATH environment variable, but will not be added automatically."
