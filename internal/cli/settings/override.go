@@ -17,12 +17,12 @@ var overrideSetPath string
 
 var overrideCmd = &cobra.Command{
 	Use:   "override",
-	Short: "Manage directory toolchain overrides",
+	Short: i18n.T("OverrideCmdShort", nil),
 }
 
 var overrideSetCmd = &cobra.Command{
 	Use:   "set <toolchain>",
-	Short: "Set a toolchain override for the current or specified directory",
+	Short: i18n.T("OverrideSetShort", nil),
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		tc := args[0]
@@ -75,7 +75,7 @@ var overrideUnsetNonexistent bool
 
 var overrideUnsetCmd = &cobra.Command{
 	Use:   "unset",
-	Short: "Remove the toolchain override for the current or specified directory",
+	Short: i18n.T("OverrideUnsetShort", nil),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		sf, settings, err := LoadSettings()
 		if err != nil {
@@ -100,7 +100,7 @@ var overrideUnsetCmd = &cobra.Command{
 			}
 		}
 		if !found {
-			return fmt.Errorf("no override set for %s", dir)
+			return errors.New(i18n.T("NoOverrideSet", i18n.MsgData{"Dir": dir}))
 		}
 
 		if err := sf.Save(settings); err != nil {
@@ -147,7 +147,7 @@ func unsetNonexistentOverrides(settings *config.Settings, sf *config.SettingsFil
 
 var overrideListCmd = &cobra.Command{
 	Use:   "list",
-	Short: "List all directory overrides",
+	Short: i18n.T("OverrideListShort", nil),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		_, settings, err := LoadSettings()
 		if err != nil {

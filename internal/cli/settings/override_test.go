@@ -160,7 +160,9 @@ func TestOverrideUnsetCommandErrorsWhenMissing(t *testing.T) {
 
 	err := overrideUnsetCmd.RunE(overrideUnsetCmd, nil)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "no override")
+	// The "no override set" message is localized; assert on the directory it
+	// references (present in every locale's template) rather than English text.
+	assert.Contains(t, err.Error(), dir)
 }
 
 func TestOverrideListCommandHandlesEmptyAndSortedEntries(t *testing.T) {

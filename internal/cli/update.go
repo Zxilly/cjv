@@ -25,14 +25,14 @@ import (
 var noSelfUpdate bool
 
 func init() {
-	updateCmd.Flags().BoolVar(&noSelfUpdate, "no-self-update", false, "Don't check for cjv self-updates")
+	updateCmd.Flags().BoolVar(&noSelfUpdate, "no-self-update", false, i18n.T("UpdateFlagNoSelfUpdate", nil))
 	rootCmd.AddCommand(updateCmd)
 }
 
 var updateCmd = &cobra.Command{
 	Use:   "update [toolchain]",
-	Short: "Update installed toolchains",
-	Long:  "Update a specific toolchain or all installed toolchains to their latest versions.",
+	Short: i18n.T("UpdateCmdShort", nil),
+	Long:  i18n.T("UpdateCmdLong", nil),
 	Args:  cobra.MaximumNArgs(1),
 	RunE:  runUpdate,
 }
@@ -133,7 +133,7 @@ func updateSingle(ctx context.Context, input string) ([]updateEntry, error) {
 		return nil, err
 	}
 	if name.IsCustom() {
-		return nil, fmt.Errorf("cannot update custom toolchain '%s'", input)
+		return nil, errors.New(i18n.T("UpdateCustomToolchain", i18n.MsgData{"Name": input}))
 	}
 	if name.Target != "" {
 		currentName := name.String()
