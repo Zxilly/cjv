@@ -17,7 +17,7 @@ import (
 
 var checkCmd = &cobra.Command{
 	Use:   "check",
-	Short: "Check for available updates without installing",
+	Short: i18n.T("CheckCmdShort", nil),
 	RunE:  runCheck,
 }
 
@@ -88,7 +88,7 @@ func runCheck(cmd *cobra.Command, args []string) error {
 	for _, name := range installed {
 		parsed, parseErr := toolchain.ParseToolchainName(name)
 		if parseErr == nil && parsed.Channel == toolchain.Nightly {
-			latestNightly, nightlyErr = dist.FetchLatestNightly(ctx, dist.DefaultNightlyAPIURL, settings.GitCodeAPIKey)
+			latestNightly, nightlyErr = dist.FetchLatestNightly(ctx, dist.DefaultNightlyAPIURL, settings.ResolveGitCodeAPIKey())
 			break
 		}
 	}
@@ -149,8 +149,13 @@ func runCheck(cmd *cobra.Command, args []string) error {
 				entry.Latest = toolchain.ToolchainName{Channel: parsed.Channel, Version: unavailable.Version, Target: target}.String()
 				entry.NotForTarget = true
 				entry.Target = infoTuple
-				result.Toolchains = append(result.Toolchains, entry)
+			} else {
+				// Don't silently drop the toolchain on an unexpected error
+				// (e.g. a malformed/missing 'latest' for the channel) — surface
+				// it per-entry like the nightly branch does.
+				entry.Error = err.Error()
 			}
+			result.Toolchains = append(result.Toolchains, entry)
 			continue
 		}
 
