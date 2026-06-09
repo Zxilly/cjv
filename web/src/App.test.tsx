@@ -86,3 +86,41 @@ describe('App (unknown OS)', () => {
     expect(screen.getByText(/请手动选择对应平台的二进制/)).toBeInTheDocument()
   })
 })
+
+describe('App (macOS browser with hidden architecture)', () => {
+  beforeEach(() => setPlatform('Mac OS', ''))
+
+  it('keeps command install ready instead of showing the unrecognized-platform fallback', () => {
+    render(<App />)
+    expect(screen.getByText('检测到你的平台：macOS')).toBeInTheDocument()
+    expect(screen.queryByText(/无法识别你的平台/)).not.toBeInTheDocument()
+  })
+
+  it('shows explicit Apple Silicon and Intel downloads in the download tab', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+
+    await user.click(screen.getByRole('tab', { name: '下载安装' }))
+
+    expect(screen.getByRole('link', { name: /Apple Silicon/ })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /Intel/ })).toBeInTheDocument()
+    expect(screen.queryByText(/请手动选择对应平台的二进制/)).not.toBeInTheDocument()
+  })
+})
+
+describe('App (macOS ARM64 detected)', () => {
+  beforeEach(() => setPlatform('macOS', 'arm64'))
+
+  it('shows the single detected binary, not the chip chooser, once the arch is known', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+
+    await user.click(screen.getByRole('tab', { name: '下载安装' }))
+
+    // The single-binary view shows this copy; the chip chooser says "选择对应 Mac 芯片下载".
+    expect(screen.getByText(/下载并运行/)).toBeInTheDocument()
+    expect(screen.queryByText(/选择对应 Mac 芯片下载/)).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: /Apple Silicon/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: /Intel/ })).not.toBeInTheDocument()
+  })
+})

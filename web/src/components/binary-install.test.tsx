@@ -6,6 +6,7 @@ import { computePlatformResult } from '@/hooks/use-platform'
 
 const { allBinaries } = computePlatformResult('Windows', 'amd64')
 const winBinary = allBinaries.find(b => b.goos === 'windows')!
+const macArmBinary = allBinaries.find(b => b.goos === 'darwin' && b.goarch === 'arm64')!
 const macX86Binary = allBinaries.find(b => b.goos === 'darwin' && b.goarch === 'amd64')!
 
 describe('BinaryInstall (binary detected)', () => {
@@ -41,6 +42,41 @@ describe('BinaryInstall (binary detected)', () => {
     expect(hrefs.filter(h => h?.includes('linux_arm64'))).toHaveLength(1)
   })
 
+})
+
+describe('BinaryInstall (macOS choices)', () => {
+  it('renders Apple Silicon and Intel download buttons when macOS choices are requested', () => {
+    render(<BinaryInstall binary={null} allBinaries={allBinaries} mirror={false} showMacOSChoices />)
+
+    const appleSilicon = screen.getByRole('link', { name: /Apple Silicon/ })
+    const intel = screen.getByRole('link', { name: /Intel/ })
+
+    expect(appleSilicon).toHaveAttribute('href', '/dl/official/darwin_arm64/cjv-init')
+    expect(appleSilicon).toHaveAttribute('download', 'cjv-init')
+    expect(intel).toHaveAttribute('href', '/dl/official/darwin_amd64/cjv-init')
+    expect(intel).toHaveAttribute('download', 'cjv-init')
+    expect(screen.getByText(/⚠.*x86_64/)).toBeInTheDocument()
+  })
+
+  it('uses mirror URLs for both macOS choices when mirror=true', () => {
+    render(<BinaryInstall binary={macArmBinary} allBinaries={allBinaries} mirror showMacOSChoices />)
+
+    expect(screen.getByRole('link', { name: /Apple Silicon/ })).toHaveAttribute('href', '/dl/mirror/darwin_arm64/cjv-init')
+    expect(screen.getByRole('link', { name: /Intel/ })).toHaveAttribute('href', '/dl/mirror/darwin_amd64/cjv-init')
+  })
+
+  it('omits macOS binaries from the expanded other-platform list', async () => {
+    const user = userEvent.setup()
+    render(<BinaryInstall binary={macArmBinary} allBinaries={allBinaries} mirror={false} showMacOSChoices />)
+
+    await user.click(screen.getByRole('button', { name: /其他平台/ }))
+
+    const links = screen.getAllByRole('link', { name: /cjv-init/ })
+    const hrefs = links.map(a => a.getAttribute('href'))
+    expect(hrefs.filter(h => h?.includes('darwin_'))).toHaveLength(2)
+    expect(hrefs.filter(h => h?.includes('linux_'))).toHaveLength(2)
+    expect(hrefs.filter(h => h?.includes('windows_'))).toHaveLength(1)
+  })
 })
 
 describe('BinaryInstall (no binary)', () => {

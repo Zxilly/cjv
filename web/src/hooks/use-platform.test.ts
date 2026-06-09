@@ -20,9 +20,15 @@ function asReady(r: PlatformResult) {
   return r
 }
 
+function asReadyWithBinary(r: PlatformResult) {
+  const ready = asReady(r)
+  if (!ready.binary) throw new Error('expected ready result with binary')
+  return ready as typeof ready & { binary: NonNullable<typeof ready.binary> }
+}
+
 describe('computePlatformResult', () => {
   it('detects Windows x86_64 as ready', () => {
-    const r = asReady(computePlatformResult('Windows', 'amd64'))
+    const r = asReadyWithBinary(computePlatformResult('Windows', 'amd64'))
     expect(r.info.label).toBe('Windows x86_64')
     expect(r.info.command).toMatch(/install\.ps1/)
     expect(r.info.mirrorCommand).toMatch(/CJV_MIRROR/)
@@ -33,7 +39,7 @@ describe('computePlatformResult', () => {
   })
 
   it('detects macOS ARM64 as ready', () => {
-    const r = asReady(computePlatformResult('macOS', 'arm64'))
+    const r = asReadyWithBinary(computePlatformResult('macOS', 'arm64'))
     expect(r.info.label).toBe('macOS ARM64')
     expect(r.info.command).toMatch(/install\.sh/)
     expect(r.binary.goos).toBe('darwin')
@@ -42,7 +48,7 @@ describe('computePlatformResult', () => {
   })
 
   it('detects macOS x86_64 with the SDK warning', () => {
-    const r = asReady(computePlatformResult('Mac OS', 'amd64'))
+    const r = asReadyWithBinary(computePlatformResult('Mac OS', 'amd64'))
     expect(r.info.label).toBe('macOS x86_64')
     expect(r.info.warning).toMatch(/x86_64/)
     expect(r.binary.warning).toMatch(/x86_64/)
@@ -57,15 +63,15 @@ describe('computePlatformResult', () => {
     }
   })
 
-  it('does not guess a CPU architecture when a desktop OS hides it', () => {
-    const r = computePlatformResult('Mac OS', '')
-    expect(r.state).toBe('unknown')
-    expect(r.info.label).toBe('macOS 未知架构')
+  it('keeps macOS command install ready when the desktop browser hides the CPU architecture', () => {
+    const r = asReady(computePlatformResult('Mac OS', ''))
+    expect(r.info.label).toBe('macOS')
+    expect(r.info.command).toMatch(/install\.sh/)
     expect(r.binary).toBeNull()
   })
 
   it('detects Linux ARM64', () => {
-    const r = asReady(computePlatformResult('Linux', 'arm64'))
+    const r = asReadyWithBinary(computePlatformResult('Linux', 'arm64'))
     expect(r.info.label).toBe('Linux ARM64')
     expect(r.binary.goarch).toBe('arm64')
   })
@@ -93,7 +99,7 @@ describe('computePlatformResult', () => {
   })
 
   it('returns binary refs that are reused inside allBinaries', () => {
-    const r = asReady(computePlatformResult('Windows', 'amd64'))
+    const r = asReadyWithBinary(computePlatformResult('Windows', 'amd64'))
     expect(r.allBinaries).toContain(r.binary)
   })
 
@@ -110,7 +116,7 @@ describe('computePlatformResult', () => {
   })
 
   it('produces release URLs that follow the goreleaser scheme', () => {
-    const r = asReady(computePlatformResult('Linux', 'arm64'))
+    const r = asReadyWithBinary(computePlatformResult('Linux', 'arm64'))
     expect(r.binary.officialReleaseUrl).toMatch(/cjv_linux_arm64\.tar\.gz$/)
     expect(r.binary.mirrorReleaseUrl).toMatch(/cjv-mirror_linux_arm64\.tar\.gz$/)
     const win = r.allBinaries.find(b => b.goos === 'windows')
@@ -129,6 +135,9 @@ describe('computePlatformResult', () => {
 
     const mac = computePlatformResult('macOS', 'arm64')
     expect(mac.otherMethods.map(m => m.label)).toEqual(['Windows (PowerShell)'])
+
+    const macUnknownArch = computePlatformResult('macOS', '')
+    expect(macUnknownArch.otherMethods.map(m => m.label)).toEqual(['Windows (PowerShell)'])
   })
 
   it('keeps every method in otherMethods when state is not ready', () => {
@@ -138,15 +147,14 @@ describe('computePlatformResult', () => {
 })
 
 describe('computeBrowserPlatformResult', () => {
-  it('does not infer macOS Intel when the browser hides the CPU architecture', () => {
-    const r = computeBrowserPlatformResult({
+  it('keeps macOS command install ready when the browser hides the CPU architecture', () => {
+    const r = asReady(computeBrowserPlatformResult({
       maxTouchPoints: 0,
       platform: 'MacIntel',
       userAgent: MAC_DESKTOP_UA,
-    })
+    }))
 
-    expect(r.state).toBe('unknown')
-    expect(r.info.label).toBe('macOS 未知架构')
+    expect(r.info.label).toBe('macOS')
     expect(r.binary).toBeNull()
   })
 
@@ -188,7 +196,7 @@ describe('computeBrowserPlatformResult', () => {
       },
     })
 
-    const ready = asReady(r)
+    const ready = asReadyWithBinary(r)
     expect(ready.info.label).toBe('macOS ARM64')
     expect(ready.binary.goos).toBe('darwin')
     expect(ready.binary.goarch).toBe('arm64')
@@ -205,7 +213,7 @@ describe('computeBrowserPlatformResult', () => {
       },
     })
 
-    const ready = asReady(r)
+    const ready = asReadyWithBinary(r)
     expect(ready.info.label).toBe('macOS x86_64')
     expect(ready.info.warning).toMatch(/x86_64/)
   })
@@ -244,8 +252,11 @@ describe('usePlatform', () => {
     }
     const { result } = renderHook(() => usePlatform(input))
 
-    expect(result.current.state).toBe('unknown')
-    await waitFor(() => expect(result.current.state).toBe('ready'))
-    expect(result.current.info.label).toBe('macOS ARM64')
+    expect(result.current.state).toBe('ready')
+    expect(result.current.info.label).toBe('macOS')
+    expect(result.current.binary).toBeNull()
+    await waitFor(() => expect(result.current.info.label).toBe('macOS ARM64'))
+    expect(result.current.state).toBe('ready')
+    expect(result.current.binary?.goarch).toBe('arm64')
   })
 })

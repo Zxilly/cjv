@@ -1,4 +1,4 @@
-import { Download } from 'lucide-react'
+import { Apple, Cpu, Download, type LucideIcon } from 'lucide-react'
 import { CollapsibleSection } from './collapsible-section'
 import type { BinaryInfo } from '@/hooks/use-platform'
 
@@ -6,9 +6,45 @@ interface BinaryInstallProps {
   binary: BinaryInfo | null
   allBinaries: BinaryInfo[]
   mirror: boolean
+  showMacOSChoices?: boolean
 }
 
 const platformKey = (b: BinaryInfo) => `${b.goos}_${b.goarch}`
+const binaryUrl = (b: BinaryInfo, mirror: boolean) => mirror ? b.mirrorUrl : b.officialUrl
+
+const DL_ROW_CLS =
+  'group/dl flex items-center justify-between gap-3 px-2 py-2 rounded hover:bg-gray-100/70 dark:hover:bg-gray-800/40 focus-visible:outline-none focus-visible:bg-gray-100/70 dark:focus-visible:bg-gray-800/40 transition-colors'
+
+// Per-arch presentation for the macOS chip chooser. Apple Silicon carries the brand
+// emerald (it is the common case on modern Macs); Intel stays neutral and pairs with
+// the amber SDK caveat below. `detail` doubles as a "which Mac do I have?" hint.
+const MAC_CHOICE_META: Record<BinaryInfo['goarch'], {
+  title: string
+  detail: string
+  Icon: LucideIcon
+  badge?: string
+  card: string
+  tile: string
+  pill: string
+}> = {
+  arm64: {
+    title: 'Apple Silicon',
+    detail: 'M1 / M2 / M3 及更新机型',
+    Icon: Apple,
+    badge: '常见',
+    card: 'hover:border-cj/40 dark:hover:border-cj-light/45',
+    tile: 'bg-gradient-to-br from-cj/15 to-cj/5 text-cj ring-1 ring-cj/20 group-hover/card:ring-cj/45 dark:from-cj-light/15 dark:to-cj-light/5 dark:text-cj-light dark:ring-cj-light/25 dark:group-hover/card:ring-cj-light/50',
+    pill: 'group-hover/card:bg-cj group-hover/card:text-white dark:group-hover/card:bg-cj-light dark:group-hover/card:text-gray-900',
+  },
+  amd64: {
+    title: 'Intel',
+    detail: '2020 年前的 Intel 机型',
+    Icon: Cpu,
+    card: 'hover:border-gray-300 dark:hover:border-gray-600',
+    tile: 'bg-gradient-to-br from-gray-100 to-gray-50 text-gray-500 ring-1 ring-gray-200 group-hover/card:ring-gray-300 dark:from-gray-800 dark:to-gray-800/40 dark:text-gray-300 dark:ring-gray-700 dark:group-hover/card:ring-gray-600',
+    pill: 'group-hover/card:bg-gray-800 group-hover/card:text-white dark:group-hover/card:bg-gray-200 dark:group-hover/card:text-gray-900',
+  },
+}
 
 function ManualDownloadList({
   binaries,
@@ -25,10 +61,10 @@ function ManualDownloadList({
         {binaries.map(b => (
           <li key={platformKey(b)}>
             <a
-              href={mirror ? b.mirrorUrl : b.officialUrl}
+              href={binaryUrl(b, mirror)}
               download={b.binaryName}
               rel="noopener"
-              className="group/dl flex items-center justify-between gap-3 px-2 py-2 rounded hover:bg-gray-100/70 dark:hover:bg-gray-800/40 focus-visible:outline-none focus-visible:bg-gray-100/70 dark:focus-visible:bg-gray-800/40 transition-colors"
+              className={DL_ROW_CLS}
             >
               <span className="text-sm text-gray-700 dark:text-gray-300">{b.label}</span>
               <span className="inline-flex items-center gap-1.5 font-mono text-sm text-cj dark:text-cj-light group-hover/dl:underline group-focus-visible/dl:underline underline-offset-4">
@@ -57,7 +93,81 @@ function ManualDownloadList({
   )
 }
 
-export function BinaryInstall({ binary, allBinaries, mirror }: BinaryInstallProps) {
+function MacOSDownloadChoices({
+  allBinaries,
+  mirror,
+}: {
+  allBinaries: BinaryInfo[]
+  mirror: boolean
+}) {
+  // ALL_BINARIES always carries both darwin variants, ordered arm64 then amd64.
+  const choices = allBinaries.filter(b => b.goos === 'darwin')
+  const otherBinaries = allBinaries.filter(b => b.goos !== 'darwin')
+  const warning = choices.find(b => b.warning)?.warning
+
+  return (
+    <>
+      <div className="px-6 pt-6 pb-5">
+        <div className="mb-4 text-center">
+          <p className="text-base text-gray-600 dark:text-gray-300">选择你的 Mac 芯片，下载 cjv 安装器</p>
+          <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">不确定？打开 Apple 菜单 →「关于本机」查看芯片型号</p>
+        </div>
+        <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          {choices.map(b => {
+            const meta = MAC_CHOICE_META[b.goarch]
+            const { title, detail, Icon } = meta
+            return (
+              <li key={platformKey(b)}>
+                <a
+                  href={binaryUrl(b, mirror)}
+                  download={b.binaryName}
+                  rel="noopener"
+                  className={`group/card relative flex h-full flex-col gap-4 rounded-xl border border-gray-200 bg-white p-4 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-gray-900/[0.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cj/40 dark:border-gray-800 dark:bg-gray-900/40 dark:hover:shadow-black/40 ${meta.card}`}
+                >
+                  {meta.badge && (
+                    <span className="absolute right-3 top-3 rounded-full bg-cj/10 px-2 py-0.5 text-[10px] font-medium tracking-wide text-cj dark:bg-cj-light/15 dark:text-cj-light">
+                      {meta.badge}
+                    </span>
+                  )}
+                  <span className="flex items-center gap-3">
+                    <span className={`inline-flex size-11 shrink-0 items-center justify-center rounded-xl transition-all duration-200 ${meta.tile}`}>
+                      <Icon className="size-5 transition-transform duration-200 group-hover/card:scale-110" strokeWidth={1.75} />
+                    </span>
+                    <span className="min-w-0">
+                      <span className="block text-base font-semibold text-gray-900 dark:text-gray-100">{title}</span>
+                      <span className="mt-0.5 block text-xs text-gray-500 dark:text-gray-400">{detail}</span>
+                    </span>
+                  </span>
+                  <span className={`mt-auto flex items-center justify-between gap-2 rounded-lg bg-gray-50 px-3 py-2 font-mono text-sm text-gray-600 transition-colors duration-200 dark:bg-gray-800/50 dark:text-gray-300 ${meta.pill}`}>
+                    <span className="truncate">{b.binaryName}</span>
+                    <Download className="size-4 shrink-0 transition-transform duration-200 group-hover/card:translate-y-0.5" strokeWidth={2} />
+                  </span>
+                </a>
+              </li>
+            )
+          })}
+        </ul>
+        {warning && (
+          <p className="mt-4 rounded-lg border border-amber-300/50 bg-amber-50/70 px-3.5 py-2.5 text-xs leading-relaxed text-amber-700 dark:border-amber-500/25 dark:bg-amber-500/10 dark:text-amber-400/90">
+            ⚠ {warning}
+          </p>
+        )}
+      </div>
+
+      <CollapsibleSection title="其他平台" initial={false}>
+        <div className="mt-2">
+          <ManualDownloadList binaries={otherBinaries} mirror={mirror} />
+        </div>
+      </CollapsibleSection>
+    </>
+  )
+}
+
+export function BinaryInstall({ binary, allBinaries, mirror, showMacOSChoices = false }: BinaryInstallProps) {
+  if (showMacOSChoices) {
+    return <MacOSDownloadChoices allBinaries={allBinaries} mirror={mirror} />
+  }
+
   if (!binary) {
     return (
       <>
@@ -71,7 +181,7 @@ export function BinaryInstall({ binary, allBinaries, mirror }: BinaryInstallProp
     )
   }
 
-  const primaryUrl = mirror ? binary.mirrorUrl : binary.officialUrl
+  const primaryUrl = binaryUrl(binary, mirror)
   const others = allBinaries.filter(b => b !== binary)
 
   return (

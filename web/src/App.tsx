@@ -57,6 +57,11 @@ export default function App() {
 
   const slideTransition = prefersReducedMotion ? NO_MOTION : SLIDE_SPRING
   const heightTransition = prefersReducedMotion ? NO_MOTION : HEIGHT_EASE
+  // macOS on Safari/Firefox exposes no CPU architecture, so detection lands in the
+  // 'ready' state with no concrete binary. Only then do we offer an explicit Apple
+  // Silicon / Intel choice; once the arch is known (Chromium via UA Client Hints) the
+  // detected single binary is shown instead. This is the sole ready+null-binary case.
+  const showMacOSDownloadChoices = platform.state === 'ready' && platform.binary === null
 
   function handleTabChange(value: string) {
     const next = value as InstallTab
@@ -104,6 +109,7 @@ export default function App() {
           binary={platform.binary}
           allBinaries={allBinaries}
           mirror={mirror}
+          showMacOSChoices={showMacOSDownloadChoices}
         />
       </TabsContent>
     ),

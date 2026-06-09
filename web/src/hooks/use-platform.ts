@@ -49,7 +49,10 @@ interface CommonResult {
 }
 
 export type PlatformResult = CommonResult & (
-  | { state: 'ready'; info: ReadyInfo; binary: BinaryInfo }
+  // In the 'ready' state `binary` is null only when the OS is known but the CPU
+  // architecture is hidden (macOS on Safari/Firefox): install.sh still installs the
+  // right build, but there is no single binary to offer — the UI shows an arch choice.
+  | { state: 'ready'; info: ReadyInfo; binary: BinaryInfo | null }
   | { state: 'unsupported' | 'unknown'; info: BasicInfo; binary: null }
 )
 
@@ -187,7 +190,8 @@ const SOURCE_METHOD: InstallMethod = {
 
 export function computePlatformResult(os: string, arch: string): PlatformResult {
   const entry = findEntry(os, arch)
-  const knownDesktopOS = normalizeOS(os) !== null
+  const goos = normalizeOS(os)
+  const knownDesktopOS = goos !== null
   const hasArch = arch.trim() !== ''
   const common: CommonResult = {
     methods: METHODS,
@@ -203,6 +207,18 @@ export function computePlatformResult(os: string, arch: string): PlatformResult 
       state: 'ready',
       info,
       binary: binaryForEntry(entry),
+    }
+  }
+  // macOS without a detectable arch (Safari/Firefox hide it): install.sh resolves the
+  // arch itself, so we stay 'ready' with no specific binary rather than giving up.
+  if (goos === 'darwin' && !hasArch) {
+    const info: ReadyInfo = { label: 'macOS', hint: SH_HINT, command: SH_CMD, mirrorCommand: SH_MIRROR_CMD }
+    return {
+      ...common,
+      otherMethods: METHODS.filter(m => m.command !== info.command),
+      state: 'ready',
+      info,
+      binary: null,
     }
   }
   const state: 'unsupported' | 'unknown' =
