@@ -237,10 +237,17 @@ func runComponentRemove(cmd *cobra.Command, args []string) error {
 			Component: string(c),
 		})
 	}
-	if joinErr := errors.Join(removeErrs...); joinErr != nil {
-		return joinErr
+	joinErr := errors.Join(removeErrs...)
+	// Emit what was actually removed before surfacing any error so a partial
+	// removal is visible to the caller. In JSON mode the root handler writes an
+	// error envelope to stdout on failure, so only render the result there when
+	// it succeeded to avoid emitting two JSON documents.
+	if joinErr == nil || !output.IsJSON() {
+		if renderErr := output.RenderTo(cmdOutput(cmd), result); renderErr != nil {
+			return errors.Join(joinErr, renderErr)
+		}
 	}
-	return output.RenderTo(cmdOutput(cmd), result)
+	return joinErr
 }
 
 func runComponentLink(cmd *cobra.Command, args []string) error {
@@ -303,7 +310,9 @@ func runComponentList(cmd *cobra.Command, args []string) error {
 		available = componentlib.AvailableComponents(tcName, tuple)
 	}
 
-	result := componentListResult{Toolchain: tcName.String()}
+	// Initialize Components to a non-nil empty slice so `--json` emits [] rather
+	// than null for the empty state, keeping the array field's shape stable.
+	result := componentListResult{Toolchain: tcName.String(), Components: []componentEntry{}}
 	for _, n := range installed {
 		result.Components = append(result.Components, componentEntry{Name: string(n), Installed: true})
 	}
