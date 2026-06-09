@@ -211,3 +211,23 @@ func canonicalEnvKey(key string) string {
 	}
 	return key
 }
+
+// LookupValue returns the value of key from a KEY=VALUE environment slice,
+// matching keys case-insensitively on Windows (mirroring the OS). The last
+// matching entry wins, as the OS resolves duplicate variables. This is the
+// single source of the env-key matching rule, shared with the env builders
+// above so a custom-env lookup (e.g. cjv run's PATH resolution) cannot drift.
+func LookupValue(environ []string, key string) (string, bool) {
+	want := canonicalEnvKey(key)
+	value, found := "", false
+	for _, kv := range environ {
+		k, v, ok := strings.Cut(kv, "=")
+		if !ok {
+			continue
+		}
+		if canonicalEnvKey(k) == want {
+			value, found = v, true
+		}
+	}
+	return value, found
+}

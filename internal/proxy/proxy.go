@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -15,6 +16,7 @@ import (
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/env"
 	"github.com/Zxilly/cjv/internal/resolve"
+	"github.com/Zxilly/cjv/internal/toolchain"
 )
 
 const maxRecursion = 20
@@ -32,14 +34,11 @@ func ExtractToolName(argv0 string) string {
 }
 
 func extractPlusToolchain(args []string) (string, []string, error) {
-	if len(args) > 0 && strings.HasPrefix(args[0], "+") {
-		tc := args[0][1:]
-		if tc == "" {
-			return "", args, fmt.Errorf("toolchain name cannot be empty after '+'")
-		}
-		return tc, args[1:], nil
+	tc, rest, present := toolchain.SplitPlusSelector(args)
+	if present && tc == "" {
+		return "", args, fmt.Errorf("toolchain name cannot be empty after '+'")
 	}
-	return "", args, nil
+	return tc, rest, nil
 }
 
 func checkRecursion(count int) error {
@@ -50,12 +49,22 @@ func checkRecursion(count int) error {
 }
 
 // GetRecursionCount reads the recursion counter from the environment.
+//
+// cjv always writes a valid non-negative integer (see BuildProxyEnv). A value
+// that fails to parse therefore means the counter was corrupted by something
+// outside cjv; rather than silently resetting to 0 (which would defeat the
+// infinite-proxy-loop guard), we fail safe by reporting the recursion limit so
+// checkRecursion trips immediately.
 func GetRecursionCount() int {
 	s := os.Getenv(config.EnvRecursionCount)
 	if s == "" {
 		return 0
 	}
-	n, _ := strconv.Atoi(s)
+	n, err := strconv.Atoi(s)
+	if err != nil {
+		slog.Warn("invalid recursion counter; treating as recursion limit", "value", s)
+		return maxRecursion
+	}
 	if n < 0 {
 		return 0
 	}

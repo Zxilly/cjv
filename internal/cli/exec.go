@@ -6,39 +6,37 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"strings"
 
 	"github.com/Zxilly/cjv/internal/cjverr"
 	"github.com/Zxilly/cjv/internal/cli/output"
 	componentlib "github.com/Zxilly/cjv/internal/component"
 	"github.com/Zxilly/cjv/internal/env"
+	"github.com/Zxilly/cjv/internal/i18n"
 	"github.com/Zxilly/cjv/internal/proxy"
+	"github.com/Zxilly/cjv/internal/toolchain"
 	"github.com/spf13/cobra"
 )
 
 var execCmd = &cobra.Command{
 	Use:                "exec [+toolchain] <command> [args...]",
-	Short:              "Run a command with Cangjie runtime environment",
-	Long:               "Execute any command with the correct Cangjie runtime library paths injected.",
+	Short:              i18n.T("ExecCmdShort", nil),
+	Long:               i18n.T("ExecCmdLong", nil),
 	Args:               cobra.ArbitraryArgs,
 	RunE:               execRun,
 	DisableFlagParsing: true,
 }
 
-// extractPlusToolchainFromArgs extracts an optional +toolchain prefix from args.
+// extractPlusToolchainFromArgs extracts an optional +toolchain prefix from args
+// (used by envsetup, which lets cobra parse flags). A bare "+" is ignored.
 func extractPlusToolchainFromArgs(args []string) (string, []string) {
-	if len(args) > 0 && strings.HasPrefix(args[0], "+") {
-		tc := args[0][1:]
-		if tc != "" {
-			return tc, args[1:]
-		}
+	if tc, rest, present := toolchain.SplitPlusSelector(args); present && tc != "" {
+		return tc, rest
 	}
 	return "", args
 }
 
 func execRun(cmd *cobra.Command, args []string) error {
-	var err error
-	args, err = stripJSONModeFlagPrefix(args, true)
+	tcOverride, remaining, err := stripJSONModeFlagPrefix(args, true)
 	if err != nil {
 		return err
 	}
@@ -50,11 +48,9 @@ func execRun(cmd *cobra.Command, args []string) error {
 		ctx = context.Background()
 	}
 
-	if len(args) > 0 && (args[0] == "--help" || args[0] == "-h") {
+	if len(remaining) > 0 && (remaining[0] == "--help" || remaining[0] == "-h") {
 		return cmd.Help()
 	}
-
-	tcOverride, remaining := extractPlusToolchainFromArgs(args)
 
 	if len(remaining) == 0 {
 		_ = cmd.Help()
@@ -69,8 +65,13 @@ func execRun(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	stopIntercept := proxy.InterceptInterrupts()
-	defer stopIntercept()
+	// Resolve a bare command against the runtime env's PATH (toolchain bin dirs
+	// prepended) rather than letting exec.Command resolve it against the parent
+	// process PATH — exec.LookPath reads os.Getenv("PATH"), not c.Env, so a tool
+	// present only in the toolchain would otherwise not be found (mirrors run.go).
+	if resolved, ok := lookPathInEnv(command, runtimeEnv); ok {
+		command = resolved
+	}
 
 	c := exec.CommandContext(ctx, command, commandArgs...)
 	c.Env = runtimeEnv
@@ -78,7 +79,13 @@ func execRun(cmd *cobra.Command, args []string) error {
 	c.Stdout = os.Stdout
 	c.Stderr = os.Stderr
 
-	if err := c.Run(); err != nil {
+	if err := c.Start(); err != nil {
+		return err
+	}
+	stopForward := proxy.ForwardTerminationSignals(c.Process)
+	defer stopForward()
+
+	if err := c.Wait(); err != nil {
 		if exitErr, ok := errors.AsType[*exec.ExitError](err); ok {
 			return &cjverr.ExitCodeError{Code: exitErr.ExitCode()}
 		}
