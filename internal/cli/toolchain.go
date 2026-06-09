@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -31,18 +32,18 @@ func (r toolchainLinkResult) Text() string {
 
 var toolchainCmd = &cobra.Command{
 	Use:   "toolchain",
-	Short: "Manage installed toolchains",
+	Short: i18n.T("ToolchainCmdShort", nil),
 }
 
 var toolchainListCmd = &cobra.Command{
 	Use:   "list",
-	Short: "List installed toolchains",
+	Short: i18n.T("ToolchainListShort", nil),
 	RunE:  runShowInstalled,
 }
 
 var toolchainLinkCmd = &cobra.Command{
 	Use:   "link <name> <path>",
-	Short: "Link a custom toolchain to a local directory",
+	Short: i18n.T("ToolchainLinkShort", nil),
 	Args:  cobra.ExactArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		name := args[0]
@@ -55,20 +56,20 @@ var toolchainLinkCmd = &cobra.Command{
 		}
 		// Prevent shadowing standard channel names (lts, sts, nightly)
 		if !parsed.IsCustom() {
-			return fmt.Errorf("'%s' is a reserved channel name; use a unique custom name for linked toolchains", name)
+			return errors.New(i18n.T("LinkReservedName", i18n.MsgData{"Name": name}))
 		}
 
 		absPath, err := filepath.Abs(targetPath)
 		if err != nil {
-			return fmt.Errorf("invalid path: %w", err)
+			return fmt.Errorf("%s: %w", i18n.T("LinkInvalidPath", nil), err)
 		}
 		if _, err := os.Stat(absPath); err != nil {
-			return fmt.Errorf("path does not exist: %s", absPath)
+			return errors.New(i18n.T("LinkPathNotExist", i18n.MsgData{"Path": absPath}))
 		}
 
 		// Validate the directory contains a Cangjie SDK (bin/cjc must exist)
 		if _, err := proxy.ResolveInstalledToolBinary(absPath, "cjc"); err != nil {
-			return fmt.Errorf("directory does not appear to contain a Cangjie SDK: %w", err)
+			return fmt.Errorf("%s: %w", i18n.T("LinkNotSDK", nil), err)
 		}
 
 		tcDir, err := config.ToolchainsDir()
@@ -90,7 +91,7 @@ var toolchainLinkCmd = &cobra.Command{
 
 		// Create symlink (with junction fallback on Windows)
 		if err := utils.SymlinkOrJunction(absPath, linkPath); err != nil {
-			return fmt.Errorf("failed to create link: %w", err)
+			return fmt.Errorf("%s: %w", i18n.T("LinkCreateFailed", nil), err)
 		}
 
 		// Ensure proxy links exist in bin directory
@@ -104,12 +105,13 @@ var toolchainLinkCmd = &cobra.Command{
 
 var toolchainUninstallCmd = &cobra.Command{
 	Use:   "uninstall <name>",
-	Short: "Uninstall a toolchain",
+	Short: i18n.T("ToolchainUninstallShort", nil),
 	Args:  cobra.ExactArgs(1),
 	RunE:  runUninstall,
 }
 
 func init() {
+	toolchainUninstallCmd.Flags().BoolVarP(&uninstallYes, "yes", "y", false, i18n.T("FlagSkipConfirm", nil))
 	toolchainCmd.AddCommand(toolchainListCmd)
 	toolchainCmd.AddCommand(toolchainLinkCmd)
 	toolchainCmd.AddCommand(toolchainUninstallCmd)

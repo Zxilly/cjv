@@ -15,17 +15,23 @@ import (
 	"github.com/Zxilly/cjv/internal/i18n"
 	"github.com/Zxilly/cjv/internal/toolchain"
 	"github.com/Zxilly/cjv/internal/utils"
+	"github.com/charmbracelet/huh"
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 )
 
+// uninstallYes skips the confirmation prompt; bound to --yes on both
+// `cjv uninstall` and `cjv toolchain uninstall`.
+var uninstallYes bool
+
 func init() {
+	uninstallCmd.Flags().BoolVarP(&uninstallYes, "yes", "y", false, i18n.T("FlagSkipConfirm", nil))
 	rootCmd.AddCommand(uninstallCmd)
 }
 
 var uninstallCmd = &cobra.Command{
 	Use:   "uninstall <toolchain>",
-	Short: "Uninstall a Cangjie SDK toolchain",
+	Short: i18n.T("UninstallCmdShort", nil),
 	Args:  cobra.ExactArgs(1),
 	RunE:  runUninstall,
 }
@@ -51,6 +57,22 @@ func runUninstall(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	// Confirm before destroying the toolchain and its components. Skipped with
+	// --yes, in JSON mode, or when stdin is not an interactive terminal (so
+	// scripts/CI are not blocked waiting on a prompt).
+	if !uninstallYes && !output.IsJSON() && initStdinIsTerminal() {
+		confirm := false
+		if err := huh.NewConfirm().
+			Title(i18n.T("ToolchainUninstallConfirm", i18n.MsgData{"Name": name})).
+			Value(&confirm).
+			Run(); err != nil {
+			return err
+		}
+		if !confirm {
+			return nil
+		}
+	}
+
 	sf, settings, err := clisettings.LoadSettings()
 	if err != nil {
 		return err
@@ -66,7 +88,7 @@ func runUninstall(cmd *cobra.Command, args []string) error {
 	}
 
 	if err := utils.RemoveAllRetry(dir); err != nil {
-		removeErr := fmt.Errorf("failed to remove toolchain: %w", err)
+		removeErr := fmt.Errorf("%s: %w", i18n.T("RemoveToolchainFailed", nil), err)
 		if restoreErr := sf.Save(rollbackSettings); restoreErr != nil {
 			return errors.Join(removeErr, fmt.Errorf("failed to restore settings: %w", restoreErr))
 		}

@@ -1,17 +1,31 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/Zxilly/cjv/internal/fstx"
 )
 
-func swapInstalledToolchain(stagingDir, destDir string, isReinstall bool, afterSwap func() error) error {
-	tx, err := fstx.NewTransaction(destDir)
-	if err != nil {
-		return fmt.Errorf("failed to begin install transaction: %w", err)
+func swapInstalledToolchain(stagingDir, destDir string, isReinstall bool, afterSwap func() error) (err error) {
+	tx, txErr := fstx.NewTransaction(destDir)
+	if txErr != nil {
+		return fmt.Errorf("failed to begin install transaction: %w", txErr)
 	}
-	defer func() { _ = tx.Rollback() }()
+	committed := false
+	defer func() {
+		if committed {
+			return
+		}
+		// A rollback that itself fails (e.g. a sharing violation persisting past
+		// the retries on Windows) can leave the destination missing; surface
+		// that alongside the original error instead of swallowing it, so the
+		// user is not told only about afterSwap while the toolchain silently
+		// disappeared.
+		if rbErr := tx.Rollback(); rbErr != nil {
+			err = errors.Join(err, fmt.Errorf("rollback after failed install also failed: %w", rbErr))
+		}
+	}()
 
 	if isReinstall {
 		if err := tx.RemoveDir(destDir); err != nil {
@@ -27,5 +41,9 @@ func swapInstalledToolchain(stagingDir, destDir string, isReinstall bool, afterS
 		return fmt.Errorf("failed to finalize installation: %w", err)
 	}
 
-	return tx.Commit()
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	committed = true
+	return nil
 }

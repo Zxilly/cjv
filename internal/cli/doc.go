@@ -76,11 +76,14 @@ func runDoc(cmd *cobra.Command, args []string) error {
 		return output.RenderTo(cmdOutput(cmd), docResult{Toolchain: tcName, Topic: topic, Path: docFile, Opened: false})
 	}
 
-	fmt.Fprintln(os.Stderr, i18n.T("OpeningDocs", nil))
+	// Attempt the launch first, then report the outcome — printing "opening..."
+	// before a launch that immediately fails (e.g. headless/SSH session)
+	// produces contradictory "opening" + "failed" messages.
 	if err := openURLFunc(fileURL(docFile)); err != nil {
 		fmt.Fprintln(os.Stderr, i18n.T("OpeningDocsBrowserFailed", i18n.MsgData{"Path": docFile}))
 		return err
 	}
+	fmt.Fprintln(os.Stderr, i18n.T("OpeningDocs", nil))
 	return output.RenderTo(cmdOutput(cmd), docResult{Toolchain: tcName, Topic: topic, Path: docFile, Opened: true})
 }
 

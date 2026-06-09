@@ -37,17 +37,17 @@ var (
 )
 
 func init() {
-	initCmd.Flags().BoolVarP(&initYes, "yes", "y", false, "Skip confirmation prompt")
-	initCmd.Flags().StringVar(&initDefaultToolchain, "default-toolchain", "lts", "Default toolchain to install (use 'none' to skip)")
+	initCmd.Flags().BoolVarP(&initYes, "yes", "y", false, i18n.T("FlagSkipConfirm", nil))
+	initCmd.Flags().StringVar(&initDefaultToolchain, "default-toolchain", "lts", i18n.T("InitFlagDefaultToolchain", nil))
 	initCmd.Flags().StringSliceVarP(&initComponents, "component", "c", nil, i18n.T("InstallFlagComponent", nil))
-	initCmd.Flags().BoolVar(&initNoModifyPath, "no-modify-path", false, "Do not modify PATH")
+	initCmd.Flags().BoolVar(&initNoModifyPath, "no-modify-path", false, i18n.T("InitFlagNoModifyPath", nil))
 	rootCmd.AddCommand(initCmd)
 }
 
 var initCmd = &cobra.Command{
 	Use:   "init",
-	Short: "Install cjv and configure the environment",
-	Long:  "Set up cjv for first use: copy binary, create proxy links, configure PATH, and optionally install a default toolchain.",
+	Short: i18n.T("InitCmdShort", nil),
+	Long:  i18n.T("InitCmdLong", nil),
 	RunE:  runInit,
 }
 
@@ -120,6 +120,11 @@ func printInitMarkdown(markdown string) {
 
 func initStdoutIsTerminal() bool {
 	fd := os.Stdout.Fd()
+	return isatty.IsTerminal(fd) || isatty.IsCygwinTerminal(fd)
+}
+
+func initStdinIsTerminal() bool {
+	fd := os.Stdin.Fd()
 	return isatty.IsTerminal(fd) || isatty.IsCygwinTerminal(fd)
 }
 
@@ -305,7 +310,18 @@ func runInit(cmd *cobra.Command, _ []string) error {
 
 	printInitMarkdown(i18n.T("InitUninstallHint", nil))
 
-	if !initYes {
+	// The interactive menu relies on huh forms reading from a terminal. When
+	// stdin is not a TTY (the documented `curl ... | sh` / `irm ... | iex`
+	// bootstrap pipes the script through stdin) we cannot prompt, so fall back
+	// to a non-interactive standard install with the default options instead of
+	// failing with an opaque form error.
+	interactive := !initYes && initStdinIsTerminal()
+	if !initYes && !interactive {
+		fmt.Println()
+		fmt.Println(i18n.T("InitNonInteractive", nil))
+	}
+
+	if interactive {
 		customized := false
 	menuLoop:
 		for {
@@ -362,14 +378,14 @@ func runInit(cmd *cobra.Command, _ []string) error {
 	}
 
 	if toolchain == "none" && len(components) > 0 {
-		return fmt.Errorf("cannot install components when default toolchain is 'none'")
+		return errors.New(i18n.T("InitComponentsRequireToolchain", nil))
 	}
 
 	managedPath := filepath.Join(binDir, proxy.CjvBinaryName())
 	if _, err := os.Stat(managedPath); err == nil {
 		fmt.Println(i18n.T("InitAlreadyInstalled", i18n.MsgData{"Path": managedPath}))
 
-		if !initYes {
+		if interactive {
 			confirm := false
 			if err := huh.NewConfirm().
 				Title(i18n.T("InitReinstallConfirm", nil)).
