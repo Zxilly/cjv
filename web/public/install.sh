@@ -88,10 +88,12 @@ download_and_install() {
     # When invoked as `curl ... | sh`, the binary inherits the script pipe as
     # stdin. Reconnect the controlling terminal if there is one so interactive
     # setup can prompt; otherwise cjv init detects the non-tty stdin and
-    # proceeds with a standard non-interactive install.
-    if [ ! -t 0 ] && { exec 3</dev/tty; } 2>/dev/null; then
-        "$_tmpdir/$BINARY" init "$@" <&3
-        exec 3<&-
+    # proceeds with a standard non-interactive install. The /dev/tty probe must
+    # run in a subshell: a failed redirection on the `exec` special builtin
+    # terminates a non-interactive POSIX shell outright, even inside an `if`
+    # condition.
+    if [ ! -t 0 ] && (exec </dev/tty) 2>/dev/null; then
+        "$_tmpdir/$BINARY" init "$@" </dev/tty
     else
         "$_tmpdir/$BINARY" init "$@"
     fi
