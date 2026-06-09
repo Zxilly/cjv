@@ -53,17 +53,10 @@ func ResolveAssetURL(spec Spec, tc toolchain.ToolchainName, tuple string) (strin
 	if tc.Version == "" {
 		return "", fmt.Errorf("component %q requires a resolved toolchain version", spec.Name)
 	}
-
-	switch spec.Name {
-	case Stdx:
-		return stdxURL(tc, tuple)
-	case Docs:
-		return docsURL(tc)
-	case StdxDocs:
-		return stdxDocsURL(tc)
-	default:
+	if spec.assetURL == nil {
 		return "", &cjverr.UnknownComponentError{Name: string(spec.Name)}
 	}
+	return spec.assetURL(tc, tuple)
 }
 
 func stdxURL(tc toolchain.ToolchainName, tuple string) (string, error) {
@@ -98,7 +91,7 @@ func stdxURL(tc toolchain.ToolchainName, tuple string) (string, error) {
 
 // docsURL: nightly from the cangjie nightly_build release; LTS / STS from
 // the cangjie-docs-bundle GitHub release, tag = bare version (no `v` prefix).
-func docsURL(tc toolchain.ToolchainName) (string, error) {
+func docsURL(tc toolchain.ToolchainName, _ string) (string, error) {
 	asset := fmt.Sprintf("cangjie-docs-html-%s.tar.gz", tc.Version)
 	switch tc.Channel {
 	case toolchain.Nightly:
@@ -110,7 +103,7 @@ func docsURL(tc toolchain.ToolchainName) (string, error) {
 
 // stdxDocsURL: nightly from nightly_build; LTS / STS from cangjie_stdx,
 // tag = `v{ver}.1`, asset suffix `.1`.
-func stdxDocsURL(tc toolchain.ToolchainName) (string, error) {
+func stdxDocsURL(tc toolchain.ToolchainName, _ string) (string, error) {
 	asset := fmt.Sprintf("cangjie-stdx-docs-html-%s.1.tar.gz", tc.Version)
 	switch tc.Channel {
 	case toolchain.Nightly:

@@ -42,6 +42,21 @@ type Spec struct {
 	Location          InstallLocation
 	StripTopLevel     bool
 	SupportedChannels []toolchain.Channel
+	// EnvVars maps an environment variable name to a subdirectory, relative to
+	// the component's install root, that the variable should point at when the
+	// component is installed. Empty for components that contribute no runtime
+	// environment (docs, stdx-docs).
+	EnvVars map[string]string
+	// Linkable reports whether `cjv component link` can point this component at
+	// a local directory. LinkChildren are the subdirectories that get linked
+	// and that must exist in the source.
+	Linkable     bool
+	LinkChildren []string
+	// assetURL builds the download URL for this component's archive given the
+	// resolved toolchain and target tuple (tuple is consulted only by stdx). It
+	// is the component's download recipe, kept on the Spec so everything about a
+	// component lives in one table entry instead of a switch elsewhere.
+	assetURL func(tc toolchain.ToolchainName, tuple string) (string, error)
 }
 
 func (s Spec) SupportsChannel(ch toolchain.Channel) bool {
@@ -56,18 +71,27 @@ var specs = map[Name]Spec{
 		Location:          InstallLocation{Anchor: AnchorStdx, Subdir: ""},
 		StripTopLevel:     true,
 		SupportedChannels: []toolchain.Channel{toolchain.LTS, toolchain.STS, toolchain.Nightly},
+		EnvVars: map[string]string{
+			EnvStdxDynamic: "dynamic",
+			EnvStdxStatic:  "static",
+		},
+		Linkable:     true,
+		LinkChildren: []string{"dynamic", "static"},
+		assetURL:     stdxURL,
 	},
 	Docs: {
 		Name:              Docs,
 		Location:          InstallLocation{Anchor: AnchorDocs, Subdir: "main"},
 		StripTopLevel:     false,
 		SupportedChannels: []toolchain.Channel{toolchain.LTS, toolchain.STS, toolchain.Nightly},
+		assetURL:          docsURL,
 	},
 	StdxDocs: {
 		Name:              StdxDocs,
 		Location:          InstallLocation{Anchor: AnchorDocs, Subdir: "stdx"},
 		StripTopLevel:     false,
 		SupportedChannels: []toolchain.Channel{toolchain.LTS, toolchain.STS, toolchain.Nightly},
+		assetURL:          stdxDocsURL,
 	},
 }
 
