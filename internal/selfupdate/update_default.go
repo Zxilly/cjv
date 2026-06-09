@@ -20,8 +20,12 @@ func runUpdate(ctx context.Context, updateURL, currentVersion string) error {
 	}
 
 	updater, err := go_selfupdate.NewUpdater(go_selfupdate.Config{
-		Source:  source,
-		Filters: []string{fmt.Sprintf("cjv_%s_%s", runtime.GOOS, runtime.GOARCH)},
+		Source: source,
+		// Verify the downloaded binary against the release checksums.txt before
+		// it replaces the running executable — TLS alone does not protect
+		// against a tampered or corrupted release asset.
+		Validator: &go_selfupdate.ChecksumValidator{UniqueFilename: "checksums.txt"},
+		Filters:   []string{fmt.Sprintf("cjv_%s_%s", runtime.GOOS, runtime.GOARCH)},
 	})
 	if err != nil {
 		return err
