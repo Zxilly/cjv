@@ -48,21 +48,14 @@ func Active(ctx context.Context, tcOverride string) (ActiveToolchain, error) {
 		slog.Warn("failed to load settings", "error", settingsErr)
 	}
 
-	parsed, err := toolchain.ParseToolchainName(tcName)
+	// Share the parse → reject-target → find-installed core with
+	// toolchain.ResolveActiveToolchain; the auto-install retry and the
+	// target/component ensuring below are the deliberate extra behavior of the
+	// proxy path.
+	tcDir, displayName, parsed, err := toolchain.FindActiveDir(tcName)
 	if err != nil {
-		return ActiveToolchain{}, err
-	}
-	if parsed.Target != "" {
-		hostName := toolchain.ToolchainName{
-			Channel: parsed.Channel,
-			Version: parsed.Version,
-		}.String()
-		return ActiveToolchain{}, fmt.Errorf("target variant %q cannot be used as the active toolchain; use host toolchain %q and configure targets instead", tcName, hostName)
-	}
-
-	tcDir, findErr := toolchain.FindInstalled(parsed)
-	if findErr != nil {
-		if !parsed.IsCustom() && shouldAutoInstall(settings) && AutoInstallFunc != nil {
+		var notInstalled *cjverr.ToolchainNotInstalledError
+		if errors.As(err, &notInstalled) && !parsed.IsCustom() && shouldAutoInstall(settings) && AutoInstallFunc != nil {
 			fmt.Fprintln(os.Stderr, i18n.T("AutoInstalling", i18n.MsgData{"Name": tcName}))
 			if installErr := AutoInstallFunc(ctx, tcName, targets); installErr != nil {
 				fmt.Fprintf(os.Stderr, "%s\n", i18n.T("AutoInstallFailed", i18n.MsgData{
@@ -71,27 +64,24 @@ func Active(ctx context.Context, tcOverride string) (ActiveToolchain, error) {
 				}))
 				return ActiveToolchain{}, &cjverr.ToolchainNotInstalledError{Name: tcName}
 			}
-			tcDir, findErr = toolchain.FindInstalled(parsed)
+			tcDir, displayName, parsed, err = toolchain.FindActiveDir(tcName)
 		}
-		if findErr != nil {
-			if !errors.Is(findErr, os.ErrNotExist) {
-				return ActiveToolchain{}, findErr
-			}
-			return ActiveToolchain{}, &cjverr.ToolchainNotInstalledError{Name: tcName}
+		if err != nil {
+			return ActiveToolchain{}, err
 		}
 	}
 
-	if err := ensureTargets(ctx, filepath.Base(tcDir), tcDir, settings, targets); err != nil {
+	if err := ensureTargets(ctx, displayName, tcDir, settings, targets); err != nil {
 		return ActiveToolchain{}, err
 	}
 
-	if err := ensureComponents(ctx, filepath.Base(tcDir), tcDir, settings, components); err != nil {
+	if err := ensureComponents(ctx, displayName, tcDir, settings, components); err != nil {
 		return ActiveToolchain{}, err
 	}
 
 	return ActiveToolchain{
 		Dir:        tcDir,
-		Name:       filepath.Base(tcDir),
+		Name:       displayName,
 		Source:     source,
 		Targets:    targets,
 		Components: components,

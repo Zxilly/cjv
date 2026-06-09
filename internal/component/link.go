@@ -10,8 +10,6 @@ import (
 	"github.com/Zxilly/cjv/internal/utils"
 )
 
-var stdxLinkChildren = []string{"dynamic", "static"}
-
 // Link points a component install root at a user-supplied local directory by
 // creating per-child symlinks (junctions on Windows where unprivileged
 // symlinks are disallowed). The manifest is written exactly like a normal
@@ -24,7 +22,7 @@ func Link(roots Roots, name Name, sourcePath string, force bool) (absSource stri
 	if err != nil {
 		return "", err
 	}
-	if name != Stdx {
+	if !spec.Linkable {
 		return "", &cjverr.ComponentLinkNotSupportedError{Component: string(name)}
 	}
 
@@ -32,7 +30,7 @@ func Link(roots Roots, name Name, sourcePath string, force bool) (absSource stri
 	if err != nil {
 		return "", &cjverr.ComponentLinkInvalidPathError{Reason: err.Error()}
 	}
-	if err := validateStdxSource(absSource); err != nil {
+	if err := validateLinkSource(absSource, spec.LinkChildren); err != nil {
 		return "", err
 	}
 
@@ -73,7 +71,7 @@ func Link(roots Roots, name Name, sourcePath string, force bool) (absSource stri
 		return "", err
 	}
 
-	for _, rel := range stdxLinkChildren {
+	for _, rel := range spec.LinkChildren {
 		target := filepath.Join(absSource, rel)
 		linkPath := filepath.Join(destDir, rel)
 		// Mirror moveStagedFiles: clear any unmanaged leftover before placing
@@ -89,13 +87,13 @@ func Link(roots Roots, name Name, sourcePath string, force bool) (absSource stri
 		created = append(created, rel)
 	}
 
-	if err := WriteManifest(roots.TcDir, name, stdxLinkChildren); err != nil {
+	if err := WriteManifest(roots.TcDir, name, spec.LinkChildren); err != nil {
 		return "", err
 	}
 	return absSource, nil
 }
 
-func validateStdxSource(absSource string) error {
+func validateLinkSource(absSource string, children []string) error {
 	info, err := os.Stat(absSource)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
@@ -110,7 +108,7 @@ func validateStdxSource(absSource string) error {
 			Reason: fmt.Sprintf("not a directory: %s", absSource),
 		}
 	}
-	for _, sub := range stdxLinkChildren {
+	for _, sub := range children {
 		subPath := filepath.Join(absSource, sub)
 		subInfo, err := os.Stat(subPath)
 		if err != nil {
