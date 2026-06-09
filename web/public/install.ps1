@@ -64,17 +64,30 @@ function Cleanup-CjvInstall {
     }
 }
 
+function Warn {
+    param([string]$Message)
+    [Console]::Error.WriteLine("cjv-install: warning: " + $Message)
+}
+
+# Fail raises a terminating error rather than calling `exit`. When the script is
+# run via `irm ... | iex` it executes in the caller's session scope, where
+# `exit` would close the user's PowerShell window and swallow the message; a
+# thrown error is surfaced by the trap below and propagated without killing the
+# session.
 function Fail {
     param([string]$Message)
-    [Console]::Error.WriteLine("cjv-install: error: " + $Message)
-    Cleanup-CjvInstall
-    exit 1
+    throw $Message
 }
 
 trap {
-    [Console]::Error.WriteLine($_)
+    [Console]::Error.WriteLine("cjv-install: error: " + $_)
     Cleanup-CjvInstall
-    exit 1
+    # Re-raise so the failure propagates to the caller (non-zero exit under
+    # `-File`) without `exit`, which would close an interactive `iex` session.
+    # `throw` is used rather than `break`: a `break` in a trap unwinds to an
+    # enclosing loop, so under `irm | iex` wrapped in a caller's loop it would
+    # break the caller's loop instead of just aborting the install.
+    throw $_
 }
 
 function Get-Architecture {
@@ -85,7 +98,13 @@ function Get-Architecture {
     }
     switch ($arch) {
         "AMD64" { return "amd64" }
-        "ARM64" { Fail "Windows ARM64 is not currently supported" }
+        "ARM64" {
+            # There is no native Windows ARM64 build; the amd64 binary runs
+            # under the OS x64 emulation layer, so warn and fall back to it
+            # instead of refusing to install.
+            Warn "Windows ARM64 has no native build; installing the amd64 build to run under x64 emulation."
+            return "amd64"
+        }
         default { Fail "Unsupported architecture: $arch" }
     }
 }
@@ -122,6 +141,49 @@ function Download-File {
     $client = New-Object Net.WebClient
     $client.DownloadFile($Uri, $OutFile)
     $client.Dispose()
+}
+
+# Verify-Checksum validates the downloaded archive against the release
+# checksums.txt. A missing checksums file or hashing support degrades to a
+# warning (older releases / legacy hosts); a present-but-mismatched checksum is
+# fatal so a tampered or corrupted download is never installed.
+function Verify-Checksum {
+    param(
+        [string]$FilePath,
+        [string]$FileName
+    )
+
+    if (-not (Has-Command "Get-FileHash")) {
+        Warn "Get-FileHash is unavailable; skipping integrity verification"
+        return
+    }
+
+    $sumsPath = Join-Path $script:CjvInstallTmpDir "checksums.txt"
+    try {
+        Download-File -Uri "$CjvUpdateRoot/checksums.txt" -OutFile $sumsPath
+    } catch {
+        Warn "could not download checksums.txt; skipping integrity verification"
+        return
+    }
+
+    $expected = $null
+    foreach ($line in Get-Content -Path $sumsPath) {
+        $fields = $line -split '\s+' | Where-Object { $_ -ne "" }
+        if ($fields.Count -ge 2 -and $fields[1] -eq $FileName) {
+            $expected = $fields[0].ToLower()
+            break
+        }
+    }
+    if (-not $expected) {
+        Warn "no checksum entry for $FileName; skipping integrity verification"
+        return
+    }
+
+    $actual = (Get-FileHash -Path $FilePath -Algorithm SHA256).Hash.ToLower()
+    if ($actual -ne $expected) {
+        Fail "checksum mismatch for $FileName (expected $expected, got $actual)"
+    }
+    Write-Host "cjv-install: checksum verified"
 }
 
 function Expand-ZipArchive {
@@ -162,7 +224,8 @@ function Expand-ZipArchive {
 
 function Install-Cjv {
     $arch = Get-Architecture
-    $url = "$CjvUpdateRoot/${BinaryName}_windows_$arch.zip"
+    $archiveName = "${BinaryName}_windows_$arch.zip"
+    $url = "$CjvUpdateRoot/$archiveName"
     $tmpName = "cjv-install-" + [System.Guid]::NewGuid().ToString("N").Substring(0, 8)
     $script:CjvInstallTmpDir = Join-Path ([System.IO.Path]::GetTempPath()) $tmpName
     New-Item -ItemType Directory -Path $script:CjvInstallTmpDir -Force | Out-Null
@@ -171,6 +234,8 @@ function Install-Cjv {
 
     Write-Host "cjv-install: downloading cjv from $url"
     Download-File -Uri $url -OutFile $zipPath
+
+    Verify-Checksum -FilePath $zipPath -FileName $archiveName
 
     Write-Host "cjv-install: extracting"
     Expand-ZipArchive -ZipPath $zipPath -DestinationPath $script:CjvInstallTmpDir -ExpectedFile "$BinaryName.exe"
@@ -193,7 +258,7 @@ function Install-Cjv {
     $exitCode = $LASTEXITCODE
     Cleanup-CjvInstall
     if ($exitCode -ne 0) {
-        exit $exitCode
+        Fail "cjv init exited with code $exitCode"
     }
 }
 
