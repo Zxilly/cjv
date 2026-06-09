@@ -19,25 +19,25 @@ import (
 
 var showCmd = &cobra.Command{
 	Use:   "show",
-	Short: "Show active and installed toolchains",
+	Short: i18n.T("ShowCmdShort", nil),
 	RunE:  runShowDefault,
 }
 
 var showActiveCmd = &cobra.Command{
 	Use:   "active",
-	Short: "Show the active toolchain",
+	Short: i18n.T("ShowActiveShort", nil),
 	RunE:  runShowActive,
 }
 
 var showInstalledCmd = &cobra.Command{
 	Use:   "installed",
-	Short: "List installed toolchains",
+	Short: i18n.T("ShowInstalledShort", nil),
 	RunE:  runShowInstalled,
 }
 
 var showHomeCmd = &cobra.Command{
 	Use:   "home",
-	Short: "Show CJV_HOME path",
+	Short: i18n.T("ShowHomeShort", nil),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		home, src, err := config.ResolveHomeWithSource()
 		if err != nil {

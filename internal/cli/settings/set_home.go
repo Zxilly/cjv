@@ -5,15 +5,15 @@ import (
 	"path/filepath"
 
 	"github.com/Zxilly/cjv/internal/config"
+	"github.com/Zxilly/cjv/internal/i18n"
 	"github.com/spf13/cobra"
 )
 
 var setHomeCmd = &cobra.Command{
 	Use:   "home <path>",
-	Short: "Set persistent CJV_HOME path",
-	Long: "Persist the cjv data directory in settings.toml. Pass an empty string to clear the override. " +
-		"The CJV_HOME environment variable still takes precedence when set.",
-	Args: cobra.ExactArgs(1),
+	Short: i18n.T("SetHomeShort", nil),
+	Long:  i18n.T("SetHomeLong", nil),
+	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		val := args[0]
 		var stored string

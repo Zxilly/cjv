@@ -88,6 +88,9 @@ other = "Removed {{.Count}} nonexistent overrides"
 [ConfirmUninstall]
 other = "This will remove cjv and all installed toolchains. Continue?"
 
+[ToolchainUninstallConfirm]
+other = "This will remove toolchain '{{.Name}}' and its components (stdx, docs). Continue?"
+
 [UninstallComplete]
 other = "cjv has been uninstalled"
 
@@ -175,6 +178,9 @@ other = "warning: unknown field '{{.Field}}' in settings file"
 [UnsupportedSettingsVersion]
 other = "Settings version {{.Version}} is not supported. Please upgrade cjv."
 
+[HomeMustBeAbsolute]
+other = "CJV_HOME must be an absolute path, got '{{.Path}}'."
+
 # === Show ===
 [ShowDefaultHost]
 other = "Default host: {{.Host}}"
@@ -216,6 +222,9 @@ other = "This path needs to be in your PATH environment variable, but will not b
 
 [InitUninstallHint]
 other = "You can uninstall at any time with `cjv self uninstall` and these changes will be reverted."
+
+[InitNonInteractive]
+other = "No interactive terminal detected; proceeding with the standard installation. Pass --yes to silence this notice."
 
 [InitCurrentOptions]
 other = "Current installation options:"
@@ -495,3 +504,175 @@ other = "Tip: install with 'cjv install <channel>-<version>' (use --target for c
 
 [ListRemoteUnknownChannelFlag]
 other = "Unknown channel '{{.Value}}'; expected one of: all, lts, sts, nightly"
+
+[ToolchainListRemoteShort]
+other = "List all toolchain versions available remotely"
+
+[ToolchainListRemoteLong]
+other = """List Cangjie toolchain versions available from the remote SDK manifest.
+
+By default lists versions for the current host target tuple across all channels (lts, sts, nightly). Pass --target <suffix> to query a cross-compile build (matching `cjv install --target`), or --all-platforms to enumerate every target tuple present in the manifest."""
+
+# === Command descriptions ===
+
+[InitCmdShort]
+other = "Install cjv and configure the environment"
+
+[InitCmdLong]
+other = "Set up cjv for first use: copy binary, create proxy links, configure PATH, and optionally install a default toolchain."
+
+[UninstallCmdShort]
+other = "Uninstall a Cangjie SDK toolchain"
+
+[RunCmdShort]
+other = "Run a command with a specific toolchain"
+
+[ExecCmdShort]
+other = "Run a command with Cangjie runtime environment"
+
+[ExecCmdLong]
+other = "Execute any command with the correct Cangjie runtime library paths injected."
+
+[WhichCmdShort]
+other = "Show the path of an SDK tool for the active toolchain"
+
+[WhichCmdLong]
+other = "Show the path of an SDK tool for the active toolchain.\nIf no command is given, print the toolchain root directory."
+
+[UpdateCmdShort]
+other = "Update installed toolchains"
+
+[UpdateCmdLong]
+other = "Update a specific toolchain or all installed toolchains to their latest versions."
+
+[ShowCmdShort]
+other = "Show active and installed toolchains"
+
+[ShowActiveShort]
+other = "Show the active toolchain"
+
+[ShowInstalledShort]
+other = "List installed toolchains"
+
+[ShowHomeShort]
+other = "Show CJV_HOME path"
+
+[CheckCmdShort]
+other = "Check for available updates without installing"
+
+[ToolchainCmdShort]
+other = "Manage installed toolchains"
+
+[ToolchainListShort]
+other = "List installed toolchains"
+
+[ToolchainLinkShort]
+other = "Link a custom toolchain to a local directory"
+
+[ToolchainUninstallShort]
+other = "Uninstall a toolchain"
+
+[EnvsetupCmdShort]
+other = "Print shell commands to configure Cangjie runtime environment"
+
+[EnvsetupCmdLong]
+other = """Output shell commands that set environment variables for the active Cangjie toolchain.
+
+Usage:
+  eval "$(cjv envsetup)"          # bash/zsh
+  cjv envsetup | source           # fish
+  cjv envsetup | Invoke-Expression  # powershell"""
+
+[SetCmdShort]
+other = "Modify cjv settings"
+
+[SetAutoSelfUpdateShort]
+other = "Set auto-self-update behavior"
+
+[SetAutoInstallShort]
+other = "Set whether to auto-install missing toolchains in proxy mode"
+
+[SetDefaultHostShort]
+other = "Set the default host platform triple"
+
+[SetGitCodeAPIKeyShort]
+other = "Set the GitCode API access token for nightly builds"
+
+[SetHomeShort]
+other = "Set persistent CJV_HOME path"
+
+[SetHomeLong]
+other = "Persist the cjv data directory in settings.toml. Pass an empty string to clear the override. The CJV_HOME environment variable still takes precedence when set."
+
+[DefaultCmdShort]
+other = "Set or show the default toolchain"
+
+[DefaultCmdLong]
+other = "Without arguments, shows the current default toolchain.\nUse 'none' to clear the default."
+
+[OverrideCmdShort]
+other = "Manage directory toolchain overrides"
+
+[OverrideSetShort]
+other = "Set a toolchain override for the current or specified directory"
+
+[OverrideUnsetShort]
+other = "Remove the toolchain override for the current or specified directory"
+
+[OverrideListShort]
+other = "List all directory overrides"
+
+[SelfCmdShort]
+other = "Manage the cjv installation itself"
+
+[SelfUpdateShort]
+other = "Update cjv to the latest version"
+
+[SelfUninstallShort]
+other = "Uninstall cjv and all installed toolchains"
+
+# === Flag descriptions ===
+
+[FlagSkipConfirm]
+other = "Skip confirmation prompt"
+
+[InitFlagDefaultToolchain]
+other = "Default toolchain to install (use 'none' to skip)"
+
+[InitFlagNoModifyPath]
+other = "Do not modify PATH"
+
+[UpdateFlagNoSelfUpdate]
+other = "Don't check for cjv self-updates"
+
+# === Command errors ===
+
+[InstallCustomToolchain]
+other = "cannot install custom toolchain '{{.Name}}': use 'cjv toolchain link' instead"
+
+[InitComponentsRequireToolchain]
+other = "cannot install components when default toolchain is 'none'"
+
+[UpdateCustomToolchain]
+other = "cannot update custom toolchain '{{.Name}}'"
+
+[LinkReservedName]
+other = "'{{.Name}}' is a reserved channel name; use a unique custom name for linked toolchains"
+
+[LinkInvalidPath]
+other = "invalid path"
+
+[LinkPathNotExist]
+other = "path does not exist: {{.Path}}"
+
+[LinkNotSDK]
+other = "directory does not appear to contain a Cangjie SDK"
+
+[LinkCreateFailed]
+other = "failed to create link"
+
+[RemoveToolchainFailed]
+other = "failed to remove toolchain"
+
+[NoOverrideSet]
+other = "no override set for {{.Dir}}"

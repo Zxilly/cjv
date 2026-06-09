@@ -47,12 +47,12 @@ var (
 func NewSelfCommand(ver, updURL string) *cobra.Command {
 	selfCmd := &cobra.Command{
 		Use:   "self",
-		Short: "Manage the cjv installation itself",
+		Short: i18n.T("SelfCmdShort", nil),
 	}
 
 	selfUpdateCmd := &cobra.Command{
 		Use:   "update",
-		Short: "Update cjv to the latest version",
+		Short: i18n.T("SelfUpdateShort", nil),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if _, err := selfupdate.EnsureManagedExecutable(); err != nil {
 				return err
@@ -73,7 +73,7 @@ func NewSelfCommand(ver, updURL string) *cobra.Command {
 
 	selfUninstallCmd := &cobra.Command{
 		Use:   "uninstall",
-		Short: "Uninstall cjv and all installed toolchains",
+		Short: i18n.T("SelfUninstallShort", nil),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// Interactive confirmation cannot be combined with JSON output.
 			if output.IsJSON() && !uninstallYes {
@@ -113,7 +113,7 @@ func NewSelfCommand(ver, updURL string) *cobra.Command {
 		},
 	}
 
-	selfUninstallCmd.Flags().BoolVarP(&uninstallYes, "yes", "y", false, "Skip confirmation prompt")
+	selfUninstallCmd.Flags().BoolVarP(&uninstallYes, "yes", "y", false, i18n.T("FlagSkipConfirm", nil))
 	selfCmd.AddCommand(selfUpdateCmd)
 	selfCmd.AddCommand(selfUninstallCmd)
 

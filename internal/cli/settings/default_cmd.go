@@ -11,8 +11,8 @@ import (
 
 var defaultCmd = &cobra.Command{
 	Use:   "default [toolchain]",
-	Short: "Set or show the default toolchain",
-	Long:  "Without arguments, shows the current default toolchain.\nUse 'none' to clear the default.",
+	Short: i18n.T("DefaultCmdShort", nil),
+	Long:  i18n.T("DefaultCmdLong", nil),
 	Args:  cobra.MaximumNArgs(1),
 	RunE:  runDefault,
 }
