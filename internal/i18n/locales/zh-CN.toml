@@ -226,6 +226,9 @@ other = "附加 component："
 [InitOptModifyPath]
 other = "修改 PATH："
 
+[InitOptInstallPath]
+other = "安装路径："
+
 [InitProceedStandard]
 other = "继续标准安装（默认）"
 
@@ -252,6 +255,24 @@ other = "无"
 
 [InitModifyPathQuestion]
 other = "是否修改 PATH 变量？"
+
+[InitInstallPathQuestion]
+other = "cjv 安装路径？"
+
+[InitInstallPathDescription]
+other = "不存在的目录会自动创建。CJV_HOME 环境变量仍会在后续命令中优先生效。"
+
+[InitHomePathEmpty]
+other = "安装路径不能为空"
+
+[InitHomePathInvalid]
+other = "安装路径无效：{{.Path}}"
+
+[InitHomePathNotDir]
+other = "安装路径已存在但不是目录：{{.Path}}"
+
+[InitHomePathCreateFailed]
+other = "无法创建安装路径 {{.Path}}：{{.Err}}"
 
 [InitAlreadyInstalled]
 other = "cjv 已安装在 {{.Path}}"

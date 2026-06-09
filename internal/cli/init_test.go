@@ -1,14 +1,19 @@
 package cli
 
 import (
+	"bytes"
 	"context"
 	"os"
 	"path/filepath"
 	"runtime"
 	"testing"
+	"time"
 
 	"github.com/Zxilly/cjv/internal/config"
+	"github.com/Zxilly/cjv/internal/i18n"
 	"github.com/Zxilly/cjv/internal/proxy"
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/x/exp/teatest"
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -148,4 +153,93 @@ func TestRunInitPassesConfiguredComponentsToDefaultToolchainInstall(t *testing.T
 	require.NoError(t, err)
 	assert.Equal(t, "sts", gotInput)
 	assert.Equal(t, []string{"stdx", "docs"}, gotComponents)
+}
+
+func TestRenderInitMarkdown(t *testing.T) {
+	rendered, err := renderInitMarkdown("Use `cjv install lts` to install a toolchain.")
+
+	require.NoError(t, err)
+	assert.Contains(t, rendered, "cjv install lts")
+}
+
+func TestInitCustomizeFormEndToEnd(t *testing.T) {
+	userHome := t.TempDir()
+	target := filepath.Join(userHome, "custom", "cjv")
+	opts := initCustomizeOptions{
+		toolchain:  "lts",
+		components: []string{"stdx"},
+		modifyPath: true,
+	}
+
+	form := newInitCustomizeForm(&opts)
+	form.SubmitCmd = tea.Quit
+	tm := teatest.NewTestModel(t, form, teatest.WithInitialTermSize(100, 40))
+	t.Cleanup(func() {
+		_ = tm.Quit()
+	})
+
+	teatest.WaitFor(t, tm.Output(), func(out []byte) bool {
+		return bytes.Contains(out, []byte(i18n.T("InitInstallPathQuestion", nil)))
+	}, teatest.WithDuration(2*time.Second), teatest.WithCheckInterval(10*time.Millisecond))
+	tm.Type(target)
+	tm.Send(tea.KeyMsg{Type: tea.KeyEnter})
+
+	teatest.WaitFor(t, tm.Output(), func(out []byte) bool {
+		return bytes.Contains(out, []byte(i18n.T("InitToolchainQuestion", nil)))
+	}, teatest.WithDuration(2*time.Second), teatest.WithCheckInterval(10*time.Millisecond))
+	for range 3 {
+		tm.Send(tea.KeyMsg{Type: tea.KeyDown})
+	}
+	tm.Send(tea.KeyMsg{Type: tea.KeyEnter})
+
+	teatest.WaitFor(t, tm.Output(), func(out []byte) bool {
+		return bytes.Contains(out, []byte(i18n.T("InitModifyPathQuestion", nil)))
+	}, teatest.WithDuration(2*time.Second), teatest.WithCheckInterval(10*time.Millisecond))
+	tm.Type("n")
+	tm.FinalModel(t, teatest.WithFinalTimeout(2*time.Second))
+
+	expectedAbs, err := filepath.Abs(target)
+	require.NoError(t, err)
+	assert.Equal(t, expectedAbs, opts.home)
+	assert.Equal(t, "none", opts.toolchain)
+	assert.Empty(t, opts.components)
+	assert.False(t, opts.modifyPath)
+	assert.NoDirExists(t, target)
+}
+
+func TestInitHomePathValidationAndActivation(t *testing.T) {
+	userHome := t.TempDir()
+	config.IsolateForTest(t, userHome)
+	config.ResetDefaultSettingsFileCache()
+	t.Cleanup(config.ResetDefaultSettingsFileCache)
+
+	filePath := filepath.Join(userHome, "not-a-dir")
+	require.NoError(t, os.WriteFile(filePath, []byte("x"), 0o644))
+	_, err := normalizeInitHomePath(filePath)
+	require.Error(t, err)
+
+	target := filepath.Join(userHome, "custom", "cjv")
+	normalized, err := normalizeInitHomePath("  " + target + "  ")
+	require.NoError(t, err)
+	expectedAbs, err := filepath.Abs(target)
+	require.NoError(t, err)
+	assert.Equal(t, expectedAbs, normalized)
+	assert.NoDirExists(t, target)
+
+	require.NoError(t, activateInitHomePath(normalized))
+	assert.DirExists(t, target)
+	assert.Equal(t, normalized, os.Getenv(config.EnvHome))
+
+	settingsPath, err := config.SettingsPath()
+	require.NoError(t, err)
+	settings, err := config.LoadSettings(settingsPath)
+	require.NoError(t, err)
+	assert.Equal(t, normalized, settings.Home)
+
+	t.Setenv(config.EnvHome, "")
+	config.ResetDefaultSettingsFileCache()
+	got, src, err := config.ResolveHomeWithSource()
+	require.NoError(t, err)
+	assert.Equal(t, normalized, got)
+	assert.Equal(t, config.HomeSourcePersisted, src)
 }

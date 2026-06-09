@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -18,8 +19,13 @@ import (
 	"github.com/Zxilly/cjv/internal/i18n"
 	"github.com/Zxilly/cjv/internal/proxy"
 	"github.com/Zxilly/cjv/internal/selfupdate"
+	"github.com/charmbracelet/glamour"
+	"github.com/charmbracelet/glamour/styles"
+	glowutils "github.com/charmbracelet/glow/v2/utils"
 	"github.com/charmbracelet/huh"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/fatih/color"
+	"github.com/mattn/go-isatty"
 	"github.com/spf13/cobra"
 )
 
@@ -83,6 +89,167 @@ func initComponentOptions() []huh.Option[string] {
 	return options
 }
 
+func renderInitMarkdown(markdown string) (string, error) {
+	style := styles.AutoStyle
+	if !initStdoutIsTerminal() {
+		style = styles.NoTTYStyle
+	}
+	r, err := glamour.NewTermRenderer(
+		glamour.WithColorProfile(lipgloss.ColorProfile()),
+		glowutils.GlamourStyle(style, false),
+		glamour.WithWordWrap(100),
+		glamour.WithPreservedNewLines(),
+	)
+	if err != nil {
+		return "", err
+	}
+	return r.Render(markdown)
+}
+
+func printInitMarkdown(markdown string) {
+	rendered, err := renderInitMarkdown(markdown)
+	if err != nil {
+		fmt.Println(markdown)
+		return
+	}
+	fmt.Print(rendered)
+	if !strings.HasSuffix(rendered, "\n") {
+		fmt.Println()
+	}
+}
+
+func initStdoutIsTerminal() bool {
+	fd := os.Stdout.Fd()
+	return isatty.IsTerminal(fd) || isatty.IsCygwinTerminal(fd)
+}
+
+func normalizeInitHomePath(input string) (string, error) {
+	path := strings.TrimSpace(input)
+	if path == "" {
+		return "", errors.New(i18n.T("InitHomePathEmpty", nil))
+	}
+	if strings.ContainsRune(path, 0) {
+		return "", errors.New(i18n.T("InitHomePathInvalid", i18n.MsgData{"Path": path}))
+	}
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return "", fmt.Errorf("%s: %w", i18n.T("InitHomePathInvalid", i18n.MsgData{"Path": path}), err)
+	}
+	abs = filepath.Clean(abs)
+	if info, err := os.Stat(abs); err == nil {
+		if !info.IsDir() {
+			return "", errors.New(i18n.T("InitHomePathNotDir", i18n.MsgData{"Path": abs}))
+		}
+		return abs, nil
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return "", fmt.Errorf("%s: %w", i18n.T("InitHomePathInvalid", i18n.MsgData{"Path": abs}), err)
+	}
+	return abs, nil
+}
+
+func ensureInitHomePath(path string) error {
+	if err := os.MkdirAll(path, 0o755); err != nil {
+		return errors.New(i18n.T("InitHomePathCreateFailed", i18n.MsgData{
+			"Path": path,
+			"Err":  err.Error(),
+		}))
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		return fmt.Errorf("%s: %w", i18n.T("InitHomePathInvalid", i18n.MsgData{"Path": path}), err)
+	}
+	if !info.IsDir() {
+		return errors.New(i18n.T("InitHomePathNotDir", i18n.MsgData{"Path": path}))
+	}
+	return nil
+}
+
+func activateInitHomePath(path string) error {
+	if err := ensureInitHomePath(path); err != nil {
+		return err
+	}
+	sf, err := config.DefaultSettingsFile()
+	if err != nil {
+		return err
+	}
+	settings, err := sf.Load()
+	if err != nil {
+		return err
+	}
+	if settings.Home != path {
+		settings.Home = path
+		if err := sf.Save(settings); err != nil {
+			return err
+		}
+	}
+	return os.Setenv(config.EnvHome, path)
+}
+
+type initCustomizeOptions struct {
+	home       string
+	toolchain  string
+	components []string
+	modifyPath bool
+}
+
+func newInitCustomizeForm(opts *initCustomizeOptions) *huh.Form {
+	return huh.NewForm(
+		huh.NewGroup(
+			huh.NewInput().
+				Title(i18n.T("InitInstallPathQuestion", nil)).
+				Description(i18n.T("InitInstallPathDescription", nil)).
+				Value(&opts.home).
+				Validate(func(value string) error {
+					_, err := normalizeInitHomePath(value)
+					return err
+				}),
+		),
+		huh.NewGroup(
+			huh.NewSelect[string]().
+				Title(i18n.T("InitToolchainQuestion", nil)).
+				Options(
+					huh.NewOption("lts", "lts"),
+					huh.NewOption("sts", "sts"),
+					huh.NewOption("nightly", "nightly"),
+					huh.NewOption(i18n.T("InitToolchainNone", nil), "none"),
+				).
+				Value(&opts.toolchain),
+		),
+		huh.NewGroup(
+			huh.NewMultiSelect[string]().
+				Title(i18n.T("InitComponentsQuestion", nil)).
+				Options(initComponentOptions()...).
+				Value(&opts.components),
+		).WithHideFunc(func() bool {
+			if opts.toolchain == "none" {
+				opts.components = nil
+				return true
+			}
+			return false
+		}),
+		huh.NewGroup(
+			huh.NewConfirm().
+				Title(i18n.T("InitModifyPathQuestion", nil)).
+				Value(&opts.modifyPath),
+		),
+	)
+}
+
+func runInitCustomizePrompt(opts *initCustomizeOptions) error {
+	if err := newInitCustomizeForm(opts).Run(); err != nil {
+		return err
+	}
+	normalizedHome, err := normalizeInitHomePath(opts.home)
+	if err != nil {
+		return err
+	}
+	opts.home = normalizedHome
+	if opts.toolchain == "none" {
+		opts.components = nil
+	}
+	return nil
+}
+
 func runInit(cmd *cobra.Command, _ []string) error {
 	if output.IsJSON() {
 		return &cjverr.UnsupportedForJSONError{Command: "init"}
@@ -93,27 +260,10 @@ func runInit(cmd *cobra.Command, _ []string) error {
 	if err != nil {
 		return err
 	}
+	initialHome := home
 	binDir, err := config.BinDir()
 	if err != nil {
 		return err
-	}
-
-	managedPath := filepath.Join(binDir, proxy.CjvBinaryName())
-	if _, err := os.Stat(managedPath); err == nil {
-		fmt.Println(i18n.T("InitAlreadyInstalled", i18n.MsgData{"Path": managedPath}))
-
-		if !initYes {
-			confirm := false
-			if err := huh.NewConfirm().
-				Title(i18n.T("InitReinstallConfirm", nil)).
-				Value(&confirm).
-				Run(); err != nil {
-				return err
-			}
-			if !confirm {
-				return nil
-			}
-		}
 	}
 
 	// Effective options — initialized from CLI flags, may be modified by interactive menu
@@ -124,18 +274,15 @@ func runInit(cmd *cobra.Command, _ []string) error {
 	fmt.Println()
 	color.Cyan(i18n.T("InitWelcome", nil))
 	fmt.Println()
-	fmt.Println(i18n.T("InitDescription", nil))
-	fmt.Println()
+	printInitMarkdown(i18n.T("InitDescription", nil))
 
 	fmt.Println(i18n.T("InitDataDir", nil))
 	fmt.Println()
 	fmt.Printf("    %s\n", home)
 	fmt.Println()
-	fmt.Println(i18n.T("InitDataDirEnvHint", nil))
-	fmt.Println()
+	printInitMarkdown(i18n.T("InitDataDirEnvHint", nil))
 
-	fmt.Println(i18n.T("InitCommandsAvailable", nil))
-	fmt.Println()
+	printInitMarkdown(i18n.T("InitCommandsAvailable", nil))
 	fmt.Printf("    %s\n", binDir)
 	fmt.Println()
 
@@ -156,7 +303,7 @@ func runInit(cmd *cobra.Command, _ []string) error {
 	}
 	fmt.Println()
 
-	fmt.Println(i18n.T("InitUninstallHint", nil))
+	printInitMarkdown(i18n.T("InitUninstallHint", nil))
 
 	if !initYes {
 		customized := false
@@ -165,6 +312,7 @@ func runInit(cmd *cobra.Command, _ []string) error {
 			fmt.Println()
 			fmt.Println(i18n.T("InitCurrentOptions", nil))
 			fmt.Println()
+			fmt.Printf("   %s %s\n", i18n.T("InitOptInstallPath", nil), home)
 			fmt.Printf("   %s %s\n", i18n.T("InitOptToolchain", nil), toolchain)
 			fmt.Printf("   %s %s\n", i18n.T("InitOptComponents", nil), initComponentsStr(components))
 			fmt.Printf("   %s %s\n", i18n.T("InitOptModifyPath", nil), yesNoStr(modifyPath))
@@ -195,41 +343,58 @@ func runInit(cmd *cobra.Command, _ []string) error {
 			case menuCustomize:
 				customized = true
 
-				if err := huh.NewSelect[string]().
-					Title(i18n.T("InitToolchainQuestion", nil)).
-					Options(
-						huh.NewOption("lts", "lts"),
-						huh.NewOption("sts", "sts"),
-						huh.NewOption("nightly", "nightly"),
-						huh.NewOption(i18n.T("InitToolchainNone", nil), "none"),
-					).
-					Value(&toolchain).
-					Run(); err != nil {
+				opts := initCustomizeOptions{
+					home:       home,
+					toolchain:  toolchain,
+					components: components,
+					modifyPath: modifyPath,
+				}
+				if err := runInitCustomizePrompt(&opts); err != nil {
 					return err
 				}
-
-				if toolchain == "none" {
-					components = nil
-				} else if err := huh.NewMultiSelect[string]().
-					Title(i18n.T("InitComponentsQuestion", nil)).
-					Options(initComponentOptions()...).
-					Value(&components).
-					Run(); err != nil {
-					return err
-				}
-
-				if err := huh.NewConfirm().
-					Title(i18n.T("InitModifyPathQuestion", nil)).
-					Value(&modifyPath).
-					Run(); err != nil {
-					return err
-				}
+				home = opts.home
+				binDir = filepath.Join(home, "bin")
+				toolchain = opts.toolchain
+				components = opts.components
+				modifyPath = opts.modifyPath
 			}
 		}
 	}
 
 	if toolchain == "none" && len(components) > 0 {
 		return fmt.Errorf("cannot install components when default toolchain is 'none'")
+	}
+
+	managedPath := filepath.Join(binDir, proxy.CjvBinaryName())
+	if _, err := os.Stat(managedPath); err == nil {
+		fmt.Println(i18n.T("InitAlreadyInstalled", i18n.MsgData{"Path": managedPath}))
+
+		if !initYes {
+			confirm := false
+			if err := huh.NewConfirm().
+				Title(i18n.T("InitReinstallConfirm", nil)).
+				Value(&confirm).
+				Run(); err != nil {
+				return err
+			}
+			if !confirm {
+				return nil
+			}
+		}
+	}
+
+	if home != initialHome {
+		if err := activateInitHomePath(home); err != nil {
+			return err
+		}
+		home, err = config.Home()
+		if err != nil {
+			return err
+		}
+		binDir, err = config.BinDir()
+		if err != nil {
+			return err
+		}
 	}
 
 	ctx := cmd.Context()
@@ -270,10 +435,8 @@ func runInit(cmd *cobra.Command, _ []string) error {
 	fmt.Println()
 	color.Green(i18n.T("InitComplete", nil))
 	fmt.Println()
-	fmt.Println(i18n.T("InitSourceHint", nil))
-	fmt.Println()
-	fmt.Println(i18n.T("InitSourceHintRun", nil))
-	fmt.Println()
+	printInitMarkdown(i18n.T("InitSourceHint", nil))
+	printInitMarkdown(i18n.T("InitSourceHintRun", nil))
 	if runtime.GOOS != "windows" {
 		envPath := filepath.Join(home, "env")
 		fmt.Printf("    source \"%s\"\n", envPath)
@@ -286,8 +449,7 @@ func runInit(cmd *cobra.Command, _ []string) error {
 	fmt.Println()
 
 	if toolchain == "none" {
-		fmt.Println(i18n.T("InitInstallHint", nil))
-		fmt.Println()
+		printInitMarkdown(i18n.T("InitInstallHint", nil))
 		fmt.Println("    cjv install <toolchain>")
 		fmt.Println()
 	}

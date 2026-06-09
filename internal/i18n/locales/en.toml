@@ -229,6 +229,9 @@ other = "components:"
 [InitOptModifyPath]
 other = "modify PATH variable:"
 
+[InitOptInstallPath]
+other = "install path:"
+
 [InitProceedStandard]
 other = "Proceed with standard installation (default)"
 
@@ -255,6 +258,24 @@ other = "none"
 
 [InitModifyPathQuestion]
 other = "Modify PATH variable?"
+
+[InitInstallPathQuestion]
+other = "cjv install path?"
+
+[InitInstallPathDescription]
+other = "Nonexistent directories will be created automatically. The CJV_HOME environment variable will still take precedence in future commands."
+
+[InitHomePathEmpty]
+other = "install path cannot be empty"
+
+[InitHomePathInvalid]
+other = "invalid install path: {{.Path}}"
+
+[InitHomePathNotDir]
+other = "install path exists but is not a directory: {{.Path}}"
+
+[InitHomePathCreateFailed]
+other = "failed to create install path {{.Path}}: {{.Err}}"
 
 [InitAlreadyInstalled]
 other = "cjv is already installed at {{.Path}}"
