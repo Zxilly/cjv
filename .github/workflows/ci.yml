@@ -364,6 +364,7 @@ jobs:
             os: ubuntu-24.04
             kind: unix
             shell_name: sh
+            test_mode: path
             apt_packages: ''
             brew_packages: ''
             default_toolchain: ''
@@ -371,6 +372,7 @@ jobs:
             os: ubuntu-24.04
             kind: unix
             shell_name: bash
+            test_mode: path
             apt_packages: ''
             brew_packages: ''
             default_toolchain: ''
@@ -378,6 +380,7 @@ jobs:
             os: ubuntu-24.04
             kind: unix
             shell_name: zsh
+            test_mode: path
             apt_packages: zsh
             brew_packages: ''
             default_toolchain: ''
@@ -385,6 +388,7 @@ jobs:
             os: ubuntu-24.04
             kind: unix
             shell_name: fish
+            test_mode: path
             apt_packages: fish
             brew_packages: ''
             default_toolchain: ''
@@ -392,6 +396,7 @@ jobs:
             os: ubuntu-24.04-arm
             kind: unix
             shell_name: sh
+            test_mode: path
             apt_packages: ''
             brew_packages: ''
             default_toolchain: ''
@@ -399,6 +404,7 @@ jobs:
             os: macos-26
             kind: unix
             shell_name: bash
+            test_mode: path
             apt_packages: ''
             brew_packages: ''
             default_toolchain: ''
@@ -406,6 +412,7 @@ jobs:
             os: macos-26
             kind: unix
             shell_name: zsh
+            test_mode: path
             apt_packages: ''
             brew_packages: ''
             default_toolchain: ''
@@ -413,6 +420,7 @@ jobs:
             os: macos-26
             kind: unix
             shell_name: fish
+            test_mode: path
             apt_packages: ''
             brew_packages: fish
             default_toolchain: ''
@@ -420,6 +428,7 @@ jobs:
             os: macos-26-intel
             kind: unix
             shell_name: bash
+            test_mode: path
             apt_packages: ''
             brew_packages: ''
             default_toolchain: ''
@@ -427,6 +436,7 @@ jobs:
             os: macos-26-intel
             kind: unix
             shell_name: zsh
+            test_mode: path
             apt_packages: ''
             brew_packages: ''
             default_toolchain: ''
@@ -434,6 +444,7 @@ jobs:
             os: macos-26-intel
             kind: unix
             shell_name: fish
+            test_mode: path
             apt_packages: ''
             brew_packages: fish
             default_toolchain: ''
@@ -441,6 +452,7 @@ jobs:
             os: windows-2025
             kind: powershell
             shell_name: 'C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe'
+            test_mode: ''
             apt_packages: ''
             brew_packages: ''
             default_toolchain: all
@@ -448,6 +460,7 @@ jobs:
             os: windows-2025
             kind: powershell
             shell_name: pwsh
+            test_mode: ''
             apt_packages: ''
             brew_packages: ''
             default_toolchain: all
@@ -455,10 +468,6 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-      - name: Set up Go
-        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
-        with:
-          go-version: stable
       - name: Install Linux test shells
         if: matrix.kind == 'unix' && runner.os == 'Linux' && matrix.apt_packages != ''
         run: |
@@ -483,13 +492,15 @@ jobs:
         if: matrix.kind == 'unix'
         env:
           CJV_INSTALL_TEST_SHELL: ${{ matrix.shell_name }}
-        run: go test -v -tags "integration installscript" -run '^TestIntegrationInstallScriptShFromConfiguredShell$' -count=1 -timeout 15m ./tests/integration/
+          CJV_INSTALL_TEST_MODE: ${{ matrix.test_mode }}
+        run: sh tests/install-scripts/install-sh.sh
       - name: Run install.ps1 integration
         if: matrix.kind == 'powershell'
+        shell: pwsh
         env:
           CJV_INSTALL_TEST_DEFAULT_TOOLCHAIN: ${{ matrix.default_toolchain }}
           CJV_INSTALL_TEST_POWERSHELL: ${{ matrix.shell_name }}
-        run: go test -v -tags "integration installscript" -run '^TestIntegrationInstallScriptPs1FromConfiguredPowerShell$' -count=1 -timeout 15m ./tests/integration/
+        run: ./tests/install-scripts/install-ps1.ps1
 
   go-integration:
     strategy:
