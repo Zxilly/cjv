@@ -4,10 +4,38 @@ import (
 	"fmt"
 	"regexp"
 	"runtime"
+	"slices"
 	"strings"
 
 	"github.com/Zxilly/cjv/internal/cjverr"
 )
+
+// HostPlatform is a (GOOS, GOARCH) pair cjv ships a host binary for.
+type HostPlatform struct {
+	GOOS   string
+	GOARCH string
+}
+
+// SupportedHostPlatforms returns the (GOOS, GOARCH) pairs cjv builds host
+// binaries for, sorted for determinism. This is the single source of truth for
+// the shipped platform set; the parallel lists in .goreleaser.yml, the web
+// landing page (web/src/hooks/use-platform.ts), and the install-binary
+// extraction script (scripts/extract-init-binaries.sh) are checked against it
+// by TestPlatformMatrixInSync so they cannot silently drift.
+func SupportedHostPlatforms() []HostPlatform {
+	out := make([]HostPlatform, 0, len(hostByGo))
+	for key := range hostByGo {
+		goos, goarch, _ := strings.Cut(key, "-")
+		out = append(out, HostPlatform{GOOS: goos, GOARCH: goarch})
+	}
+	slices.SortFunc(out, func(a, b HostPlatform) int {
+		if a.GOOS != b.GOOS {
+			return strings.Compare(a.GOOS, b.GOOS)
+		}
+		return strings.Compare(a.GOARCH, b.GOARCH)
+	})
+	return out
+}
 
 var (
 	targetRE = regexp.MustCompile(`^[a-z0-9]+(?:-[a-z0-9]+)*$`)
