@@ -20,11 +20,14 @@ func execTool(ctx context.Context, binary string, args []string, env []string) e
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
+	// Intercept termination signals before Start so a signal in the gap is
+	// buffered and forwarded to the child instead of killing only the parent.
+	forwarder := NewTerminationForwarder()
+	defer forwarder.Stop()
 	if err := cmd.Start(); err != nil {
 		return err
 	}
-	stop := ForwardTerminationSignals(cmd.Process)
-	defer stop()
+	forwarder.Attach(cmd.Process)
 
 	if err := cmd.Wait(); err != nil {
 		if exitErr, ok := errors.AsType[*exec.ExitError](err); ok {
