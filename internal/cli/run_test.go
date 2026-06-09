@@ -24,15 +24,50 @@ func TestResolveRunCommandPrefersToolchainBinary(t *testing.T) {
 	}
 	require.NoError(t, os.WriteFile(toolPath, []byte("stub"), 0o755))
 
-	assert.Equal(t, toolPath, resolveRunCommand(tcDir, "cjc"))
+	got, found := resolveToolchainToolPath(tcDir, "cjc")
+	assert.True(t, found)
+	assert.Equal(t, toolPath, got)
 }
 
 func TestResolveRunCommandFallsBackForUnknownCommand(t *testing.T) {
-	assert.Equal(t, "powershell", resolveRunCommand(t.TempDir(), "powershell"))
+	got, found := resolveToolchainToolPath(t.TempDir(), "powershell")
+	assert.False(t, found)
+	assert.Equal(t, "powershell", got)
 }
 
 func TestResolveRunCommandFallsBackWhenMappedToolIsMissing(t *testing.T) {
-	assert.Equal(t, "cjc", resolveRunCommand(t.TempDir(), "cjc"))
+	got, found := resolveToolchainToolPath(t.TempDir(), "cjc")
+	assert.False(t, found)
+	assert.Equal(t, "cjc", got)
+}
+
+func TestLookPathInEnv_ExtensionHandling(t *testing.T) {
+	dir := t.TempDir()
+	environ := []string{"PATH=" + dir}
+
+	if runtime.GOOS == "windows" {
+		// A same-named extensionless file must NOT shadow the real .exe.
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "tool"), []byte("data"), 0o644))
+		exe := filepath.Join(dir, "tool.exe")
+		require.NoError(t, os.WriteFile(exe, []byte("MZ"), 0o644))
+		environ = append(environ, "PATHEXT=.COM;.EXE;.BAT;.CMD")
+
+		got, found := lookPathInEnv("tool", environ)
+		require.True(t, found)
+		assert.Equal(t, exe, got)
+	} else {
+		exe := filepath.Join(dir, "tool")
+		require.NoError(t, os.WriteFile(exe, []byte("#!/bin/sh\n"), 0o755))
+
+		got, found := lookPathInEnv("tool", environ)
+		require.True(t, found)
+		assert.Equal(t, exe, got)
+	}
+
+	// A command not present on the env PATH is reported as not found.
+	got, found := lookPathInEnv("definitely-not-present-xyz", environ)
+	assert.False(t, found)
+	assert.Equal(t, "definitely-not-present-xyz", got)
 }
 
 func TestRunRun_NoToolchain(t *testing.T) {

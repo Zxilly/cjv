@@ -96,9 +96,12 @@ func TestGetRecursionCount_UnsetDefaultsToZero(t *testing.T) {
 	assert.Equal(t, 0, GetRecursionCount())
 }
 
-func TestGetRecursionCount_InvalidStringDefaultsToZero(t *testing.T) {
+func TestGetRecursionCount_InvalidStringFailsSafe(t *testing.T) {
 	t.Setenv("CJV_RECURSION_COUNT", "not-a-number")
-	assert.Equal(t, 0, GetRecursionCount())
+	// cjv only ever writes a valid integer, so a non-numeric value means the
+	// counter was corrupted externally. Fail safe to the recursion limit so the
+	// loop guard trips, rather than silently resetting to 0 and defeating it.
+	assert.Equal(t, maxRecursion, GetRecursionCount())
 }
 
 func TestGetRecursionCount_NegativeClampedToZero(t *testing.T) {

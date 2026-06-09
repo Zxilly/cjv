@@ -11,6 +11,7 @@ import (
 	componentlib "github.com/Zxilly/cjv/internal/component"
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/env"
+	"github.com/Zxilly/cjv/internal/i18n"
 	"github.com/Zxilly/cjv/internal/resolve"
 	"github.com/spf13/cobra"
 )
@@ -41,47 +42,47 @@ func applyJSONModeFlag(arg string) (bool, error) {
 	return true, nil
 }
 
-func stripJSONModeFlagPrefix(args []string, allowAfterPlusToolchain bool) ([]string, error) {
-	out := make([]string, 0, len(args))
-	scanning := true
-	sawPlusToolchain := false
-	for i, arg := range args {
-		if scanning {
-			if arg == "--" {
-				out = append(out, args[i+1:]...)
-				return out, nil
-			}
-			matched, err := applyJSONModeFlag(arg)
-			if err != nil {
-				return nil, err
-			}
-			if matched {
-				continue
-			}
-			if allowAfterPlusToolchain && !sawPlusToolchain && strings.HasPrefix(arg, "+") && len(arg) > 1 {
-				sawPlusToolchain = true
-				out = append(out, arg)
-				continue
-			}
-			scanning = false
+// stripJSONModeFlagPrefix consumes leading --json flags and, when
+// allowPlusToolchain is set, an optional +toolchain selector. It applies JSON
+// mode as a side effect and returns the extracted toolchain (empty if none)
+// together with the remaining args.
+//
+// A "--" terminator stops all interpretation: everything after it is returned
+// verbatim. This lets a literal command that begins with "+" be run via
+// `cjv exec -- +cmd` without it being mistaken for a toolchain override.
+func stripJSONModeFlagPrefix(args []string, allowPlusToolchain bool) (toolchain string, rest []string, err error) {
+	for i := range args {
+		arg := args[i]
+		if arg == "--" {
+			rest = append(rest, args[i+1:]...)
+			return toolchain, rest, nil
 		}
-		out = append(out, arg)
+		matched, ferr := applyJSONModeFlag(arg)
+		if ferr != nil {
+			return "", nil, ferr
+		}
+		if matched {
+			continue
+		}
+		if allowPlusToolchain && toolchain == "" && strings.HasPrefix(arg, "+") && len(arg) > 1 {
+			toolchain = arg[1:]
+			continue
+		}
+		// First token that is neither a recognized flag nor the +toolchain
+		// selector: the rest is the command and its arguments, verbatim.
+		rest = append(rest, args[i:]...)
+		return toolchain, rest, nil
 	}
-	return out, nil
+	return toolchain, rest, nil
 }
 
 func newEnvsetupCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "envsetup [+toolchain] [--target=SUFFIX] [--shell=TYPE]",
-		Short: "Print shell commands to configure Cangjie runtime environment",
-		Long: `Output shell commands that set environment variables for the active Cangjie toolchain.
-
-Usage:
-  eval "$(cjv envsetup)"          # bash/zsh
-  cjv envsetup | source           # fish
-  cjv envsetup | Invoke-Expression  # powershell`,
-		Args: cobra.ArbitraryArgs,
-		RunE: envsetupRun,
+		Short: i18n.T("EnvsetupCmdShort", nil),
+		Long:  i18n.T("EnvsetupCmdLong", nil),
+		Args:  cobra.ArbitraryArgs,
+		RunE:  envsetupRun,
 	}
 	// Unlike exec/run, envsetup does not forward arguments to a child process,
 	// so it lets cobra parse flags normally: --json is the global persistent
