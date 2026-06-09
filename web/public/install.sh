@@ -67,25 +67,94 @@ detect_arch() {
 }
 
 download_and_install() {
-    _url="${UPDATE_ROOT}/${BINARY}_${PLATFORM}_${ARCH}.tar.gz"
+    _archive="${BINARY}_${PLATFORM}_${ARCH}.tar.gz"
+    _url="${UPDATE_ROOT}/${_archive}"
     _tmpdir="$(mktemp -d)"
+    # Clean up the temp dir on normal exit and on interruption (the bare EXIT
+    # trap is not always run when sh is killed by a signal).
     # shellcheck disable=SC2064
-    trap "rm -rf '$_tmpdir'" EXIT
+    trap "cleanup '$_tmpdir'" EXIT
+    # shellcheck disable=SC2064
+    trap "cleanup '$_tmpdir'; exit 130" HUP INT TERM
 
     say "downloading cjv from $_url"
+    download "$_url" "$_tmpdir/cjv.tar.gz"
 
-    if command -v curl > /dev/null 2>&1; then
-        curl -sSfL "$_url" -o "$_tmpdir/cjv.tar.gz"
-    elif command -v wget > /dev/null 2>&1; then
-        wget -qO "$_tmpdir/cjv.tar.gz" "$_url"
-    else
-        err "need curl or wget to download cjv"
-    fi
+    verify_checksum "$_tmpdir/cjv.tar.gz" "$_archive"
 
     tar -xzf "$_tmpdir/cjv.tar.gz" -C "$_tmpdir"
 
     say "running cjv init"
-    "$_tmpdir/$BINARY" init "$@"
+    # When invoked as `curl ... | sh`, the binary inherits the script pipe as
+    # stdin. Reconnect the controlling terminal if there is one so interactive
+    # setup can prompt; otherwise cjv init detects the non-tty stdin and
+    # proceeds with a standard non-interactive install.
+    if [ ! -t 0 ] && { exec 3</dev/tty; } 2>/dev/null; then
+        "$_tmpdir/$BINARY" init "$@" <&3
+        exec 3<&-
+    else
+        "$_tmpdir/$BINARY" init "$@"
+    fi
+}
+
+download() {
+    if command -v curl > /dev/null 2>&1; then
+        curl -sSfL "$1" -o "$2"
+    elif command -v wget > /dev/null 2>&1; then
+        wget -qO "$2" "$1"
+    else
+        err "need curl or wget to download cjv"
+    fi
+}
+
+fetch_text() {
+    if command -v curl > /dev/null 2>&1; then
+        curl -sSfL "$1"
+    elif command -v wget > /dev/null 2>&1; then
+        wget -qO- "$1"
+    else
+        return 1
+    fi
+}
+
+compute_sha256() {
+    if command -v sha256sum > /dev/null 2>&1; then
+        sha256sum "$1" | awk '{print $1}'
+    elif command -v shasum > /dev/null 2>&1; then
+        shasum -a 256 "$1" | awk '{print $1}'
+    else
+        return 1
+    fi
+}
+
+# verify_checksum validates the downloaded archive against the release
+# checksums.txt. A missing checksums file or sha256 tool degrades to a warning
+# (older releases / minimal environments); a present-but-mismatched checksum is
+# fatal so a tampered or corrupted download is never installed.
+verify_checksum() {
+    _file=$1
+    _name=$2
+    if ! _sums="$(fetch_text "${UPDATE_ROOT}/checksums.txt")"; then
+        warn "could not download checksums.txt; skipping integrity verification"
+        return 0
+    fi
+    _expected="$(printf '%s\n' "$_sums" | awk -v n="$_name" '$2 == n {print $1; exit}')"
+    if [ -z "$_expected" ]; then
+        warn "no checksum entry for $_name; skipping integrity verification"
+        return 0
+    fi
+    if ! _actual="$(compute_sha256 "$_file")"; then
+        warn "no sha256 tool available; skipping integrity verification"
+        return 0
+    fi
+    if [ "$_actual" != "$_expected" ]; then
+        err "checksum mismatch for $_name (expected $_expected, got $_actual)"
+    fi
+    say "checksum verified"
+}
+
+cleanup() {
+    [ -n "${1:-}" ] && rm -rf "$1"
 }
 
 say() {
