@@ -162,7 +162,9 @@ func TestOverrideUnsetCommandErrorsWhenMissing(t *testing.T) {
 	require.Error(t, err)
 	// The "no override set" message is localized; assert on the directory it
 	// references (present in every locale's template) rather than English text.
-	assert.Contains(t, err.Error(), dir)
+	// Normalize like the command does: on Windows runners t.TempDir() can be an
+	// 8.3 short path while the message carries the symlink-resolved long form.
+	assert.Contains(t, err.Error(), config.NormalizePath(dir))
 }
 
 func TestOverrideListCommandHandlesEmptyAndSortedEntries(t *testing.T) {
