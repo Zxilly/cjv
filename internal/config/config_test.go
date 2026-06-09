@@ -38,12 +38,34 @@ func TestEnsureDirs(t *testing.T) {
 // --- Tests merged from home_test.go ---
 
 func TestHome_WithCJVHome(t *testing.T) {
-	t.Setenv("CJV_HOME", "/custom/cjv")
+	// Use a platform-appropriate absolute path (a forward-slash path like
+	// "/custom/cjv" is volume-relative, not absolute, on Windows).
+	custom := filepath.Join(t.TempDir(), "custom-cjv")
+	t.Setenv("CJV_HOME", custom)
 
 	home, err := Home()
 	require.NoError(t, err)
-	assert.Contains(t, home, "custom")
-	assert.Contains(t, home, "cjv")
+	assert.Equal(t, filepath.Clean(custom), home)
+}
+
+func TestHome_RejectsRelativeCJVHome(t *testing.T) {
+	// A relative CJV_HOME would resolve against the current working directory,
+	// so the same install would resolve to different homes depending on where
+	// cjv runs. It must be rejected rather than silently made cwd-relative.
+	t.Setenv("CJV_HOME", "relative/cjv")
+
+	_, err := Home()
+	require.Error(t, err)
+}
+
+func TestHome_BlankCJVHomeFallsThrough(t *testing.T) {
+	// A whitespace-only CJV_HOME is treated as unset, falling through to the
+	// default user-home resolution rather than resolving to "<cwd>/ ".
+	t.Setenv("CJV_HOME", "   ")
+
+	home, err := Home()
+	require.NoError(t, err)
+	assert.Contains(t, home, ".cjv")
 }
 
 func TestHome_FallbackToUserHome(t *testing.T) {
