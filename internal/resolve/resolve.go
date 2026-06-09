@@ -64,7 +64,7 @@ func Active(ctx context.Context, tcOverride string) (ActiveToolchain, error) {
 				}))
 				return ActiveToolchain{}, &cjverr.ToolchainNotInstalledError{Name: tcName}
 			}
-			tcDir, displayName, parsed, err = toolchain.FindActiveDir(tcName)
+			tcDir, displayName, _, err = toolchain.FindActiveDir(tcName)
 		}
 		if err != nil {
 			return ActiveToolchain{}, err
