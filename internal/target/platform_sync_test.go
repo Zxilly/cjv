@@ -30,7 +30,7 @@ func TestPlatformMatrixInSync(t *testing.T) {
 	root := repoRoot(t)
 	sources := map[string]map[string]bool{
 		".goreleaser.yml":                  goreleaserPlatforms(t, root),
-		"web/src/hooks/use-platform.ts":    webPlatforms(t, root),
+		"web/src/generated/platforms.ts":   webPlatforms(t, root),
 		"scripts/extract-init-binaries.sh": shellPlatforms(t, root),
 	}
 
@@ -122,14 +122,14 @@ func goreleaserPlatforms(t *testing.T, root string) map[string]bool {
 }
 
 func webPlatforms(t *testing.T, root string) map[string]bool {
-	content := readRepoFile(t, root, "web/src/hooks/use-platform.ts")
+	content := readRepoFile(t, root, "web/src/generated/platforms.ts")
 	set := map[string]bool{}
 	re := regexp.MustCompile(`goos:\s*'([a-z0-9]+)',\s*goarch:\s*'([a-z0-9]+)'`)
 	for _, m := range re.FindAllStringSubmatch(content, -1) {
 		set[m[1]+"_"+m[2]] = true
 	}
 	if len(set) == 0 {
-		t.Fatal("no PLATFORMS entries parsed from use-platform.ts")
+		t.Fatal("no generated platform entries parsed from platforms.ts")
 	}
 	return set
 }

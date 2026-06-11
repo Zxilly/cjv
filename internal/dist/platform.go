@@ -9,22 +9,26 @@ type tupleMapping struct {
 }
 
 func lookup(goos, goarch string) (tupleMapping, error) {
-	host, err := sdktarget.HostTuple(goos, goarch)
-	if err != nil {
-		return tupleMapping{}, err
-	}
-	return lookupTuple(host)
-}
-
-func lookupTuple(tuple string) (tupleMapping, error) {
-	parts, err := sdktarget.ParseTuple(tuple)
+	id, err := sdktarget.HostIdentity(goos, goarch)
 	if err != nil {
 		return tupleMapping{}, err
 	}
 	return tupleMapping{
-		Tuple:       tuple,
-		NightlyOS:   parts.NightlyOS,
-		NightlyArch: parts.NightlyArch,
+		Tuple:       id.Tuple(),
+		NightlyOS:   id.NightlyOS(),
+		NightlyArch: id.NightlyArch(),
+	}, nil
+}
+
+func lookupTuple(tuple string) (tupleMapping, error) {
+	id, err := sdktarget.ParseIdentity(tuple)
+	if err != nil {
+		return tupleMapping{}, err
+	}
+	return tupleMapping{
+		Tuple:       id.Tuple(),
+		NightlyOS:   id.NightlyOS(),
+		NightlyArch: id.NightlyArch(),
 	}, nil
 }
 
@@ -47,11 +51,11 @@ func CurrentHostTuple(defaultHost string) (string, error) {
 // environment value (e.g. "ohos") into a target tuple usable as a manifest
 // index. An empty environment yields the bare host tuple.
 func CurrentTargetTuple(defaultHost, environment string) (string, error) {
-	host, err := CurrentHostTuple(defaultHost)
+	id, err := sdktarget.CurrentTargetIdentity(defaultHost, environment)
 	if err != nil {
 		return "", err
 	}
-	return sdktarget.BuildTuple(host, environment)
+	return id.Tuple(), nil
 }
 
 func NightlyFilename(goos, goarch, version string) (string, error) {
@@ -66,20 +70,11 @@ func NightlyFilename(goos, goarch, version string) (string, error) {
 // NightlyFilenameForTuple builds the nightly archive filename that corresponds
 // to a target tuple, including the cross-compile target suffix when present.
 func NightlyFilenameForTuple(tuple, version string) (string, error) {
-	m, err := lookupTuple(tuple)
+	id, err := sdktarget.ParseIdentity(tuple)
 	if err != nil {
 		return "", err
 	}
-	parts, err := sdktarget.ParseTuple(tuple)
-	if err != nil {
-		return "", err
-	}
-	targetPart := ""
-	if parts.Environment != "" {
-		targetPart = "-" + parts.Environment
-	}
-	ext := ArchiveExt(NightlyGOOS(m.NightlyOS))
-	return "cangjie-sdk-" + m.NightlyOS + "-" + m.NightlyArch + targetPart + "-" + version + ext, nil
+	return id.NightlyFilename(version), nil
 }
 
 // NightlyGOOS maps the SDK manifest's OS name to Go's GOOS (mac → darwin).

@@ -63,20 +63,9 @@ func stdxURL(tc toolchain.ToolchainName, tuple string) (string, error) {
 	if tuple == "" {
 		return "", fmt.Errorf("stdx requires a host tuple")
 	}
-	parts, err := sdktarget.ParseTuple(tuple)
+	platform, err := sdktarget.StdxPlatformForTuple(tuple)
 	if err != nil {
 		return "", err
-	}
-	var platform string
-	if parts.Environment == "" {
-		// Host stdx: platform token derives from the host OS/arch.
-		platform = parts.NightlyOS + "-" + parts.NightlyArch
-	} else {
-		// Cross-target stdx: platform token derives from the target environment.
-		platform, err = sdktarget.StdxPlatformForEnvironment(parts.Environment)
-		if err != nil {
-			return "", err
-		}
 	}
 	stdxVersion := tc.Version + ".1"
 	asset := fmt.Sprintf("cangjie-stdx-%s-%s.zip", platform, stdxVersion)

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { parseCPU, parseOS } from 'ua-parser-modern'
+import { SUPPORTED_PLATFORMS, type SupportedPlatform } from '../generated/platforms'
 
 const BASE = 'https://cjv.zxilly.dev'
 const REPO = 'https://github.com/Zxilly/cjv'
@@ -90,9 +91,7 @@ const PS_MIRROR_CMD = `$env:CJV_MIRROR = "1"; irm ${BASE}/install.ps1 | iex`
 const SH_HINT = '在终端中运行：'
 const PS_HINT = '在 PowerShell 中运行：'
 
-interface PlatformEntry {
-  goos: BinaryInfo['goos']
-  goarch: BinaryInfo['goarch']
+type PlatformEntry = SupportedPlatform & {
   label: string
   hint: string
   command: string
@@ -100,13 +99,34 @@ interface PlatformEntry {
   warning?: string
 }
 
-const PLATFORMS: PlatformEntry[] = [
-  { goos: 'windows', goarch: 'amd64', label: 'Windows x86_64', hint: PS_HINT, command: PS_CMD, mirrorCommand: PS_MIRROR_CMD },
-  { goos: 'darwin', goarch: 'arm64', label: 'macOS ARM64', hint: SH_HINT, command: SH_CMD, mirrorCommand: SH_MIRROR_CMD },
-  { goos: 'darwin', goarch: 'amd64', label: 'macOS x86_64', hint: SH_HINT, command: SH_CMD, mirrorCommand: SH_MIRROR_CMD, warning: MAC_X86_WARNING },
-  { goos: 'linux', goarch: 'amd64', label: 'Linux x86_64', hint: SH_HINT, command: SH_CMD, mirrorCommand: SH_MIRROR_CMD },
-  { goos: 'linux', goarch: 'arm64', label: 'Linux ARM64', hint: SH_HINT, command: SH_CMD, mirrorCommand: SH_MIRROR_CMD },
+type SupportedPlatformKey<T extends SupportedPlatform = SupportedPlatform> =
+  T extends { goos: infer GOOS extends string; goarch: infer GOARCH extends string }
+    ? `${GOOS}_${GOARCH}`
+    : never
+
+const PLATFORM_PRESENTATION: Record<SupportedPlatformKey, Omit<PlatformEntry, 'goos' | 'goarch'>> = {
+  windows_amd64: { label: 'Windows x86_64', hint: PS_HINT, command: PS_CMD, mirrorCommand: PS_MIRROR_CMD },
+  darwin_arm64: { label: 'macOS ARM64', hint: SH_HINT, command: SH_CMD, mirrorCommand: SH_MIRROR_CMD },
+  darwin_amd64: { label: 'macOS x86_64', hint: SH_HINT, command: SH_CMD, mirrorCommand: SH_MIRROR_CMD, warning: MAC_X86_WARNING },
+  linux_amd64: { label: 'Linux x86_64', hint: SH_HINT, command: SH_CMD, mirrorCommand: SH_MIRROR_CMD },
+  linux_arm64: { label: 'Linux ARM64', hint: SH_HINT, command: SH_CMD, mirrorCommand: SH_MIRROR_CMD },
+}
+
+const PLATFORM_ORDER: SupportedPlatformKey[] = [
+  'windows_amd64',
+  'darwin_arm64',
+  'darwin_amd64',
+  'linux_amd64',
+  'linux_arm64',
 ]
+
+const GENERATED_PLATFORM_BY_KEY = new Map(SUPPORTED_PLATFORMS.map(p => [`${p.goos}_${p.goarch}`, p] as const))
+
+const PLATFORMS: PlatformEntry[] = PLATFORM_ORDER.map(key => {
+  const platform = GENERATED_PLATFORM_BY_KEY.get(key)
+  if (!platform) throw new Error(`missing generated platform ${key}`)
+  return { ...platform, ...PLATFORM_PRESENTATION[key] }
+})
 
 function toBinaryInfo(p: PlatformEntry): BinaryInfo {
   const isWin = p.goos === 'windows'
