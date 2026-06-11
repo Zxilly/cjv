@@ -69,7 +69,7 @@ func execRun(cmd *cobra.Command, args []string) error {
 	// prepended) rather than letting exec.Command resolve it against the parent
 	// process PATH — exec.LookPath reads os.Getenv("PATH"), not c.Env, so a tool
 	// present only in the toolchain would otherwise not be found (mirrors run.go).
-	if resolved, ok := lookPathInEnv(command, runtimeEnv); ok {
+	if resolved, ok := env.LookPathInEnv(command, runtimeEnv); ok {
 		command = resolved
 	}
 

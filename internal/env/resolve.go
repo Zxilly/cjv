@@ -2,12 +2,7 @@ package env
 
 import (
 	"context"
-	"fmt"
 	"os"
-	"path/filepath"
-
-	"github.com/Zxilly/cjv/internal/config"
-	"github.com/Zxilly/cjv/internal/resolve"
 )
 
 // ResolveRuntimeEnv resolves the active toolchain from context and builds
@@ -15,25 +10,9 @@ import (
 // tcOverride is the optional +toolchain argument (empty string to auto-resolve).
 // componentEnv may be nil; when non-nil it injects component-contributed vars.
 func ResolveRuntimeEnv(ctx context.Context, tcOverride string, componentEnv ComponentEnvProvider) ([]string, error) {
-	active, err := resolve.Active(ctx, tcOverride)
+	runtimeEnv, err := ResolveRuntime(ctx, tcOverride, componentEnv)
 	if err != nil {
 		return nil, err
 	}
-
-	envCfg := LoadToolchainEnv(active.Dir, componentEnv)
-
-	binDir, err := config.BinDir()
-	if err != nil {
-		return nil, fmt.Errorf("failed to determine bin directory: %w", err)
-	}
-
-	proxyEnv := BuildProxyEnv(os.Environ(), ProxyEnvContext{
-		Cfg:             envCfg,
-		CjvBinDir:       binDir,
-		ToolchainBinDir: filepath.Join(active.Dir, "bin"),
-		Recursion:       0,
-		ToolchainName:   active.Name,
-	})
-
-	return proxyEnv, nil
+	return runtimeEnv.ProxyEnv(os.Environ(), 0), nil
 }

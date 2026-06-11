@@ -15,7 +15,6 @@ import (
 	"github.com/Zxilly/cjv/internal/component"
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/env"
-	"github.com/Zxilly/cjv/internal/resolve"
 	"github.com/Zxilly/cjv/internal/toolchain"
 )
 
@@ -130,29 +129,17 @@ func Run(ctx context.Context, toolName string, args []string) error {
 		return err
 	}
 
-	active, err := resolve.Active(ctx, tcOverride)
+	rt, err := env.ResolveRuntime(ctx, tcOverride, component.ApplyEnv)
 	if err != nil {
 		return err
 	}
 
-	binary, err := ResolveInstalledToolBinary(active.Dir, toolName)
+	binary, err := ResolveInstalledToolBinary(rt.Active.Dir, toolName)
 	if err != nil {
 		return err
 	}
 
-	envCfg := env.LoadToolchainEnv(active.Dir, component.ApplyEnv)
-
-	binDir, err := config.BinDir()
-	if err != nil {
-		return fmt.Errorf("failed to determine bin directory: %w", err)
-	}
-	proxyEnv := env.BuildProxyEnv(os.Environ(), env.ProxyEnvContext{
-		Cfg:             envCfg,
-		CjvBinDir:       binDir,
-		ToolchainBinDir: filepath.Join(active.Dir, "bin"),
-		Recursion:       count,
-		ToolchainName:   active.Name,
-	})
+	proxyEnv := rt.ProxyEnv(os.Environ(), count)
 
 	return execTool(ctx, binary, remainingArgs, proxyEnv)
 }

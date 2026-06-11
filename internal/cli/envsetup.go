@@ -152,33 +152,28 @@ func loadEnvsetupData(ctx context.Context, tcOverride, target string) (envsetupD
 		ctx = context.Background()
 	}
 
-	var active resolve.ActiveToolchain
+	var rt env.Runtime
 	var err error
 	if target != "" {
-		active, err = resolve.ActiveTarget(ctx, tcOverride, target)
+		rt, err = env.ResolveTargetRuntime(ctx, tcOverride, target, componentlib.ApplyEnv)
 	} else {
-		active, err = resolve.Active(ctx, tcOverride)
+		rt, err = env.ResolveRuntime(ctx, tcOverride, componentlib.ApplyEnv)
 	}
 	if err != nil {
 		return envsetupData{}, err
 	}
-	cfg := env.LoadToolchainEnv(active.Dir, componentlib.ApplyEnv)
 
 	home, err := config.Home()
 	if err != nil {
 		return envsetupData{}, err
 	}
-	bin, err := config.BinDir()
-	if err != nil {
-		return envsetupData{}, err
-	}
 
 	return envsetupData{
-		active: active,
-		cfg:    cfg,
+		active: rt.Active,
+		cfg:    rt.Cfg,
 		home:   home,
-		bin:    bin,
-		source: envsetupSource(tcOverride, active.Source),
+		bin:    rt.CjvBinDir,
+		source: envsetupSource(tcOverride, rt.Active.Source),
 	}, nil
 }
 

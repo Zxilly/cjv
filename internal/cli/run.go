@@ -6,13 +6,10 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
-	"strings"
 
 	"github.com/Zxilly/cjv/internal/cjverr"
 	"github.com/Zxilly/cjv/internal/cli/output"
 	componentlib "github.com/Zxilly/cjv/internal/component"
-	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/env"
 	"github.com/Zxilly/cjv/internal/i18n"
 	"github.com/Zxilly/cjv/internal/proxy"
@@ -93,23 +90,14 @@ flagLoop:
 		}
 	}
 
-	envCfg := env.LoadToolchainEnv(tcDir, componentlib.ApplyEnv)
-
 	count := proxy.GetRecursionCount()
 
-	// Get cjv bin dir to remove from PATH (prevent proxy recursion)
-	binDir, err := config.BinDir()
+	rt, err := env.RuntimeForToolchain(tcDir, filepath.Base(tcDir), componentlib.ApplyEnv)
 	if err != nil {
-		return fmt.Errorf("failed to determine bin directory: %w", err)
+		return err
 	}
 
-	procEnv := env.BuildProxyEnv(os.Environ(), env.ProxyEnvContext{
-		Cfg:             envCfg,
-		CjvBinDir:       binDir,
-		ToolchainBinDir: filepath.Join(tcDir, "bin"),
-		Recursion:       count,
-		ToolchainName:   filepath.Base(tcDir),
-	})
+	procEnv := rt.ProxyEnv(os.Environ(), count)
 
 	toolPath, found := resolveToolchainToolPath(tcDir, toolName)
 	if !found {
@@ -118,7 +106,7 @@ flagLoop:
 		// resolve a bare name against the parent process PATH — exec.LookPath
 		// reads os.Getenv("PATH"), not c.Env, so the toolchain dirs would
 		// otherwise be ignored.
-		if resolved, ok := lookPathInEnv(toolName, procEnv); ok {
+		if resolved, ok := env.LookPathInEnv(toolName, procEnv); ok {
 			toolPath = resolved
 		}
 	}
@@ -151,17 +139,7 @@ flagLoop:
 // tools/bin/. The bool reports whether the tool was found inside the toolchain;
 // when false the returned path is the bare command name.
 func resolveToolchainToolPath(tcDir, command string) (string, bool) {
-	if toolPath, err := proxy.ResolveInstalledToolBinary(tcDir, command); err == nil {
-		return toolPath, true
-	}
-	binaryName := proxy.PlatformBinaryName(command)
-	for _, subDir := range []string{"bin", filepath.Join("tools", "bin")} {
-		candidate := filepath.Join(tcDir, subDir, binaryName)
-		if _, err := os.Stat(candidate); err == nil {
-			return candidate, true
-		}
-	}
-	return command, false
+	return env.ResolveToolPath(tcDir, command, proxy.ResolveInstalledToolBinary, proxy.PlatformBinaryName)
 }
 
 // lookPathInEnv resolves a bare command name against the PATH carried in
@@ -170,66 +148,7 @@ func resolveToolchainToolPath(tcDir, command string) (string, bool) {
 // lets `cjv run` honor the toolchain bin dirs prepended to the child env.
 // Returns the absolute path and true if found.
 func lookPathInEnv(command string, environ []string) (string, bool) {
-	if strings.ContainsRune(command, '/') || strings.ContainsRune(command, filepath.Separator) {
-		return command, false // already a path; leave it for exec to handle
-	}
-	pathVal, _ := env.LookupValue(environ, "PATH")
-	pathext, _ := env.LookupValue(environ, "PATHEXT")
-	exts := executableExtensions(command, pathext)
-	for _, dir := range filepath.SplitList(pathVal) {
-		if dir == "" {
-			continue
-		}
-		base := filepath.Join(dir, command)
-		for _, ext := range exts {
-			candidate := base + ext
-			if isRegularExecutable(candidate) {
-				return candidate, true
-			}
-		}
-	}
-	return command, false
-}
-
-// executableExtensions returns the suffixes to append to a bare command name
-// when searching PATH. On non-Windows the only candidate is the name as given.
-// On Windows, mirroring os/exec.LookPath: if the command already carries an
-// extension it is used verbatim; otherwise each PATHEXT entry is tried and the
-// bare extensionless name is NOT treated as executable — so a same-named data
-// file cannot shadow the real .exe.
-func executableExtensions(command, pathext string) []string {
-	if runtime.GOOS != "windows" || filepath.Ext(command) != "" {
-		return []string{""}
-	}
-	if pathext == "" {
-		pathext = ".COM;.EXE;.BAT;.CMD"
-	}
-	var exts []string
-	for p := range strings.SplitSeq(pathext, ";") {
-		p = strings.TrimSpace(p)
-		if p == "" {
-			continue
-		}
-		if !strings.HasPrefix(p, ".") {
-			p = "." + p
-		}
-		exts = append(exts, strings.ToLower(p))
-	}
-	return exts
-}
-
-// isRegularExecutable reports whether path is a regular file that is executable.
-// On Windows executability is determined by extension (gated by the caller via
-// executableExtensions), so any regular file matches here.
-func isRegularExecutable(path string) bool {
-	info, err := os.Stat(path)
-	if err != nil || info.IsDir() {
-		return false
-	}
-	if runtime.GOOS == "windows" {
-		return true
-	}
-	return info.Mode()&0o111 != 0
+	return env.LookPathInEnv(command, environ)
 }
 
 func init() {
