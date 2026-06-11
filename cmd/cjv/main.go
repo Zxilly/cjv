@@ -13,7 +13,6 @@ import (
 	"github.com/Zxilly/cjv/internal/cli/output"
 	"github.com/Zxilly/cjv/internal/logging"
 	"github.com/Zxilly/cjv/internal/proxy"
-	"github.com/Zxilly/cjv/internal/resolve"
 	"github.com/Zxilly/cjv/internal/utils"
 	"github.com/spf13/cobra"
 )
@@ -33,14 +32,6 @@ func run() int {
 	logging.Init()
 
 	utils.AppVersion = version
-
-	// Break circular import: proxy cannot import cli, so we wire the callback here.
-	resolve.AutoInstallFunc = func(ctx context.Context, input string, targets []string) error {
-		return cli.InstallToolchainWithTargets(ctx, input, targets, false)
-	}
-	resolve.AutoInstallComponentsFunc = func(ctx context.Context, input string, components []string) error {
-		return cli.InstallComponentsForToolchain(ctx, input, components)
-	}
 
 	toolName := proxy.ExtractToolName(os.Args[0])
 

@@ -2,7 +2,6 @@ package cli
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -12,18 +11,16 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"strings"
-	"sync"
 
 	"github.com/Zxilly/cjv/internal/cjverr"
 	"github.com/Zxilly/cjv/internal/cli/output"
 	"github.com/Zxilly/cjv/internal/cli/selfmgmt"
-	clisettings "github.com/Zxilly/cjv/internal/cli/settings"
 	componentlib "github.com/Zxilly/cjv/internal/component"
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/dist"
 	"github.com/Zxilly/cjv/internal/env"
 	"github.com/Zxilly/cjv/internal/i18n"
+	"github.com/Zxilly/cjv/internal/lifecycle"
 	"github.com/Zxilly/cjv/internal/proxy"
 	"github.com/Zxilly/cjv/internal/selfupdate"
 	sdktarget "github.com/Zxilly/cjv/internal/target"
@@ -46,6 +43,17 @@ var (
 
 	installToolchainWithExtrasFn = InstallToolchainWithExtras
 )
+
+func lifecycleOptions() lifecycle.Options {
+	return lifecycle.Options{
+		IsJSON:               output.IsJSON,
+		EnsurePathConfigured: ensurePathConfiguredFn,
+		ComponentInstall:     componentInstallFunc,
+		EnsureManagedBinary:  selfupdate.EnsureManagedExecutable,
+		CreateProxyLinks:     proxy.CreateAllProxyLinks,
+		ValidateInstallation: validateInstallation,
+	}
+}
 
 func init() {
 	installCmd.Flags().BoolVar(&forceInstall, "force", false, i18n.T("InstallFlagForce", nil))
@@ -109,88 +117,7 @@ func InstallToolchainWithTargets(ctx context.Context, input string, targets []st
 // InstallToolchainWithExtras installs the host toolchain plus optional cross
 // SDK target variants and optional components.
 func InstallToolchainWithExtras(ctx context.Context, input string, targets, components []string, force bool) error {
-	if ctx == nil {
-		ctx = context.Background()
-	}
-	name, err := toolchain.ParseToolchainName(input)
-	if err != nil {
-		return err
-	}
-	if name.IsCustom() {
-		return errors.New(i18n.T("InstallCustomToolchain", i18n.MsgData{"Name": input}))
-	}
-
-	sf, settings, err := clisettings.LoadSettings()
-	if err != nil {
-		return err
-	}
-
-	normalizedTargets, err := sdktarget.NormalizeList(targets)
-	if err != nil {
-		return err
-	}
-	if name.Target != "" && len(normalizedTargets) > 0 {
-		return fmt.Errorf("cannot combine target variant toolchain name %q with --target; pass the host toolchain name and --target instead", input)
-	}
-
-	fetcher := newManifestFetcher(settings.ManifestURL)
-
-	resolved, err := resolveAndLocate(ctx, name, settings, fetcher)
-	if err != nil {
-		return err
-	}
-
-	if name.Target != "" {
-		if err := installResolvedNoDefault(ctx, resolved, settings, sf, force); err != nil {
-			return err
-		}
-	} else {
-		if err := installResolved(ctx, resolved, settings, sf, force); err != nil {
-			return err
-		}
-	}
-
-	// Pin cross-compile target SDKs to the host's resolved concrete version so
-	// the host toolchain and its target SDKs always share a version. A
-	// channel-alias / latest install otherwise resolves each target's version
-	// independently (latestVersionForTuple), which can diverge from the host
-	// (e.g. a lagging target build) and later break `envsetup --target`, which
-	// reconstructs the target name from the host version.
-	targetBase := name
-	if len(normalizedTargets) > 0 {
-		hostResolved, err := toolchain.ParseToolchainName(resolved.Name)
-		if err != nil {
-			return err
-		}
-		targetBase = toolchain.ToolchainName{Channel: hostResolved.Channel, Version: hostResolved.Version}
-	}
-
-	var targetNames []string
-	for _, target := range normalizedTargets {
-		resolvedTarget, err := resolveAndLocateWithTarget(ctx, targetBase, settings, fetcher, target)
-		if err != nil {
-			return err
-		}
-		if err := installResolvedNoDefault(ctx, resolvedTarget, settings, sf, force); err != nil {
-			return err
-		}
-		targetNames = append(targetNames, resolvedTarget.Name)
-	}
-
-	if len(components) > 0 {
-		if len(normalizedTargets) > 0 {
-			// When cross-compiling, components (notably stdx) belong to the
-			// target SDK, so install them against each target's resolved name.
-			for _, targetName := range targetNames {
-				if err := installComponentsList(ctx, targetName, components, force, false); err != nil {
-					return err
-				}
-			}
-		} else if err := installComponentsList(ctx, resolved.Name, components, force, false); err != nil {
-			return err
-		}
-	}
-	return nil
+	return lifecycle.InstallToolchainWithExtras(ctx, input, targets, components, force, lifecycleOptions())
 }
 
 // manifestFetcher fetches the SDK manifest at most once per install operation.
@@ -198,123 +125,39 @@ func InstallToolchainWithExtras(ctx context.Context, input string, targets, comp
 // status line); subsequent calls return the cached result, including any error.
 // The first caller's ctx is used for the actual fetch.
 type manifestFetcher struct {
-	once sync.Once
-	url  string
-	m    *dist.Manifest
-	err  error
+	inner *lifecycle.ManifestFetcher
 }
 
 func newManifestFetcher(url string) *manifestFetcher {
-	return &manifestFetcher{url: url}
+	return &manifestFetcher{inner: lifecycle.NewManifestFetcher(url, lifecycleOptions())}
 }
 
 func (f *manifestFetcher) get(ctx context.Context) (*dist.Manifest, error) {
-	f.once.Do(func() {
-		noteStep(i18n.T("FetchingManifest", nil))
-		f.m, f.err = fetchManifest(ctx, f.url)
-	})
-	return f.m, f.err
+	return f.inner.Get(ctx)
 }
 
 // InstallComponentsForToolchain backs the proxy auto_install path: it
 // resolves tcInput to an already-installed toolchain and installs missing
 // components quietly.
 func InstallComponentsForToolchain(ctx context.Context, tcInput string, components []string) error {
-	if len(components) == 0 {
-		return nil
-	}
-	if ctx == nil {
-		ctx = context.Background()
-	}
-	name, err := toolchain.ParseToolchainName(tcInput)
-	if err != nil {
-		return err
-	}
-	installedDir, err := toolchain.FindInstalled(name)
-	if err != nil {
-		return err
-	}
-	return installComponentsList(ctx, filepath.Base(installedDir), components, false, true)
+	return lifecycle.InstallComponentsForToolchain(ctx, tcInput, components, lifecycleOptions())
 }
 
 // installComponentsList expects resolvedName as "<channel>-<version>"
 // (the directory name under <CJV_HOME>/toolchains/). quiet suppresses the
 // per-component status lines; used by the proxy auto-install path.
 func installComponentsList(ctx context.Context, resolvedName string, components []string, force, quiet bool) error {
-	resolvedTC, err := toolchain.ParseToolchainName(resolvedName)
-	if err != nil {
-		return err
-	}
-	if resolvedTC.IsCustom() {
-		return &cjverr.ComponentRequiresHostError{Component: strings.Join(components, ", ")}
-	}
-	parsed, err := componentlib.NormalizeList(components)
-	if err != nil {
-		return err
-	}
-	_, settings, err := clisettings.LoadSettings()
-	if err != nil {
-		return err
-	}
-	// For a target-variant resolved name (e.g. "lts-1.0.5-linux-x64-ohos") the
-	// target tuple is encoded in the name; otherwise install against the host.
-	tuple := resolvedTC.Target
-	if tuple == "" {
-		tuple, err = dist.CurrentHostTuple(settings.DefaultHost)
-		if err != nil {
-			return err
-		}
-	}
-	downloadsDir, err := config.DownloadsDir()
-	if err != nil {
-		return err
-	}
-	roots, err := componentlib.RootsFor(resolvedName)
-	if err != nil {
-		return err
-	}
-	snap, err := componentlib.TakeSnapshot(roots, parsed)
-	if err != nil {
-		return err
-	}
-	defer snap.Cleanup() //nolint:errcheck // best-effort cleanup
-	for _, c := range parsed {
-		if err := componentInstallFunc(ctx, roots, resolvedTC, c, tuple, downloadsDir, force); err != nil {
-			var alreadyErr *cjverr.ComponentAlreadyInstalledError
-			if errors.As(err, &alreadyErr) {
-				if !quiet && !output.IsJSON() {
-					fmt.Println(err)
-				}
-				continue
-			}
-			_ = snap.Restore() //nolint:errcheck // best-effort rollback
-			return err
-		}
-		if !quiet && !output.IsJSON() {
-			color.Green(i18n.T("ComponentInstalled", i18n.MsgData{
-				"Toolchain": resolvedName,
-				"Component": string(c),
-			}))
-		}
-	}
-	return nil
+	return lifecycle.InstallComponentsList(ctx, resolvedName, components, force, quiet, lifecycleOptions())
 }
 
-// resolvedToolchain holds the result of toolchain resolution.
-type resolvedToolchain struct {
-	Name        string // e.g. "lts-1.0.5"
-	URL         string // download URL
-	SHA256      string // expected checksum (empty for nightly)
-	ArchiveName string // display filename from the manifest when available
-	Tuple       string // manifest platform tuple used to select the archive
-}
+type resolvedToolchain = lifecycle.ResolvedToolchain
 
 func installResolved(ctx context.Context, rt resolvedToolchain, settings *config.Settings, sf *config.SettingsFile, force bool) (retErr error) {
-	return installResolvedWithDefault(ctx, rt, settings, sf, force, true)
+	return lifecycle.InstallResolved(ctx, rt, settings, sf, force, lifecycleOptions())
 }
 
 func installResolvedNoDefault(ctx context.Context, rt resolvedToolchain, settings *config.Settings, sf *config.SettingsFile, force bool) (retErr error) {
-	return installResolvedWithDefault(ctx, rt, settings, sf, force, false)
+	return lifecycle.InstallResolvedNoDefault(ctx, rt, settings, sf, force, lifecycleOptions())
 }
 
 func installResolvedWithDefault(ctx context.Context, rt resolvedToolchain, settings *config.Settings, sf *config.SettingsFile, force bool, allowDefault bool) (retErr error) {
@@ -458,65 +301,22 @@ func resolveAndLocate(ctx context.Context, name toolchain.ToolchainName, setting
 }
 
 func resolveAndLocateWithTarget(ctx context.Context, name toolchain.ToolchainName, settings *config.Settings, fetcher *manifestFetcher, target string) (resolvedToolchain, error) {
-	tuple := name.Target
-	if tuple == "" {
-		var err error
-		tuple, err = dist.CurrentTargetTuple(settings.DefaultHost, target)
-		if err != nil {
-			return resolvedToolchain{}, err
-		}
-	}
-	return resolveAndLocateWithTuple(ctx, name, settings, fetcher, tuple)
+	return withNightlyChecksumHook(func() (resolvedToolchain, error) {
+		return lifecycle.ResolveAndLocateWithTarget(ctx, name, settings, fetcher.inner, target)
+	})
 }
 
 func resolveAndLocateWithTuple(ctx context.Context, name toolchain.ToolchainName, settings *config.Settings, fetcher *manifestFetcher, tuple string) (resolvedToolchain, error) {
-	if tuple == "" {
-		var err error
-		tuple, err = dist.CurrentHostTuple(settings.DefaultHost)
-		if err != nil {
-			return resolvedToolchain{}, err
-		}
-	}
-	if name.Channel == toolchain.Nightly {
-		return resolveNightlyWithTuple(ctx, name, settings, tuple)
-	}
+	return withNightlyChecksumHook(func() (resolvedToolchain, error) {
+		return lifecycle.ResolveAndLocateWithTuple(ctx, name, settings, fetcher.inner, tuple)
+	})
+}
 
-	manifest, err := fetcher.get(ctx)
-	if err != nil {
-		return resolvedToolchain{}, err
-	}
-
-	channel := name.Channel
-	version := name.Version
-
-	// If channel is unknown (bare version number), find which channel it belongs to
-	if channel == toolchain.UnknownChannel {
-		found, err := manifest.FindVersionChannel(version)
-		if err != nil {
-			return resolvedToolchain{}, err
-		}
-		channel = found
-	}
-
-	if version == "" {
-		v, err := latestVersionForTuple(manifest, channel, tuple)
-		if err != nil {
-			return resolvedToolchain{}, err
-		}
-		version = v
-	}
-
-	resolved := toolchain.ToolchainName{Channel: channel, Version: version}
-	if parts, err := sdktarget.ParseTuple(tuple); err == nil && parts.Environment != "" {
-		resolved.Target = tuple
-	}
-
-	info, err := manifest.GetDownloadInfo(channel, version, tuple)
-	if err != nil {
-		return resolvedToolchain{}, err
-	}
-
-	return resolvedToolchain{Name: resolved.String(), URL: info.URL, SHA256: info.SHA256, ArchiveName: info.Name, Tuple: tuple}, nil
+func withNightlyChecksumHook(fn func() (resolvedToolchain, error)) (resolvedToolchain, error) {
+	orig := lifecycle.FetchNightlySHA256
+	lifecycle.FetchNightlySHA256 = fetchNightlySHA256
+	defer func() { lifecycle.FetchNightlySHA256 = orig }()
+	return fn()
 }
 
 func latestVersionForTuple(manifest *dist.Manifest, channel toolchain.Channel, tuple string) (string, error) {

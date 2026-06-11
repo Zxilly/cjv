@@ -14,15 +14,15 @@ import (
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/dist"
 	"github.com/Zxilly/cjv/internal/i18n"
+	"github.com/Zxilly/cjv/internal/lifecycle"
 	"github.com/Zxilly/cjv/internal/toolchain"
 )
 
-// AutoInstallFunc is wired by main to avoid importing cli from lower-level packages.
+// AutoInstallFunc is the test seam for auto-install. Production defaults to
+// internal/lifecycle so main does not wire resolve back up to CLI.
 var AutoInstallFunc func(ctx context.Context, input string, targets []string) error
 
-// AutoInstallComponentsFunc auto-installs missing components on demand. Wired
-// by main; must be safe to leave nil in tests where component installation
-// is not exercised.
+// AutoInstallComponentsFunc is the test seam for missing component installs.
 var AutoInstallComponentsFunc func(ctx context.Context, input string, components []string) error
 
 type ActiveToolchain struct {
@@ -55,9 +55,10 @@ func Active(ctx context.Context, tcOverride string) (ActiveToolchain, error) {
 	tcDir, displayName, parsed, err := toolchain.FindActiveDir(tcName)
 	if err != nil {
 		var notInstalled *cjverr.ToolchainNotInstalledError
-		if errors.As(err, &notInstalled) && !parsed.IsCustom() && shouldAutoInstall(settings) && AutoInstallFunc != nil {
+		installFunc := autoInstallFunc()
+		if errors.As(err, &notInstalled) && !parsed.IsCustom() && shouldAutoInstall(settings) && installFunc != nil {
 			fmt.Fprintln(os.Stderr, i18n.T("AutoInstalling", i18n.MsgData{"Name": tcName}))
-			if installErr := AutoInstallFunc(ctx, tcName, targets); installErr != nil {
+			if installErr := installFunc(ctx, tcName, targets); installErr != nil {
 				fmt.Fprintf(os.Stderr, "%s\n", i18n.T("AutoInstallFailed", i18n.MsgData{
 					"Name": tcName,
 					"Err":  installErr.Error(),
@@ -212,12 +213,13 @@ func ensureTargets(ctx context.Context, tcInput, tcDir string, settings *config.
 		return nil
 	}
 
-	if !shouldAutoInstall(settings) || AutoInstallFunc == nil {
+	installFunc := autoInstallFunc()
+	if !shouldAutoInstall(settings) || installFunc == nil {
 		return &cjverr.ToolchainNotInstalledError{Name: missingNames[0]}
 	}
 
 	fmt.Fprintln(os.Stderr, i18n.T("AutoInstalling", i18n.MsgData{"Name": strings.Join(missingNames, ", ")}))
-	if installErr := AutoInstallFunc(ctx, tcInput, missingTargets); installErr != nil {
+	if installErr := installFunc(ctx, tcInput, missingTargets); installErr != nil {
 		fmt.Fprintf(os.Stderr, "%s\n", i18n.T("AutoInstallFailed", i18n.MsgData{
 			"Name": strings.Join(missingNames, ", "),
 			"Err":  installErr.Error(),
@@ -239,6 +241,24 @@ func ensureTargets(ctx context.Context, tcInput, tcDir string, settings *config.
 
 func shouldAutoInstall(settings *config.Settings) bool {
 	return settings != nil && settings.AutoInstall
+}
+
+func autoInstallFunc() func(context.Context, string, []string) error {
+	if AutoInstallFunc != nil {
+		return AutoInstallFunc
+	}
+	return func(ctx context.Context, input string, targets []string) error {
+		return lifecycle.InstallToolchainWithTargets(ctx, input, targets, false, lifecycle.Options{})
+	}
+}
+
+func autoInstallComponentsFunc() func(context.Context, string, []string) error {
+	if AutoInstallComponentsFunc != nil {
+		return AutoInstallComponentsFunc
+	}
+	return func(ctx context.Context, input string, components []string) error {
+		return lifecycle.InstallComponentsForToolchain(ctx, input, components, lifecycle.Options{})
+	}
 }
 
 func ensureComponents(ctx context.Context, tcInput, tcDir string, settings *config.Settings, components []string) error {
@@ -266,7 +286,8 @@ func ensureComponents(ctx context.Context, tcInput, tcDir string, settings *conf
 		asStrings[i] = string(n)
 	}
 
-	if !shouldAutoInstall(settings) || AutoInstallComponentsFunc == nil {
+	installComponentsFunc := autoInstallComponentsFunc()
+	if !shouldAutoInstall(settings) || installComponentsFunc == nil {
 		return &cjverr.ComponentNotInstalledError{
 			Toolchain: filepath.Base(tcDir),
 			Component: asStrings[0],
@@ -276,7 +297,7 @@ func ensureComponents(ctx context.Context, tcInput, tcDir string, settings *conf
 	fmt.Fprintln(os.Stderr, i18n.T("AutoInstalling", i18n.MsgData{
 		"Name": strings.Join(asStrings, ", "),
 	}))
-	if err := AutoInstallComponentsFunc(ctx, tcInput, asStrings); err != nil {
+	if err := installComponentsFunc(ctx, tcInput, asStrings); err != nil {
 		fmt.Fprintf(os.Stderr, "%s\n", i18n.T("AutoInstallFailed", i18n.MsgData{
 			"Name": strings.Join(asStrings, ", "),
 			"Err":  err.Error(),
