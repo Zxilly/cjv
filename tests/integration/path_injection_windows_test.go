@@ -99,14 +99,16 @@ func TestIntegrationInitEnvScriptsWindows(t *testing.T) {
 		"init", "-y", "--default-toolchain", "none", "--no-modify-path")
 	require.NoError(t, err, "init failed: stdout=%s stderr=%s", stdout, stderr)
 
-	expectedBinDir := filepath.Join(cjvHome, "bin")
-
+	// The scripts derive the bin dir from their own location (so they stay valid
+	// if CJV_HOME moves), then prepend it to PATH, rather than embedding an
+	// absolute path.
 	ps1Content, err := os.ReadFile(filepath.Join(cjvHome, "env.ps1"))
 	require.NoError(t, err, "env.ps1 script should exist")
-	assert.Contains(t, string(ps1Content), expectedBinDir)
+	assert.Contains(t, string(ps1Content), "$PSScriptRoot")
 	assert.Contains(t, string(ps1Content), "$env:PATH")
 
 	batContent, err := os.ReadFile(filepath.Join(cjvHome, "env.bat"))
 	require.NoError(t, err, "env.bat script should exist")
-	assert.Contains(t, string(batContent), expectedBinDir)
+	assert.Contains(t, string(batContent), "%~dp0")
+	assert.Contains(t, string(batContent), "PATH")
 }
