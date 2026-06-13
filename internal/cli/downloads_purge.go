@@ -14,7 +14,7 @@ import (
 // purgeDownloadsDir wipes leftover entries from the downloads staging area.
 // Steady state is empty (each install removes its archive on success), so
 // this is a sweep for whatever a crashed/aborted run left behind. Called by
-// `cjv update` to mimic rustup's end-of-update cleanup.
+// `cjv update` as an end-of-update cleanup step.
 const purgeDownloadsMaxPasses = 3
 
 func purgeDownloadsDir() (int, error) {

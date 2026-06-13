@@ -57,6 +57,14 @@ func ExtractFlattened(ctx context.Context, archivePath, destDir string, stripTop
 	return moveContentsRecording(srcDir, destDir)
 }
 
+// MoveTreeContents moves every entry under srcDir into destDir, preferring a
+// rename per entry and falling back to a cross-filesystem copy. It stages an
+// already-extracted tree without re-reading the source archive.
+func MoveTreeContents(srcDir, destDir string) error {
+	_, err := moveContentsRecording(srcDir, destDir)
+	return err
+}
+
 // moveContentsRecording overwrites existing entries — component archives
 // may legitimately replace SDK static assets.
 func moveContentsRecording(srcDir, destDir string) ([]string, error) {

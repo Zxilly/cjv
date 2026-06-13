@@ -567,7 +567,7 @@ other = "Manage installed toolchains"
 other = "List installed toolchains"
 
 [ToolchainLinkShort]
-other = "Link a custom toolchain to a local directory"
+other = "Link a custom toolchain from a local directory, or download and install one from a URL"
 
 [ToolchainUninstallShort]
 other = "Uninstall a toolchain"
@@ -670,6 +670,36 @@ other = "directory does not appear to contain a Cangjie SDK"
 
 [LinkCreateFailed]
 other = "failed to create link"
+
+[LinkFlagSHA256]
+other = "Verify the downloaded archive against this SHA-256 (URL install only)"
+
+[LinkFlagForce]
+other = "Overwrite an existing toolchain of the same name (URL install only)"
+
+[LinkFlagNoStdx]
+other = "Skip installing the bundled stdx component (URL install only)"
+
+[LinkDownloadingURL]
+other = "Downloading toolchain from {{.URL}}"
+
+[LinkNoSDKArchive]
+other = "no cangjie-sdk-* archive found in download"
+
+[LinkFlagURLOnly]
+other = "flag --{{.Flag}} only applies to URL installs"
+
+[LinkCrossOSUnsupported]
+other = "cannot install a {{.Target}} SDK on {{.Host}}; URL install supports only SDKs matching the current system"
+
+[LinkInstallingStdx]
+other = "Installing bundled stdx for '{{.Name}}'"
+
+[LinkStdxMissingDirs]
+other = "stdx archive did not produce dynamic/ and static/ directories"
+
+[LinkStdxFailedAfterSDK]
+other = "SDK toolchain '{{.Name}}' was installed, but its bundled stdx failed; rerun with --force to retry, or install stdx separately"
 
 [RemoveToolchainFailed]
 other = "failed to remove toolchain"
