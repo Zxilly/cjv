@@ -567,7 +567,7 @@ other = "管理已安装的工具链"
 other = "列出已安装的工具链"
 
 [ToolchainLinkShort]
-other = "将自定义工具链链接到本地目录，或从 URL 下载并安装"
+other = "将自定义工具链链接到本地目录或归档，或从 URL 下载并安装"
 
 [ToolchainUninstallShort]
 other = "卸载工具链"
@@ -672,25 +672,28 @@ other = "该目录似乎不包含仓颉 SDK"
 other = "创建链接失败"
 
 [LinkFlagSHA256]
-other = "用此 SHA-256 校验下载的归档（仅 URL 安装）"
+other = "用此 SHA-256 校验下载的或本地的归档（仅 URL 或本地归档安装）"
 
 [LinkFlagForce]
-other = "覆盖同名的已存在工具链（仅 URL 安装）"
+other = "覆盖同名的已存在工具链（仅 URL 或本地归档安装）"
 
 [LinkFlagNoStdx]
-other = "跳过安装随包的 stdx 组件（仅 URL 安装）"
+other = "跳过安装随包的 stdx 组件（仅 URL 或本地归档安装）"
 
 [LinkDownloadingURL]
 other = "正在从 {{.URL}} 下载工具链"
 
+[LinkUsingArchive]
+other = "正在使用本地归档 {{.Path}}"
+
 [LinkNoSDKArchive]
-other = "下载内容中未找到 cangjie-sdk-* 归档"
+other = "归档中未找到 cangjie-sdk-* 子归档"
 
 [LinkFlagURLOnly]
-other = "标志 --{{.Flag}} 仅适用于 URL 安装"
+other = "标志 --{{.Flag}} 不适用于链接本地目录"
 
 [LinkCrossOSUnsupported]
-other = "无法在 {{.Host}} 上安装 {{.Target}} SDK；URL 安装仅支持与当前系统匹配的 SDK"
+other = "无法在 {{.Host}} 上安装 {{.Target}} SDK；此安装仅支持与当前系统匹配的 SDK"
 
 [LinkInstallingStdx]
 other = "正在为 '{{.Name}}' 安装随包 stdx"

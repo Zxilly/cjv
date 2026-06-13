@@ -567,7 +567,7 @@ other = "Manage installed toolchains"
 other = "List installed toolchains"
 
 [ToolchainLinkShort]
-other = "Link a custom toolchain from a local directory, or download and install one from a URL"
+other = "Link a custom toolchain from a local directory or archive, or download and install one from a URL"
 
 [ToolchainUninstallShort]
 other = "Uninstall a toolchain"
@@ -672,25 +672,28 @@ other = "directory does not appear to contain a Cangjie SDK"
 other = "failed to create link"
 
 [LinkFlagSHA256]
-other = "Verify the downloaded archive against this SHA-256 (URL install only)"
+other = "Verify the downloaded or local archive against this SHA-256 (URL or local archive only)"
 
 [LinkFlagForce]
-other = "Overwrite an existing toolchain of the same name (URL install only)"
+other = "Overwrite an existing toolchain of the same name (URL or local archive only)"
 
 [LinkFlagNoStdx]
-other = "Skip installing the bundled stdx component (URL install only)"
+other = "Skip installing the bundled stdx component (URL or local archive only)"
 
 [LinkDownloadingURL]
 other = "Downloading toolchain from {{.URL}}"
 
+[LinkUsingArchive]
+other = "Using local archive {{.Path}}"
+
 [LinkNoSDKArchive]
-other = "no cangjie-sdk-* archive found in download"
+other = "no cangjie-sdk-* archive found inside the archive"
 
 [LinkFlagURLOnly]
-other = "flag --{{.Flag}} only applies to URL installs"
+other = "flag --{{.Flag}} does not apply when linking a local directory"
 
 [LinkCrossOSUnsupported]
-other = "cannot install a {{.Target}} SDK on {{.Host}}; URL install supports only SDKs matching the current system"
+other = "cannot install a {{.Target}} SDK on {{.Host}}; this install supports only SDKs matching the current system"
 
 [LinkInstallingStdx]
 other = "Installing bundled stdx for '{{.Name}}'"

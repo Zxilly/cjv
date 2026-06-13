@@ -212,6 +212,15 @@ func CleanupDownload(stagedPath string) error {
 	return utils.RemoveAllRetry(stagedPath)
 }
 
+// VerifyArchive validates a local archive file the same way a freshly downloaded
+// one is checked: against sha256Hex when non-empty, otherwise that it is a
+// non-empty file carrying a recognized archive magic header. It lets the
+// `toolchain link` local-archive path vet a user-supplied file before extracting
+// it, without moving it through the download cache.
+func VerifyArchive(path, sha256Hex string) error {
+	return verifyStagedFile(path, strings.ToLower(sha256Hex))
+}
+
 func verifyStagedFile(path, sha256Hex string) error {
 	if sha256Hex == "" {
 		// No checksum available (e.g. nightly builds). Verify the staged

@@ -21,13 +21,46 @@ import (
 )
 
 // InstallToolchainFromURL downloads an SDK archive from url and materializes it
-// as a custom-named toolchain that cjv OWNS (unlike the local `toolchain link`,
-// which only references a user-owned directory). The archive is expected in the
-// cangjie-build CI format: an outer .zip containing a required cangjie-sdk-*
-// inner archive and an optional cangjie-stdx-* inner archive. A URL pointing
-// directly at a bare SDK archive is also supported. Cross-OS installs are not
-// supported. The default toolchain is never changed.
-func InstallToolchainFromURL(ctx context.Context, name, url, sha256 string, force, noStdx bool, opts Options) (retErr error) {
+// as a custom-named toolchain that cjv OWNS (unlike a local directory `toolchain
+// link`, which only references a user-owned directory). The archive is expected
+// in the cangjie-build CI format: an outer .zip containing a required
+// cangjie-sdk-* inner archive and an optional cangjie-stdx-* inner archive. A URL
+// pointing directly at a bare SDK archive is also supported. Cross-OS installs
+// are not supported. The default toolchain is never changed.
+func InstallToolchainFromURL(ctx context.Context, name, url, sha256 string, force, noStdx bool, opts Options) error {
+	return installLinkedToolchain(ctx, name, force, noStdx, opts, func(ctx context.Context, downloadsDir string) (string, bool, error) {
+		// An optional sha256 verifies the download; otherwise we rely on the
+		// transport (TLS for https — a plain http URL is the user's risk) plus the
+		// archive-magic sniff in DownloadCachedWithName. The staged file is owned
+		// by cjv and cleaned up on success.
+		opts.note(i18n.T("LinkDownloadingURL", i18n.MsgData{"URL": url}))
+		archivePath, err := dist.DownloadCachedWithName(ctx, url, sha256, downloadsDir, name)
+		return archivePath, true, err
+	})
+}
+
+// InstallToolchainFromZip materializes a cjv-owned toolchain from a local archive
+// file (zip or tar.gz) using the same extraction and bundled-stdx logic as the
+// URL install. The archive is verified — against sha256 when non-empty, otherwise
+// by its magic header — but, unlike a download, it is never moved or deleted: it
+// stays where the user put it. The default toolchain is not changed.
+func InstallToolchainFromZip(ctx context.Context, name, archivePath, sha256 string, force, noStdx bool, opts Options) error {
+	return installLinkedToolchain(ctx, name, force, noStdx, opts, func(_ context.Context, _ string) (string, bool, error) {
+		opts.note(i18n.T("LinkUsingArchive", i18n.MsgData{"Path": archivePath}))
+		if err := dist.VerifyArchive(archivePath, sha256); err != nil {
+			return "", false, err
+		}
+		// owned=false: a user-supplied archive must never be cleaned up.
+		return archivePath, false, nil
+	})
+}
+
+// installLinkedToolchain holds the logic shared by the URL and local-archive link
+// paths. acquire obtains the SDK archive (downloading it, or vetting a local
+// file) and reports whether cjv owns that file and may delete it on success;
+// everything after — outer extraction, inner SDK/stdx location, materialization
+// into a cjv-owned toolchain, and bundled-stdx install — is identical for both.
+func installLinkedToolchain(ctx context.Context, name string, force, noStdx bool, opts Options, acquire func(ctx context.Context, downloadsDir string) (string, bool, error)) (retErr error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -53,19 +86,17 @@ func InstallToolchainFromURL(ctx context.Context, name, url, sha256 string, forc
 		return fmt.Errorf("failed to stat %s: %w", destDir, err)
 	}
 
-	// An optional sha256 verifies the download; otherwise we rely on the transport
-	// (TLS for https — a plain http URL is the user's risk) plus the archive-magic
-	// sniff in DownloadCachedWithName.
-	opts.note(i18n.T("LinkDownloadingURL", i18n.MsgData{"URL": url}))
-	archivePath, err := dist.DownloadCachedWithName(ctx, url, sha256, downloadsDir, name)
+	archivePath, owned, err := acquire(ctx, downloadsDir)
 	if err != nil {
 		return err
 	}
-	defer func() {
-		if retErr == nil {
-			_ = dist.CleanupDownload(archivePath) //nolint:errcheck // best-effort
-		}
-	}()
+	if owned {
+		defer func() {
+			if retErr == nil {
+				_ = dist.CleanupDownload(archivePath) //nolint:errcheck // best-effort
+			}
+		}()
+	}
 
 	// Extract the outer archive into a temp dir under downloads/ (NOT toolchains/),
 	// so ExtractFlattened's own .cjv-install-* scratch dir never pollutes the

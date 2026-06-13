@@ -90,20 +90,39 @@ var toolchainLinkCmd = &cobra.Command{
 			return output.RenderTo(cmdOutput(cmd), toolchainLinkResult{Name: name, Path: filepath.Join(tcDir, name)})
 		}
 
-		// Local path: the URL-only flags must not be used here. Reject explicit
-		// use rather than silently ignoring them.
-		for _, f := range []string{"sha256", "force", "no-stdx"} {
-			if cmd.Flags().Changed(f) {
-				return errors.New(i18n.T("LinkFlagURLOnly", i18n.MsgData{"Flag": f}))
-			}
-		}
-
 		absPath, err := filepath.Abs(targetPath)
 		if err != nil {
 			return fmt.Errorf("%s: %w", i18n.T("LinkInvalidPath", nil), err)
 		}
-		if _, err := os.Stat(absPath); err != nil {
+		info, err := os.Stat(absPath)
+		if err != nil {
 			return errors.New(i18n.T("LinkPathNotExist", i18n.MsgData{"Path": absPath}))
+		}
+
+		// A local archive file (zip/tar.gz) is extracted and materialized as a
+		// cjv-owned toolchain, exactly like the URL path; --sha256/--force/--no-stdx
+		// apply here too. A directory is referenced in place via a symlink, and
+		// those flags do not apply to it.
+		if !info.IsDir() {
+			if err := lifecycle.InstallToolchainFromZip(cmd.Context(), name, absPath, linkSHA256, linkForce, linkNoStdx, lifecycleOptions()); err != nil {
+				return err
+			}
+			if !output.IsJSON() {
+				return nil
+			}
+			tcDir, err := config.ToolchainsDir()
+			if err != nil {
+				return err
+			}
+			return output.RenderTo(cmdOutput(cmd), toolchainLinkResult{Name: name, Path: filepath.Join(tcDir, name)})
+		}
+
+		// Directory link: the archive/URL-only flags must not be used here. Reject
+		// explicit use rather than silently ignoring them.
+		for _, f := range []string{"sha256", "force", "no-stdx"} {
+			if cmd.Flags().Changed(f) {
+				return errors.New(i18n.T("LinkFlagURLOnly", i18n.MsgData{"Flag": f}))
+			}
 		}
 
 		// Validate the directory contains a Cangjie SDK (bin/cjc must exist)
