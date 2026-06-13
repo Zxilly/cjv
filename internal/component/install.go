@@ -75,6 +75,45 @@ func Install(ctx context.Context, roots Roots, tc toolchain.ToolchainName, name 
 
 	fmt.Println(i18n.T("InstallingComponent", i18n.MsgData{"Component": string(name)}))
 
+	return stageAndInstall(ctx, roots, spec, name, archivePath, force, alreadyInstalled)
+}
+
+// InstallFromArchive installs a component from a local archive file already on
+// disk, bypassing URL/channel resolution and version checks. It is used by URL
+// toolchain install to materialize a component bundled inside the downloaded
+// artifact (e.g. the stdx archive shipped alongside the SDK).
+func InstallFromArchive(ctx context.Context, roots Roots, name Name, archivePath string, force bool) error {
+	spec, err := SpecFor(name)
+	if err != nil {
+		return err
+	}
+
+	alreadyInstalled := IsInstalled(roots.TcDir, name)
+	if !force && alreadyInstalled {
+		return &cjverr.ComponentAlreadyInstalledError{
+			Toolchain: filepath.Base(roots.TcDir),
+			Component: string(name),
+		}
+	}
+
+	return stageAndInstall(ctx, roots, spec, name, archivePath, force, alreadyInstalled)
+}
+
+// stageAndInstall extracts archivePath into the component's install root, moves
+// the files into place, and writes the manifest. On a force reinstall over an
+// existing component it snapshots first and restores on failure. It is the
+// shared tail of Install and InstallFromArchive.
+func stageAndInstall(ctx context.Context, roots Roots, spec Spec, name Name, archivePath string, force, alreadyInstalled bool) (retErr error) {
+	destDir := spec.InstallRoot(roots)
+	if err := os.MkdirAll(filepath.Dir(destDir), 0o755); err != nil {
+		return err
+	}
+	stageDir, err := os.MkdirTemp(filepath.Dir(destDir), ".cjv-component-*")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(stageDir) //nolint:errcheck // best-effort cleanup
+
 	paths, err := dist.ExtractFlattened(ctx, archivePath, stageDir, spec.StripTopLevel)
 	if err != nil {
 		return err
@@ -85,14 +124,19 @@ func Install(ctx context.Context, roots Roots, tc toolchain.ToolchainName, name 
 
 	var snap *Snapshot
 	var moved []string
+	// On failure: undo the move, drop the manifest, then restore the snapshot.
+	// The backup is dropped (snap.Cleanup) LAST in both paths, so Restore always
+	// runs before its backup is deleted. snap.Cleanup is nil-safe.
 	defer func() {
 		if retErr == nil {
+			_ = snap.Cleanup() //nolint:errcheck // best-effort cleanup (nil-safe)
 			return
 		}
 		_ = removePaths(roots, name, moved)         //nolint:errcheck // best-effort rollback
 		_ = cleanupComponentMeta(roots.TcDir, name) //nolint:errcheck // best-effort rollback
 		if snap != nil {
 			_ = snap.Restore() //nolint:errcheck // best-effort rollback
+			_ = snap.Cleanup() //nolint:errcheck // best-effort cleanup
 		}
 	}()
 
@@ -101,7 +145,6 @@ func Install(ctx context.Context, roots Roots, tc toolchain.ToolchainName, name 
 		if err != nil {
 			return err
 		}
-		defer snap.Cleanup() //nolint:errcheck // best-effort cleanup
 		if err := Remove(roots, name); err != nil {
 			return fmt.Errorf("reinstall: remove existing %s: %w", name, err)
 		}

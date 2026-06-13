@@ -205,7 +205,7 @@ func verifyChecksum(hasher hash.Hash, expected string) error {
 }
 
 // CleanupDownload removes a staged download once its archive has been
-// extracted, keeping cacheDir empty in steady state (rustup-style). Failures
+// extracted, keeping cacheDir empty in steady state. Failures
 // during install must NOT call this: leaving the file on disk lets the next
 // run reuse it instead of re-downloading.
 func CleanupDownload(stagedPath string) error {

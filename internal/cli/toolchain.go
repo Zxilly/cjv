@@ -5,11 +5,13 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/Zxilly/cjv/internal/cjverr"
 	"github.com/Zxilly/cjv/internal/cli/output"
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/i18n"
+	"github.com/Zxilly/cjv/internal/lifecycle"
 	"github.com/Zxilly/cjv/internal/proxy"
 	"github.com/Zxilly/cjv/internal/selfupdate"
 	"github.com/Zxilly/cjv/internal/toolchain"
@@ -17,6 +19,20 @@ import (
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 )
+
+// Flags for `cjv toolchain link`. These only apply to the URL install branch;
+// passing them with a local path is rejected (see runToolchainLink).
+var (
+	linkSHA256 string
+	linkForce  bool
+	linkNoStdx bool
+)
+
+// isURLPath reports whether the link target is an http(s) URL (vs a local path).
+func isURLPath(s string) bool {
+	l := strings.ToLower(s)
+	return strings.HasPrefix(l, "http://") || strings.HasPrefix(l, "https://")
+}
 
 type toolchainLinkResult struct {
 	Name string `json:"name"`
@@ -57,6 +73,29 @@ var toolchainLinkCmd = &cobra.Command{
 		// Prevent shadowing standard channel names (lts, sts, nightly)
 		if !parsed.IsCustom() {
 			return errors.New(i18n.T("LinkReservedName", i18n.MsgData{"Name": name}))
+		}
+
+		// URL target: download and materialize a cjv-owned toolchain.
+		if isURLPath(targetPath) {
+			if err := lifecycle.InstallToolchainFromURL(cmd.Context(), name, targetPath, linkSHA256, linkForce, linkNoStdx, lifecycleOptions()); err != nil {
+				return err
+			}
+			if !output.IsJSON() {
+				return nil
+			}
+			tcDir, err := config.ToolchainsDir()
+			if err != nil {
+				return err
+			}
+			return output.RenderTo(cmdOutput(cmd), toolchainLinkResult{Name: name, Path: filepath.Join(tcDir, name)})
+		}
+
+		// Local path: the URL-only flags must not be used here. Reject explicit
+		// use rather than silently ignoring them.
+		for _, f := range []string{"sha256", "force", "no-stdx"} {
+			if cmd.Flags().Changed(f) {
+				return errors.New(i18n.T("LinkFlagURLOnly", i18n.MsgData{"Flag": f}))
+			}
 		}
 
 		absPath, err := filepath.Abs(targetPath)
@@ -112,6 +151,9 @@ var toolchainUninstallCmd = &cobra.Command{
 
 func init() {
 	toolchainUninstallCmd.Flags().BoolVarP(&uninstallYes, "yes", "y", false, i18n.T("FlagSkipConfirm", nil))
+	toolchainLinkCmd.Flags().StringVar(&linkSHA256, "sha256", "", i18n.T("LinkFlagSHA256", nil))
+	toolchainLinkCmd.Flags().BoolVar(&linkForce, "force", false, i18n.T("LinkFlagForce", nil))
+	toolchainLinkCmd.Flags().BoolVar(&linkNoStdx, "no-stdx", false, i18n.T("LinkFlagNoStdx", nil))
 	toolchainCmd.AddCommand(toolchainListCmd)
 	toolchainCmd.AddCommand(toolchainLinkCmd)
 	toolchainCmd.AddCommand(toolchainUninstallCmd)

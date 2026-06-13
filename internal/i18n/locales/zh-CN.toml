@@ -567,7 +567,7 @@ other = "管理已安装的工具链"
 other = "列出已安装的工具链"
 
 [ToolchainLinkShort]
-other = "将自定义工具链链接到本地目录"
+other = "将自定义工具链链接到本地目录，或从 URL 下载并安装"
 
 [ToolchainUninstallShort]
 other = "卸载工具链"
@@ -670,6 +670,36 @@ other = "该目录似乎不包含仓颉 SDK"
 
 [LinkCreateFailed]
 other = "创建链接失败"
+
+[LinkFlagSHA256]
+other = "用此 SHA-256 校验下载的归档（仅 URL 安装）"
+
+[LinkFlagForce]
+other = "覆盖同名的已存在工具链（仅 URL 安装）"
+
+[LinkFlagNoStdx]
+other = "跳过安装随包的 stdx 组件（仅 URL 安装）"
+
+[LinkDownloadingURL]
+other = "正在从 {{.URL}} 下载工具链"
+
+[LinkNoSDKArchive]
+other = "下载内容中未找到 cangjie-sdk-* 归档"
+
+[LinkFlagURLOnly]
+other = "标志 --{{.Flag}} 仅适用于 URL 安装"
+
+[LinkCrossOSUnsupported]
+other = "无法在 {{.Host}} 上安装 {{.Target}} SDK；URL 安装仅支持与当前系统匹配的 SDK"
+
+[LinkInstallingStdx]
+other = "正在为 '{{.Name}}' 安装随包 stdx"
+
+[LinkStdxMissingDirs]
+other = "stdx 归档未生成 dynamic/ 和 static/ 目录"
+
+[LinkStdxFailedAfterSDK]
+other = "SDK 工具链 '{{.Name}}' 已安装，但其随包 stdx 安装失败；可加 --force 重试，或单独安装 stdx"
 
 [RemoveToolchainFailed]
 other = "删除工具链失败"
