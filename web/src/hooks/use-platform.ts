@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react'
+import { msg } from '@lingui/core/macro'
+import type { MessageDescriptor } from '@lingui/core'
 import { parseCPU, parseOS } from 'ua-parser-modern'
 import { SUPPORTED_PLATFORMS, type SupportedPlatform } from '../generated/platforms'
 
@@ -8,14 +10,14 @@ const GITCODE = 'https://gitcode.com/Zxilly/cjv'
 const DL_BASE = '/dl'
 
 const UNSUPPORTED = new Set(['iOS', 'Android', 'HarmonyOS'])
-const MAC_X86_WARNING = '部分 LTS 和 STS 版本可能不包含 macOS x86_64 的预编译 SDK。'
+const MAC_X86_WARNING = msg`部分 LTS 和 STS 版本可能不包含 macOS x86_64 的预编译 SDK。`
 
 export interface ReadyInfo {
   label: string
-  hint: string
+  hint: MessageDescriptor
   command: string
   mirrorCommand: string
-  warning?: string
+  warning?: MessageDescriptor
   // A ready result is by definition supported, so it never carries an unsupported
   // reason. Declaring the field as `never` keeps `info.reason` accessible across the
   // ReadyInfo | BasicInfo union without widening what a ready result may hold.
@@ -48,7 +50,7 @@ export interface BinaryInfo {
   mirrorUrl: string
   officialReleaseUrl: string
   mirrorReleaseUrl: string
-  warning?: string
+  warning?: MessageDescriptor
 }
 
 export type PlatformState = 'ready' | 'unsupported' | 'unknown'
@@ -88,15 +90,15 @@ const SH_MIRROR_CMD = `curl -sSf ${BASE}/install.sh | sh -s -- --mirror`
 const PS_CMD = `irm ${BASE}/install.ps1 | iex`
 const PS_MIRROR_CMD = `$env:CJV_MIRROR = "1"; irm ${BASE}/install.ps1 | iex`
 
-const SH_HINT = '在终端中运行：'
-const PS_HINT = '在 PowerShell 中运行：'
+const SH_HINT = msg`在终端中运行：`
+const PS_HINT = msg`在 PowerShell 中运行：`
 
 type PlatformEntry = SupportedPlatform & {
   label: string
-  hint: string
+  hint: MessageDescriptor
   command: string
   mirrorCommand: string
-  warning?: string
+  warning?: MessageDescriptor
 }
 
 type SupportedPlatformKey<T extends SupportedPlatform = SupportedPlatform> =

@@ -1,12 +1,13 @@
 import { defineConfig } from 'vitest/config'
 import react from '@vitejs/plugin-react'
+import { lingui } from '@lingui/vite-plugin'
 import { playwright } from '@vitest/browser-playwright'
 import path from 'node:path'
 
 const browserName = (process.env.VITEST_BROWSER || 'chromium') as 'chromium' | 'firefox' | 'webkit'
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react({ babel: { plugins: ['@lingui/babel-plugin-lingui-macro'] } }), lingui()],
   resolve: {
     alias: { '@': path.resolve(__dirname, './src') },
   },
@@ -29,7 +30,9 @@ export default defineConfig({
       exclude: [
         'src/**/*.test.{ts,tsx}',
         'src/test-setup.ts',
+        'src/test-utils.tsx',
         'src/components/ui/**',
+        'src/locales/**',
         'src/main.tsx',
         'src/vite-env.d.ts',
       ],
