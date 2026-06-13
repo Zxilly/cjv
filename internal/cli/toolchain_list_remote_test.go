@@ -172,7 +172,7 @@ func TestRunToolchainListRemote_TargetWithChannelAll_LtsFiltered(t *testing.T) {
 	assert.Equal(t, []string{"1.0.5"}, got.Channels[0].Versions)
 	assert.Empty(t, got.Channels[1].Versions, "STS has no ohos build in the mock")
 	assert.Empty(t, got.Channels[1].Error, "missing builds is not a per-channel error")
-	// Nightly tag is target-orthogonal: error must come from missing API key,
+	// Nightly latest is target-orthogonal: error must come from missing API key,
 	// not from a 'target unsupported' check.
 	nightly := got.Channels[2]
 	assert.Equal(t, "nightly", nightly.Channel)

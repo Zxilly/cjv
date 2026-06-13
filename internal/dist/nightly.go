@@ -10,6 +10,8 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -35,6 +37,19 @@ var (
 	httpClient     *http.Client
 	httpClientOnce sync.Once
 )
+
+var nightlySDKVersionRE = regexp.MustCompile(`-(\d+\.\d+\.\d+(?:-[0-9A-Za-z.]+)?(?:\+[0-9A-Za-z.]+)?)$`)
+
+// NightlyRelease is the resolved identity of a GitCode nightly release.
+//
+// TagName is the release/download path segment. Version is the SDK asset
+// version embedded in archive filenames and used as cjv's installed toolchain
+// version. They usually match, but upstream can publish a release where the
+// tag and asset version differ.
+type NightlyRelease struct {
+	TagName string
+	Version string
+}
 
 // HTTPClient returns the shared HTTP client with proper timeout and User-Agent.
 // The client is lazily initialized so that CJV_DOWNLOAD_TIMEOUT can be set
@@ -87,12 +102,23 @@ func NightlyDownloadURL(baseURL, version, goos, goarch string) (string, error) {
 	return nightlyDownloadURL(baseURL, version, filename)
 }
 
-func NightlyDownloadURLForTuple(baseURL, version, tuple string) (string, error) {
-	filename, err := NightlyFilenameForTuple(tuple, version)
+func (r NightlyRelease) DownloadURL(baseURL, tuple string) (string, error) {
+	version := r.Version
+	if version == "" {
+		version = r.TagName
+	}
+	filename, err := NightlyArchiveName(tuple, version)
 	if err != nil {
 		return "", err
 	}
-	return nightlyDownloadURL(baseURL, version, filename)
+	return nightlyDownloadURL(baseURL, r.tag(), filename)
+}
+
+func (r NightlyRelease) tag() string {
+	if r.TagName != "" {
+		return r.TagName
+	}
+	return r.Version
 }
 
 func nightlyDownloadURL(baseURL, version, filename string) (string, error) {
@@ -202,45 +228,127 @@ type gitCodeReleaseAsset struct {
 }
 
 // FetchLatestNightly queries the GitCode releases/latest API and returns the
-// tag_name of the repository's latest release.
+// SDK asset version of the repository's latest release.
 // apiURL should be the full latest endpoint URL (e.g. DefaultNightlyAPIURL).
 // apiKey is the GitCode API access token; required for authentication.
 func FetchLatestNightly(ctx context.Context, apiURL, apiKey string) (string, error) {
+	release, err := FetchLatestNightlyRelease(ctx, apiURL, apiKey)
+	if err != nil {
+		return "", err
+	}
+	return release.Version, nil
+}
+
+// FetchLatestNightlyRelease queries the GitCode releases/latest API and
+// returns both the release tag and the SDK asset version. The release tag is
+// used for the download URL path; the asset version is used in filenames and
+// installed toolchain names.
+func FetchLatestNightlyRelease(ctx context.Context, apiURL, apiKey string) (NightlyRelease, error) {
 	if apiKey == "" {
-		return "", &cjverr.GitCodeAPIKeyRequiredError{}
+		return NightlyRelease{}, &cjverr.GitCodeAPIKeyRequiredError{}
 	}
 	u, err := url.Parse(apiURL)
 	if err != nil {
-		return "", fmt.Errorf("invalid nightly API URL: %w", err)
+		return NightlyRelease{}, fmt.Errorf("invalid nightly API URL: %w", err)
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
 	if err != nil {
-		return "", fmt.Errorf("failed to create nightly request: %w", err)
+		return NightlyRelease{}, fmt.Errorf("failed to create nightly request: %w", err)
 	}
 	req.Header.Set(GitCodeTokenHeader, apiKey)
 	resp, err := HTTPClient().Do(req)
 	if err != nil {
-		return "", fmt.Errorf("failed to query nightly versions: %w", err)
+		return NightlyRelease{}, fmt.Errorf("failed to query nightly versions: %w", err)
 	}
 	defer resp.Body.Close() //nolint:errcheck // best-effort cleanup
 
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("failed to query nightly versions: HTTP %d", resp.StatusCode)
+		return NightlyRelease{}, fmt.Errorf("failed to query nightly versions: HTTP %d", resp.StatusCode)
 	}
 
 	body, err := io.ReadAll(io.LimitReader(resp.Body, MaxResponseSize))
 	if err != nil {
-		return "", err
+		return NightlyRelease{}, err
 	}
 
 	var release gitCodeRelease
 	if err := json.Unmarshal(body, &release); err != nil {
-		return "", fmt.Errorf("failed to parse nightly release: %w", err)
+		return NightlyRelease{}, fmt.Errorf("failed to parse nightly release: %w", err)
 	}
-	if release.TagName == "" {
-		return "", fmt.Errorf("nightly release has empty tag_name")
-	}
+	return parseNightlyRelease(release)
+}
 
-	return release.TagName, nil
+func parseNightlyRelease(release gitCodeRelease) (NightlyRelease, error) {
+	if release.TagName == "" {
+		return NightlyRelease{}, fmt.Errorf("nightly release has empty tag_name")
+	}
+	version, err := nightlySDKVersionFromAssets(release.Assets)
+	if err != nil {
+		return NightlyRelease{}, err
+	}
+	if version == "" {
+		version = release.TagName
+	}
+	return NightlyRelease{TagName: release.TagName, Version: version}, nil
+}
+
+func nightlySDKVersionFromAssets(assets []gitCodeReleaseAsset) (string, error) {
+	version := ""
+	for _, asset := range assets {
+		name := nightlyReleaseAssetName(asset)
+		v := nightlySDKAssetVersion(name)
+		if v == "" {
+			continue
+		}
+		if version == "" {
+			version = v
+			continue
+		}
+		if version != v {
+			return "", fmt.Errorf("nightly release has multiple SDK asset versions: %s and %s", version, v)
+		}
+	}
+	return version, nil
+}
+
+func nightlyReleaseAssetName(asset gitCodeReleaseAsset) string {
+	if strings.TrimSpace(asset.Name) != "" {
+		return strings.TrimSpace(asset.Name)
+	}
+	if asset.BrowserDownloadURL == "" {
+		return ""
+	}
+	u, err := url.Parse(asset.BrowserDownloadURL)
+	if err != nil {
+		return path.Base(asset.BrowserDownloadURL)
+	}
+	return path.Base(u.Path)
+}
+
+func nightlySDKAssetVersion(name string) string {
+	name = strings.TrimSpace(name)
+	name = strings.TrimSuffix(name, ".sha256")
+	if !strings.HasPrefix(name, "cangjie-sdk-") {
+		return ""
+	}
+	stem, ok := trimNightlyAssetExt(name)
+	if !ok {
+		return ""
+	}
+	stem = strings.TrimSuffix(stem, "-sanitizer")
+	match := nightlySDKVersionRE.FindStringSubmatch(stem)
+	if len(match) != 2 {
+		return ""
+	}
+	return match[1]
+}
+
+func trimNightlyAssetExt(name string) (string, bool) {
+	for _, ext := range []string{".tar.gz", ".zip", ".exe"} {
+		if strings.HasSuffix(name, ext) {
+			return strings.TrimSuffix(name, ext), true
+		}
+	}
+	return name, false
 }

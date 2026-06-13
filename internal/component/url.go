@@ -67,12 +67,13 @@ func stdxURL(tc toolchain.ToolchainName, tuple string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	stdxVersion := tc.Version + ".1"
+	nightly := nightlyReleaseAsset(tc)
+	stdxVersion := nightly.Version + ".1"
 	asset := fmt.Sprintf("cangjie-stdx-%s-%s.zip", platform, stdxVersion)
 
 	switch tc.Channel {
 	case toolchain.Nightly:
-		return joinReleaseURL(dist.DefaultNightlyBaseURL, tc.Version, asset)
+		return joinReleaseURL(dist.DefaultNightlyBaseURL, nightly.ReleaseTag, asset)
 	default:
 		return joinReleaseURL(stdxReleaseBase(), "v"+stdxVersion, asset)
 	}
@@ -81,10 +82,11 @@ func stdxURL(tc toolchain.ToolchainName, tuple string) (string, error) {
 // docsURL: nightly from the cangjie nightly_build release; LTS / STS from
 // the cangjie-docs-bundle GitHub release, tag = bare version (no `v` prefix).
 func docsURL(tc toolchain.ToolchainName, _ string) (string, error) {
-	asset := fmt.Sprintf("cangjie-docs-html-%s.tar.gz", tc.Version)
+	nightly := nightlyReleaseAsset(tc)
+	asset := fmt.Sprintf("cangjie-docs-html-%s.tar.gz", nightly.Version)
 	switch tc.Channel {
 	case toolchain.Nightly:
-		return joinReleaseURL(dist.DefaultNightlyBaseURL, tc.Version, asset)
+		return joinReleaseURL(dist.DefaultNightlyBaseURL, nightly.ReleaseTag, asset)
 	default:
 		return joinReleaseURL(docsBundleBase(), tc.Version, asset)
 	}
@@ -93,13 +95,41 @@ func docsURL(tc toolchain.ToolchainName, _ string) (string, error) {
 // stdxDocsURL: nightly from nightly_build; LTS / STS from cangjie_stdx,
 // tag = `v{ver}.1`, asset suffix `.1`.
 func stdxDocsURL(tc toolchain.ToolchainName, _ string) (string, error) {
-	asset := fmt.Sprintf("cangjie-stdx-docs-html-%s.1.tar.gz", tc.Version)
+	nightly := nightlyReleaseAsset(tc)
+	asset := fmt.Sprintf("cangjie-stdx-docs-html-%s.1.tar.gz", nightly.Version)
 	switch tc.Channel {
 	case toolchain.Nightly:
-		return joinReleaseURL(dist.DefaultNightlyBaseURL, tc.Version, asset)
+		return joinReleaseURL(dist.DefaultNightlyBaseURL, nightly.ReleaseTag, asset)
 	default:
 		return joinReleaseURL(stdxReleaseBase(), "v"+tc.Version+".1", asset)
 	}
+}
+
+type nightlyAsset struct {
+	ReleaseTag string
+	Version    string
+}
+
+func nightlyReleaseAsset(tc toolchain.ToolchainName) nightlyAsset {
+	asset := nightlyAsset{ReleaseTag: tc.Version, Version: tc.Version}
+	if tc.Channel != toolchain.Nightly || tc.Version == "" {
+		return asset
+	}
+	roots, err := RootsFor(tc.String())
+	if err != nil {
+		return asset
+	}
+	meta, err := toolchain.ReadNightlyReleaseMetadata(roots.TcDir)
+	if err != nil {
+		return asset
+	}
+	if meta.ReleaseTag != "" {
+		asset.ReleaseTag = meta.ReleaseTag
+	}
+	if meta.Version != "" {
+		asset.Version = meta.Version
+	}
+	return asset
 }
 
 func joinReleaseURL(base, tag, asset string) (string, error) {

@@ -156,7 +156,7 @@ func InstallToolchainWithExtras(ctx context.Context, input string, targets, comp
 
 	var targetNames []string
 	for _, target := range normalizedTargets {
-		resolvedTarget, err := ResolveAndLocateWithTarget(ctx, targetBase, settings, fetcher, target)
+		resolvedTarget, err := resolveTargetToolchain(ctx, targetBase, settings, fetcher, target, resolved)
 		if err != nil {
 			return err
 		}
@@ -178,6 +178,20 @@ func InstallToolchainWithExtras(ctx context.Context, input string, targets, comp
 		}
 	}
 	return nil
+}
+
+func resolveTargetToolchain(ctx context.Context, base toolchain.ToolchainName, settings *config.Settings, fetcher *ManifestFetcher, target string, host ResolvedToolchain) (ResolvedToolchain, error) {
+	if base.Channel != toolchain.Nightly || host.NightlyReleaseTag == "" || host.NightlyVersion == "" {
+		return ResolveAndLocateWithTarget(ctx, base, settings, fetcher, target)
+	}
+	tuple, err := dist.CurrentTargetTuple(settings.DefaultHost, target)
+	if err != nil {
+		return ResolvedToolchain{}, err
+	}
+	return resolveNightlyRelease(ctx, dist.NightlyRelease{
+		TagName: host.NightlyReleaseTag,
+		Version: host.NightlyVersion,
+	}, tuple, fetcher.opts)
 }
 
 // LoadSettings loads the cached user settings file used by lifecycle operations.
@@ -292,11 +306,13 @@ func InstallComponentsList(ctx context.Context, resolvedName string, components 
 
 // ResolvedToolchain holds the result of toolchain resolution.
 type ResolvedToolchain struct {
-	Name        string
-	URL         string
-	SHA256      string
-	ArchiveName string
-	Tuple       string
+	Name              string
+	URL               string
+	SHA256            string
+	ArchiveName       string
+	Tuple             string
+	NightlyReleaseTag string
+	NightlyVersion    string
 }
 
 func InstallResolved(ctx context.Context, rt ResolvedToolchain, settings *config.Settings, sf *config.SettingsFile, force bool, opts Options) error {
@@ -365,6 +381,14 @@ func installResolvedWithDefault(ctx context.Context, rt ResolvedToolchain, setti
 	if err := opts.validateInstallation(stagingDir, rt.Tuple); err != nil {
 		return err
 	}
+	if rt.NightlyReleaseTag != "" || rt.NightlyVersion != "" {
+		if err := toolchain.WriteNightlyReleaseMetadata(stagingDir, toolchain.NightlyReleaseMetadata{
+			ReleaseTag: rt.NightlyReleaseTag,
+			Version:    rt.NightlyVersion,
+		}); err != nil {
+			return err
+		}
+	}
 
 	isFirstInstall := allowDefault && (settings.DefaultToolchain == "" || !defaultToolchainExists(settings.DefaultToolchain))
 	if err := swapInstalledToolchain(stagingDir, destDir, isReinstall, func() error {
@@ -403,10 +427,10 @@ func ResolveAndLocateWithTarget(ctx context.Context, name toolchain.ToolchainNam
 			return ResolvedToolchain{}, err
 		}
 	}
-	return ResolveAndLocateWithTuple(ctx, name, settings, fetcher, tuple)
+	return ResolveAndLocatePlatform(ctx, name, settings, fetcher, tuple)
 }
 
-func ResolveAndLocateWithTuple(ctx context.Context, name toolchain.ToolchainName, settings *config.Settings, fetcher *ManifestFetcher, tuple string) (ResolvedToolchain, error) {
+func ResolveAndLocatePlatform(ctx context.Context, name toolchain.ToolchainName, settings *config.Settings, fetcher *ManifestFetcher, tuple string) (ResolvedToolchain, error) {
 	if tuple == "" {
 		var err error
 		tuple, err = dist.CurrentHostTuple(settings.DefaultHost)
@@ -415,7 +439,7 @@ func ResolveAndLocateWithTuple(ctx context.Context, name toolchain.ToolchainName
 		}
 	}
 	if name.Channel == toolchain.Nightly {
-		return resolveNightlyWithTuple(ctx, name, settings, tuple, fetcher.opts)
+		return resolveNightly(ctx, name, settings, tuple, fetcher.opts)
 	}
 
 	manifest, err := fetcher.Get(ctx)
@@ -433,7 +457,7 @@ func ResolveAndLocateWithTuple(ctx context.Context, name toolchain.ToolchainName
 		channel = found
 	}
 	if version == "" {
-		v, err := latestVersionForTuple(manifest, channel, tuple)
+		v, err := latestVersion(manifest, channel, tuple)
 		if err != nil {
 			return ResolvedToolchain{}, err
 		}
@@ -451,7 +475,7 @@ func ResolveAndLocateWithTuple(ctx context.Context, name toolchain.ToolchainName
 	return ResolvedToolchain{Name: resolved.String(), URL: info.URL, SHA256: info.SHA256, ArchiveName: info.Name, Tuple: tuple}, nil
 }
 
-func latestVersionForTuple(manifest *dist.Manifest, channel toolchain.Channel, tuple string) (string, error) {
+func latestVersion(manifest *dist.Manifest, channel toolchain.Channel, tuple string) (string, error) {
 	if tuple == "" {
 		return manifest.GetLatestVersion(channel)
 	}
@@ -472,7 +496,11 @@ func latestVersionForTuple(manifest *dist.Manifest, channel toolchain.Channel, t
 // FetchNightlySHA256 is a package-level seam for tests that resolve nightly toolchains.
 var FetchNightlySHA256 = dist.FetchNightlySHA256
 
-func resolveNightlyWithTuple(ctx context.Context, name toolchain.ToolchainName, settings *config.Settings, tuple string, opts Options) (ResolvedToolchain, error) {
+// FetchLatestNightlyRelease is a package-level seam for tests that resolve
+// pinned nightly asset versions back to their GitCode release tag.
+var FetchLatestNightlyRelease = dist.FetchLatestNightlyRelease
+
+func resolveNightly(ctx context.Context, name toolchain.ToolchainName, settings *config.Settings, tuple string, opts Options) (ResolvedToolchain, error) {
 	if tuple == "" {
 		var err error
 		tuple, err = dist.CurrentHostTuple(settings.DefaultHost)
@@ -481,21 +509,54 @@ func resolveNightlyWithTuple(ctx context.Context, name toolchain.ToolchainName, 
 		}
 	}
 	version := name.Version
+	releaseTag := version
 	if version == "" {
 		opts.note(i18n.T("FetchingNightly", nil))
-		v, err := dist.FetchLatestNightly(ctx, dist.DefaultNightlyAPIURL, settings.ResolveGitCodeAPIKey())
+		release, err := FetchLatestNightlyRelease(ctx, dist.DefaultNightlyAPIURL, settings.ResolveGitCodeAPIKey())
 		if err != nil {
 			return ResolvedToolchain{}, err
 		}
-		version = v
+		releaseTag = release.TagName
+		version = release.Version
+	} else if release, ok := pinnedNightlyRelease(ctx, version, settings); ok {
+		releaseTag = release.TagName
+		version = release.Version
 	}
 
+	return resolveNightlyRelease(ctx, dist.NightlyRelease{
+		TagName: releaseTag,
+		Version: version,
+	}, tuple, opts)
+}
+
+func pinnedNightlyRelease(ctx context.Context, version string, settings *config.Settings) (dist.NightlyRelease, bool) {
+	apiKey := settings.ResolveGitCodeAPIKey()
+	if apiKey == "" {
+		return dist.NightlyRelease{}, false
+	}
+	release, err := FetchLatestNightlyRelease(ctx, dist.DefaultNightlyAPIURL, apiKey)
+	if err != nil {
+		slog.Debug("failed to resolve pinned nightly release tag", "version", version, "error", err)
+		return dist.NightlyRelease{}, false
+	}
+	if release.Version != version && release.TagName != version {
+		return dist.NightlyRelease{}, false
+	}
+	return release, true
+}
+
+func resolveNightlyRelease(ctx context.Context, release dist.NightlyRelease, tuple string, opts Options) (ResolvedToolchain, error) {
+	version := release.Version
+	releaseTag := release.TagName
+	if releaseTag == "" {
+		releaseTag = version
+	}
 	resolved := toolchain.ToolchainName{Channel: toolchain.Nightly, Version: version}
 	if id, err := sdktarget.ParseIdentity(tuple); err == nil && id.IsTargetVariant() {
 		resolved.Target = tuple
 	}
 
-	url, err := dist.NightlyDownloadURLForTuple(dist.DefaultNightlyBaseURL, version, tuple)
+	url, err := (dist.NightlyRelease{TagName: releaseTag, Version: version}).DownloadURL(dist.DefaultNightlyBaseURL, tuple)
 	if err != nil {
 		return ResolvedToolchain{}, err
 	}
@@ -506,7 +567,14 @@ func resolveNightlyWithTuple(ctx context.Context, name toolchain.ToolchainName, 
 	if sha256 == "" {
 		opts.note(i18n.T("NightlyNoChecksum", nil))
 	}
-	return ResolvedToolchain{Name: resolved.String(), URL: url, SHA256: sha256, Tuple: tuple}, nil
+	return ResolvedToolchain{
+		Name:              resolved.String(),
+		URL:               url,
+		SHA256:            sha256,
+		Tuple:             tuple,
+		NightlyReleaseTag: releaseTag,
+		NightlyVersion:    version,
+	}, nil
 }
 
 func FetchManifest(ctx context.Context, manifestURL string) (*dist.Manifest, error) {

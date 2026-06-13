@@ -937,6 +937,7 @@ func TestInstallToolchainWithOptions_Wrapper(t *testing.T) {
 }
 
 func TestResolveNightlyWithSpecificVersionSkipsLatestLookup(t *testing.T) {
+	t.Setenv(config.EnvGitCodeAPIKey, "")
 	settings := config.DefaultSettings()
 	// No GitCode API key is configured: a specific version must skip the latest
 	// lookup (which requires the key and a network call), so resolution
@@ -946,7 +947,7 @@ func TestResolveNightlyWithSpecificVersionSkipsLatestLookup(t *testing.T) {
 	fetchNightlySHA256 = func(context.Context, string) (string, error) { return "", nil }
 	t.Cleanup(func() { fetchNightlySHA256 = orig })
 
-	resolved, err := resolveNightlyWithTuple(context.Background(), toolchain.ToolchainName{
+	resolved, err := resolveNightly(context.Background(), toolchain.ToolchainName{
 		Channel: toolchain.Nightly,
 		Version: "202501010000",
 	}, &settings, "linux-x64")
@@ -1016,8 +1017,13 @@ func TestInstallComponentsListInputValidationAndAlreadyInstalled(t *testing.T) {
 }
 
 func TestResolveAndLocateDispatchesNightlyAndDefaultToolchainExistsInvalidName(t *testing.T) {
+	t.Setenv(config.EnvGitCodeAPIKey, "")
+	orig := fetchNightlySHA256
+	fetchNightlySHA256 = func(context.Context, string) (string, error) { return "", nil }
+	t.Cleanup(func() { fetchNightlySHA256 = orig })
+
 	settings := config.DefaultSettings()
-	resolved, err := resolveAndLocateWithTuple(context.Background(), toolchain.ToolchainName{
+	resolved, err := resolveAndLocate(context.Background(), toolchain.ToolchainName{
 		Channel: toolchain.Nightly,
 		Version: "202501010000",
 	}, &settings, newManifestFetcher(""), "linux-x64")

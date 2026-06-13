@@ -3,6 +3,7 @@ package component
 import (
 	"testing"
 
+	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/toolchain"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -135,4 +136,35 @@ func TestAvailableComponentsFiltersBySelectedPlatform(t *testing.T) {
 	assert.Contains(t, got, Stdx)
 	assert.Contains(t, got, Docs)
 	assert.Contains(t, got, StdxDocs)
+}
+
+func TestResolveAssetURLNightlyUsesReleaseMetadata(t *testing.T) {
+	home := t.TempDir()
+	config.IsolateForTest(t, home)
+
+	const tag = "1.1.0-alpha.20260613020028"
+	const assetVersion = "1.2.0-alpha.20260613020028"
+	tc := toolchain.ToolchainName{Channel: toolchain.Nightly, Version: assetVersion}
+	roots, err := RootsFor(tc.String())
+	require.NoError(t, err)
+	require.NoError(t, toolchain.WriteNightlyReleaseMetadata(roots.TcDir, toolchain.NightlyReleaseMetadata{
+		ReleaseTag: tag,
+		Version:    assetVersion,
+	}))
+
+	docsSpec, err := SpecFor(Docs)
+	require.NoError(t, err)
+	docsURL, err := ResolveAssetURL(docsSpec, tc, "")
+	require.NoError(t, err)
+	assert.Equal(t,
+		"https://gitcode.com/Cangjie/nightly_build/releases/download/"+tag+"/cangjie-docs-html-"+assetVersion+".tar.gz",
+		docsURL)
+
+	stdxSpec, err := SpecFor(Stdx)
+	require.NoError(t, err)
+	stdxURL, err := ResolveAssetURL(stdxSpec, tc, "linux-x64")
+	require.NoError(t, err)
+	assert.Equal(t,
+		"https://gitcode.com/Cangjie/nightly_build/releases/download/"+tag+"/cangjie-stdx-linux-x64-"+assetVersion+".1.zip",
+		stdxURL)
 }

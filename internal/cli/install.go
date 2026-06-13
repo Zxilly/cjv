@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"path/filepath"
 	"runtime"
 
 	"github.com/Zxilly/cjv/internal/cjverr"
@@ -23,10 +22,7 @@ import (
 	"github.com/Zxilly/cjv/internal/lifecycle"
 	"github.com/Zxilly/cjv/internal/proxy"
 	"github.com/Zxilly/cjv/internal/selfupdate"
-	sdktarget "github.com/Zxilly/cjv/internal/target"
 	"github.com/Zxilly/cjv/internal/toolchain"
-	"github.com/Zxilly/cjv/internal/utils"
-	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 )
 
@@ -160,99 +156,6 @@ func installResolvedNoDefault(ctx context.Context, rt resolvedToolchain, setting
 	return lifecycle.InstallResolvedNoDefault(ctx, rt, settings, sf, force, lifecycleOptions())
 }
 
-func installResolvedWithDefault(ctx context.Context, rt resolvedToolchain, settings *config.Settings, sf *config.SettingsFile, force bool, allowDefault bool) (retErr error) {
-	resolvedName := rt.Name
-	tcDir, err := config.ToolchainsDir()
-	if err != nil {
-		return err
-	}
-	destDir := filepath.Join(tcDir, resolvedName)
-	isReinstall := false
-	if _, err := os.Stat(destDir); err == nil {
-		if !force {
-			if output.IsJSON() {
-				// In JSON mode treat "already installed" as a structured error
-				// so consumers can branch on it instead of seeing a no-op.
-				return &cjverr.ToolchainAlreadyInstalledError{Name: resolvedName}
-			}
-			fmt.Println(i18n.T("ToolchainAlreadyInstalled", i18n.MsgData{
-				"Name": resolvedName,
-			}))
-			return nil
-		}
-		isReinstall = true
-	}
-
-	if err := config.EnsureDirs(); err != nil {
-		return err
-	}
-
-	downloadsDir, err := config.DownloadsDir()
-	if err != nil {
-		return err
-	}
-	if u, err := url.Parse(rt.URL); err != nil || u.Path == "" {
-		return fmt.Errorf("invalid toolchain download URL: %s", rt.URL)
-	}
-
-	archivePath, err := dist.DownloadCachedWithName(ctx, rt.URL, rt.SHA256, downloadsDir, rt.ArchiveName)
-	if err != nil {
-		return err
-	}
-	// Drop the staged archive on success; failures keep it for the next retry.
-	defer func() {
-		if retErr == nil {
-			_ = dist.CleanupDownload(archivePath) //nolint:errcheck // best-effort
-		}
-	}()
-
-	stagingDir := destDir + toolchain.StagingSuffix
-	if err := utils.RemoveAllRetry(stagingDir); err != nil {
-		return fmt.Errorf("failed to clean staging directory: %w", err)
-	}
-	defer func() {
-		if retErr != nil {
-			_ = utils.RemoveAllRetry(stagingDir)
-		}
-	}()
-
-	noteStep(i18n.T("Extracting", nil))
-	if err := dist.InstallSDK(ctx, archivePath, stagingDir); err != nil {
-		return err
-	}
-
-	if err := validateInstallation(stagingDir, rt.Tuple); err != nil {
-		return err
-	}
-
-	isFirstInstall := allowDefault && (settings.DefaultToolchain == "" || !defaultToolchainExists(settings.DefaultToolchain))
-	if err := swapInstalledToolchain(stagingDir, destDir, isReinstall, func() error {
-		if _, err := selfupdate.EnsureManagedExecutable(); err != nil {
-			return err
-		}
-		if err := proxy.CreateAllProxyLinks(); err != nil {
-			return err
-		}
-		if isFirstInstall {
-			settings.DefaultToolchain = resolvedName
-			if err := sf.Save(settings); err != nil {
-				return err
-			}
-			ensurePathConfiguredFn()
-		}
-		return nil
-	}); err != nil {
-		return err
-	}
-
-	if !output.IsJSON() {
-		color.Green(i18n.T("ToolchainInstalled", i18n.MsgData{
-			"Name": resolvedName,
-		}))
-	}
-	return nil
-}
-
 // ensurePathConfigured adds the cjv bin directory to the user's PATH
 // on first install, so proxy commands are immediately available.
 //
@@ -296,19 +199,9 @@ func ensurePathConfigured() {
 	}
 }
 
-func resolveAndLocate(ctx context.Context, name toolchain.ToolchainName, settings *config.Settings, fetcher *manifestFetcher) (resolvedToolchain, error) {
-	return resolveAndLocateWithTarget(ctx, name, settings, fetcher, "")
-}
-
-func resolveAndLocateWithTarget(ctx context.Context, name toolchain.ToolchainName, settings *config.Settings, fetcher *manifestFetcher, target string) (resolvedToolchain, error) {
+func resolveAndLocate(ctx context.Context, name toolchain.ToolchainName, settings *config.Settings, fetcher *manifestFetcher, tuple string) (resolvedToolchain, error) {
 	return withNightlyChecksumHook(func() (resolvedToolchain, error) {
-		return lifecycle.ResolveAndLocateWithTarget(ctx, name, settings, fetcher.inner, target)
-	})
-}
-
-func resolveAndLocateWithTuple(ctx context.Context, name toolchain.ToolchainName, settings *config.Settings, fetcher *manifestFetcher, tuple string) (resolvedToolchain, error) {
-	return withNightlyChecksumHook(func() (resolvedToolchain, error) {
-		return lifecycle.ResolveAndLocateWithTuple(ctx, name, settings, fetcher.inner, tuple)
+		return lifecycle.ResolveAndLocatePlatform(ctx, name, settings, fetcher.inner, tuple)
 	})
 }
 
@@ -319,7 +212,7 @@ func withNightlyChecksumHook(fn func() (resolvedToolchain, error)) (resolvedTool
 	return fn()
 }
 
-func latestVersionForTuple(manifest *dist.Manifest, channel toolchain.Channel, tuple string) (string, error) {
+func latestVersion(manifest *dist.Manifest, channel toolchain.Channel, tuple string) (string, error) {
 	if tuple == "" {
 		return manifest.GetLatestVersion(channel)
 	}
@@ -341,46 +234,8 @@ func latestVersionForTuple(manifest *dist.Manifest, channel toolchain.Channel, t
 // toolchain without reaching the network for the checksum sidecar.
 var fetchNightlySHA256 = dist.FetchNightlySHA256
 
-func resolveNightlyWithTuple(ctx context.Context, name toolchain.ToolchainName, settings *config.Settings, tuple string) (resolvedToolchain, error) {
-	if tuple == "" {
-		var err error
-		tuple, err = dist.CurrentHostTuple(settings.DefaultHost)
-		if err != nil {
-			return resolvedToolchain{}, err
-		}
-	}
-	version := name.Version
-
-	if version == "" {
-		noteStep(i18n.T("FetchingNightly", nil))
-		v, err := dist.FetchLatestNightly(ctx, dist.DefaultNightlyAPIURL, settings.ResolveGitCodeAPIKey())
-		if err != nil {
-			return resolvedToolchain{}, err
-		}
-		version = v
-	}
-
-	resolved := toolchain.ToolchainName{Channel: toolchain.Nightly, Version: version}
-	if parts, err := sdktarget.ParseTuple(tuple); err == nil && parts.Environment != "" {
-		resolved.Target = tuple
-	}
-
-	url, err := dist.NightlyDownloadURLForTuple(dist.DefaultNightlyBaseURL, version, tuple)
-	if err != nil {
-		return resolvedToolchain{}, err
-	}
-
-	sha256, err := fetchNightlySHA256(ctx, url)
-	if err != nil {
-		// A fetch failure (network/HTTP/malformed) must not silently downgrade
-		// to an unverified install — abort. Only a genuine 404 (no checksum
-		// published) yields ("", nil) and proceeds with an explicit notice.
-		return resolvedToolchain{}, err
-	}
-	if sha256 == "" {
-		noteStep(i18n.T("NightlyNoChecksum", nil))
-	}
-	return resolvedToolchain{Name: resolved.String(), URL: url, SHA256: sha256, Tuple: tuple}, nil
+func resolveNightly(ctx context.Context, name toolchain.ToolchainName, settings *config.Settings, tuple string) (resolvedToolchain, error) {
+	return resolveAndLocate(ctx, name, settings, newManifestFetcher(settings.ManifestURL), tuple)
 }
 
 func fetchManifest(ctx context.Context, manifestURL string) (*dist.Manifest, error) {

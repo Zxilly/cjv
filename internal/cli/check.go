@@ -142,7 +142,7 @@ func runCheck(cmd *cobra.Command, args []string) error {
 			target = parsed.Target
 		}
 
-		latest, err := latestVersionForTuple(manifest, parsed.Channel, infoTuple)
+		latest, err := latestVersion(manifest, parsed.Channel, infoTuple)
 		if err != nil {
 			entry := checkEntry{Name: name}
 			if unavailable, ok := errors.AsType[*cjverr.VersionNotAvailableError](err); ok {

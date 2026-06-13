@@ -78,12 +78,12 @@ func manifestWithPlatformGap() dist.Manifest {
 	return manifest
 }
 
-func TestResolveAndLocateWithTupleUsesLatestVersionAvailableForTuple(t *testing.T) {
+func TestResolveAndLocateUsesLatestVersionAvailableForTarget(t *testing.T) {
 	server := manifestOnlyServer(t, manifestWithPlatformGap())
 	settings := config.DefaultSettings()
 	settings.ManifestURL = server.URL + "/sdk-versions.json"
 
-	resolved, err := resolveAndLocateWithTuple(context.Background(), toolchain.ToolchainName{
+	resolved, err := resolveAndLocate(context.Background(), toolchain.ToolchainName{
 		Channel: toolchain.LTS,
 	}, &settings, newManifestFetcher(settings.ManifestURL), "linux-x64")
 

@@ -50,8 +50,8 @@ type platformVersionsEntry struct {
 	Versions []string `json:"versions"`
 }
 
-// LTS/STS populate Platforms; nightly populates Versions (single tag) — the
-// nightly tag is platform-orthogonal and has no per-platform breakdown.
+// LTS/STS populate Platforms; nightly populates Versions (single resolved SDK
+// version) — nightly latest is platform-orthogonal and has no per-platform breakdown.
 type toolchainListRemoteAllPlatformsEntry struct {
 	Channel   string                  `json:"channel"`
 	Latest    string                  `json:"latest,omitempty"`
@@ -173,13 +173,13 @@ func buildNightlyEntry(ctx context.Context, settings *config.Settings) toolchain
 		Channel:  toolchain.Nightly.String(),
 		Versions: []string{},
 	}
-	tag, err := dist.FetchLatestNightly(ctx, dist.DefaultNightlyAPIURL, settings.ResolveGitCodeAPIKey())
+	version, err := dist.FetchLatestNightly(ctx, dist.DefaultNightlyAPIURL, settings.ResolveGitCodeAPIKey())
 	if err != nil {
 		entry.Error = err.Error()
 		return entry
 	}
-	entry.Latest = tag
-	entry.Versions = []string{tag}
+	entry.Latest = version
+	entry.Versions = []string{version}
 	return entry
 }
 
@@ -253,14 +253,14 @@ func buildAllPlatformsChannelEntry(m *dist.Manifest, ch toolchain.Channel) toolc
 
 func buildNightlyAllPlatformsEntry(ctx context.Context, settings *config.Settings) toolchainListRemoteAllPlatformsEntry {
 	entry := toolchainListRemoteAllPlatformsEntry{Channel: toolchain.Nightly.String()}
-	tag, err := dist.FetchLatestNightly(ctx, dist.DefaultNightlyAPIURL, settings.ResolveGitCodeAPIKey())
+	version, err := dist.FetchLatestNightly(ctx, dist.DefaultNightlyAPIURL, settings.ResolveGitCodeAPIKey())
 	if err != nil {
 		entry.Error = err.Error()
 		entry.Versions = []string{}
 		return entry
 	}
-	entry.Latest = tag
-	entry.Versions = []string{tag}
+	entry.Latest = version
+	entry.Versions = []string{version}
 	return entry
 }
 

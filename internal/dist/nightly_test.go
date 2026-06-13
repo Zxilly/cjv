@@ -17,10 +17,22 @@ func TestNightlyDownloadURL(t *testing.T) {
 	assert.Equal(t, "https://example.com/releases/download/1.1.0-alpha.20260306010001/cangjie-sdk-windows-x64-1.1.0-alpha.20260306010001.zip", url)
 }
 
-func TestNightlyDownloadURLForPlatformTarget(t *testing.T) {
-	url, err := NightlyDownloadURLForTuple("https://example.com/releases/download", "1.1.0-alpha.20260429010057", "win32-x64-ohos-arm32")
+func TestNightlyReleaseDownloadURLTarget(t *testing.T) {
+	url, err := (NightlyRelease{
+		TagName: "1.1.0-alpha.20260429010057",
+		Version: "1.1.0-alpha.20260429010057",
+	}).DownloadURL("https://example.com/releases/download", "win32-x64-ohos-arm32")
 	require.NoError(t, err)
 	assert.Equal(t, "https://example.com/releases/download/1.1.0-alpha.20260429010057/cangjie-sdk-windows-x64-ohos-arm32-1.1.0-alpha.20260429010057.zip", url)
+}
+
+func TestNightlyReleaseDownloadURLUsesTagAndAssetVersion(t *testing.T) {
+	url, err := (NightlyRelease{
+		TagName: "1.1.0-alpha.20260613020028",
+		Version: "1.2.0-alpha.20260613020028",
+	}).DownloadURL("https://example.com/releases/download", "win32-x64-ohos-arm32")
+	require.NoError(t, err)
+	assert.Equal(t, "https://example.com/releases/download/1.1.0-alpha.20260613020028/cangjie-sdk-windows-x64-ohos-arm32-1.2.0-alpha.20260613020028.zip", url)
 }
 
 func TestParseSHA256(t *testing.T) {
@@ -89,6 +101,50 @@ func TestFetchLatestNightly(t *testing.T) {
 	latest, err := FetchLatestNightly(context.Background(), server.URL, "test-token")
 	require.NoError(t, err)
 	assert.Equal(t, tag, latest)
+}
+
+func TestFetchLatestNightlyReleaseUsesSDKAssetVersion(t *testing.T) {
+	const tag = "1.1.0-alpha.20260613020028"
+	const assetVersion = "1.2.0-alpha.20260613020028"
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{
+			"tag_name":"` + tag + `",
+			"assets":[
+				{"name":"cangjie-docs-html-` + assetVersion + `.tar.gz"},
+				{"name":"cangjie-sdk-linux-x64-` + assetVersion + `-sanitizer.tar.gz"},
+				{"name":"cangjie-sdk-windows-x64-ohos-` + assetVersion + `.zip.sha256"}
+			]
+		}`))
+	}))
+	defer server.Close()
+
+	release, err := FetchLatestNightlyRelease(context.Background(), server.URL, "test-token")
+	require.NoError(t, err)
+	assert.Equal(t, tag, release.TagName)
+	assert.Equal(t, assetVersion, release.Version)
+
+	latest, err := FetchLatestNightly(context.Background(), server.URL, "test-token")
+	require.NoError(t, err)
+	assert.Equal(t, assetVersion, latest)
+}
+
+func TestFetchLatestNightlyReleaseRejectsMixedSDKAssetVersions(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{
+			"tag_name":"1.1.0-alpha.20260613020028",
+			"assets":[
+				{"name":"cangjie-sdk-linux-x64-1.2.0-alpha.20260613020028.tar.gz"},
+				{"name":"cangjie-sdk-windows-x64-1.3.0-alpha.20260613020028.zip"}
+			]
+		}`))
+	}))
+	defer server.Close()
+
+	_, err := FetchLatestNightlyRelease(context.Background(), server.URL, "test-token")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "multiple SDK asset versions")
 }
 
 func TestFetchLatestNightlyEmptyTag(t *testing.T) {

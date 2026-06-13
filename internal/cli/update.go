@@ -276,7 +276,7 @@ func reinstallChannel(ctx context.Context, channel toolchain.Channel, currentNam
 }
 
 func reinstallChannelForPlatform(ctx context.Context, req reinstallRequest) (updateEntry, bool, error) {
-	resolved, err := resolveAndLocateWithTuple(ctx, toolchain.ToolchainName{Channel: req.Channel}, req.Settings, req.Fetcher, req.Target)
+	resolved, err := resolveAndLocate(ctx, toolchain.ToolchainName{Channel: req.Channel}, req.Settings, req.Fetcher, req.Target)
 	if err != nil {
 		return updateEntry{}, false, err
 	}
