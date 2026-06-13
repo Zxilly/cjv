@@ -1,6 +1,6 @@
 # 配置
 
-cjv 把持久化设置保存在 `~/.cjv/settings.toml` 这个 TOML 文件里。日常使用中你不需要手动编辑它，用 `cjv set` 子命令修改即可，它们会校验取值、原子写回文件，并打印确认信息。
+cjv 把持久化设置保存在 `~/.cjv/settings.toml` 这个 TOML 文件里。日常使用中你不需要手动编辑它，用 `cjv set` 子命令修改即可，它们会校验取值、写回文件，并打印确认信息。
 
 本章介绍 `cjv set` 的全部子命令、`settings.toml` 中对应的字段，以及 `~/.cjv/` 目录的整体布局。运行时通过环境变量做的临时覆盖（如 `CJV_HOME`、`CJV_GITCODE_API_KEY`）见 [环境变量](environment-variables.md)。
 

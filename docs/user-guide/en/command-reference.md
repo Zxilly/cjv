@@ -320,7 +320,7 @@ cjv toolchain list
 
 ### `cjv toolchain link`
 
-Link a custom toolchain to a local directory, or download from a URL and install it as a cjv-owned toolchain.
+Link a custom toolchain to a local directory (reference), or extract a local archive / URL and install it as a cjv-owned toolchain (materialize).
 
 ```text
 cjv toolchain link <name> <path|url> [--sha256 <hash>] [--force] [--no-stdx]
@@ -329,40 +329,45 @@ cjv toolchain link <name> <path|url> [--sha256 <hash>] [--force] [--no-stdx]
 Arguments:
 
 - `<name>` (required): the custom toolchain name. It must be a custom name, must not conflict with the reserved channel names `lts`, `sts`, or `nightly`, and must not contain path separators, a `+` prefix, or otherwise be an invalid name.
-- `<path|url>` (required): a local directory path, or an `http(s)://` URL. The command routes to one of two modes depending on whether the argument matches `^https?://`.
+- `<path|url>` (required): a local directory, a local archive file (`.zip` / `.tar.gz`), or an `http(s)://` URL. The command first checks whether the argument matches `^https?://`; otherwise it treats the path as local — a regular file is materialized, a directory is referenced.
 
-Two modes:
+Two behaviors:
 
-|Aspect|Local path mode|URL mode|
-|------|---------------|--------|
-|`<path>` form|Local directory|`https://...` or `http://...`|
-|`toolchains/<name>` contents|Symlink / junction (falls back to junction on Windows)|The real directory materialized after download and extraction|
+|Aspect|Reference mode (local directory)|Materialize mode (local archive / URL)|
+|------|--------------------------------|--------------------------------------|
+|`<path>` form|Local directory|Local archive `sdk.zip`, or `https://...`|
+|`toolchains/<name>` contents|Symlink / junction (falls back to junction on Windows)|The real directory materialized after extraction|
 |Data ownership|Not owned by cjv, only referenced|Owned by cjv|
 |Uninstall behavior|Only the link is deleted; the original directory is preserved|Deletes the entire directory (including stdx)|
 
-Flags (URL mode only):
+In materialize mode a local archive and a URL share the same extraction logic; the only difference is that a URL is downloaded and staged first, while a local archive is read in place and never deleted.
+
+Flags (materialize mode only; apply equally to a local archive and a URL):
 
 |Flags|Description|
 |-----|-----------|
-|`--sha256 <hash>`|Verify the downloaded archive against this SHA-256|
+|`--sha256 <hash>`|Verify the archive against this SHA-256|
 |`--force`|Overwrite an existing toolchain with the same name|
 |`--no-stdx`|Skip installing the bundled stdx component|
 
-These three flags only apply to URL mode; using them with a local path is an error rather than being silently ignored. Local path mode requires the directory to be a real Cangjie SDK (`bin/cjc` must exist).
+These three flags only apply to materialize mode; using them with a local directory is an error rather than being silently ignored. Reference mode requires the directory to be a real Cangjie SDK (`bin/cjc` must exist).
 
 ```bash
-# Local path mode: only create a link, the original directory is preserved
+# Reference mode: only create a link, the original directory is preserved
 cjv toolchain link mysdk /path/to/local/sdk
 
-# URL mode: download, extract, and materialize into a cjv-owned real directory
+# Materialize mode (local archive): extract into a cjv-owned real directory, the source file is kept
+cjv toolchain link mysdk ./cangjie-linux-x64-1.0.0.zip
+
+# Materialize mode (URL): download, extract, and materialize into a cjv-owned real directory
 cjv toolchain link mysdk https://example.com/cangjie-linux-x64-1.0.0.zip
 
-# URL mode + verification + overwrite same name + skip bundled stdx
+# Materialize mode + verification + overwrite same name + skip bundled stdx
 cjv toolchain link mysdk https://example.com/sdk.zip \
   --sha256 <hash> --force --no-stdx
 ```
 
-For the full semantics of URL mode (timing of name validation, bundled stdx, cross-system limitations, etc.), see [Installing a toolchain from a URL](install-from-url.md). For linking a local stdx, see [Components](concepts/components.md).
+For the full semantics of materialize mode (timing of name validation, bundled stdx, cross-system limitations, etc.), see [Installing a toolchain from a URL or archive](install-from-url.md). For linking a local stdx, see [Components](concepts/components.md).
 
 ### `cjv toolchain uninstall`
 

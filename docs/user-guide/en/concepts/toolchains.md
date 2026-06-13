@@ -100,23 +100,27 @@ The linked directory must be a real Cangjie SDK. cjv checks that `bin/cjc` exist
 
 Because it is only a link, the original data still belongs to you. Any change you make in the source directory takes effect immediately through cjv; `cjv toolchain uninstall my-sdk` (as well as `cjv uninstall my-sdk`) only removes the link and does not touch your original directory. This way suits debugging a self-built SDK, or sharing one installation across several tools.
 
-### Source 2: install from a URL (cjv owns the data)
+### Source 2: install from an archive (cjv owns the data)
 
-When the second argument to `cjv toolchain link` is an `http://` or `https://` URL, cjv downloads the archive, extracts it, and materializes the contents under `<CJV_HOME>/toolchains/<name>/`, producing an installation fully owned by cjv:
+When the second argument to `cjv toolchain link` is an archive — a local `.zip` / `.tar.gz` file, or an `http://` / `https://` URL — cjv extracts it and materializes the contents under `<CJV_HOME>/toolchains/<name>/`, producing an installation fully owned by cjv. A URL is downloaded and staged locally first, whereas a local archive is read in place and is never moved or deleted:
 
 ```bash
+# Local archive (the source file is kept)
+cjv toolchain link my-sdk ./cangjie-sdk.tar.gz
+
+# URL
 cjv toolchain link my-sdk https://example.com/cangjie-sdk.tar.gz
 ```
 
 In contrast to a local link, this toolchain's data is managed by cjv: `cjv toolchain uninstall my-sdk` actually deletes this directory and its components.
 
-URL installation supports a few extra options. They apply only to a URL source and are rejected when used with a local path:
+A materialize install supports a few extra options. They apply only to an archive source (a local file or a URL) and are rejected when used with a local directory:
 
-- `--sha256 <hash>`: verify the SHA-256 of the downloaded archive;
+- `--sha256 <hash>`: verify the SHA-256 of the archive;
 - `--force`: overwrite an already-installed toolchain of the same name;
 - `--no-stdx`: skip auto-detecting and installing the bundled stdx.
 
-For the full URL format conventions, archive layout requirements, verification behavior, and examples, see [Installing toolchains from a URL](../install-from-url.md).
+For the full archive format conventions, layout requirements, verification behavior, and examples, see [Installing a toolchain from a URL or archive](../install-from-url.md).
 
 ### Attaching stdx to a custom toolchain
 

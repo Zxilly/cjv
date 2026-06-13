@@ -118,4 +118,4 @@ When any download or install step during auto-install fails, cjv does not contin
 
 ## Recursion protection
 
-A proxied tool ultimately runs the real SDK, and some tools may in turn invoke proxied commands such as `cjc`. cjv records the proxy nesting depth in an internal environment variable, incrementing the count at each proxy layer, and aborts with a recursion limit error once the limit is exceeded, to avoid falling into infinite self-invocation when the configuration is broken. In normal use you will not reach this limit, and you do not need to set this variable by hand.
+A proxied tool ultimately runs the real SDK, and some tools may in turn invoke proxied commands such as `cjc`. To avoid falling into infinite self-invocation when the configuration is broken, cjv limits how deeply proxies may nest and aborts with a recursion-limit error once that limit is exceeded. In normal use you will not reach this limit.

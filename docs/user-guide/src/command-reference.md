@@ -319,7 +319,7 @@ cjv toolchain list
 
 ### `cjv toolchain link`
 
-将自定义工具链链接到本地目录，或从 URL 下载并安装为 cjv 拥有的工具链。
+将自定义工具链链接到本地目录（引用），或从本地归档 / URL 解包并安装为 cjv 拥有的工具链（物化）。
 
 ```text
 cjv toolchain link <name> <path|url> [--sha256 <hash>] [--force] [--no-stdx]
@@ -328,40 +328,45 @@ cjv toolchain link <name> <path|url> [--sha256 <hash>] [--force] [--no-stdx]
 参数：
 
 - `<name>`（必填）：自定义工具链名。必须是自定义名，不能与保留通道名 `lts`、`sts`、`nightly` 冲突，也不能含路径分隔符、`+` 前缀或为非法名。
-- `<path|url>`（必填）：本地目录路径，或 `http(s)://` URL。命令根据是否匹配 `^https?://` 自动分流为两种模式。
+- `<path|url>`（必填）：本地目录、本地归档文件（`.zip` / `.tar.gz`），或 `http(s)://` URL。命令先判断是否匹配 `^https?://`；否则按本地路径处理——普通文件走物化，目录走引用。
 
-两种模式：
+两种行为：
 
-| 维度 | 本地路径模式 | URL 模式 |
+| 维度 | 引用模式（本地目录） | 物化模式（本地归档 / URL） |
 | --- | --- | --- |
-| `<path>` 形态 | 本地目录 | `https://...` 或 `http://...` |
-| `toolchains/<name>` 内容 | 符号链接 / junction（Windows 回退到 junction） | 下载、解包后落地的真实目录 |
+| `<path>` 形态 | 本地目录 | 本地归档 `sdk.zip`，或 `https://...` |
+| `toolchains/<name>` 内容 | 符号链接 / junction（Windows 回退到 junction） | 解包后落地的真实目录 |
 | 数据归属 | cjv 不拥有，只引用 | cjv 拥有 |
 | 卸载行为 | 只删链接，原目录保留 | 删除整个目录（含 stdx） |
 
-标志（仅 URL 模式）：
+物化模式下本地归档与 URL 共用同一套解包逻辑，区别只在于 URL 先下载暂存、本地归档就地读取且永不删除。
+
+标志（仅物化模式，本地归档与 URL 同样适用）：
 
 | 标志 | 说明 |
 | --- | --- |
-| `--sha256 <hash>` | 用该 SHA-256 校验下载的归档 |
+| `--sha256 <hash>` | 用该 SHA-256 校验归档 |
 | `--force` | 覆盖同名的已存在工具链 |
 | `--no-stdx` | 跳过安装随包的 stdx 组件 |
 
-这三个标志只对 URL 模式有效，与本地路径一起使用会报错，而不是静默忽略。本地路径模式要求目录是一个真实的仓颉 SDK（须存在 `bin/cjc`）。
+这三个标志只对物化模式有效，与本地目录一起使用会报错，而不是静默忽略。引用模式要求目录是一个真实的仓颉 SDK（须存在 `bin/cjc`）。
 
 ```bash
-# 本地路径模式：只创建链接，原目录保留
+# 引用模式：只创建链接，原目录保留
 cjv toolchain link mysdk /path/to/local/sdk
 
-# URL 模式：下载、解包，落地为 cjv 拥有的真实目录
+# 物化模式（本地归档）：解包落地为 cjv 拥有的真实目录，源文件保留
+cjv toolchain link mysdk ./cangjie-linux-x64-1.0.0.zip
+
+# 物化模式（URL）：下载、解包，落地为 cjv 拥有的真实目录
 cjv toolchain link mysdk https://example.com/cangjie-linux-x64-1.0.0.zip
 
-# URL 模式 + 校验 + 覆盖同名 + 跳过随包 stdx
+# 物化模式 + 校验 + 覆盖同名 + 跳过随包 stdx
 cjv toolchain link mysdk https://example.com/sdk.zip \
   --sha256 <hash> --force --no-stdx
 ```
 
-URL 模式的完整语义（名称校验时机、随包 stdx、跨系统限制等）见 [从 URL 安装工具链](install-from-url.md)。链接本地 stdx 见 [组件](concepts/components.md)。
+物化模式的完整语义（名称校验时机、随包 stdx、跨系统限制等）见 [从 URL 或本地归档安装工具链](install-from-url.md)。链接本地 stdx 见 [组件](concepts/components.md)。
 
 ### `cjv toolchain uninstall`
 

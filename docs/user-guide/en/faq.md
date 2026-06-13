@@ -93,10 +93,10 @@ Uninstalling also cleans up references to that toolchain in `settings.toml`: if 
 
 ## Can a toolchain installed from a URL span operating systems?
 
-No. `cjv toolchain link <name> <url>` and URL install only support an SDK that matches the current operating system. cjv determines the SDK's operating system by reading the executable magic of the extracted `bin/cjc` (ELF / Mach-O / PE), and refuses to install once it does not match the local machine:
+No. The materialize install of `cjv toolchain link` (a local archive or a URL) only supports an SDK that matches the current operating system; if the SDK targets a different OS than the local machine, cjv refuses it before installing:
 
 ```text
-cannot install a linux SDK on windows; URL install supports only SDKs matching the current system
+cannot install a linux SDK on windows; this install supports only SDKs matching the current system
 ```
 
 After installing, cjv immediately verifies that the SDK works (by running one of its tools), and a binary for a different system cannot run on the local machine. To prepare an SDK for another system, install it on that system.

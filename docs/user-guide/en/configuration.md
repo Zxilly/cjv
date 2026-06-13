@@ -1,6 +1,6 @@
 # Configuration
 
-cjv keeps its persisted settings in the TOML file `~/.cjv/settings.toml`. In daily use you do not need to edit it by hand; modify it with the `cjv set` subcommands, which validate values, write the file back atomically, and print a confirmation.
+cjv keeps its persisted settings in the TOML file `~/.cjv/settings.toml`. In daily use you do not need to edit it by hand; modify it with the `cjv set` subcommands, which validate values, write the file back, and print a confirmation.
 
 This chapter covers all `cjv set` subcommands, the corresponding fields in `settings.toml`, and the overall layout of the `~/.cjv/` directory. Temporary overrides made at runtime via environment variables (such as `CJV_HOME` and `CJV_GITCODE_API_KEY`) are covered in [Environment Variables](environment-variables.md).
 

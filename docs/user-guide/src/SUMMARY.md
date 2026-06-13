@@ -13,7 +13,7 @@
   - [代理](concepts/proxies.md)
   - [目标与覆盖](concepts/targets-overrides.md)
 - [工具链文件](toolchain-file.md)
-- [从 URL 安装工具链](install-from-url.md)
+- [从 URL 或本地归档安装工具链](install-from-url.md)
 - [交叉编译](cross-compilation.md)
 - [运行时环境](runtime-environment.md)
 - [环境变量](environment-variables.md)

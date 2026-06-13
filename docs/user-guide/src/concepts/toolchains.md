@@ -100,23 +100,27 @@ cjv toolchain link my-sdk /path/to/local/sdk
 
 因为只是一个链接，原始数据仍归你所有。你在源目录里做的任何改动都会立刻通过 cjv 生效；`cjv toolchain uninstall my-sdk`(以及 `cjv uninstall my-sdk`)只删除这个链接，不会动你的原始目录。这种方式适合调试自编译的 SDK，或在多个工具之间共享同一份安装。
 
-### 来源二：从 URL 安装(cjv 拥有数据)
+### 来源二：从归档安装(cjv 拥有数据)
 
-当 `cjv toolchain link` 的第二个参数是一个 `http://` 或 `https://` 链接时，cjv 会下载归档、解压，并把内容物化到 `<CJV_HOME>/toolchains/<名称>/` 下，成为一份由 cjv 完整拥有的安装：
+当 `cjv toolchain link` 的第二个参数是一个归档时——本地的 `.zip` / `.tar.gz` 文件，或一个 `http://` / `https://` 链接——cjv 会解包它，并把内容物化到 `<CJV_HOME>/toolchains/<名称>/` 下，成为一份由 cjv 完整拥有的安装。URL 会先下载到本地暂存，本地归档则就地读取，且不会被移动或删除：
 
 ```bash
+# 本地归档(源文件保留)
+cjv toolchain link my-sdk ./cangjie-sdk.tar.gz
+
+# URL
 cjv toolchain link my-sdk https://example.com/cangjie-sdk.tar.gz
 ```
 
 与本地链接相反，这种工具链的数据由 cjv 管理：`cjv toolchain uninstall my-sdk` 会真正删除这份目录及其组件。
 
-URL 安装支持几个额外参数，它们仅对 URL 来源有效，搭配本地路径使用会被拒绝：
+物化安装支持几个额外参数，它们仅对归档来源(本地文件或 URL)有效，搭配本地目录使用会被拒绝：
 
-- `--sha256 <hash>`：校验下载归档的 SHA-256；
+- `--sha256 <hash>`：校验归档的 SHA-256；
 - `--force`：覆盖同名的已安装工具链；
 - `--no-stdx`：跳过自动探测并安装随包的 stdx。
 
-完整的 URL 格式约定、归档布局要求、校验行为与示例，见 [从 URL 安装工具链](../install-from-url.md)。
+完整的归档格式约定、布局要求、校验行为与示例，见 [从 URL 或本地归档安装工具链](../install-from-url.md)。
 
 ### 为自定义工具链挂载 stdx
 

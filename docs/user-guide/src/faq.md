@@ -91,10 +91,10 @@ stdx 与 docs 与工具链解耦、各自独立存放，但卸载时会被当作
 
 ## 从 URL 安装的工具链能跨操作系统吗？
 
-不能。`cjv toolchain link <name> <url>` 与 URL 安装只支持与当前操作系统匹配的 SDK。cjv 会在解压后读取 SDK 里 `bin/cjc` 可执行文件的魔数（ELF / Mach-O / PE）判定其操作系统，一旦与本机不符就拒绝安装：
+不能。`cjv toolchain link` 的物化安装（本地归档或 URL）只支持与当前操作系统匹配的 SDK；若 SDK 面向的系统与本机不符，cjv 会在安装前拒绝：
 
 ```text
-无法在 windows 上安装 linux SDK；URL 安装仅支持与当前系统匹配的 SDK
+无法在 windows 上安装 linux SDK；此安装仅支持与当前系统匹配的 SDK
 ```
 
 cjv 安装后要立刻校验 SDK 可用（运行其中的工具），异系统的二进制无法在本机执行。需要给其他系统准备 SDK 时，请到对应系统上安装。

@@ -13,7 +13,7 @@
   - [Proxies](concepts/proxies.md)
   - [Targets and Overrides](concepts/targets-overrides.md)
 - [The Toolchain File](toolchain-file.md)
-- [Installing a Toolchain from a URL](install-from-url.md)
+- [Installing a Toolchain from a URL or Archive](install-from-url.md)
 - [Cross-compilation](cross-compilation.md)
 - [Runtime Environment](runtime-environment.md)
 - [Environment Variables](environment-variables.md)
