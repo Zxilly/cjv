@@ -53,6 +53,30 @@ jobs:
         run: |
           ARCHIVES_DIR=archives OUT_DIR=web/dist/dl bash scripts/extract-init-binaries.sh
           find web/dist/dl -type f | sort
+
+      # Build the bilingual mdBook into web/dist/book/<lang>/ so it ships with the
+      # Pages deploy. Must run after `pnpm build`, which clears web/dist.
+      - name: Install mdbook
+        env:
+          MDBOOK_VERSION: "0.5.3"
+        run: |
+          mkdir -p "${RUNNER_TEMP}/mdbook-bin"
+          curl -fsSL "https://github.com/rust-lang/mdBook/releases/download/v${MDBOOK_VERSION}/mdbook-v${MDBOOK_VERSION}-x86_64-unknown-linux-gnu.tar.gz" \
+            | tar -xz -C "${RUNNER_TEMP}/mdbook-bin"
+          echo "${RUNNER_TEMP}/mdbook-bin" >> "$GITHUB_PATH"
+
+      - name: Build the user guide
+        working-directory: docs/user-guide
+        run: |
+          MDBOOK_OUTPUT__HTML__SITE_URL=/book/user-guide/zh-CN/ mdbook build -d ../../web/dist/book/user-guide/zh-CN
+          MDBOOK_BOOK__SRC=en MDBOOK_BOOK__LANGUAGE=en MDBOOK_OUTPUT__HTML__SITE_URL=/book/user-guide/en/ mdbook build -d ../../web/dist/book/user-guide/en
+
+      - name: Build the dev guide
+        working-directory: docs/dev-guide
+        run: |
+          MDBOOK_OUTPUT__HTML__SITE_URL=/book/dev-guide/zh-CN/ mdbook build -d ../../web/dist/book/dev-guide/zh-CN
+          MDBOOK_BOOK__SRC=en MDBOOK_BOOK__LANGUAGE=en MDBOOK_OUTPUT__HTML__SITE_URL=/book/dev-guide/en/ mdbook build -d ../../web/dist/book/dev-guide/en
+
       - name: Setup Pages
         uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
       - name: Upload artifact

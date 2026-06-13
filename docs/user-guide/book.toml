@@ -1,0 +1,18 @@
+# 中英文各一份独立源:src/ 为简体中文(源语言),en/ 为英文。
+# CI 用 MDBOOK_BOOK__SRC=en + MDBOOK_BOOK__LANGUAGE=en 构建英文版。
+[book]
+title = "cjv 用户手册"
+authors = ["Zxilly"]
+language = "zh-CN"
+src = "src"
+
+[output.html]
+# site-url 由 CI 逐语言覆盖(/book/user-guide/zh-CN/、/book/user-guide/en/)。
+site-url = "/"
+git-repository-url = "https://github.com/Zxilly/cjv"
+edit-url-template = "https://github.com/Zxilly/cjv/edit/master/docs/user-guide/{path}"
+default-theme = "light"
+preferred-dark-theme = "navy"
+# 右上角语言切换器(地球图标下拉)。
+additional-js = ["theme/cjv-i18n.js"]
+additional-css = ["theme/cjv-i18n.css"]
