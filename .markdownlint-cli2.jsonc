@@ -1,0 +1,22 @@
+{
+  // markdownlint-cli2 config for the repo's Markdown (READMEs + the mdBook manual).
+  // Run locally with: npx markdownlint-cli2
+  "globs": ["README.md", "README.EN.md", "docs/**/*.md"],
+  "ignores": [
+    // mdBook's SUMMARY.md uses multiple level-1 headings as part titles (MD025),
+    // which is structural, not prose. Covers both languages (src/ and en/).
+    "docs/**/SUMMARY.md"
+  ],
+  "config": {
+    "default": true,
+    // Line length is not meaningful for CJK prose, tables, or long URLs.
+    "MD013": false,
+    // Table column style requires pipes to align by character count; CJK glyphs
+    // are double-width, so character alignment never matches visual alignment.
+    "MD060": false,
+    // Allow the same subsection name (e.g. "示例") under different parent headings.
+    "MD024": { "siblings_only": true },
+    // Go source is tab-indented (gofmt); keep hard-tab checking for prose only.
+    "MD010": { "code_blocks": false }
+  }
+}
