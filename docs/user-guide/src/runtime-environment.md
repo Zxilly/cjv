@@ -102,7 +102,7 @@ cjv install sts --target ohos
 
 ## 相关章节
 
-- [代理](concepts/proxies.md):代理模式如何为 SDK 工具自动注入运行时环境。
-- [组件](concepts/components.md):`stdx` 组件及其注入的 `CANGJIE_STDX_PATH_*` 变量。
-- [环境变量](environment-variables.md):cjv 涉及的全部环境变量。
-- [交叉编译](cross-compilation.md):安装与使用交叉编译目标 SDK。
+- [代理](concepts/proxies.md)：代理模式如何为 SDK 工具自动注入运行时环境。
+- [组件](concepts/components.md)：`stdx` 组件及其注入的 `CANGJIE_STDX_PATH_*` 变量。
+- [环境变量](environment-variables.md)：cjv 涉及的全部环境变量。
+- [交叉编译](cross-compilation.md)：安装与使用交叉编译目标 SDK。

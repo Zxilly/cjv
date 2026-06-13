@@ -164,9 +164,9 @@ cjpm build        # 缺失的工具链 / 目标 / 组件会被自动补齐
 
 ## 相关章节
 
-- [目标与覆盖](concepts/targets-overrides.md):工具链文件在整条解析链中的位置
-- [工具链](concepts/toolchains.md) 与[通道](concepts/channels.md):`channel` 可填的取值
-- [组件](concepts/components.md):`components` 可填的取值
-- [交叉编译](cross-compilation.md):`targets` 的语义与目标 SDK 模型
-- [配置](configuration.md) 与[代理](concepts/proxies.md):`auto_install` 的设置与行为
-- [环境变量](environment-variables.md):`CJV_TOOLCHAIN`、`CJV_LOG` 等
+- [目标与覆盖](concepts/targets-overrides.md)：工具链文件在整条解析链中的位置
+- [工具链](concepts/toolchains.md) 与[通道](concepts/channels.md)：`channel` 可填的取值
+- [组件](concepts/components.md)：`components` 可填的取值
+- [交叉编译](cross-compilation.md)：`targets` 的语义与目标 SDK 模型
+- [配置](configuration.md) 与[代理](concepts/proxies.md)：`auto_install` 的设置与行为
+- [环境变量](environment-variables.md)：`CJV_TOOLCHAIN`、`CJV_LOG` 等
