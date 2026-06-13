@@ -99,6 +99,10 @@ CJV_NO_PATH_SETUP=1 cjv install lts
 
 一般情况下无需手动设置它们，cjv 会确保仓颉编译器和构建工具能正确找到扩展库。关于 `stdx` 组件的安装与目录布局，参见[组件](concepts/components.md)；关于运行时环境的配置方式，参见[运行时环境](runtime-environment.md)。
 
+### 网络代理（`https_proxy` / `http_proxy` / `no_proxy`）
+
+cjv 的下载会自动遵循标准代理环境变量，在企业受限网络里无需任何 cjv 配置。设置方式、支持的代理方案（http / https / socks5）与注意事项详见[网络代理](network-proxies.md)。
+
 ## 高级与内部变量
 
 以下变量面向特殊场景或由 cjv 内部使用，普通用户通常无需关心。

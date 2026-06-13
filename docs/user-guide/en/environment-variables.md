@@ -99,6 +99,10 @@ These two variables are injected automatically by cjv during proxy execution and
 
 You normally do not need to set them manually; cjv makes sure the Cangjie compiler and build tools can find the extension libraries. For installation and directory layout of the `stdx` component, see [Components](concepts/components.md); for how the runtime environment is set up, see [Runtime environment](runtime-environment.md).
 
+### Network proxies (`https_proxy` / `http_proxy` / `no_proxy`)
+
+cjv's downloads automatically honor the standard proxy environment variables, so no cjv configuration is needed on a restricted enterprise network. For how to set them, the supported proxy schemes (http / https / socks5), and caveats, see [Network proxies](network-proxies.md).
+
 ## Advanced and internal variables
 
 The following variables target special scenarios or are used internally by cjv, and ordinary users usually need not be concerned with them.
