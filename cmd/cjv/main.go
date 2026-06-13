@@ -49,6 +49,14 @@ func run() int {
 		return 0
 	}
 
+	// cjv prints UTF-8 (Chinese) output below; switch the console to UTF-8 so it
+	// renders in legacy conhost. Deferred before the pause hook so the restore
+	// runs after it — the "press Enter" prompt still needs UTF-8 to display.
+	// Not done on the proxy path above: that only passes external tools through
+	// and must not change the shared console's code page out from under them.
+	restoreConsole := utils.EnableConsoleUTF8()
+	defer restoreConsole()
+
 	if isInitInvocation(toolName) {
 		// cjv-init is designed to be double-clicked from Explorer, so disable
 		// cobra's mousetrap that would otherwise abort with a "use cmd.exe" notice.
