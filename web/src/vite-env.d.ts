@@ -1,3 +1,8 @@
+declare module '*.po' {
+  import type { Messages } from '@lingui/core'
+  export const messages: Messages
+}
+
 interface ImportMetaEnv {
   readonly VITE_EXPECTED_BINARY_GOARCH?: string
   readonly VITE_EXPECTED_BINARY_GOOS?: string

@@ -1,0 +1,165 @@
+msgid ""
+msgstr ""
+"POT-Creation-Date: 2026-06-13 16:06+0800\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"X-Generator: @lingui/cli\n"
+"Language: zh\n"
+"Project-Id-Version: \n"
+"Report-Msgid-Bugs-To: \n"
+"PO-Revision-Date: \n"
+"Last-Translator: \n"
+"Language-Team: \n"
+"Plural-Forms: \n"
+
+#: src/App.tsx:242
+msgid "<0>仓颉</0>编程语言 SDK 工具链管理器"
+msgstr "<0>仓颉</0>编程语言 SDK 工具链管理器"
+
+#: src/components/binary-install.tsx:119
+msgid "2020 年前的 Intel 机型"
+msgstr "2020 年前的 Intel 机型"
+
+#. placeholder {0}: platform.info.label
+#: src/App.tsx:258
+msgid "cjv 暂不支持 <0>{0}</0> 平台。"
+msgstr "cjv 暂不支持 <0>{0}</0> 平台。"
+
+#: src/App.tsx:273
+msgid "cjv 目前仅在 Linux、macOS 和 Windows 桌面系统上提供。"
+msgstr "cjv 目前仅在 Linux、macOS 和 Windows 桌面系统上提供。"
+
+#: src/App.tsx:225
+msgid "GitCode · 镜像源"
+msgstr "GitCode · 镜像源"
+
+#: src/App.tsx:225
+msgid "GitHub · 默认源"
+msgstr "GitHub · 默认源"
+
+#: src/components/binary-install.tsx:119
+msgid "M1 / M2 / M3 及更新机型"
+msgstr "M1 / M2 / M3 及更新机型"
+
+#: src/App.tsx:173
+msgid "下载安装"
+msgstr "下载安装"
+
+#: src/components/binary-install.tsx:113
+msgid "不确定？打开 Apple 菜单 →「关于本机」查看芯片型号"
+msgstr "不确定？打开 Apple 菜单 →「关于本机」查看芯片型号"
+
+#: src/App.tsx:310
+msgid "仓颉官网"
+msgstr "仓颉官网"
+
+#: src/App.tsx:264
+msgid "你可以尝试 x86_64（amd64）版本（多数情况下可通过系统模拟运行），或从 <0>Releases</0> 手动下载。"
+msgstr "你可以尝试 x86_64（amd64）版本（多数情况下可通过系统模拟运行），或从 <0>Releases</0> 手动下载。"
+
+#: src/App.tsx:157
+msgid "使用 Go 从源码编译安装："
+msgstr "使用 Go 从源码编译安装："
+
+#: src/App.tsx:214
+msgid "使用镜像源"
+msgstr "使用镜像源"
+
+#: src/App.tsx:102
+#: src/components/binary-install.tsx:159
+#: src/components/binary-install.tsx:213
+msgid "其他平台"
+msgstr "其他平台"
+
+#: src/App.tsx:172
+msgid "命令安装"
+msgstr "命令安装"
+
+#: src/hooks/use-platform.ts:94
+msgid "在 PowerShell 中运行："
+msgstr "在 PowerShell 中运行："
+
+#: src/hooks/use-platform.ts:93
+msgid "在终端中运行："
+msgstr "在终端中运行："
+
+#: src/components/code-block.tsx:103
+msgid "复制"
+msgstr "复制"
+
+#: src/components/code-block.tsx:102
+msgid "复制命令"
+msgstr "复制命令"
+
+#: src/components/code-block.tsx:132
+msgid "复制失败，请手动复制"
+msgstr "复制失败，请手动复制"
+
+#: src/components/code-block.tsx:132
+msgid "已复制"
+msgstr "已复制"
+
+#: src/components/binary-install.tsx:120
+msgid "常见"
+msgstr "常见"
+
+#. placeholder {0}: mirror ? 'GitCode Releases' : 'GitHub Releases'
+#: src/components/binary-install.tsx:77
+msgid "或 <0>{0}</0> 下载完整发布包。"
+msgstr "或 <0>{0}</0> 下载完整发布包。"
+
+#: src/App.tsx:304
+msgid "文档"
+msgstr "文档"
+
+#: src/App.tsx:135
+msgid "无法识别你的平台，以下是所有支持的安装方式。"
+msgstr "无法识别你的平台，以下是所有支持的安装方式。"
+
+#: src/App.tsx:291
+msgid "查看其他平台的安装方式"
+msgstr "查看其他平台的安装方式"
+
+#. placeholder {0}: binary.label
+#. placeholder {0}: platform.info.label
+#: src/App.tsx:119
+#: src/components/binary-install.tsx:207
+msgid "检测到你的平台：{0}"
+msgstr "检测到你的平台：{0}"
+
+#: src/components/binary-install.tsx:206
+msgid "然后按屏幕提示完成安装。"
+msgstr "然后按屏幕提示完成安装。"
+
+#: src/App.tsx:174
+msgid "编译安装"
+msgstr "编译安装"
+
+#: src/components/binary-install.tsx:195
+msgid "要安装 cjv，下载并运行"
+msgstr "要安装 cjv，下载并运行"
+
+#: src/App.tsx:262
+msgid "该架构暂无预编译版本。"
+msgstr "该架构暂无预编译版本。"
+
+#: src/App.tsx:275
+msgid "请在桌面设备上访问此页面，或查看 <0>GitHub</0> 了解更多。"
+msgstr "请在桌面设备上访问此页面，或查看 <0>GitHub</0> 了解更多。"
+
+#: src/components/binary-install.tsx:179
+msgid "请手动选择对应平台的二进制："
+msgstr "请手动选择对应平台的二进制："
+
+#: src/components/binary-install.tsx:112
+msgid "选择你的 Mac 芯片，下载 cjv 安装器"
+msgstr "选择你的 Mac 芯片，下载 cjv 安装器"
+
+#: src/hooks/use-platform.ts:13
+msgid "部分 LTS 和 STS 版本可能不包含 macOS x86_64 的预编译 SDK。"
+msgstr "部分 LTS 和 STS 版本可能不包含 macOS x86_64 的预编译 SDK。"
+
+#: src/App.tsx:159
+msgid "需要本机已安装 Go 环境。"
+msgstr "需要本机已安装 Go 环境。"

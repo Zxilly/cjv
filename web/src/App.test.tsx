@@ -57,6 +57,19 @@ describe('App (ready / Windows)', () => {
     expect(await screen.findByText(/CJV_MIRROR/)).toBeInTheDocument()
     expect(await screen.findByText('GitCode · 镜像源')).toBeInTheDocument()
   })
+
+  it('switches the page language between Chinese and English', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+    expect(screen.getByText(/检测到你的平台：Windows x86_64/)).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'English' }))
+    expect(await screen.findByText(/Detected platform: Windows x86_64/)).toBeInTheDocument()
+    expect(screen.queryByText(/检测到你的平台/)).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: '中文' }))
+    expect(await screen.findByText(/检测到你的平台：Windows x86_64/)).toBeInTheDocument()
+  })
 })
 
 describe('App (unsupported / iOS)', () => {

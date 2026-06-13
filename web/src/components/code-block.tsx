@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Check, Copy, X } from 'lucide-react'
 import { motion, AnimatePresence, type Transition } from 'framer-motion'
+import { useLingui } from '@lingui/react/macro'
 import { cn } from '@/lib/utils'
 
 interface CodeBlockProps {
@@ -48,6 +49,7 @@ async function copyToClipboard(text: string): Promise<boolean> {
 }
 
 export function CodeBlock({ command, primary }: CodeBlockProps) {
+  const { t } = useLingui()
   const [status, setStatus] = useState<CopyStatus>('idle')
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined)
   const iconCls = primary ? 'w-4 h-4' : 'w-3.5 h-3.5'
@@ -97,8 +99,8 @@ export function CodeBlock({ command, primary }: CodeBlockProps) {
       </div>
       <button
         type="button"
-        aria-label="复制命令"
-        title="复制"
+        aria-label={t`复制命令`}
+        title={t`复制`}
         onClick={copy}
         className={cn(
           'absolute top-1/2 -translate-y-1/2 rounded bg-gray-50/80 dark:bg-gray-900/80 backdrop-blur-sm hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors cursor-pointer text-gray-400 hover:text-gray-600 dark:hover:text-gray-300',
@@ -127,7 +129,7 @@ export function CodeBlock({ command, primary }: CodeBlockProps) {
         </AnimatePresence>
       </button>
       <span aria-live="polite" className="sr-only">
-        {copied ? '已复制' : errored ? '复制失败，请手动复制' : ''}
+        {copied ? t`已复制` : errored ? t`复制失败，请手动复制` : ''}
       </span>
     </div>
   )

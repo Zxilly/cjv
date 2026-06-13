@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { renderHook, waitFor } from '@testing-library/react'
+import { i18n } from '@/lib/i18n'
 import {
   computeBrowserPlatformResult,
   computePlatformResult,
@@ -56,8 +57,8 @@ describe('computePlatformResult', () => {
   it('detects macOS x86_64 with the SDK warning', () => {
     const r = asReadyWithBinary(computePlatformResult('Mac OS', 'amd64'))
     expect(r.info.label).toBe('macOS x86_64')
-    expect(r.info.warning).toMatch(/x86_64/)
-    expect(r.binary.warning).toMatch(/x86_64/)
+    expect(i18n._(r.info.warning!)).toMatch(/x86_64/)
+    expect(i18n._(r.binary.warning!)).toMatch(/x86_64/)
   })
 
   it('marks unsupported CPU architectures on known desktop OSes as unsupported', () => {
@@ -272,7 +273,7 @@ describe('computeBrowserPlatformResult', () => {
 
     const ready = asReadyWithBinary(r)
     expect(ready.info.label).toBe('macOS x86_64')
-    expect(ready.info.warning).toMatch(/x86_64/)
+    expect(i18n._(ready.info.warning!)).toMatch(/x86_64/)
   })
 })
 
