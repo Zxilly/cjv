@@ -41,7 +41,7 @@ cjpm build
 
 When installing, cjv creates a proxy symlink for each SDK tool in its own `bin` directory. When you call commands such as `cjc` or `cjpm`, what actually runs is this proxy. It first resolves which toolchain should be used, then transparently forwards the call to the real executable in that toolchain, and automatically injects the necessary environment variables (such as `CANGJIE_STDX_PATH_DYNAMIC` and `CANGJIE_STDX_PATH_STATIC` when stdx is installed).
 
-The proxied SDK tools include `cjc`, `cjc-frontend`, `cjpm`, `cjfmt`, `cjlint`, `cjdb`, `cjcov`, and several internal tools. Use the Cangjie command-line tools the way you normally would; after installing cjv they work as before, with toolchain switching handled by cjv behind the scenes.
+The proxied SDK tools include `cjc`, `cjc-frontend`, `cjpm`, `cjfmt`, `cjlint`, `cjdb`, `cjcov`, `cjprof`, and several internal tools. Use the Cangjie command-line tools the way you normally would; after installing cjv they work as before, with toolchain switching handled by cjv behind the scenes.
 
 The proxy resolves the toolchain by the same rules as `cjv run`, but without requiring you to specify a toolchain. It decides automatically by priority: environment variable, directory override, the project's `cangjie-sdk.toml`, and finally falling back to the default toolchain. For the full resolution order, see [Proxies](concepts/proxies.md) and [Targets and overrides](concepts/targets-overrides.md).
 

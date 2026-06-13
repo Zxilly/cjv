@@ -41,7 +41,7 @@ cjpm build
 
 cjv 在安装时会在自己的 `bin` 目录里为每个 SDK 工具创建一个代理符号链接。当你调用 `cjc`、`cjpm` 等命令时，实际运行的是这个代理。它先解析出当前应当使用哪个工具链，再把调用透明地转发给该工具链里真正的可执行文件，并自动注入必要的环境变量（如 stdx 已安装时的 `CANGJIE_STDX_PATH_DYNAMIC`、`CANGJIE_STDX_PATH_STATIC`）。
 
-被代理的 SDK 工具包括 `cjc`、`cjc-frontend`、`cjpm`、`cjfmt`、`cjlint`、`cjdb`、`cjcov` 以及若干内部工具。平时怎么用仓颉的命令行工具，装上 cjv 之后照旧用，工具链切换由 cjv 在背后完成。
+被代理的 SDK 工具包括 `cjc`、`cjc-frontend`、`cjpm`、`cjfmt`、`cjlint`、`cjdb`、`cjcov`、`cjprof` 以及若干内部工具。平时怎么用仓颉的命令行工具，装上 cjv 之后照旧用，工具链切换由 cjv 在背后完成。
 
 代理使用的工具链解析规则与 `cjv run` 一致，但不需要你指定工具链。它会按优先级自动判断：环境变量、目录覆盖、项目中的 `cangjie-sdk.toml`，最后回退到默认工具链。完整的解析顺序见 [代理](concepts/proxies.md) 与 [目标与覆盖](concepts/targets-overrides.md)。
 

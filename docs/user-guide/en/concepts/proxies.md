@@ -16,6 +16,7 @@ The tools currently proxied are:
 - `cjlint`: static analysis
 - `cjdb`: the debugger
 - `cjcov`: the coverage tool
+- `cjprof`: the profiler
 - `cjtrace-recover`, `chir-dis`, `hle`
 - `LSPServer`, `LSPMacroServer`: the language service
 

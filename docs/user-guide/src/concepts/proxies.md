@@ -16,6 +16,7 @@ cjv 安装到 `<CJV_HOME>/bin/`，该目录在首次安装时会被加入 `PATH`
 - `cjlint`：静态检查
 - `cjdb`：调试器
 - `cjcov`：覆盖率工具
+- `cjprof`：性能分析工具
 - `cjtrace-recover`、`chir-dis`、`hle`
 - `LSPServer`、`LSPMacroServer`：语言服务
 
