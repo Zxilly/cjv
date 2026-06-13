@@ -1,0 +1,51 @@
+/* Language switcher (globe dropdown) in the mdBook top bar. */
+.cjv-lang {
+  position: relative;
+  display: inline-block;
+}
+
+.cjv-lang-menu {
+  position: absolute;
+  right: 0;
+  top: 100%;
+  margin: 0;
+  padding: 4px 0;
+  list-style: none;
+  min-width: 120px;
+  background: var(--theme-popup-bg, #fff);
+  border: 1px solid var(--theme-popup-border, #ccc);
+  border-radius: 4px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+  display: none;
+  z-index: 100;
+}
+
+.cjv-lang.open .cjv-lang-menu {
+  display: block;
+}
+
+.cjv-lang-menu li {
+  margin: 0;
+  padding: 0;
+}
+
+.cjv-lang-menu a {
+  display: block;
+  padding: 4px 14px;
+  color: var(--fg, inherit);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.cjv-lang-menu a:hover {
+  background: var(--theme-hover, rgba(0, 0, 0, 0.07));
+}
+
+.cjv-lang-menu li.active a {
+  font-weight: bold;
+}
+
+.cjv-lang-menu a[aria-disabled="true"] {
+  opacity: 0.4;
+  pointer-events: none;
+}

@@ -35,6 +35,9 @@ web/public/dl/
 web/screenshot-*.png
 web/*.tsbuildinfo
 
+# mdBook documentation sites (docs/user-guide, docs/dev-guide)
+docs/*/book/
+
 # Local helper scripts artifacts
 /archives/
 
