@@ -63,9 +63,8 @@ func TestWritePosixEnvScriptEscapesBinDir(t *testing.T) {
 func TestWritePowerShellEnvScript(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "env.ps1")
-	binDir := `C:\Users\testuser\.cjv\bin`
 
-	if err := WritePowerShellEnvScript(path, binDir); err != nil {
+	if err := WritePowerShellEnvScript(path); err != nil {
 		t.Fatalf("WritePowerShellEnvScript failed: %v", err)
 	}
 
@@ -75,43 +74,19 @@ func TestWritePowerShellEnvScript(t *testing.T) {
 	}
 	s := string(content)
 
-	if !strings.Contains(s, binDir) {
-		t.Errorf("env.ps1 does not contain binDir %q", binDir)
+	if !strings.Contains(s, `$cjvBin = Join-Path $PSScriptRoot 'bin'`) {
+		t.Error("env.ps1 does not derive the bin dir from $PSScriptRoot")
 	}
 	if !strings.Contains(s, "$env:PATH") {
 		t.Error("env.ps1 missing PATH modification")
 	}
 }
 
-func TestWritePowerShellEnvScriptUsesLiteralBinDir(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "env.ps1")
-	binDir := `C:\Users\$(throw 'pwn')\.cjv\bin`
-
-	if err := WritePowerShellEnvScript(path, binDir); err != nil {
-		t.Fatalf("WritePowerShellEnvScript failed: %v", err)
-	}
-
-	content, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	s := string(content)
-
-	if strings.Contains(s, `$cjvBin = "`) {
-		t.Fatal("env.ps1 assigns binDir with an interpolating string")
-	}
-	if !strings.Contains(s, `$cjvBin = 'C:\Users\$(throw ''pwn'')\.cjv\bin'`) {
-		t.Fatal("env.ps1 did not single-quote and escape binDir")
-	}
-}
-
 func TestWriteBatEnvScript(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "env.bat")
-	binDir := `C:\Users\testuser\.cjv\bin`
 
-	if err := WriteBatEnvScript(path, binDir); err != nil {
+	if err := WriteBatEnvScript(path); err != nil {
 		t.Fatalf("WriteBatEnvScript failed: %v", err)
 	}
 
@@ -121,43 +96,19 @@ func TestWriteBatEnvScript(t *testing.T) {
 	}
 	s := string(content)
 
-	if !strings.Contains(s, binDir) {
-		t.Errorf("env.bat does not contain binDir %q", binDir)
+	if !strings.Contains(s, `set "cjvBin=%~dp0bin"`) {
+		t.Error("env.bat does not derive the bin dir from %~dp0")
 	}
 	if !strings.Contains(s, `%PATH%`) {
 		t.Error("env.bat missing PATH reference")
 	}
 }
 
-func TestWriteBatEnvScriptEscapesPercentExpansion(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "env.bat")
-	binDir := `C:\Users\%USERNAME%\.cjv\bin`
-
-	if err := WriteBatEnvScript(path, binDir); err != nil {
-		t.Fatalf("WriteBatEnvScript failed: %v", err)
-	}
-
-	content, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	s := string(content)
-
-	if strings.Contains(s, `\Users\%USERNAME%\`) {
-		t.Fatal("env.bat contains an unescaped percent expansion in binDir")
-	}
-	if !strings.Contains(s, `%%USERNAME%%`) {
-		t.Fatal("env.bat did not escape percent signs in binDir")
-	}
-}
-
 func TestWriteBatEnvScriptChecksExactPathEntry(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "env.bat")
-	binDir := `C:\Users\testuser\.cjv\bin`
 
-	if err := WriteBatEnvScript(path, binDir); err != nil {
+	if err := WriteBatEnvScript(path); err != nil {
 		t.Fatalf("WriteBatEnvScript failed: %v", err)
 	}
 
@@ -175,6 +126,50 @@ func TestWriteBatEnvScriptChecksExactPathEntry(t *testing.T) {
 	}
 	if !strings.Contains(s, `if /I "%%~P"=="%cjvBin%"`) {
 		t.Fatal("env.bat does not compare complete PATH entries")
+	}
+}
+
+// TestWindowsEnvScriptsAreSelfLocatingASCII guards the fix for non-ASCII home
+// paths (e.g. a Chinese Windows username). The Windows env scripts must derive
+// the cjv bin directory from their own on-disk location instead of embedding it
+// as a literal, so their bytes stay pure ASCII. A UTF-8 file carrying a
+// non-ASCII path literal gets corrupted when CMD reads the .bat in CP936 or
+// Windows PowerShell 5.1 reads the BOM-less .ps1 as legacy ANSI, leaving a
+// wrong bin path that never matches and silently breaks current-session PATH.
+func TestWindowsEnvScriptsAreSelfLocatingASCII(t *testing.T) {
+	dir := t.TempDir()
+
+	ps1 := filepath.Join(dir, "env.ps1")
+	if err := WritePowerShellEnvScript(ps1); err != nil {
+		t.Fatalf("WritePowerShellEnvScript failed: %v", err)
+	}
+	bat := filepath.Join(dir, "env.bat")
+	if err := WriteBatEnvScript(bat); err != nil {
+		t.Fatalf("WriteBatEnvScript failed: %v", err)
+	}
+
+	cases := []struct {
+		path   string
+		marker string // the runtime self-location expression the script must use
+	}{
+		{ps1, `Join-Path $PSScriptRoot 'bin'`},
+		{bat, `set "cjvBin=%~dp0bin"`},
+	}
+	for _, c := range cases {
+		name := filepath.Base(c.path)
+		content, err := os.ReadFile(c.path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(string(content), c.marker) {
+			t.Errorf("%s does not self-locate the bin dir via %q", name, c.marker)
+		}
+		for i, b := range content {
+			if b > 0x7F {
+				t.Errorf("%s has a non-ASCII byte at offset %d; a non-ASCII home path would corrupt the script", name, i)
+				break
+			}
+		}
 	}
 }
 

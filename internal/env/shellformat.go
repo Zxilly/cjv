@@ -109,6 +109,15 @@ func shellQuote(value string, shell ShellType) string {
 	}
 }
 
+func powerShellSingleQuote(value string) string {
+	return "'" + strings.ReplaceAll(value, "'", "''") + "'"
+}
+
+func batchLiteral(value string) string {
+	replacer := strings.NewReplacer("^", "^^", "%", "%%", `"`, `^"`)
+	return replacer.Replace(value)
+}
+
 // ParseShellFlag parses the --shell flag value into a ShellType.
 func ParseShellFlag(s string) (ShellType, error) {
 	switch strings.ToLower(s) {
