@@ -28,7 +28,7 @@ func SaveRegistryPath() (*RegistryPathGuard, error) {
 		// Key does not exist — nothing to save.
 		return &RegistryPathGuard{name: "Path"}, nil
 	}
-	defer key.Close()
+	defer func() { _ = key.Close() }()
 
 	name := findRegistryPathName(key)
 	val, valType, err := key.GetStringValue(name)
@@ -46,7 +46,7 @@ func (g *RegistryPathGuard) Restore() {
 		fmt.Fprintf(os.Stderr, "RegistryPathGuard: failed to open registry for restore: %v\n", err)
 		return
 	}
-	defer key.Close()
+	defer func() { _ = key.Close() }()
 
 	if !g.existed {
 		_ = key.DeleteValue(g.name)
@@ -89,7 +89,7 @@ func ReadRegistryPath() (string, error) {
 		}
 		return "", err
 	}
-	defer key.Close()
+	defer func() { _ = key.Close() }()
 
 	name := findRegistryPathName(key)
 	val, _, err := key.GetStringValue(name)
