@@ -15,6 +15,7 @@ var toolPathMap = map[string]string{
 	"cjlint":          "tools/bin/cjlint",
 	"cjdb":            "tools/bin/cjdb",
 	"cjcov":           "tools/bin/cjcov",
+	"cjprof":          "tools/bin/cjprof",
 	"cjtrace-recover": "tools/bin/cjtrace-recover",
 	"chir-dis":        "tools/bin/chir-dis",
 	"hle":             "tools/bin/hle",
