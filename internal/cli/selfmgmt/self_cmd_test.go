@@ -3,6 +3,7 @@ package selfmgmt
 import (
 	"errors"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/Zxilly/cjv/internal/config"
@@ -26,6 +27,23 @@ func TestNewSelfCommandWiresSubcommandsAndUpdate(t *testing.T) {
 	require.NoError(t, update.RunE(update, nil))
 	assert.FileExists(t, filepath.Join(home, "bin", proxy.CjvBinaryName()))
 	assert.FileExists(t, filepath.Join(home, "bin", proxy.PlatformBinaryName("cjc")))
+}
+
+func TestSelfUpdateRegeneratesEnvScripts(t *testing.T) {
+	home := t.TempDir()
+	config.IsolateForTest(t, home)
+
+	cmd := NewSelfCommand("dev", "")
+	update := findSubcommand(cmd, "update")
+	require.NoError(t, update.RunE(update, nil))
+
+	scripts := []string{"env"}
+	if runtime.GOOS == "windows" {
+		scripts = []string{"env.ps1", "env.bat"}
+	}
+	for _, name := range scripts {
+		assert.FileExists(t, filepath.Join(home, name))
+	}
 }
 
 func TestSelfUninstallDoesNotCleanPathWhenRemoveHomeFails(t *testing.T) {

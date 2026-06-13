@@ -64,6 +64,15 @@ func NewSelfCommand(ver, updURL string) *cobra.Command {
 			if err := proxy.CreateAllProxyLinks(); err != nil {
 				return err
 			}
+			// Refresh the managed env scripts so script-level fixes ship via
+			// self update too — otherwise they are regenerated only by a fresh
+			// `cjv init`. The scripts are self-locating static content, so this
+			// is idempotent; PATH configuration (registry / shell rc) is left to
+			// `cjv init` on purpose. Non-fatal: the scripts are a convenience and
+			// must not fail an otherwise successful self update.
+			if err := refreshEnvScripts(); err != nil {
+				slog.Warn("failed to refresh env scripts during self update", "error", err)
+			}
 			if !output.IsJSON() {
 				return nil
 			}
@@ -118,6 +127,25 @@ func NewSelfCommand(ver, updURL string) *cobra.Command {
 	selfCmd.AddCommand(selfUninstallCmd)
 
 	return selfCmd
+}
+
+// refreshEnvScripts regenerates the managed shell env scripts (env.ps1/env.bat
+// on Windows, env elsewhere) so improvements to them reach users via `cjv self
+// update`, not only a fresh `cjv init`. The scripts are self-locating, so
+// rewriting them is idempotent and never touches PATH configuration.
+func refreshEnvScripts() error {
+	home, err := config.Home()
+	if err != nil {
+		return err
+	}
+	binDir, err := config.BinDir()
+	if err != nil {
+		return err
+	}
+	if err := config.EnsureDirs(); err != nil {
+		return err
+	}
+	return env.WriteEnvScripts(home, binDir)
 }
 
 func cleanupPathEntries() {
