@@ -4,6 +4,13 @@
   display: inline-block;
 }
 
+/* mdBook pads both the .icon-button toggle and its inner .fa-svg (8px each),
+   while the sibling <a> icons in .right-buttons pad only the .fa-svg. Drop the
+   toggle's own padding so the globe lines up with the print/git/edit icons. */
+#mdbook-menu-bar .cjv-lang .cjv-lang-toggle {
+  padding: 0;
+}
+
 .cjv-lang-menu {
   position: absolute;
   right: 0;
