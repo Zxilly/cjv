@@ -11,6 +11,7 @@ concurrency:
 
 jobs:
   real-component-downloads:
+    name: Real component downloads (${{ matrix.os }})
     strategy:
       fail-fast: false
       matrix:

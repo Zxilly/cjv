@@ -8,6 +8,7 @@ permissions:
 
 jobs:
   release:
+    name: Build and release
     runs-on: ubuntu-latest
     steps:
       - name: Ensure stable tag
@@ -53,6 +54,7 @@ jobs:
             dist/checksums.txt
 
   pages:
+    name: Deploy to GitHub Pages
     needs: release
     permissions:
       contents: read

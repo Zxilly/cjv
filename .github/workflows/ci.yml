@@ -6,6 +6,7 @@ on:
 
 jobs:
   go-test:
+    name: Go test (${{ matrix.os }})
     strategy:
       matrix:
         include:
@@ -41,6 +42,7 @@ jobs:
         run: go vet -tags=mirror ./...
 
   lint:
+    name: Go lint
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout repository
@@ -55,6 +57,7 @@ jobs:
           version: latest
 
   markdown-lint:
+    name: Markdown lint
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout repository
@@ -67,6 +70,7 @@ jobs:
         run: npx --yes markdownlint-cli2@0.22.1
 
   cross-build:
+    name: Cross build (${{ matrix.goos }}/${{ matrix.goarch }})
     strategy:
       matrix:
         goos: [linux, darwin, windows]
@@ -86,6 +90,7 @@ jobs:
         run: GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} go build -o /dev/null ./cmd/cjv/
 
   mod-check:
+    name: Go mod check
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout repository
@@ -102,6 +107,7 @@ jobs:
         run: go mod verify
 
   vuln-check:
+    name: Vulnerability check
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout repository
@@ -116,6 +122,7 @@ jobs:
         run: govulncheck ./...
 
   web-build:
+    name: Web build
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout repository
@@ -139,6 +146,7 @@ jobs:
         run: pnpm build
 
   web-test:
+    name: Web test
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -184,6 +192,7 @@ jobs:
         run: pnpm exec vitest run --exclude src/App.platform.integration.test.tsx
 
   web-coverage:
+    name: Web coverage
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -515,6 +524,7 @@ jobs:
         run: ./tests/install-scripts/install-ps1.ps1
 
   go-integration:
+    name: Go integration (${{ matrix.os }})
     strategy:
       matrix:
         include:
