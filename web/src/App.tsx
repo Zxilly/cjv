@@ -1,17 +1,20 @@
-import { Fragment, useEffect, useState, type ReactElement } from 'react'
+import { useState, type ReactElement } from 'react'
 import { AnimatePresence, LayoutGroup, motion, useReducedMotion, type Transition, type Variants } from 'framer-motion'
 import { ChevronRight } from 'lucide-react'
 import { I18nProvider } from '@lingui/react'
 import { Trans, useLingui } from '@lingui/react/macro'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Switch } from '@/components/ui/switch'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { CodeBlock } from '@/components/code-block'
 import { CollapsibleSection } from '@/components/collapsible-section'
 import { BinaryInstall } from '@/components/binary-install'
+import { LangSwitch } from '@/components/lang-switch'
+import { SlidingTabIndicator } from '@/components/sliding-tab-indicator'
 import { usePlatform, type InstallMethod } from '@/hooks/use-platform'
-import { getInstallTabDirection, type InstallTab } from '@/lib/tab-motion'
-import { i18n, activateLang, persistLang, LANGS, type Lang } from '@/lib/i18n'
+import { useLanguageSwitch } from '@/hooks/use-language-switch'
+import { INSTALL_TABS, getInstallTabDirection, type InstallTab } from '@/lib/tab-motion'
+import { i18n } from '@/lib/i18n'
 
 function MethodsList({ items, mirror }: { items: InstallMethod[]; mirror: boolean }) {
   return (
@@ -26,39 +29,13 @@ function MethodsList({ items, mirror }: { items: InstallMethod[]; mirror: boolea
   )
 }
 
-const LANG_LABEL: Record<Lang, string> = { zh: '中文', en: 'English' }
-
-function LangSwitch() {
-  // Subscribe to locale changes via the hook so the active-language highlight
-  // re-renders on its own, rather than relying on an ancestor's re-render.
-  const { i18n: active } = useLingui()
-  const lang = active.locale as Lang
-  return (
-    <div className="absolute right-4 top-4 md:right-6 md:top-6 flex items-center gap-1.5 text-sm">
-      {LANGS.map((l, idx) => (
-        <Fragment key={l}>
-          {idx > 0 && <span className="text-gray-300 dark:text-gray-700">/</span>}
-          <button
-            type="button"
-            onClick={() => { activateLang(l); persistLang(l) }}
-            aria-current={l === lang}
-            className={l === lang
-              ? 'text-cj dark:text-cj-light font-medium'
-              : 'text-gray-400 dark:text-gray-600 hover:text-cj dark:hover:text-cj-light cursor-pointer'}
-          >
-            {LANG_LABEL[l]}
-          </button>
-        </Fragment>
-      ))}
-    </div>
-  )
-}
-
 const TAB_CONTENT_CLS =
   'w-full text-base divide-y divide-gray-200 dark:divide-gray-800'
 
-const TAB_TRIGGER_CLS =
-  'flex-1 h-full rounded-none data-active:text-cj dark:data-active:text-cj-light data-active:after:bg-cj dark:data-active:after:bg-cj-light data-active:after:opacity-100 after:bottom-[-1px]'
+// Triggers stay grey; the green active text + underline are drawn by the sliding
+// SlidingTabIndicator overlay so they animate across instead of snapping. after:hidden
+// suppresses the ui kit's default grey active underline (it would show below ours).
+const TAB_TRIGGER_CLS = 'flex-1 h-full rounded-none after:hidden'
 
 const panelVariants: Variants = {
   enter: (direction: number) => ({ x: direction >= 0 ? '100%' : '-100%' }),
@@ -87,10 +64,6 @@ export default function App() {
 
 function AppContent() {
   const { t } = useLingui()
-  const locale = i18n.locale
-  useEffect(() => {
-    document.documentElement.lang = locale === 'en' ? 'en' : 'zh-CN'
-  }, [locale])
   const platform = usePlatform()
   const { methods, otherMethods, sourceMethod, allBinaries } = platform
   const prefersReducedMotion = useReducedMotion()
@@ -101,6 +74,8 @@ function AppContent() {
 
   const slideTransition = prefersReducedMotion ? NO_MOTION : SLIDE_SPRING
   const heightTransition = prefersReducedMotion ? NO_MOTION : HEIGHT_EASE
+
+  const { fadeControls, switchLang } = useLanguageSwitch()
   // macOS on Safari/Firefox exposes no CPU architecture, so detection lands in the
   // 'ready' state with no concrete binary. Only then do we offer an explicit Apple
   // Silicon / Intel choice; once the arch is known (Chromium via UA Client Hints) the
@@ -117,7 +92,7 @@ function AppContent() {
 
   const panels: Record<InstallTab, ReactElement> = {
     command: (
-      <TabsContent forceMount value="command" className={TAB_CONTENT_CLS}>
+      <>
         {platform.state === 'ready' && (
           <>
             <div className="p-6 text-center">
@@ -146,53 +121,72 @@ function AppContent() {
         )}
 
         {platform.state === 'unsupported' && <div className="px-6 py-5"><MethodsList items={methods} mirror={mirror} /></div>}
-      </TabsContent>
+      </>
     ),
     download: (
-      <TabsContent forceMount value="download" className={TAB_CONTENT_CLS}>
-        <BinaryInstall
-          binary={platform.binary}
-          allBinaries={allBinaries}
-          mirror={mirror}
-          showMacOSChoices={showMacOSDownloadChoices}
-        />
-      </TabsContent>
+      <BinaryInstall
+        binary={platform.binary}
+        allBinaries={allBinaries}
+        mirror={mirror}
+        showMacOSChoices={showMacOSDownloadChoices}
+      />
     ),
     source: (
-      <TabsContent forceMount value="source" className={TAB_CONTENT_CLS}>
-        <div className="p-6 text-center">
-          <p className="text-base text-gray-500 dark:text-gray-400 mb-4"><Trans>使用 Go 从源码编译安装：</Trans></p>
-          <CodeBlock command={mirror && sourceMethod.mirrorCommand ? sourceMethod.mirrorCommand : sourceMethod.command} primary />
-          <p className="mt-4 text-sm text-gray-400 dark:text-gray-500"><Trans>需要本机已安装 Go 环境。</Trans></p>
-        </div>
-      </TabsContent>
+      <div className="p-6 text-center">
+        <p className="text-base text-gray-500 dark:text-gray-400 mb-4"><Trans>使用 Go 从源码编译安装：</Trans></p>
+        <CodeBlock command={mirror && sourceMethod.mirrorCommand ? sourceMethod.mirrorCommand : sourceMethod.command} primary />
+        <p className="mt-4 text-sm text-gray-400 dark:text-gray-500"><Trans>需要本机已安装 Go 环境。</Trans></p>
+      </div>
     ),
   }
+
+  // Labels keyed by tab id; the ordered list itself comes from INSTALL_TABS (the single
+  // source of truth that also types InstallTab and drives slide direction).
+  const installTabLabels: Record<InstallTab, ReactElement> = {
+    command: <Trans>命令安装</Trans>,
+    download: <Trans>下载安装</Trans>,
+    source: <Trans>编译安装</Trans>,
+  }
+  const installTabs = INSTALL_TABS.map(value => ({ value, label: installTabLabels[value] }))
 
   const installCard = (
     <>
       <Tabs value={tab} onValueChange={handleTabChange} className="flex-col gap-0">
         <TabsList
           variant="line"
-          className="w-full h-11 p-0 border-b border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900/50 rounded-none gap-0"
+          className="relative w-full h-11 p-0 border-b border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900/50 rounded-none gap-0"
         >
-          <TabsTrigger value="command" className={TAB_TRIGGER_CLS}><Trans>命令安装</Trans></TabsTrigger>
-          <TabsTrigger value="download" className={TAB_TRIGGER_CLS}><Trans>下载安装</Trans></TabsTrigger>
-          <TabsTrigger value="source" className={TAB_TRIGGER_CLS}><Trans>编译安装</Trans></TabsTrigger>
+          {installTabs.map(t => (
+            <TabsTrigger
+              key={t.value}
+              value={t.value}
+              id={`install-tab-${t.value}`}
+              aria-controls={`install-panel-${t.value}`}
+              className={TAB_TRIGGER_CLS}
+            >
+              {t.label}
+            </TabsTrigger>
+          ))}
+          <SlidingTabIndicator tabs={installTabs} activeValue={tab} direction={slideDirection} transition={slideTransition} />
         </TabsList>
 
+        {/* Only the active panel is mounted; the card's `layout` animation smoothly
+            resizes the height when switching tabs (no shared grid, so no cross-tab
+            height bleed or stutter). */}
         <div className="relative overflow-hidden">
           <AnimatePresence initial={false} custom={slideDirection} mode="popLayout">
             <motion.div
               key={tab}
+              role="tabpanel"
+              id={`install-panel-${tab}`}
+              aria-labelledby={`install-tab-${tab}`}
               custom={slideDirection}
               variants={panelVariants}
               initial="enter"
               animate="center"
               exit="exit"
               transition={slideTransition}
-              className="w-full"
-              data-slide-direction={slideDirection}
+              className={`${TAB_CONTENT_CLS} w-full`}
             >
               {panels[tab]}
             </motion.div>
@@ -239,8 +233,8 @@ function AppContent() {
 
   return (
     <LayoutGroup id="install-layout">
-      <div className="relative max-w-2xl mx-auto px-4 md:px-6 py-12 md:py-24 w-full">
-        <LangSwitch />
+      <motion.div animate={fadeControls} className="relative max-w-2xl mx-auto px-4 md:px-6 py-12 md:py-24 w-full">
+        <LangSwitch onSelect={switchLang} transition={heightTransition} layoutDependency={tab} />
         <motion.header layout="position" layoutDependency={tab} transition={heightTransition}>
           <h1 className="text-6xl sm:text-7xl md:text-8xl" style={{ fontFamily: '"Patua One", serif', fontWeight: 400 }}>
             <span className="cj-gradient" style={{ paddingBottom: '0.15em', display: 'inline-block' }}>cjv</span>
@@ -316,7 +310,7 @@ function AppContent() {
           <span>·</span>
           <a href="https://cangjie-lang.cn/" target="_blank" rel="noopener noreferrer" className="hover:text-cj dark:hover:text-cj-light"><Trans>仓颉官网</Trans></a>
         </motion.nav>
-      </div>
+      </motion.div>
     </LayoutGroup>
   )
 }
