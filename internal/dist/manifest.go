@@ -18,9 +18,27 @@ type DownloadInfo struct {
 	URL    string `json:"url"`
 }
 
+// ComponentInfo is a toolchain add-on archive (docs / stdx / stdx-docs). Unlike
+// the SDK, these archives ship without a published checksum, so it carries only
+// a name and a verbatim download URL taken from the upstream release API.
+type ComponentInfo struct {
+	Name string `json:"name"`
+	URL  string `json:"url"`
+}
+
+// ComponentSet holds the component download links for a single version: the
+// main docs and stdx-docs archives (one each), plus the stdx binaries keyed by
+// archive platform token (e.g. "linux-x64", "ohos-aarch64").
+type ComponentSet struct {
+	Docs     *ComponentInfo           `json:"docs,omitempty"`
+	StdxDocs *ComponentInfo           `json:"stdx-docs,omitempty"`
+	Stdx     map[string]ComponentInfo `json:"stdx,omitempty"`
+}
+
 type ChannelInfo struct {
-	Latest   string                             `json:"latest"`
-	Versions map[string]map[string]DownloadInfo `json:"versions"` // version -> platform -> info
+	Latest     string                             `json:"latest"`
+	Versions   map[string]map[string]DownloadInfo `json:"versions"`             // version -> platform -> info
+	Components map[string]ComponentSet            `json:"components,omitempty"` // version -> component set
 }
 
 type Manifest struct {
@@ -58,6 +76,52 @@ func (m *Manifest) GetDownloadInfo(channel toolchain.Channel, version, tuple str
 	}
 
 	return &info, nil
+}
+
+// ComponentDownload returns the download link for a component archive. comp is
+// the component name ("stdx", "docs", "stdx-docs"); stdxPlatform is the stdx
+// archive platform token (e.g. "linux-x64") and is consulted only for stdx.
+// It returns ComponentNotPublishedError when the manifest carries no link for
+// the requested version / component / platform.
+func (m *Manifest) ComponentDownload(channel toolchain.Channel, version, comp, stdxPlatform string) (*ComponentInfo, error) {
+	ch, err := m.getChannel(channel)
+	if err != nil {
+		return nil, err
+	}
+	set, ok := ch.Components[version]
+	if !ok {
+		return nil, &cjverr.ComponentNotPublishedError{Component: comp, Version: version}
+	}
+	switch comp {
+	case "stdx":
+		info, ok := set.Stdx[stdxPlatform]
+		if !ok {
+			return nil, &cjverr.ComponentNotPublishedError{Component: comp, Version: version, Target: stdxPlatform}
+		}
+		return &info, nil
+	case "docs":
+		if set.Docs == nil {
+			return nil, &cjverr.ComponentNotPublishedError{Component: comp, Version: version}
+		}
+		return set.Docs, nil
+	case "stdx-docs":
+		if set.StdxDocs == nil {
+			return nil, &cjverr.ComponentNotPublishedError{Component: comp, Version: version}
+		}
+		return set.StdxDocs, nil
+	default:
+		return nil, &cjverr.UnknownComponentError{Name: comp}
+	}
+}
+
+// HasComponents reports whether the channel publishes any component for version.
+func (m *Manifest) HasComponents(channel toolchain.Channel, version string) bool {
+	ch, err := m.getChannel(channel)
+	if err != nil {
+		return false
+	}
+	_, ok := ch.Components[version]
+	return ok
 }
 
 func (m *Manifest) GetLatestVersion(channel toolchain.Channel) (string, error) {

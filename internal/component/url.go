@@ -10,40 +10,16 @@ import (
 	"github.com/Zxilly/cjv/internal/toolchain"
 )
 
-// DefaultStdxReleaseBaseURL is the gitcode releases prefix for the
-// cangjie_stdx repository (used for LTS/STS stdx and stdx-docs archives).
-const DefaultStdxReleaseBaseURL = "https://gitcode.com/Cangjie/cangjie_stdx/releases/download"
-
-// DefaultDocsBundleBaseURL is the github releases prefix for the cangjie-docs
-// bundle that publishes LTS / STS main documentation tarballs.
-const DefaultDocsBundleBaseURL = "https://github.com/Zxilly/cangjie-docs-bundle/releases/download"
-
-// Test overrides for the LTS/STS download URLs; empty falls back to the default.
-var (
-	stdxReleaseBaseOverride string
-	docsBundleBaseOverride  string
-)
-
-func stdxReleaseBase() string {
-	if stdxReleaseBaseOverride != "" {
-		return stdxReleaseBaseOverride
-	}
-	return DefaultStdxReleaseBaseURL
-}
-
-func docsBundleBase() string {
-	if docsBundleBaseOverride != "" {
-		return docsBundleBaseOverride
-	}
-	return DefaultDocsBundleBaseURL
-}
-
-// ResolveAssetURL requires a tuple for stdx — a host tuple selects the host
-// stdx, a target tuple (with environment suffix) selects the matching
-// cross-compile target stdx — and ignores tuple for docs / stdx-docs. Returns
-// ComponentNotAvailableForChannelError when the component does not ship offline
-// for tc.Channel.
-func ResolveAssetURL(spec Spec, tc toolchain.ToolchainName, tuple string) (string, error) {
+// ResolveAssetURL resolves the download URL for a component archive.
+//
+// Nightly builds construct the URL from the on-disk release metadata: the
+// nightly_build repo publishes every component under a single release tag, so
+// the URL is derivable. LTS / STS read the link straight from the version
+// manifest instead — the upstream cangjie_stdx repo tags releases
+// inconsistently (the release tag is sometimes the SDK version, sometimes the
+// stdx asset version), so the manifest carries verbatim links rather than a
+// reconstruction. mf is required for LTS / STS and ignored for nightly.
+func ResolveAssetURL(spec Spec, tc toolchain.ToolchainName, tuple string, mf *dist.Manifest) (string, error) {
 	if !spec.SupportsChannel(tc.Channel) {
 		return "", &cjverr.ComponentNotAvailableForChannelError{
 			Component: string(spec.Name),
@@ -53,56 +29,62 @@ func ResolveAssetURL(spec Spec, tc toolchain.ToolchainName, tuple string) (strin
 	if tc.Version == "" {
 		return "", fmt.Errorf("component %q requires a resolved toolchain version", spec.Name)
 	}
-	if spec.assetURL == nil {
-		return "", &cjverr.UnknownComponentError{Name: string(spec.Name)}
+	if tc.Channel == toolchain.Nightly {
+		return nightlyComponentURL(spec.Name, tc, tuple)
 	}
-	return spec.assetURL(tc, tuple)
+	return manifestComponentURL(mf, spec.Name, tc, tuple)
 }
 
-func stdxURL(tc toolchain.ToolchainName, tuple string) (string, error) {
-	if tuple == "" {
-		return "", fmt.Errorf("stdx requires a host tuple")
+// manifestComponentURL looks up the LTS / STS component link in the manifest.
+// For stdx it keys on the archive platform token derived from tuple; docs /
+// stdx-docs have a single archive per version.
+func manifestComponentURL(mf *dist.Manifest, name Name, tc toolchain.ToolchainName, tuple string) (string, error) {
+	if mf == nil {
+		return "", fmt.Errorf("component %q requires the version manifest", name)
 	}
-	platform, err := sdktarget.StdxPlatformForTuple(tuple)
+	platform := ""
+	if name == Stdx {
+		p, err := stdxPlatform(tuple)
+		if err != nil {
+			return "", err
+		}
+		platform = p
+	}
+	info, err := mf.ComponentDownload(tc.Channel, tc.Version, string(name), platform)
 	if err != nil {
 		return "", err
 	}
-	nightly := nightlyReleaseAsset(tc)
-	stdxVersion := nightly.Version + ".1"
-	asset := fmt.Sprintf("cangjie-stdx-%s-%s.zip", platform, stdxVersion)
-
-	switch tc.Channel {
-	case toolchain.Nightly:
-		return joinReleaseURL(dist.DefaultNightlyBaseURL, nightly.ReleaseTag, asset)
-	default:
-		return joinReleaseURL(stdxReleaseBase(), "v"+stdxVersion, asset)
-	}
+	return info.URL, nil
 }
 
-// docsURL: nightly from the cangjie nightly_build release; LTS / STS from
-// the cangjie-docs-bundle GitHub release, tag = bare version (no `v` prefix).
-func docsURL(tc toolchain.ToolchainName, _ string) (string, error) {
+// nightlyComponentURL constructs the component URL for a nightly toolchain from
+// the release metadata recorded at install time. The stdx asset carries the
+// extra `.1` stdx revision suffix; docs does not.
+func nightlyComponentURL(name Name, tc toolchain.ToolchainName, tuple string) (string, error) {
 	nightly := nightlyReleaseAsset(tc)
-	asset := fmt.Sprintf("cangjie-docs-html-%s.tar.gz", nightly.Version)
-	switch tc.Channel {
-	case toolchain.Nightly:
-		return joinReleaseURL(dist.DefaultNightlyBaseURL, nightly.ReleaseTag, asset)
+	var asset string
+	switch name {
+	case Stdx:
+		platform, err := stdxPlatform(tuple)
+		if err != nil {
+			return "", err
+		}
+		asset = fmt.Sprintf("cangjie-stdx-%s-%s.1.zip", platform, nightly.Version)
+	case Docs:
+		asset = fmt.Sprintf("cangjie-docs-html-%s.tar.gz", nightly.Version)
+	case StdxDocs:
+		asset = fmt.Sprintf("cangjie-stdx-docs-html-%s.1.tar.gz", nightly.Version)
 	default:
-		return joinReleaseURL(docsBundleBase(), tc.Version, asset)
+		return "", &cjverr.UnknownComponentError{Name: string(name)}
 	}
+	return joinReleaseURL(dist.DefaultNightlyBaseURL, nightly.ReleaseTag, asset)
 }
 
-// stdxDocsURL: nightly from nightly_build; LTS / STS from cangjie_stdx,
-// tag = `v{ver}.1`, asset suffix `.1`.
-func stdxDocsURL(tc toolchain.ToolchainName, _ string) (string, error) {
-	nightly := nightlyReleaseAsset(tc)
-	asset := fmt.Sprintf("cangjie-stdx-docs-html-%s.1.tar.gz", nightly.Version)
-	switch tc.Channel {
-	case toolchain.Nightly:
-		return joinReleaseURL(dist.DefaultNightlyBaseURL, nightly.ReleaseTag, asset)
-	default:
-		return joinReleaseURL(stdxReleaseBase(), "v"+tc.Version+".1", asset)
+func stdxPlatform(tuple string) (string, error) {
+	if tuple == "" {
+		return "", fmt.Errorf("stdx requires a host tuple")
 	}
+	return sdktarget.StdxPlatformForTuple(tuple)
 }
 
 type nightlyAsset struct {

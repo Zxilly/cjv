@@ -23,13 +23,13 @@ func TestSmokeRealComponentDownloads_LTSSTS(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Minute)
 	defer cancel()
 
-	manifest := fetchSmokeManifest(t, ctx)
+	mf := fetchSmokeManifest(t, ctx)
 	platformKey, err := dist.CurrentTargetTuple("", "")
 	require.NoError(t, err)
 
 	downloadsDir := t.TempDir()
 	for _, ch := range []toolchain.Channel{toolchain.LTS, toolchain.STS} {
-		version, err := manifest.GetLatestVersion(ch)
+		version, err := mf.GetLatestVersion(ch)
 		require.NoError(t, err)
 		tc := toolchain.ToolchainName{Channel: ch, Version: version}
 
@@ -45,7 +45,7 @@ func TestSmokeRealComponentDownloads_LTSSTS(t *testing.T) {
 					componentPlatformKey = platformKey
 				}
 
-				require.NoError(t, component.Install(ctx, roots, tc, name, componentPlatformKey, downloadsDir, false))
+				require.NoError(t, component.Install(ctx, roots, tc, name, componentPlatformKey, downloadsDir, false, mf))
 				assert.True(t, component.IsInstalled(roots.TcDir, name))
 
 				manifest, err := component.ReadManifest(roots.TcDir, name)

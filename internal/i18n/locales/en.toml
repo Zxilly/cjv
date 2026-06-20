@@ -353,6 +353,12 @@ other = "Replace any existing component install (linked or downloaded)"
 [ComponentNotAvailableForChannel]
 other = "Component '{{.Component}}' is not available offline on channel '{{.Channel}}'."
 
+[ComponentNotPublished]
+other = "Version '{{.Version}}' does not publish component '{{.Component}}'."
+
+[ComponentNotPublishedForTarget]
+other = "Version '{{.Version}}' does not publish component '{{.Component}}' for target '{{.Target}}'."
+
 [InstalledComponents]
 one = "{{.Count}} component installed:"
 other = "{{.Count}} components installed:"

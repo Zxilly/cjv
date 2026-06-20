@@ -29,6 +29,7 @@ const (
 	ErrorCodeComponentNotInstalled           ErrorCode = "COMPONENT_NOT_INSTALLED"
 	ErrorCodeComponentAlreadyInstalled       ErrorCode = "COMPONENT_ALREADY_INSTALLED"
 	ErrorCodeComponentNotAvailableForChannel ErrorCode = "COMPONENT_NOT_AVAILABLE_FOR_CHANNEL"
+	ErrorCodeComponentNotPublished           ErrorCode = "COMPONENT_NOT_PUBLISHED"
 	ErrorCodeComponentRequiresHost           ErrorCode = "COMPONENT_REQUIRES_HOST"
 	ErrorCodeComponentLinkNotSupported       ErrorCode = "COMPONENT_LINK_NOT_SUPPORTED"
 	ErrorCodeComponentLinkInvalidPath        ErrorCode = "COMPONENT_LINK_INVALID_PATH"
@@ -291,6 +292,33 @@ func (e *ComponentNotAvailableForChannelError) Code() ErrorCode {
 }
 func (e *ComponentNotAvailableForChannelError) Details() map[string]any {
 	return map[string]any{"component": e.Component, "channel": e.Channel}
+}
+
+// ComponentNotPublishedError indicates the version manifest carries no download
+// link for the requested component — either the version ships no components at
+// all, or (for stdx) not for the requested platform.
+type ComponentNotPublishedError struct {
+	Component string
+	Version   string
+	Target    string // stdx archive platform token; empty for docs / stdx-docs
+}
+
+func (e *ComponentNotPublishedError) Error() string {
+	if e.Target != "" {
+		return i18n.T("ComponentNotPublishedForTarget", i18n.MsgData{
+			"Component": e.Component,
+			"Version":   e.Version,
+			"Target":    e.Target,
+		})
+	}
+	return i18n.T("ComponentNotPublished", i18n.MsgData{
+		"Component": e.Component,
+		"Version":   e.Version,
+	})
+}
+func (e *ComponentNotPublishedError) Code() ErrorCode { return ErrorCodeComponentNotPublished }
+func (e *ComponentNotPublishedError) Details() map[string]any {
+	return map[string]any{"component": e.Component, "version": e.Version, "target": e.Target}
 }
 
 // ComponentRequiresHostError indicates a component cannot be installed on a

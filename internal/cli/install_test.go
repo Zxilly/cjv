@@ -337,6 +337,13 @@ func TestInstallToolchainWithExtras_InstallsTargetStdx(t *testing.T) {
 	manifest.Channels.STS = dist.ChannelInfo{
 		Latest:   version,
 		Versions: map[string]map[string]dist.DownloadInfo{version: platforms},
+		// The target tuple "ohos" maps to the stdx platform token "ohos-aarch64";
+		// the manifest carries the verbatim download link for it.
+		Components: map[string]dist.ComponentSet{
+			version: {Stdx: map[string]dist.ComponentInfo{
+				"ohos-aarch64": {Name: stdxAsset, URL: server.URL + "/download/" + stdxAsset},
+			}},
+		},
 	}
 
 	mux.HandleFunc("/download/", func(w http.ResponseWriter, r *http.Request) {
@@ -351,10 +358,6 @@ func TestInstallToolchainWithExtras_InstallsTargetStdx(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		require.NoError(t, json.NewEncoder(w).Encode(manifest))
 	})
-
-	// Point the stdx release base at our mock server so the target stdx asset
-	// resolves to /download/<stdxAsset>.
-	componentlib.SetStdxReleaseBaseForTest(t, server.URL+"/download")
 
 	settings := config.DefaultSettings()
 	settings.ManifestURL = server.URL + "/sdk-versions.json"

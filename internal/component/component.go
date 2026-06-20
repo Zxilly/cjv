@@ -52,11 +52,6 @@ type Spec struct {
 	// and that must exist in the source.
 	Linkable     bool
 	LinkChildren []string
-	// assetURL builds the download URL for this component's archive given the
-	// resolved toolchain and target tuple (tuple is consulted only by stdx). It
-	// is the component's download recipe, kept on the Spec so everything about a
-	// component lives in one table entry instead of a switch elsewhere.
-	assetURL func(tc toolchain.ToolchainName, tuple string) (string, error)
 }
 
 func (s Spec) SupportsChannel(ch toolchain.Channel) bool {
@@ -77,21 +72,18 @@ var specs = map[Name]Spec{
 		},
 		Linkable:     true,
 		LinkChildren: []string{"dynamic", "static"},
-		assetURL:     stdxURL,
 	},
 	Docs: {
 		Name:              Docs,
 		Location:          InstallLocation{Anchor: AnchorDocs, Subdir: "main"},
 		StripTopLevel:     false,
 		SupportedChannels: []toolchain.Channel{toolchain.LTS, toolchain.STS, toolchain.Nightly},
-		assetURL:          docsURL,
 	},
 	StdxDocs: {
 		Name:              StdxDocs,
 		Location:          InstallLocation{Anchor: AnchorDocs, Subdir: "stdx"},
 		StripTopLevel:     false,
 		SupportedChannels: []toolchain.Channel{toolchain.LTS, toolchain.STS, toolchain.Nightly},
-		assetURL:          stdxDocsURL,
 	},
 }
 
@@ -158,15 +150,25 @@ func KnownComponents() []Name {
 	return names
 }
 
+// AvailableComponents lists the components installable for tc on the given
+// tuple. Availability is decided by channel support (and, for stdx, whether the
+// tuple resolves to an stdx archive platform); it does not consult the manifest,
+// so a component shown here may still report ComponentNotPublishedError at
+// install time if the resolved version happens not to publish it.
 func AvailableComponents(tc toolchain.ToolchainName, tuple string) []Name {
+	if tc.Version == "" {
+		return nil
+	}
 	var out []Name
 	for _, n := range KnownComponents() {
 		spec, err := SpecFor(n)
 		if err != nil || !spec.SupportsChannel(tc.Channel) {
 			continue
 		}
-		if _, err := ResolveAssetURL(spec, tc, tuple); err != nil {
-			continue
+		if n == Stdx {
+			if _, err := stdxPlatform(tuple); err != nil {
+				continue
+			}
 		}
 		out = append(out, n)
 	}

@@ -35,7 +35,10 @@ var (
 	// directory to the user's PATH. Tests override this to avoid writing to
 	// the real system PATH (e.g., the Windows registry).
 	ensurePathConfiguredFn = ensurePathConfigured
-	componentInstallFunc   = componentlib.Install
+	// componentInstallFunc is a test seam: when nil (production) the lifecycle
+	// default path installs components (resolving LTS / STS links from the
+	// manifest); tests set it to stub the installer without touching the network.
+	componentInstallFunc func(context.Context, componentlib.Roots, toolchain.ToolchainName, componentlib.Name, string, string, bool) error
 
 	installToolchainWithExtrasFn = InstallToolchainWithExtras
 )
@@ -143,7 +146,7 @@ func InstallComponentsForToolchain(ctx context.Context, tcInput string, componen
 // (the directory name under <CJV_HOME>/toolchains/). quiet suppresses the
 // per-component status lines; used by the proxy auto-install path.
 func installComponentsList(ctx context.Context, resolvedName string, components []string, force, quiet bool) error {
-	return lifecycle.InstallComponentsList(ctx, resolvedName, components, force, quiet, lifecycleOptions())
+	return lifecycle.InstallComponentsList(ctx, resolvedName, components, force, quiet, nil, lifecycleOptions())
 }
 
 type resolvedToolchain = lifecycle.ResolvedToolchain

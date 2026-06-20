@@ -33,6 +33,10 @@ import (
 type Options struct {
 	IsJSON               func() bool
 	EnsurePathConfigured func()
+	// ComponentInstall, when set, replaces the real component installer. It is a
+	// test seam and deliberately manifest-free: the default path resolves the
+	// component download manifest itself (see installComponent), so a stub need
+	// not — and must not trigger — a network manifest fetch.
 	ComponentInstall     func(context.Context, component.Roots, toolchain.ToolchainName, component.Name, string, string, bool) error
 	EnsureManagedBinary  func() (string, error)
 	CreateProxyLinks     func() error
@@ -63,12 +67,24 @@ func (o Options) ensurePathConfigured() {
 	EnsurePathConfigured()
 }
 
-func (o Options) installComponent(ctx context.Context, roots component.Roots, tc toolchain.ToolchainName, name component.Name, tuple, downloadsDir string, force bool) error {
-	install := o.ComponentInstall
-	if install == nil {
-		install = component.Install
+// installComponent installs one component. When a test override is set it is
+// used verbatim (no manifest needed). The real path resolves the LTS / STS
+// download links from the manifest, fetched lazily via fetcher so a stubbed
+// installer never reaches the network; nightly toolchains pass a nil manifest
+// and construct their URLs.
+func (o Options) installComponent(ctx context.Context, roots component.Roots, tc toolchain.ToolchainName, name component.Name, tuple, downloadsDir string, force bool, fetcher *ManifestFetcher) error {
+	if o.ComponentInstall != nil {
+		return o.ComponentInstall(ctx, roots, tc, name, tuple, downloadsDir, force)
 	}
-	return install(ctx, roots, tc, name, tuple, downloadsDir, force)
+	var mf *dist.Manifest
+	if tc.Channel != toolchain.Nightly {
+		var err error
+		mf, err = fetcher.Get(ctx)
+		if err != nil {
+			return err
+		}
+	}
+	return component.Install(ctx, roots, tc, name, tuple, downloadsDir, force, mf)
 }
 
 func (o Options) createProxyLinks() error {
@@ -169,11 +185,11 @@ func InstallToolchainWithExtras(ctx context.Context, input string, targets, comp
 	if len(components) > 0 {
 		if len(normalizedTargets) > 0 {
 			for _, targetName := range targetNames {
-				if err := InstallComponentsList(ctx, targetName, components, force, false, opts); err != nil {
+				if err := InstallComponentsList(ctx, targetName, components, force, false, fetcher, opts); err != nil {
 					return err
 				}
 			}
-		} else if err := InstallComponentsList(ctx, resolved.Name, components, force, false, opts); err != nil {
+		} else if err := InstallComponentsList(ctx, resolved.Name, components, force, false, fetcher, opts); err != nil {
 			return err
 		}
 	}
@@ -245,11 +261,15 @@ func InstallComponentsForToolchain(ctx context.Context, tcInput string, componen
 	if err != nil {
 		return err
 	}
-	return InstallComponentsList(ctx, filepath.Base(installedDir), components, false, true, opts)
+	return InstallComponentsList(ctx, filepath.Base(installedDir), components, false, true, nil, opts)
 }
 
-// InstallComponentsList expects resolvedName as "<channel>-<version>".
-func InstallComponentsList(ctx context.Context, resolvedName string, components []string, force, quiet bool, opts Options) error {
+// InstallComponentsList expects resolvedName as "<channel>-<version>". For LTS /
+// STS toolchains it resolves the component download links from the version
+// manifest; fetcher may be a manifest fetcher already primed by the caller (so
+// the manifest is fetched at most once per operation) or nil to fetch on demand.
+// Nightly toolchains construct their component URLs and never touch the manifest.
+func InstallComponentsList(ctx context.Context, resolvedName string, components []string, force, quiet bool, fetcher *ManifestFetcher, opts Options) error {
 	resolvedTC, err := toolchain.ParseToolchainName(resolvedName)
 	if err != nil {
 		return err
@@ -272,6 +292,12 @@ func InstallComponentsList(ctx context.Context, resolvedName string, components 
 			return err
 		}
 	}
+	// The component download links for LTS / STS live in the manifest; create a
+	// fetcher so installComponent can resolve them (lazily, and at most once per
+	// operation when the caller passes a primed fetcher). Nightly never uses it.
+	if fetcher == nil {
+		fetcher = NewManifestFetcher(settings.ManifestURL, opts)
+	}
 	downloadsDir, err := config.DownloadsDir()
 	if err != nil {
 		return err
@@ -286,7 +312,7 @@ func InstallComponentsList(ctx context.Context, resolvedName string, components 
 	}
 	defer snap.Cleanup() //nolint:errcheck
 	for _, c := range parsed {
-		if err := opts.installComponent(ctx, roots, resolvedTC, c, tuple, downloadsDir, force); err != nil {
+		if err := opts.installComponent(ctx, roots, resolvedTC, c, tuple, downloadsDir, force, fetcher); err != nil {
 			var alreadyErr *cjverr.ComponentAlreadyInstalledError
 			if errors.As(err, &alreadyErr) {
 				if !quiet && !opts.json() {

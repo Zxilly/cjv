@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Zxilly/cjv/internal/cjverr"
 	"github.com/Zxilly/cjv/internal/toolchain"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -436,4 +437,64 @@ func TestParseManifest_ValidManifest(t *testing.T) {
 	m, err := ParseManifest([]byte(json))
 	require.NoError(t, err)
 	assert.NotNil(t, m)
+}
+
+func TestComponentDownload(t *testing.T) {
+	var m Manifest
+	m.Channels.STS = ChannelInfo{
+		Latest:   "1.1.0-beta.25",
+		Versions: map[string]map[string]DownloadInfo{"1.1.0-beta.25": {"linux-x64": {Name: "sdk", SHA256: "x", URL: "u"}}},
+		Components: map[string]ComponentSet{
+			"1.1.0-beta.25": {
+				Docs:     &ComponentInfo{Name: "docs", URL: "https://example/docs"},
+				StdxDocs: &ComponentInfo{Name: "stdx-docs", URL: "https://example/stdx-docs"},
+				Stdx: map[string]ComponentInfo{
+					"linux-x64": {Name: "stdx-linux", URL: "https://example/stdx/linux-x64"},
+				},
+			},
+		},
+	}
+
+	stdx, err := m.ComponentDownload(toolchain.STS, "1.1.0-beta.25", "stdx", "linux-x64")
+	require.NoError(t, err)
+	assert.Equal(t, "https://example/stdx/linux-x64", stdx.URL)
+
+	docs, err := m.ComponentDownload(toolchain.STS, "1.1.0-beta.25", "docs", "")
+	require.NoError(t, err)
+	assert.Equal(t, "https://example/docs", docs.URL)
+
+	stdxDocs, err := m.ComponentDownload(toolchain.STS, "1.1.0-beta.25", "stdx-docs", "")
+	require.NoError(t, err)
+	assert.Equal(t, "https://example/stdx-docs", stdxDocs.URL)
+
+	// Missing stdx platform → not published, carrying the platform token.
+	_, err = m.ComponentDownload(toolchain.STS, "1.1.0-beta.25", "stdx", "windows-x64")
+	var notPub *cjverr.ComponentNotPublishedError
+	require.ErrorAs(t, err, &notPub)
+	assert.Equal(t, "windows-x64", notPub.Target)
+
+	// Version with no component set at all.
+	_, err = m.ComponentDownload(toolchain.STS, "9.9.9", "docs", "")
+	require.ErrorAs(t, err, &notPub)
+}
+
+func TestParseManifestWithComponents(t *testing.T) {
+	validHash := strings.Repeat("a", 64)
+	json := `{
+  "channels": {
+    "lts": {"latest": "1.0.0", "versions": {"1.0.0": {"win32-x64": {"name": "s", "sha256": "` + validHash + `", "url": "u"}}}},
+    "sts": {
+      "latest": "1.1.0",
+      "versions": {"1.1.0": {"win32-x64": {"name": "s", "sha256": "` + validHash + `", "url": "u"}}},
+      "components": {"1.1.0": {"docs": {"name": "d", "url": "https://example/d"}, "stdx": {"linux-x64": {"name": "x", "url": "https://example/x"}}}}
+    }
+  }
+}`
+	m, err := ParseManifest([]byte(json))
+	require.NoError(t, err)
+	info, err := m.ComponentDownload(toolchain.STS, "1.1.0", "stdx", "linux-x64")
+	require.NoError(t, err)
+	assert.Equal(t, "https://example/x", info.URL)
+	assert.True(t, m.HasComponents(toolchain.STS, "1.1.0"))
+	assert.False(t, m.HasComponents(toolchain.LTS, "1.0.0"))
 }

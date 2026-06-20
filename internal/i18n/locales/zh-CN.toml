@@ -353,6 +353,12 @@ other = "替换已存在的 component 安装（无论是 link 还是下载）"
 [ComponentNotAvailableForChannel]
 other = "Component '{{.Component}}' 在 channel '{{.Channel}}' 上没有可下载的离线包。"
 
+[ComponentNotPublished]
+other = "版本 '{{.Version}}' 未发布 component '{{.Component}}'。"
+
+[ComponentNotPublishedForTarget]
+other = "版本 '{{.Version}}' 未为目标 '{{.Target}}' 发布 component '{{.Component}}'。"
+
 [InstalledComponents]
 one = "已安装 {{.Count}} 个 component："
 other = "已安装 {{.Count}} 个 component："
