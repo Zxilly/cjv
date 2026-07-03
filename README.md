@@ -1,14 +1,49 @@
 # cjv - Cangjie Version Manager
 
+[![CI](https://img.shields.io/github/actions/workflow/status/Zxilly/cjv/ci.yml?branch=master&style=flat-square)](https://github.com/Zxilly/cjv/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/Zxilly/cjv?style=flat-square)](https://github.com/Zxilly/cjv/releases)
+[![License](https://img.shields.io/github/license/Zxilly/cjv?style=flat-square)](LICENSE)
+
 [English](README.EN.md) | 中文
 
-[仓颉](https://cangjie-lang.cn/)编程语言 SDK 的工具链管理器。
+cjv 是 [仓颉](https://cangjie-lang.cn/) SDK 的工具链管理器：安装并管理多套 SDK，切换默认版本，并让 `cjc`、`cjpm` 等 SDK 工具按当前项目透明代理到正确工具链。
 
-cjv 管理多个仓颉 SDK 安装、处理版本切换，并提供 SDK 工具的透明代理执行。
+## 文档
 
-完整文档见 cjv 用户手册：<https://cjv.zxilly.dev/book/user-guide/zh-CN/>（[English](https://cjv.zxilly.dev/book/user-guide/en/)）。
+完整文档请访问 [cjv.zxilly.dev](https://cjv.zxilly.dev)。
+
+- [用户手册](https://cjv.zxilly.dev/book/user-guide/zh-CN/)
+- [开发指南](https://cjv.zxilly.dev/book/dev-guide/zh-CN/)
 
 ## 安装
+
+### 一键安装脚本
+
+Linux / macOS:
+
+```bash
+curl -sSf https://cjv.zxilly.dev/install.sh | sh
+```
+
+Windows PowerShell:
+
+```powershell
+irm https://cjv.zxilly.dev/install.ps1 | iex
+```
+
+GitHub 访问不稳定时可使用镜像源：
+
+```bash
+curl -sSf https://cjv.zxilly.dev/install.sh | sh -s -- --mirror
+```
+
+```powershell
+& ([scriptblock]::Create((irm https://cjv.zxilly.dev/install.ps1))) -Mirror
+```
+
+### 预编译二进制
+
+从 [GitHub Releases](https://github.com/Zxilly/cjv/releases) 下载适合当前平台的归档，解压后把 `cjv`（Windows 为 `cjv.exe`）放入 `PATH`。
 
 ### 从源码编译
 
@@ -16,55 +51,36 @@ cjv 管理多个仓颉 SDK 安装、处理版本切换，并提供 SDK 工具的
 go install github.com/Zxilly/cjv/cmd/cjv@latest
 ```
 
-### 从发布二进制文件
-
-从 [Releases](https://github.com/Zxilly/cjv/releases) 页面下载适合你平台的二进制文件，并将其放入 PATH 中。
-
-### 一键安装脚本
-
-落地页 <https://cjv.zxilly.dev> 提供 `install.sh` / `install.ps1` 一键安装（含镜像源变体）。详见文档的[安装 cjv](https://cjv.zxilly.dev/book/user-guide/zh-CN/installation/index.html)。
-
-## 快速开始
+## 使用
 
 ```bash
 # 安装最新 LTS 工具链
 cjv install lts
 
-# 设为默认
+# 设为默认工具链
 cjv default lts
 
-# 验证安装
+# 查看当前工具链状态
 cjv show
 
 # 使用指定工具链运行命令
 cjv run sts cjc --version
 ```
 
-安装并设为默认后，可直接调用 `cjc`、`cjpm` 等工具，cjv 会透明代理到对应工具链。
+设置默认工具链后，可以直接调用 `cjc`、`cjpm` 等命令；cjv 会根据环境变量、目录覆盖、`cangjie-sdk.toml` 和默认配置解析应使用的工具链。
 
-## 常用命令
+完整命令参考、工具链解析、组件、交叉编译、运行时环境和配置说明见[用户手册](https://cjv.zxilly.dev/book/user-guide/zh-CN/)。
 
-| 命令                                         | 说明                                    |
-| -------------------------------------------- | --------------------------------------- |
-| `cjv install <toolchain> [-t target] [-c c]` | 安装工具链，可附加交叉编译目标与组件    |
-| `cjv uninstall <toolchain>`                  | 卸载工具链                              |
-| `cjv update [toolchain]`                      | 更新已安装的工具链                      |
-| `cjv default [toolchain]`                     | 设置或显示默认工具链                    |
-| `cjv show`                                    | 显示活跃和已安装的工具链                |
-| `cjv run <toolchain> <command> [args...]`     | 使用指定工具链运行命令                  |
-| `cjv toolchain link <name> <path\|url>`       | 从本地目录或 URL 添加自定义工具链       |
-| `cjv component add <name>...`                 | 为工具链安装 component（如 stdx、docs） |
-| `cjv exec [+toolchain] <command>`             | 在运行时环境中执行命令                  |
-| `cjv envsetup [+toolchain]`                   | 输出配置运行时环境的 shell 命令         |
+## 开发
 
-完整命令参考，以及工具链解析、`cangjie-sdk.toml` 格式、从 URL 安装、组件、交叉编译、运行时环境、环境变量与配置等说明，都在 cjv 用户手册里：
+本地构建和测试：
 
-- 中文：<https://cjv.zxilly.dev/book/user-guide/zh-CN/>
-- English：<https://cjv.zxilly.dev/book/user-guide/en/>
+```bash
+go build ./cmd/cjv
+go test -race -count=1 ./...
+```
 
-想参与开发（构建、测试、架构、发布流程），见开发指南：<https://cjv.zxilly.dev/book/dev-guide/zh-CN/>（[English](https://cjv.zxilly.dev/book/dev-guide/en/)）。
-
-文档源码在 [`docs/`](docs/) 目录（mdBook，简体中文源 + 英文翻译）：用户手册 `docs/user-guide/`，开发指南 `docs/dev-guide/`。
+更多构建、测试、架构和发布流程见[开发指南](https://cjv.zxilly.dev/book/dev-guide/zh-CN/)。
 
 ## 许可证
 

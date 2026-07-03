@@ -1,14 +1,49 @@
 # cjv - Cangjie Version Manager
 
+[![CI](https://img.shields.io/github/actions/workflow/status/Zxilly/cjv/ci.yml?branch=master&style=flat-square)](https://github.com/Zxilly/cjv/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/Zxilly/cjv?style=flat-square)](https://github.com/Zxilly/cjv/releases)
+[![License](https://img.shields.io/github/license/Zxilly/cjv?style=flat-square)](LICENSE)
+
 English | [中文](README.md)
 
-A toolchain manager for the [Cangjie](https://cangjie-lang.cn/) programming language SDK.
+cjv is a toolchain manager for the [Cangjie](https://cangjie-lang.cn/) SDK. It installs and manages multiple SDKs, switches default versions, and transparently proxies SDK tools such as `cjc` and `cjpm` to the right toolchain for the current project.
 
-cjv manages multiple Cangjie SDK installations, handles version switching, and provides transparent proxy execution of SDK tools.
+## Documentation
 
-Full documentation is in the cjv user guide: <https://cjv.zxilly.dev/book/user-guide/en/> ([中文](https://cjv.zxilly.dev/book/user-guide/zh-CN/)).
+Full documentation is available at [cjv.zxilly.dev](https://cjv.zxilly.dev).
+
+- [User guide](https://cjv.zxilly.dev/book/user-guide/en/)
+- [Dev guide](https://cjv.zxilly.dev/book/dev-guide/en/)
 
 ## Installation
+
+### Install script
+
+Linux / macOS:
+
+```bash
+curl -sSf https://cjv.zxilly.dev/install.sh | sh
+```
+
+Windows PowerShell:
+
+```powershell
+irm https://cjv.zxilly.dev/install.ps1 | iex
+```
+
+Use the mirror source when GitHub access is unreliable:
+
+```bash
+curl -sSf https://cjv.zxilly.dev/install.sh | sh -s -- --mirror
+```
+
+```powershell
+& ([scriptblock]::Create((irm https://cjv.zxilly.dev/install.ps1))) -Mirror
+```
+
+### Release binaries
+
+Download the archive for your platform from [GitHub Releases](https://github.com/Zxilly/cjv/releases), extract it, and put `cjv` (`cjv.exe` on Windows) on your `PATH`.
 
 ### From source
 
@@ -16,55 +51,36 @@ Full documentation is in the cjv user guide: <https://cjv.zxilly.dev/book/user-g
 go install github.com/Zxilly/cjv/cmd/cjv@latest
 ```
 
-### From release binaries
-
-Download the binary for your platform from the [Releases](https://github.com/Zxilly/cjv/releases) page and put it on your PATH.
-
-### Install script
-
-The landing page <https://cjv.zxilly.dev> offers one-line `install.sh` / `install.ps1` installers (with mirror variants). See [Installing cjv](https://cjv.zxilly.dev/book/user-guide/en/installation/index.html) in the docs.
-
-## Quick start
+## Usage
 
 ```bash
 # Install the latest LTS toolchain
 cjv install lts
 
-# Make it the default
+# Make it the default toolchain
 cjv default lts
 
-# Verify the installation
+# Show the current toolchain state
 cjv show
 
 # Run a command with a specific toolchain
 cjv run sts cjc --version
 ```
 
-Once a toolchain is installed and set as default, you can invoke `cjc`, `cjpm`, and other tools directly. cjv proxies them to the right toolchain.
+After setting a default toolchain, you can call `cjc`, `cjpm`, and other SDK tools directly. cjv resolves the active toolchain from environment variables, directory overrides, `cangjie-sdk.toml`, and the default configuration.
 
-## Common commands
+See the [user guide](https://cjv.zxilly.dev/book/user-guide/en/) for the full command reference, toolchain resolution, components, cross-compilation, runtime environment, and configuration.
 
-| Command                                       | Description                                          |
-| --------------------------------------------- | --------------------------------------------------- |
-| `cjv install <toolchain> [-t target] [-c c]`  | Install a toolchain, optionally with cross targets and components |
-| `cjv uninstall <toolchain>`                   | Uninstall a toolchain                               |
-| `cjv update [toolchain]`                       | Update installed toolchains                         |
-| `cjv default [toolchain]`                      | Set or show the default toolchain                  |
-| `cjv show`                                     | Show active and installed toolchains               |
-| `cjv run <toolchain> <command> [args...]`      | Run a command with a specific toolchain            |
-| `cjv toolchain link <name> <path\|url>`        | Add a custom toolchain from a local dir or a URL   |
-| `cjv component add <name>...`                  | Install a component (e.g. stdx, docs) for a toolchain |
-| `cjv exec [+toolchain] <command>`              | Execute a command in the runtime environment       |
-| `cjv envsetup [+toolchain]`                    | Print shell commands to configure the runtime env  |
+## Development
 
-The full command reference, plus toolchain resolution, the `cangjie-sdk.toml` format, installing from a URL, components, cross-compilation, the runtime environment, environment variables, and configuration, are all in the cjv user guide:
+Build and test locally:
 
-- English: <https://cjv.zxilly.dev/book/user-guide/en/>
-- 中文: <https://cjv.zxilly.dev/book/user-guide/zh-CN/>
+```bash
+go build ./cmd/cjv
+go test -race -count=1 ./...
+```
 
-To work on cjv itself (building, testing, architecture, releasing), see the dev guide: <https://cjv.zxilly.dev/book/dev-guide/en/> ([中文](https://cjv.zxilly.dev/book/dev-guide/zh-CN/)).
-
-The book sources live in [`docs/`](docs/) (mdBook, Simplified Chinese source + English translation): the user guide in `docs/user-guide/`, the dev guide in `docs/dev-guide/`.
+See the [dev guide](https://cjv.zxilly.dev/book/dev-guide/en/) for build, test, architecture, and release details.
 
 ## License
 
