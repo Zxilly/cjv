@@ -102,7 +102,7 @@ checksum:
 3. `actions/checkout`，`fetch-depth: 0` 拉全部历史，供 goreleaser 生成 changelog。
 4. `actions/setup-go`，`go-version: stable`。
 5. 跑 goreleaser：`goreleaser/goreleaser-action`，参数 `release --clean`，用 `GITHUB_TOKEN` 创建 GitHub Release 并上传全部 10 个归档和 `checksums.txt`。
-6. 把镜像版产物上传到 GitCode Release：`Zxilly/upload-gitcode-release`，只挑 `dist/cjv-mirror_*.tar.gz`、`dist/cjv-mirror_*.zip` 和 `dist/checksums.txt`，正文指回 GitHub Release 看完整 changelog。GitCode 仓库通过 Pull 镜像同步 GitHub 分支和 tag；Release 以镜像当前 `master` 为创建基点。
+6. 尝试把镜像版产物上传到 GitCode Release：`Zxilly/upload-gitcode-release` 只挑 `dist/cjv-mirror_*.tar.gz`、`dist/cjv-mirror_*.zip` 和 `dist/checksums.txt`，正文指回 GitHub Release 看完整 changelog。GitCode 仓库通过 Pull 镜像同步 GitHub 分支和 tag；Release 以镜像当前 `master` 为创建基点。GitCode 侧策略拒绝写入时该步骤记录失败，主发布继续完成。
 
 GitHub Release 上挂的是全部产物(官方版 + 镜像版)，GitCode Release 上只挂镜像版加校验和。官方版不上 GitCode 是有意的：走 GitCode 的用户用的就是镜像版。
 

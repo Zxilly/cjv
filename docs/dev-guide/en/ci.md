@@ -165,7 +165,7 @@ The `release` job, in order:
 1. Enables TCP BBR with `Zxilly/actions-bbr` to improve upload bandwidth.
 1. `actions/checkout` with `fetch-depth: 0` fetches the full history, since GoReleaser needs the complete tag history to generate the changelog.
 1. Runs GoReleaser (`args: release --clean`); its configuration lives in `.goreleaser.yml` at the repository root, and it handles cross-compilation, packaging, checksum generation, and creating the GitHub Release.
-1. Uses `Zxilly/upload-gitcode-release` to upload the mirror-variant artifacts (`dist/cjv-mirror_*` and `dist/checksums.txt`) separately to the GitCode release. GitCode synchronizes branches and tags through its Pull mirror, while Release creation uses the mirror's current `master` as its base.
+1. Attempts to upload the mirror-variant artifacts (`dist/cjv-mirror_*` and `dist/checksums.txt`) to a GitCode release. GitCode synchronizes branches and tags through its Pull mirror, while Release creation uses the mirror's current `master` as its base. A GitCode-side write-policy failure is recorded without blocking the GitHub Release or Pages.
 
 After `release` there is a `pages` job with `needs: release` that reuses the Pages workflow above via `uses: ./.github/workflows/pages.yml`, redeploying the landing page once the release is complete so that it points to the latest release artifacts. For the full release process, see [Release process](releasing.md).
 

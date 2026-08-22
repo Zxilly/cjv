@@ -107,7 +107,7 @@ checksum:
 
 1. Run goreleaser: `goreleaser/goreleaser-action` with `release --clean`, using `GITHUB_TOKEN` to create the GitHub Release and upload all 10 archives plus `checksums.txt`.
 
-1. Upload the mirror artifacts to the GitCode Release: `Zxilly/upload-gitcode-release` picks only `dist/cjv-mirror_*.tar.gz`, `dist/cjv-mirror_*.zip`, and `dist/checksums.txt`, with the body pointing back to the GitHub Release for the full changelog. GitCode synchronizes the GitHub branches and tags through its Pull mirror; Release creation uses the mirror's current `master` as its base.
+1. Attempt to upload the mirror artifacts to a GitCode Release: `Zxilly/upload-gitcode-release` picks only `dist/cjv-mirror_*.tar.gz`, `dist/cjv-mirror_*.zip`, and `dist/checksums.txt`, with the body pointing back to the GitHub Release for the full changelog. GitCode synchronizes the GitHub branches and tags through its Pull mirror; Release creation uses the mirror's current `master` as its base. A GitCode-side write-policy failure is recorded while the primary release continues.
 
 The GitHub Release carries every artifact (official plus mirror), while the GitCode Release carries only the mirror builds plus the checksums. Leaving the official builds off GitCode is intentional: users coming through GitCode use the mirror builds.
 

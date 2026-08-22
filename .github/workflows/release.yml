@@ -34,6 +34,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Upload mirror binaries to GitCode
+        continue-on-error: true
         uses: Zxilly/upload-gitcode-release@4ecd2bfd44008dd4f2b2487eda7a2e7bbbf12a1b # v1.0.0
         with:
           gitcode-token: ${{ secrets.GITCODE_TOKEN }}
