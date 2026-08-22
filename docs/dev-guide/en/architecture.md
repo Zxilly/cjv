@@ -47,9 +47,9 @@ Each directory under `internal/` is a package, divided by subsystem. They are li
 
 ### `lifecycle`: installation orchestration
 
-`internal/lifecycle` orchestrates a single toolchain installation: download, extract, verify, install components, configure PATH, and create proxy links, strung together into one sequential flow. It deliberately does not depend on `cli`; instead it receives callbacks through an `Options` struct (`IsJSON`, `ComponentInstall`, `CreateProxyLinks`, `ValidateInstallation`, and so on), leaving presentation and concrete implementations outside. The same flow serves both `cli install` and proxy auto-install.
+`internal/lifecycle` orchestrates download, extraction, verification, components, PATH configuration, and proxy links as one installation flow. It receives adapters such as `IsJSON`, `ComponentInstall`, `CreateProxyLinks`, and `ValidateInstallation` through `Options`, with dependencies directed from `cli` toward `lifecycle`. The same flow serves `cli install` and proxy auto-install.
 
-Files inside the package are split by responsibility: `install.go` owns orchestration, `source.go` turns channel requests into `ResolvedToolchain` values, `component_install.go` owns component batches and rollback, and `resolved_install.go` owns materialization, validation, and transactional replacement. Distribution-source selection does not leak into the install transaction.
+Files inside the package are split by responsibility: `install.go` owns orchestration, `source.go` turns channel requests into `ResolvedToolchain` values, `component_install.go` owns component batches and rollback, and `resolved_install.go` owns materialization, validation, and transactional replacement. Distribution-source selection stays local to `source.go`.
 
 ### `resolve`: active toolchain resolution
 
@@ -79,7 +79,7 @@ Files inside the package are split by responsibility: `install.go` owns orchestr
 
 ### `config`: configuration and paths
 
-`internal/config` is the configuration layer. It defines all `CJV_*` variables, including `CJV_DIST_SERVER`, resolves `CJV_HOME`, reads user and system fallback settings, reads the toolchain file, and manages directory overrides. Without a unified distribution root, the default manifest URL is still selected by the `mirror` build tag; an explicit `dist_server` takes precedence over that compatibility configuration.
+`internal/config` is the configuration layer. It defines all `CJV_*` variables, including `CJV_DIST_SERVER`, resolves `CJV_HOME`, reads user and system fallback settings, reads the toolchain file, and manages directory overrides. `dist_server` selects the unified source, while the `mirror` build tag selects the compatibility-mode default manifest URL.
 
 ### `selfupdate`: self-update
 

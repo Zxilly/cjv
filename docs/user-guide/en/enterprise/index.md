@@ -1,6 +1,6 @@
 # Enterprise deployment overview
 
-An enterprise network can let cjv reach upstream services through a controlled proxy or publish toolchains and components to an internal HTTPS artifact repository. After a toolchain is installed, normal `cjc` and `cjpm` execution does not need network access; requests occur only during installation, updates, remote queries, or automatic installation of missing content.
+An enterprise network can let cjv reach upstream services through a controlled proxy or publish toolchains and components to an internal HTTPS artifact repository. Network requests are concentrated in installation, updates, remote queries, and automatic acquisition; daily commands for installed toolchains run locally.
 
 ## Choose a deployment mode
 
@@ -9,20 +9,20 @@ An enterprise network can let cjv reach upstream services through a controlled p
 | Public services are reachable through an enterprise proxy | Set the standard proxy environment variables | All channels and self-update, subject to upstream availability |
 | Endpoints can reach only an internal artifact repository | Configure a unified `dist_server` | LTS, STS, nightly, SDKs, and components can all stay internal |
 | Fully offline or air-gapped | Use local archives or directory links | Installed or locally supplied toolchains |
-| Sources and versions must be centrally enforced | Internal source plus network ACLs and enterprise software distribution | cjv fallback settings are not an enforcement mechanism by themselves |
+| Sources and versions must be centrally enforced | Internal source plus network ACLs and enterprise software distribution | Fallback settings provide defaults; network ACLs enforce access policy |
 
-The `mirror` build variant only switches the default LTS/STS manifest and cjv self-update backend from GitHub to GitCode. It is useful where GitHub is unreliable, but it is not a generic enterprise-mirror build.
+The `mirror` build variant provides GitCode default endpoints for networks where GitHub is unreliable. Enterprise mirrors use `dist_server`.
 
 ## Toolchain distribution and cjv updates are separate
 
 cjv separates two kinds of artifacts:
 
 - **Toolchain distribution**: SDKs, stdx, docs, stdx-docs, and the LTS, STS, and nightly metadata. Enterprise deployments control this with `dist_server` or `CJV_DIST_SERVER`.
-- **cjv itself**: `CJV_UPDATE_ROOT` can redirect the installer's initial download. Upgrades of an installed cjv should normally be owned by enterprise software distribution, with cjv self-update disabled.
+- **cjv itself**: `CJV_UPDATE_ROOT` selects the installer's initial download location. Enterprise software distribution owns upgrades of installed cjv binaries, with clients configured as `auto_self_update = "disable"`.
 
-With `dist_server` configured, cjv reads `<dist_server>/versions.json`, and that manifest must describe every channel and component in use. A missing nightly channel or artifact is an error; cjv does not fall back to GitCode or another public endpoint.
+With `dist_server` configured, cjv reads `<dist_server>/versions.json` as the authoritative description of every channel and component. A missing nightly channel or artifact produces an explicit error while the configured manifest remains authoritative.
 
-Without `dist_server`, compatibility behavior remains unchanged: LTS/STS use `manifest_url`, while nightly uses GitCode `nightly_build` Releases.
+Compatibility mode resolves LTS/STS through `manifest_url` and nightly through GitCode `nightly_build` Releases.
 
 ## Network destinations
 
@@ -33,7 +33,7 @@ Without `dist_server`, compatibility behavior remains unchanged: LTS/STS use `ma
 | Download SDKs and components | Manifest URLs or nightly Releases | Declare approved relative or absolute URLs in `<dist_server>/versions.json` |
 | Run `cjv self update` | GitHub for the official build, GitCode for the mirror build | Disable self-update and upgrade cjv through enterprise software distribution |
 
-The package repositories and credentials used by `cjpm` are outside cjv's scope. Deploying cjv solves SDK and component distribution; dependency mirrors must be configured separately.
+The project-specific configuration of `cjpm` supplies dependency repositories and credentials. Enterprise environments configure those dependency mirrors separately, while cjv distributes SDKs and components.
 
 Proceed through these sections:
 

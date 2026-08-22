@@ -12,7 +12,7 @@ $env:CJV_UPDATE_ROOT = "https://artifacts.corp.example/cjv/releases/latest/downl
   -Yes -DefaultToolchain none -NoModifyPath
 ```
 
-`CJV_UPDATE_ROOT` affects only this installer download. It is not persisted and does not alter the toolchain distribution source or the installed binary's self-update source. `-NoModifyPath` lets the organization configure `PATH` through GPO, endpoint management, or a build image. Omit it when cjv may update the user's environment.
+`CJV_UPDATE_ROOT` is scoped to this installer download. `dist_server` controls toolchain distribution, while the enterprise software workflow controls upgrades of installed binaries. `-NoModifyPath` lets the organization configure `PATH` through GPO, endpoint management, or a build image; omit it when cjv may update the user's environment.
 
 Automated deployments should use `-DefaultToolchain none`, then run `cjv install` separately so cjv and SDK installation results can be checked independently.
 
@@ -33,11 +33,11 @@ auto_self_update = "disable"
 auto_install = false
 ```
 
-Replace the example version with the exact version approved by your organization. Disabling `auto_install` is recommended on restricted networks: if a project requests content that has not been deployed, `cjc` or `cjpm` fails immediately instead of waiting for an implicit network request during a build.
+Replace the example version with the exact version approved by your organization. Restricted networks should set `auto_install = false`, so `cjc` or `cjpm` immediately returns a missing-content error for an undeployed toolchain or component.
 
-The system file supplies fallback values only. Fields explicitly set in `~/.cjv/settings.toml` take precedence, and `CJV_DIST_SERVER` takes precedence over settings files. Enforce a strict no-public-egress policy with firewall, DNS, or proxy allowlists as well.
+Configuration precedence is `CJV_DIST_SERVER`, user `~/.cjv/settings.toml`, the system fallback file, and built-in defaults. Firewall, DNS, and proxy allowlists enforce network-access policy.
 
-Use a separate `CJV_HOME` for each user rather than one writable directory shared by multiple users.
+Assign a separate `CJV_HOME` to each user.
 
 ## 3. Install and pin an approved version
 
@@ -50,7 +50,7 @@ cjv which cjc
 cjc --version
 ```
 
-Projects should commit `cangjie-sdk.toml` so workstations do not move to different versions when a channel advances:
+Projects can commit `cangjie-sdk.toml` so every workstation uses the same approved version:
 
 ```toml
 [toolchain]
@@ -58,7 +58,7 @@ channel = "lts-1.0.5"
 components = ["stdx"]
 ```
 
-Projects that need nightly should likewise pin an exact version retained by the enterprise manifest:
+Nightly projects gain a reproducible configuration by pinning an exact version retained by the enterprise manifest:
 
 ```toml
 [toolchain]

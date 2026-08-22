@@ -42,7 +42,7 @@ cjv install sts-1.1.0-beta.23
 cjv install 1.0.5
 ```
 
-A bare version number (such as `1.0.5`) is looked up only in the LTS / STS version manifest; it belongs to whichever channel it matches, and nightly does not take part in bare version matching. For the full rules on toolchain naming, see [Toolchains](toolchains.md).
+The search space for a bare version number such as `1.0.5` is the LTS / STS manifest; the matching channel owns the version. Nightly versions use a channel-qualified name. See [Toolchains](toolchains.md) for the complete naming rules.
 
 ## Download sources
 
@@ -56,9 +56,9 @@ The manifest address can be overridden in `~/.cjv/settings.toml` through `manife
 
 ### nightly: GitCode by default, unified manifest for enterprise sources
 
-Without `dist_server`, cjv queries the latest release of the `Cangjie/nightly_build` repository through GitCode's release API, resolves the SDK version, and downloads the platform asset from that Release.
+Compatibility mode queries the latest release of the `Cangjie/nightly_build` repository through GitCode's release API, resolves the SDK version, and downloads the platform asset from that Release.
 
-GitCode's release API requires authentication, so installing or checking the moving `nightly` alias in the default mode requires an API access token. Without one, the relevant commands fail with a prompt:
+GitCode's release API authenticates with an access token. Configure it when compatibility mode installs or checks the moving `nightly` alias; a missing token returns this prompt:
 
 ```text
 GitCode API key is required to query nightly versions. Set it with: cjv set gitcode-api-key <your-token>
@@ -76,7 +76,7 @@ export CJV_GITCODE_API_KEY=<your-token>
 
 For the full description of `CJV_GITCODE_API_KEY` see [Environment variables](../environment-variables.md), and for `cjv set` see [Configuration](../configuration.md).
 
-With `dist_server` or `CJV_DIST_SERVER` configured, all three channels share `<dist_server>/versions.json`. The manifest describes nightly latest, exact versions, platform SDKs, and components, so no GitCode token is required. Missing content fails without a public fallback. See [Internal distribution source](../enterprise/distribution-server.md) for the deployment contract.
+With `dist_server` or `CJV_DIST_SERVER` configured, all three channels share `<dist_server>/versions.json`. The manifest describes nightly latest, exact versions, platform SDKs, and components; missing content returns an explicit error. See [Internal distribution source](../enterprise/distribution-server.md) for the deployment contract.
 
 ## Channels and component sources
 
@@ -108,7 +108,7 @@ channel = "lts"
 
 ## Checking for updates
 
-`cjv check` queries whether updates are available for installed channel toolchains. In the default mode, nightly checks call the GitCode API and require a token. With a unified enterprise source, all three channels are checked against the same manifest.
+`cjv check` queries updates for installed channel toolchains. Compatibility-mode nightly checks call the GitCode API, while a unified enterprise source checks all three channels against the same manifest.
 
 ```bash
 cjv check

@@ -27,7 +27,7 @@ Field overview:
 |-----|----|---------------------|-----------|
 |`version`|int|(maintained automatically)|Settings file format version, written and migrated automatically by cjv|
 |`default_toolchain`|string|`cjv default <toolchain>`|Default toolchain; see [Toolchains](concepts/toolchains.md)|
-|`manifest_url`|string|Manual edit / system fallback|LTS / STS manifest used when `dist_server` is not configured|
+|`manifest_url`|string|Manual edit / system fallback|LTS / STS manifest for compatibility mode|
 |`dist_server`|string|Manual edit / system fallback|Unified toolchain distribution root for every channel and component; see [Internal distribution source](enterprise/distribution-server.md)|
 |`auto_self_update`|string|`cjv set auto-self-update`|Self-update behavior during `cjv update`: `enable` / `disable` / `check`|
 |`auto_install`|bool|`cjv set auto-install`|Whether to automatically install missing toolchains in proxy mode|
@@ -39,7 +39,7 @@ Field overview:
  >
  > Unrecognized keys in the file (for example, typos) are reported with a warn-level log message but do not prevent cjv from starting. Setting `version` to a value higher than the current binary supports does cause an error.
 
-`manifest_url` and `dist_server` currently have no corresponding `cjv set` subcommand. Edit the user settings file directly or let an administrator provide them through system fallback settings. `CJV_DIST_SERVER` takes precedence over `dist_server`; once a unified source is configured, `manifest_url` is not used for toolchain resolution. See [Internal distribution source](enterprise/distribution-server.md) for the complete precedence and manifest contract.
+Provide `manifest_url` and `dist_server` through the user settings file or system fallback settings. Source precedence is `CJV_DIST_SERVER`, `dist_server`, then compatibility-mode `manifest_url` / GitCode nightly. See [Internal distribution source](enterprise/distribution-server.md) for the manifest contract.
 
 ## cjv set
 
@@ -80,7 +80,7 @@ When enabled, running `cjc`, `cjpm`, or other SDK tools directly will install th
 
 ### cjv set gitcode-api-key
 
-Sets the GitCode API access token. Without `dist_server`, resolving the latest nightly requires it. A unified enterprise source provides nightly through its manifest and does not require a GitCode token. LTS and STS do not use this token.
+Sets the GitCode API access token. Compatibility mode uses it to resolve the latest nightly; a unified enterprise source resolves nightly directly from its manifest. LTS and STS use manifest metadata.
 
 ```bash
 cjv set gitcode-api-key <your-gitcode-api-key>

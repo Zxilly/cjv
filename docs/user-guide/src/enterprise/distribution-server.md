@@ -12,7 +12,7 @@ cjv 会读取：
 https://artifacts.corp.example/cjv/dist/versions.json
 ```
 
-相对 SDK 与组件 URL 会以 `dist_server` 为基准解析；绝对 URL 则完全按 manifest 中的值使用，可以指向同一制品库的其他路径，也可以指向其他主机。cjv 把 manifest 视为管理员发布的可信配置，不替企业实施网络访问策略。
+相对 SDK 与组件 URL 会以 `dist_server` 为基准解析；绝对 URL 则完全按 manifest 中的值使用，可以指向同一制品库的其他路径，也可以指向其他主机。
 
 ## 推荐布局
 
@@ -27,11 +27,11 @@ https://artifacts.corp.example/cjv/dist/versions.json
     └── releases/                     # cjv 本体归档和 checksums.txt
 ```
 
-分发端点应允许受管终端通过 HTTPS GET 读取。需要访问控制时，建议通过网络白名单、设备身份或企业反向代理提供机器可访问的只读端点，不要依赖交互式登录页。
+分发端点通过 HTTPS GET 向受管终端提供机器可读的只读访问。网络白名单、设备身份或企业反向代理可以实施访问控制。
 
 ## Manifest 契约
 
-`versions.json` 必须包含 `lts` 与 `sts`；要在严格内网中使用 nightly，还必须包含 `nightly`。每个 SDK 条目都需要 `name`、`url` 和 `sha256`。组件条目支持可选 `sha256`，企业镜像应尽量提供。
+`versions.json` 包含 `lts` 与 `sts`；启用企业 nightly 时再加入 `nightly`。每个 SDK 条目包含 `name`、`url` 和 `sha256`。组件条目支持可选 `sha256`，企业镜像宜一并提供。
 
 ```jsonc
 {
@@ -86,7 +86,7 @@ https://artifacts.corp.example/cjv/dist/versions.json
 }
 ```
 
-`release_tag` 是可选字段。只有上游 Release tag 与 SDK 资产版本不同时才需要填写；工具链名称仍使用版本字段，下载地址以 manifest 中的 URL 为准。
+上游 Release tag 与 SDK 资产版本存在差异时填写可选字段 `release_tag`；工具链名称使用版本字段，下载地址以 manifest 中的 URL 为准。
 
 组件结构与普通 manifest 相同：`docs`、`stdx-docs` 各是一项，`stdx` 按制品平台键组织。完整字段可参考企业实际使用的 `versions.json`，并保留所有批准平台。
 
@@ -97,10 +97,10 @@ https://artifacts.corp.example/cjv/dist/versions.json
 - `cjv install nightly` 安装 `channels.nightly.latest`。
 - `cjv install nightly-<version>` 安装 manifest 中的确切版本。
 - `cjv check`、`cjv update nightly` 和 `cjv toolchain list-remote --channel nightly` 读取同一来源。
-- nightly SDK 与组件都使用 manifest 中的 URL 和校验和，不需要 GitCode API 令牌。
-- manifest 缺少 nightly、目标平台或组件时直接失败，不会访问公网补齐。
+- nightly SDK 与组件使用 manifest 中的 URL 和校验和，版本解析直接由企业 manifest 完成。
+- manifest 缺少 nightly、目标平台或组件时返回对应的缺失错误。
 
-cjv 不会像 rustup 那样在最新 nightly 缺组件时逐日回退。企业发布流程应先上传同一 nightly 的全部批准平台和组件，验证可下载后再更新 `latest`。项目应固定确切 nightly 版本，避免构建结果随 `latest` 漂移。
+`channels.nightly.latest` 精确选择一个版本，目标与组件完整性是该版本的发布条件。企业发布流程先上传同一 nightly 的全部批准平台和组件，验证可下载后再更新 `latest`。项目固定确切 nightly 版本可获得可复现构建。
 
 ## 发布顺序
 
@@ -109,6 +109,6 @@ cjv 不会像 rustup 那样在最新 nightly 缺组件时逐日回退。企业�
 3. 先发布所有归档，并用普通终端账户验证 HTTPS GET。
 4. 生成 `versions.json`。内网部署通常使用相对路径或企业批准的内部绝对 URL。
 5. 最后原子替换 manifest；只有制品齐全时才推进各通道的 `latest`。
-6. 保留仍被项目工具链文件引用的精确版本，不要只保留最新版本。
+6. 保留项目工具链文件引用的全部精确版本。
 
-`CJV_DIST_SERVER` 会覆盖设置文件中的 `dist_server`，适合 CI 临时选择测试源。若两者均未设置，才使用旧的 `manifest_url` / GitCode nightly 兼容模式。
+来源优先级为 `CJV_DIST_SERVER`、设置文件中的 `dist_server`、`manifest_url` / GitCode nightly 兼容模式。CI 可用环境变量临时选择测试源。

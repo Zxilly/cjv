@@ -27,7 +27,7 @@ gitcode_api_key = "your-token-here"
 | ------------------- | ------ | -------------------------- | --------------------------------------------------------------------- |
 | `version`           | int    | （自动维护）               | 设置文件格式版本，由 cjv 自动写入和迁移                                |
 | `default_toolchain` | string | `cjv default <toolchain>`  | 默认工具链，见 [工具链](concepts/toolchains.md)                       |
-| `manifest_url`      | string | 手动编辑 / 系统后备配置     | 未配置 `dist_server` 时使用的 LTS / STS 工具链清单地址                |
+| `manifest_url`      | string | 手动编辑 / 系统后备配置     | 兼容模式的 LTS / STS 工具链清单地址                                  |
 | `dist_server`       | string | 手动编辑 / 系统后备配置     | 统一工具链分发根，覆盖所有通道和组件，见[内部分发源](enterprise/distribution-server.md) |
 | `auto_self_update`  | string | `cjv set auto-self-update` | `cjv update` 时的自更新行为：`enable` / `disable` / `check`           |
 | `auto_install`      | bool   | `cjv set auto-install`     | 代理模式下是否自动安装缺失的工具链                                    |
@@ -38,7 +38,7 @@ gitcode_api_key = "your-token-here"
 
 > 文件中无法识别的键（例如拼写错误）会以 warn 级别日志提示，但不会阻止 cjv 启动。把 `version` 设成超过当前二进制支持的值则会报错。
 
-`manifest_url` 与 `dist_server` 目前没有对应的 `cjv set` 子命令，需要直接编辑用户设置文件，或由管理员通过系统后备配置提供。`CJV_DIST_SERVER` 环境变量优先于设置文件中的 `dist_server`；配置统一分发根后，`manifest_url` 不再参与工具链解析。完整优先级和 manifest 契约见[内部分发源](enterprise/distribution-server.md)。
+`manifest_url` 与 `dist_server` 通过用户设置文件或系统后备配置提供。来源优先级为 `CJV_DIST_SERVER`、`dist_server`、兼容模式的 `manifest_url` / GitCode nightly。完整 manifest 契约见[内部分发源](enterprise/distribution-server.md)。
 
 ## cjv set
 
@@ -79,7 +79,7 @@ cjv set auto-install false
 
 ### cjv set gitcode-api-key
 
-设置 GitCode API 访问令牌。未配置 `dist_server` 时，查询最新 nightly 需要它；使用统一企业分发源时，nightly 来自 manifest，不需要 GitCode 令牌。LTS 和 STS 不需要该令牌。
+设置 GitCode API 访问令牌。兼容模式使用该令牌查询最新 nightly；统一企业分发源直接从 manifest 解析 nightly。LTS 和 STS 使用 manifest。
 
 ```bash
 cjv set gitcode-api-key <your-gitcode-api-key>

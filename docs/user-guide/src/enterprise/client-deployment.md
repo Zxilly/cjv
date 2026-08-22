@@ -12,7 +12,7 @@ $env:CJV_UPDATE_ROOT = "https://artifacts.corp.example/cjv/releases/latest/downl
   -Yes -DefaultToolchain none -NoModifyPath
 ```
 
-`CJV_UPDATE_ROOT` 只影响安装脚本此次下载 cjv，不会持久化，也不会改变工具链分发源或已安装二进制的自更新来源。`-NoModifyPath` 让企业通过 GPO、终端管理工具或构建镜像统一设置 `PATH`；如果允许 cjv 修改用户环境，可省略该参数。
+`CJV_UPDATE_ROOT` 的作用域是安装脚本此次下载。工具链分发由 `dist_server` 控制，已安装二进制的升级由企业软件分发流程控制。`-NoModifyPath` 让企业通过 GPO、终端管理工具或构建镜像统一设置 `PATH`；允许 cjv 修改用户环境时可省略该参数。
 
 自动化部署建议使用 `-DefaultToolchain none`，再单独执行 `cjv install`，以便分别检查 cjv 与 SDK 的安装结果。
 
@@ -33,11 +33,11 @@ auto_self_update = "disable"
 auto_install = false
 ```
 
-请把示例版本替换为企业批准的确切版本。受限网络建议关闭 `auto_install`：项目请求尚未部署的工具链或组件时，`cjc` / `cjpm` 会立即报错，而不是在编译过程中隐式等待网络。
+请把示例版本替换为企业批准的确切版本。受限网络建议设置 `auto_install = false`：项目请求尚未部署的工具链或组件时，`cjc` / `cjpm` 会立即返回缺失错误。
 
-系统文件只提供后备值，用户在 `~/.cjv/settings.toml` 中显式设置的字段优先；`CJV_DIST_SERVER` 环境变量又高于设置文件。需要严格禁止公网访问时，仍必须通过防火墙、DNS 或代理白名单实施网络策略。
+配置优先级为 `CJV_DIST_SERVER`、用户 `~/.cjv/settings.toml`、系统后备文件和内置默认值。防火墙、DNS 与代理白名单实施网络访问策略。
 
-建议每个用户使用独立的 `CJV_HOME`，不要让多个用户共享同一个可写目录。
+建议为每个用户分配独立的 `CJV_HOME`。
 
 ## 3. 安装并固定批准版本
 
@@ -50,7 +50,7 @@ cjv which cjc
 cjc --version
 ```
 
-项目还应提交 `cangjie-sdk.toml`，避免不同开发机随通道更新到不同版本：
+项目提交 `cangjie-sdk.toml` 后，各开发机使用同一批准版本：
 
 ```toml
 [toolchain]
@@ -58,7 +58,7 @@ channel = "lts-1.0.5"
 components = ["stdx"]
 ```
 
-需要 nightly 的项目同样应固定 manifest 中保留的确切版本，而不是提交浮动的 `nightly`：
+nightly 项目固定 manifest 中保留的确切版本即可获得可复现配置：
 
 ```toml
 [toolchain]

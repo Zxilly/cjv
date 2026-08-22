@@ -47,9 +47,9 @@ docs/           两本 mdBook（见“文档站”一章）
 
 ### `lifecycle`：安装编排
 
-`internal/lifecycle` 把一次工具链安装编排起来：下载、解压、校验、装组件、配 PATH、建代理链接，按顺序串成一条流程。它刻意不依赖 `cli`，而是通过一个 `Options` 结构体接收回调（`IsJSON`、`ComponentInstall`、`CreateProxyLinks`、`ValidateInstallation` 等），把展示和具体实现留在外面。这样同一套安装流程既能被 `cli install` 调用，也能被代理路径的自动安装复用，`cli` 在 `lifecycleOptions()` 里把这些回调接到 `output`、`component`、`proxy`、`selfupdate` 上。
+`internal/lifecycle` 把下载、解压、校验、组件、PATH 和代理链接串成一条安装流程。它通过 `Options` 接收 `IsJSON`、`ComponentInstall`、`CreateProxyLinks`、`ValidateInstallation` 等 adapter，依赖方向从 `cli` 指向 `lifecycle`。同一流程服务 `cli install` 与代理自动安装。
 
-包内再按职责分文件：`install.go` 只做安装编排，`source.go` 把通道请求交给分发源并产出 `ResolvedToolchain`，`component_install.go` 管组件批量安装与回滚，`resolved_install.go` 管下载后的落盘、校验和事务替换。分发源选择不会渗进安装事务。
+包内按职责分文件：`install.go` 负责安装编排，`source.go` 把通道请求交给分发源并产出 `ResolvedToolchain`，`component_install.go` 管组件批量安装与回滚，`resolved_install.go` 管下载后的落盘、校验和事务替换。分发源选择集中在 `source.go`。
 
 ### `resolve`：活动工具链解析
 
@@ -79,7 +79,7 @@ docs/           两本 mdBook（见“文档站”一章）
 
 ### `config`：配置与路径
 
-`internal/config` 是配置层。它定义所有 `CJV_*` 环境变量名（包括 `CJV_DIST_SERVER`）、解析 `CJV_HOME`、读写用户与系统后备设置、工具链文件和目录级 override。未配置统一分发根时，默认 manifest URL 仍按 `mirror` 构建标记切换；显式 `dist_server` 则优先于该兼容配置。
+`internal/config` 是配置层。它定义所有 `CJV_*` 环境变量名（包括 `CJV_DIST_SERVER`）、解析 `CJV_HOME`、读写用户与系统后备设置、工具链文件和目录级 override。`dist_server` 选择统一源，兼容模式的默认 manifest URL 按 `mirror` 构建标记切换。
 
 ### `selfupdate`：自我更新
 

@@ -4,7 +4,7 @@
 
 ## 安装 nightly 时为什么提示需要 GitCode API 密钥？
 
-这表示当前没有配置统一 `dist_server`，cjv 正在使用兼容模式。该模式从 GitCode 的 [`nightly_build`](https://gitcode.com/Cangjie/nightly_build/releases) 仓库查询 `releases/latest`，而这个 API 端点要求访问令牌。没有令牌时，`cjv install nightly`、`cjv update nightly`、`cjv check` 等命令会报错：
+这条消息标识当前使用兼容模式。该模式从 GitCode 的 [`nightly_build`](https://gitcode.com/Cangjie/nightly_build/releases) 仓库查询 `releases/latest`，API 端点使用访问令牌鉴权。为 `cjv install nightly`、`cjv update nightly`、`cjv check` 提供令牌即可：
 
 ```text
 查询 nightly 版本需要 GitCode API 密钥。请通过以下命令设置: cjv set gitcode-api-key <your-token>
@@ -20,9 +20,9 @@ cjv set gitcode-api-key <your-token>
 export CJV_GITCODE_API_KEY=<your-token>
 ```
 
-只有兼容模式下的 nightly 查询需要这个令牌。企业可配置包含 nightly 的统一分发源，此时所有通道从内部 manifest 解析，不需要 GitCode 令牌，也不会回退公网。详见[内部分发源](enterprise/distribution-server.md)。
+兼容模式的 nightly 查询使用这个令牌。企业统一分发源从内部 manifest 解析所有通道。详见[内部分发源](enterprise/distribution-server.md)。
 
-> 注意：nightly 资产的 sha256 校验文件（sidecar）可能并不总是发布。当上游未提供校验文件时，cjv 会在打印明确提示后继续安装，仅依赖 TLS 保证传输完整性。
+> 注意：nightly 资产发布 sha256 sidecar 时，cjv 会执行校验；其他发布会显示完整性提示，并使用 TLS 传输。
 
 ## 在 macOS 上为什么没有自动识别我的 CPU 架构？
 
@@ -38,7 +38,7 @@ cjv 的多数操作都需要从上游下载资产，但有几种方式可以适�
 
 完整的制品库布局、系统后备配置、批量安装步骤和验收清单见[企业部署](enterprise/index.md)。本节只列出离线使用的快捷方式。
 
-cjv 提供 `mirror` 构建变体，其默认工具链清单（manifest）与自更新后端指向 GitCode 而非 GitHub，适合 GitHub 访问不稳定的环境；它不是通用的企业内部镜像版。
+cjv 的 `mirror` 构建变体提供 GitCode 默认 manifest 与自更新后端，适合 GitHub 访问不稳定的环境；企业内部镜像使用 `dist_server`。
 
 完整企业镜像应设置 `dist_server`，让 LTS、STS、nightly 和组件共用 `<root>/versions.json`。旧的 `manifest_url` 只覆盖兼容模式下的 LTS/STS。详见[配置](configuration.md)。
 

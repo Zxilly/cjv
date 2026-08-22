@@ -4,7 +4,7 @@ This chapter gathers the questions most frequently encountered when using cjv. F
 
 ## Why does installing nightly say a GitCode API key is required?
 
-This message means no unified `dist_server` is configured and cjv is using compatibility mode. That mode queries the `releases/latest` endpoint of GitCode's [`nightly_build`](https://gitcode.com/Cangjie/nightly_build/releases) repository, which requires an access token. Without one, commands such as `cjv install nightly`, `cjv update nightly`, and `cjv check` report an error:
+This message identifies compatibility mode. That mode queries the `releases/latest` endpoint of GitCode's [`nightly_build`](https://gitcode.com/Cangjie/nightly_build/releases) repository, whose authentication uses an access token. Supply the token to `cjv install nightly`, `cjv update nightly`, and `cjv check`:
 
 ```text
 GitCode API key is required to query nightly versions. Set it with: cjv set gitcode-api-key <your-token>
@@ -20,10 +20,10 @@ cjv set gitcode-api-key <your-token>
 export CJV_GITCODE_API_KEY=<your-token>
 ```
 
-Only nightly discovery in compatibility mode needs this token. An enterprise source can include nightly in its unified manifest; all channels then resolve internally without a GitCode token or public fallback. See [Internal distribution source](enterprise/distribution-server.md).
+Compatibility-mode nightly discovery uses this token. An enterprise source resolves every channel through its unified manifest. See [Internal distribution source](enterprise/distribution-server.md).
 
  >
- > Note: the sha256 checksum file (sidecar) for nightly assets may not always be published. When the upstream does not provide a checksum file, cjv continues the installation after printing an explicit notice, relying solely on TLS to guarantee transport integrity.
+ > Note: cjv verifies nightly assets when a sha256 sidecar is published. Other releases display an integrity notice and use TLS transport.
 
 ## Why wasn't my CPU architecture detected automatically on macOS?
 
@@ -39,7 +39,7 @@ Most cjv operations download assets from upstream, but there are several ways to
 
 See [Enterprise deployment](enterprise/index.md) for the complete artifact layout, system fallback settings, automated installation procedure, and acceptance checklist. This section lists only the quick offline options.
 
-cjv provides a `mirror` build variant whose default toolchain manifest and self-update backend point at GitCode rather than GitHub. It is suitable where GitHub access is unreliable, but it is not a generic enterprise-mirror build.
+cjv provides a `mirror` build variant with GitCode defaults for the toolchain manifest and self-update backend. It suits networks where GitHub access is unreliable; enterprise mirrors use `dist_server`.
 
 A complete enterprise mirror should set `dist_server`, making LTS, STS, nightly, and components share `<root>/versions.json`. The older `manifest_url` setting only overrides LTS/STS in compatibility mode. See [Configuration](configuration.md).
 

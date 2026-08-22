@@ -6,8 +6,8 @@ cjv 支持三个内置通道：
 
 | 通道      | 含义              | 下载来源                  | 额外要求                       |
 | --------- | ----------------- | ------------------------- | ------------------------------ |
-| `lts`     | 长期支持版        | 官方版本清单（manifest）  | 无                             |
-| `sts`     | 短期支持版        | 官方版本清单（manifest）  | 无                             |
+| `lts`     | 长期支持版        | 官方版本清单（manifest）  | —                              |
+| `sts`     | 短期支持版        | 官方版本清单（manifest）  | —                              |
 | `nightly` | 每日构建（预览版）| 默认 GitCode；也可由统一 manifest 提供 | 默认模式需要 `CJV_GITCODE_API_KEY` |
 
 通道名大小写不敏感，`LTS`、`Lts`、`lts` 等价。
@@ -42,7 +42,7 @@ cjv install sts-1.1.0-beta.23
 cjv install 1.0.5
 ```
 
-裸版本号（如 `1.0.5`）只在 LTS / STS 的版本清单中查找，命中哪个通道就归属哪个通道，nightly 不参与裸版本号匹配。关于工具链命名的完整规则，参见[工具链](toolchains.md)。
+裸版本号（如 `1.0.5`）的搜索空间是 LTS / STS 版本清单，命中哪个通道就归属哪个通道。nightly 使用带通道前缀的版本名。关于工具链命名的完整规则，参见[工具链](toolchains.md)。
 
 ## 下载来源
 
@@ -56,9 +56,9 @@ LTS 与 STS 的可用版本、下载地址和校验和来自一份官方维护�
 
 ### nightly：默认 GitCode，企业源使用统一 manifest
 
-未配置 `dist_server` 时，cjv 通过 GitCode 的发布 API 查询 `Cangjie/nightly_build` 仓库的最新发布，解析 SDK 版本，再下载对应平台的 Release 资产。
+兼容模式通过 GitCode 发布 API 查询 `Cangjie/nightly_build` 仓库的最新发布，解析 SDK 版本，再下载对应平台的 Release 资产。
 
-GitCode 的发布 API 需要鉴权，因此默认模式下安装或检查浮动的 `nightly` 必须配置 API 访问令牌。未配置时，相关命令会失败并提示：
+GitCode 的发布 API 使用访问令牌鉴权。兼容模式下安装或检查浮动的 `nightly` 时配置令牌；令牌缺失会返回以下提示：
 
 ```text
 查询 nightly 版本需要 GitCode API 密钥。请通过以下命令设置: cjv set gitcode-api-key <your-token>
@@ -76,7 +76,7 @@ export CJV_GITCODE_API_KEY=<your-token>
 
 关于 `CJV_GITCODE_API_KEY` 的完整说明见[环境变量](../environment-variables.md)，关于 `cjv set` 见[配置](../configuration.md)。
 
-配置 `dist_server` 或 `CJV_DIST_SERVER` 后，三个通道改为共用 `<dist_server>/versions.json`。nightly 的最新版本、精确版本、平台 SDK 和组件都由 manifest 描述，不需要 GitCode 令牌；缺少内容会直接报错，不会回退公网。部署契约见[内部分发源](../enterprise/distribution-server.md)。
+配置 `dist_server` 或 `CJV_DIST_SERVER` 后，三个通道共用 `<dist_server>/versions.json`。nightly 的最新版本、精确版本、平台 SDK 和组件都由 manifest 描述；缺少内容返回明确错误。部署契约见[内部分发源](../enterprise/distribution-server.md)。
 
 ## 通道与组件来源
 
@@ -108,7 +108,7 @@ channel = "lts"
 
 ## 检查更新
 
-`cjv check` 会为已安装的通道型工具链查询是否有更新。默认模式下 nightly 检查调用 GitCode API，需要令牌；配置统一企业分发源后，三个通道都查询同一 manifest。
+`cjv check` 会为已安装的通道型工具链查询是否有更新。兼容模式的 nightly 检查调用 GitCode API；统一企业分发源让三个通道查询同一 manifest。
 
 ```bash
 cjv check

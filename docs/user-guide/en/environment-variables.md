@@ -17,8 +17,8 @@ CJV_LOG=debug cjv install lts
 |`CJV_LOG`|`warn`|Log level; one of `debug`, `info`, `warn`, `error`. Unrecognized values are treated as `warn`. Logs are written to standard error (stderr).|
 |`CJV_MAX_RETRIES`|`3`|Maximum number of retries after a single download failure. The value must be a non-negative integer; invalid values are ignored and fall back to the default.|
 |`CJV_DOWNLOAD_TIMEOUT`|`180`|Timeout for HTTP downloads, in seconds. The value must be a positive integer; invalid values are ignored and fall back to the default.|
-|`CJV_DIST_SERVER`|None|Overrides the unified toolchain distribution root. LTS, STS, nightly, and components are resolved from `<root>/versions.json`, with no public fallback.|
-|`CJV_GITCODE_API_KEY`|None|GitCode API token for nightly discovery in compatibility mode. It takes priority over the persisted token and is not written back to disk.|
+|`CJV_DIST_SERVER`|None|Overrides the unified toolchain distribution root. LTS, STS, nightly, and components are resolved from `<root>/versions.json`.|
+|`CJV_GITCODE_API_KEY`|None|GitCode API token for nightly discovery in compatibility mode. The environment value takes priority over the persisted token.|
 |`CJV_NO_PATH_SETUP`|None|Set to `1` to skip the automatic `PATH` configuration on first install (useful for CI environments and integration tests). Any other value (including unset) has no effect.|
 |`CANGJIE_STDX_PATH_DYNAMIC`|Injected by cjv|Points to `<CJV_HOME>/stdx/<tc>/dynamic`, injected only when the corresponding toolchain has the `stdx` component installed. You normally do not need to set it manually.|
 |`CANGJIE_STDX_PATH_STATIC`|Injected by cjv|Points to `<CJV_HOME>/stdx/<tc>/static`, injected only when the corresponding toolchain has the `stdx` component installed. You normally do not need to set it manually.|
@@ -76,23 +76,23 @@ CJV_MAX_RETRIES=5 CJV_DOWNLOAD_TIMEOUT=600 cjv install sts
 CJV_DIST_SERVER=https://artifacts.corp.example/cjv/dist cjv install nightly
 ```
 
-Every channel and component must then be described by `<root>/versions.json`. Relative artifact URLs use that root as their base, while absolute URLs are honored as written; missing content does not fall back to GitCode. See [Internal distribution source](enterprise/distribution-server.md) for the layout.
+Every channel and component is then described by `<root>/versions.json`. Relative artifact URLs use that root as their base, absolute URLs are honored as written, and missing content returns an explicit error. See [Internal distribution source](enterprise/distribution-server.md) for the layout.
 
 ### `CJV_GITCODE_API_KEY`
 
-Without a unified `dist_server`, resolving the latest nightly requires a GitCode API token. This environment variable supplies it without writing the token into `settings.toml`:
+Compatibility mode uses a GitCode API token to resolve the latest nightly. This environment variable supplies the credential to the current process or CI job:
 
 ```bash
 CJV_GITCODE_API_KEY=your_token cjv install nightly
 ```
 
-This environment variable takes priority over the persisted setting, and is not written back to disk. To save the token persistently, use:
+This environment variable takes priority over the persisted setting. For persistent use, run:
 
 ```bash
 cjv set gitcode-api-key <key>
 ```
 
-An enterprise distribution source does not require this token. See [Channels](concepts/channels.md) for the two source modes.
+An enterprise distribution source resolves nightly directly from its manifest. See [Channels](concepts/channels.md) for the two source modes.
 
 ### `CJV_NO_PATH_SETUP`
 
@@ -122,4 +122,4 @@ The following variables target special scenarios and normally do not need to be 
 |--------|-----------|
 |`CJV_LANG`|Override the interface language (such as `zh`, `en`, `ja`). When unset, it follows the system locale setting.|
 |`CJV_ALLOW_INSECURE_MANIFEST`|When set to `1`, allows fetching the toolchain manifest over plaintext HTTP from non-loopback hosts. HTTPS is required by default because the manifest carries download URLs and checksums. Use this only with trusted internal mirrors; see [Internal distribution source](enterprise/distribution-server.md).|
-|`CJV_FALLBACK_SETTINGS`|Selects a system-level fallback settings file used for defaults such as enterprise distribution configuration. When unset, the platform default path is used; see [Deploy managed clients](enterprise/client-deployment.md).|
+|`CJV_FALLBACK_SETTINGS`|Selects a system-level fallback settings file; see [Deploy managed clients](enterprise/client-deployment.md) for platform defaults and an enterprise example.|
