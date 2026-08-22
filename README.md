@@ -71,6 +71,23 @@ cjv run sts cjc --version
 
 完整命令参考、工具链解析、组件、交叉编译、运行时环境和配置说明见[用户手册](https://cjv.zxilly.dev/book/user-guide/zh-CN/)。
 
+## Agent Skill
+
+仓库附带一个精简的 [cjv 使用指南 skill](skills/cjv)，帮助编码代理正确选择 cjv
+命令并遵循项目工具链解析规则。
+
+使用 [skills CLI](https://github.com/vercel-labs/skills) 全局安装到 Codex：
+
+```bash
+npx skills add Zxilly/cjv --skill cjv --agent codex --global --yes
+```
+
+安装后可在对话中调用：
+
+```text
+使用 $cjv 为当前项目安装 LTS 工具链，并生成可提交的 cangjie-sdk.toml。
+```
+
 ## 开发
 
 本地构建和测试：

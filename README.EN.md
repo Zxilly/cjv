@@ -71,6 +71,24 @@ After setting a default toolchain, you can call `cjc`, `cjpm`, and other SDK too
 
 See the [user guide](https://cjv.zxilly.dev/book/user-guide/en/) for the full command reference, toolchain resolution, components, cross-compilation, runtime environment, and configuration.
 
+## Agent Skill
+
+The repository includes a concise [cjv user-guide skill](skills/cjv) that helps
+coding agents choose the right cjv command and follow its toolchain-resolution
+rules.
+
+Install it globally for Codex with the [skills CLI](https://github.com/vercel-labs/skills):
+
+```bash
+npx skills add Zxilly/cjv --skill cjv --agent codex --global --yes
+```
+
+Then invoke it in a conversation:
+
+```text
+Use $cjv to install an LTS toolchain for this project and create a commit-ready cangjie-sdk.toml.
+```
+
 ## Development
 
 Build and test locally:
