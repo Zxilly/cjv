@@ -48,7 +48,7 @@ func CleanupOldBinaries() {
 			_ = os.Remove(filepath.Join(dir, name))
 			continue
 		}
-		// The self-update library stages the replacement binary as
+		// Self-update stages the replacement binary as
 		// ".<binary>.new" before the swap; an update interrupted between the
 		// write and the rename leaves it behind. It is a partial download, so
 		// just discard it (unlike ".old", which may need to be restored).

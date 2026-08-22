@@ -11,7 +11,6 @@ import (
 	"strings"
 
 	"github.com/Zxilly/cjv/internal/dist"
-	"github.com/Zxilly/cjv/internal/utils"
 	goversion "github.com/hashicorp/go-version"
 )
 
@@ -123,23 +122,10 @@ func installReleaseArtifact(ctx context.Context, artifact releaseArtifact) error
 		return fmt.Errorf("release binary %s is a directory", artifact.BinaryName)
 	}
 
-	replacement, err := os.CreateTemp(filepath.Dir(managedExe), ".cjv-update-*")
+	binary, err := os.Open(binaryPath)
 	if err != nil {
 		return err
 	}
-	replacementPath := replacement.Name()
-	defer os.Remove(replacementPath) //nolint:errcheck // best-effort cleanup
-	if err := replacement.Close(); err != nil {
-		return err
-	}
-	if err := utils.CopyFile(binaryPath, replacementPath, info.Mode().Perm()); err != nil {
-		return err
-	}
-	if err := os.Chmod(replacementPath, info.Mode().Perm()); err != nil {
-		return err
-	}
-	if err := replaceManagedExecutableFile(replacementPath, managedExe); err != nil {
-		return err
-	}
-	return nil
+	defer binary.Close() //nolint:errcheck // read-only
+	return applyExecutableUpdate(binary, managedExe, 0)
 }
