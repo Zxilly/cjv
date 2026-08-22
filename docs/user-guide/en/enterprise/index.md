@@ -20,7 +20,7 @@ cjv separates two kinds of artifacts:
 - **Toolchain distribution**: SDKs, stdx, docs, stdx-docs, and the LTS, STS, and nightly metadata. Enterprise deployments control this with `dist_server` or `CJV_DIST_SERVER`.
 - **cjv itself**: `CJV_UPDATE_ROOT` selects the installer's initial download location. Enterprise software distribution owns upgrades of installed cjv binaries, with clients configured as `auto_self_update = "disable"`.
 
-With `dist_server` configured, cjv reads `<dist_server>/versions.json` as the authoritative description of every channel and component. The default `manifest_url` and enterprise manifests use the same contract, covering LTS, STS, nightly, and components.
+With `dist_server` configured, cjv lazily reads LTS/STS from `<dist_server>/versions.json` and nightly from `<dist_server>/nightly.json`. Each file carries the SDKs and components for its channels.
 
 ## Network destinations
 
@@ -28,7 +28,7 @@ With `dist_server` configured, cjv reads `<dist_server>/versions.json` as the au
 | --- | --- | --- |
 | Install cjv itself | A GitHub or GitCode Release | Host release archives and `checksums.txt` internally; set `CJV_UPDATE_ROOT` for the installer |
 | Install, query, or update toolchains | Default manifest | Configure `dist_server` |
-| Download SDKs and components | URLs declared by the manifest | Declare approved relative or absolute URLs in `<dist_server>/versions.json` |
+| Download SDKs and components | URLs declared by the manifest | Declare approved URLs in the corresponding `versions.json` or `nightly.json` |
 | Run `cjv self update` | GitHub for the official build, GitCode for the mirror build | Disable self-update and upgrade cjv through enterprise software distribution |
 
 The project-specific configuration of `cjpm` supplies dependency repositories and credentials. Enterprise environments configure those dependency mirrors separately, while cjv distributes SDKs and components.

@@ -4,7 +4,7 @@
 
 ## nightly 的版本和下载地址从哪里来？
 
-默认 `manifest_url` 指向 [`cangjie-version-manifest`](https://github.com/Zxilly/cangjie-version-manifest) 生成的 `versions.json`。该项目定时采集 GitCode [`nightly_build`](https://gitcode.com/Cangjie/nightly_build/releases) 发布，并把 nightly 的最新版本、历史版本、平台 SDK 与组件 URL 写入 manifest。`cjv install nightly`、`cjv update nightly`、`cjv check` 和远程列表命令都读取这份静态数据。
+默认 `manifest_url` 指向 [`cangjie-version-manifest`](https://github.com/Zxilly/cangjie-version-manifest) 生成的 `versions.json`；同目录的 `nightly.json` 由定时任务采集 GitCode [`nightly_build`](https://gitcode.com/Cangjie/nightly_build/releases) 发布生成。nightly 安装、更新、检查和远程列表按需读取后者。
 
 nightly SDK 条目带有 SHA-256 时，cjv 直接校验；条目暂未记录校验和时，cjv 会读取资产旁的 `<url>.sha256` sidecar。上游尚未发布 sidecar 时，cjv 显示完整性提示并依赖 HTTPS 传输保护。企业部署可以在内部 manifest 中为每个批准制品填入 SHA-256。详见[内部分发源](enterprise/distribution-server.md)。
 
@@ -24,7 +24,7 @@ cjv 的多数操作都需要从上游下载资产，但有几种方式可以适�
 
 cjv 的 `mirror` 构建变体提供 GitCode 默认 manifest 与自更新后端，适合 GitHub 访问不稳定的环境；企业内部镜像使用 `dist_server`。
 
-完整企业镜像应设置 `dist_server`，让 LTS、STS、nightly 和组件共用 `<root>/versions.json`。也可以把 `manifest_url` 直接设为内部 manifest 的完整 URL。详见[配置](configuration.md)。
+完整企业镜像应设置 `dist_server`，在根目录同时发布 `versions.json` 与 `nightly.json`。也可以把 `manifest_url` 直接设为内部 `versions.json` 的完整 URL，cjv 会从同目录定位 nightly 文件。详见[配置](configuration.md)。
 
 如果你已经拿到解压好的 SDK 目录，用 `cjv toolchain link` 直接挂载，不会触发下载：
 

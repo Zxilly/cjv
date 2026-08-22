@@ -27,8 +27,8 @@ Field overview:
 |-----|----|---------------------|-----------|
 |`version`|int|(maintained automatically)|Settings file format version, written and migrated automatically by cjv|
 |`default_toolchain`|string|`cjv default <toolchain>`|Default toolchain; see [Toolchains](concepts/toolchains.md)|
-|`manifest_url`|string|Manual edit / system fallback|Toolchain manifest for LTS, STS, nightly, and components|
-|`dist_server`|string|Manual edit / system fallback|Toolchain distribution root; cjv reads its `versions.json`; see [Internal distribution source](enterprise/distribution-server.md)|
+|`manifest_url`|string|Manual edit / system fallback|LTS/STS manifest URL; nightly is loaded on demand from sibling `nightly.json`|
+|`dist_server`|string|Manual edit / system fallback|Toolchain distribution root containing `versions.json` and `nightly.json`; see [Internal distribution source](enterprise/distribution-server.md)|
 |`auto_self_update`|string|`cjv set auto-self-update`|Self-update behavior during `cjv update`: `enable` / `disable` / `check`|
 |`auto_install`|bool|`cjv set auto-install`|Whether to automatically install missing toolchains in proxy mode|
 |`home`|string|`cjv set home`|Persisted `CJV_HOME` data directory path|
@@ -38,7 +38,7 @@ Field overview:
  >
  > Unrecognized keys in the file (for example, typos) are reported with a warn-level log message but do not prevent cjv from starting. Setting `version` to a value higher than the current binary supports does cause an error.
 
-Provide `manifest_url` and `dist_server` through the user settings file or system fallback settings. Source precedence is `CJV_DIST_SERVER`, `dist_server`, then `manifest_url`. All three use the same manifest contract; the first two map a root URL to `<root>/versions.json`. See [Internal distribution source](enterprise/distribution-server.md) for the contract.
+Provide `manifest_url` and `dist_server` through the user settings file or system fallback settings. Source precedence is `CJV_DIST_SERVER`, `dist_server`, then `manifest_url`. A root maps to `<root>/versions.json` and `<root>/nightly.json`; a direct `manifest_url` locates nightly in the same directory. See [Internal distribution source](enterprise/distribution-server.md) for the contract.
 
 ## cjv set
 

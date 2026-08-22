@@ -37,11 +37,11 @@ nightly 的具体版本使用带通道前缀的名称。完整命名规则见[�
 
 ## Manifest 分发模型
 
-三个通道共用一份 JSON 版本清单。manifest 记录可用版本、每个平台的 SDK URL、组件 URL 与校验和；cjv 先解析清单，再下载其中指定的制品。
+正式通道与 nightly 使用独立的静态清单：`versions.json` 记录 LTS/STS，`nightly.json` 记录 nightly。两份文件都包含可用版本、平台 SDK URL、组件 URL 与校验和。cjv 按请求通道加载对应文件，因此普通 LTS/STS 操作无需下载 nightly 历史。
 
-默认清单由 [`cangjie-version-manifest`](https://github.com/Zxilly/cangjie-version-manifest) 维护。正式版本更新通过 PR 审核后合入，nightly 由定时任务采集 GitCode `Cangjie/nightly_build` Release 并直接更新清单。客户端读取生成后的静态清单。
+默认清单由 [`cangjie-version-manifest`](https://github.com/Zxilly/cangjie-version-manifest) 维护。正式版本通过 PR 更新 `versions.json`，nightly 定时任务采集 GitCode `Cangjie/nightly_build` Release 并直接更新 `nightly.json`。
 
-清单地址可在 `~/.cjv/settings.toml` 中通过 `manifest_url` 覆盖。配置 `dist_server` 或 `CJV_DIST_SERVER` 时，cjv 读取 `<dist_server>/versions.json`，适合企业统一托管。来源优先级和部署契约见[配置](../configuration.md)与[内部分发源](../enterprise/distribution-server.md)。
+`manifest_url` 指向正式通道文件，nightly 文件从同目录的 `nightly.json` 派生。配置 `dist_server` 或 `CJV_DIST_SERVER` 时，两份文件位于分发根下。来源优先级和部署契约见[配置](../configuration.md)与[内部分发源](../enterprise/distribution-server.md)。
 
 ## 通道与组件
 

@@ -17,7 +17,7 @@ CJV_LOG=debug cjv install lts
 |`CJV_LOG`|`warn`|Log level; one of `debug`, `info`, `warn`, `error`. Unrecognized values are treated as `warn`. Logs are written to standard error (stderr).|
 |`CJV_MAX_RETRIES`|`3`|Maximum number of retries after a single download failure. The value must be a non-negative integer; invalid values are ignored and fall back to the default.|
 |`CJV_DOWNLOAD_TIMEOUT`|`180`|Timeout for HTTP downloads, in seconds. The value must be a positive integer; invalid values are ignored and fall back to the default.|
-|`CJV_DIST_SERVER`|None|Overrides the toolchain distribution root. LTS, STS, nightly, and components are resolved from `<root>/versions.json`.|
+|`CJV_DIST_SERVER`|None|Overrides the toolchain distribution root. LTS/STS use `<root>/versions.json`; nightly uses `<root>/nightly.json`.|
 |`CJV_NO_PATH_SETUP`|None|Set to `1` to skip the automatic `PATH` configuration on first install (useful for CI environments and integration tests). Any other value (including unset) has no effect.|
 |`CANGJIE_STDX_PATH_DYNAMIC`|Injected by cjv|Points to `<CJV_HOME>/stdx/<tc>/dynamic`, injected only when the corresponding toolchain has the `stdx` component installed. You normally do not need to set it manually.|
 |`CANGJIE_STDX_PATH_STATIC`|Injected by cjv|Points to `<CJV_HOME>/stdx/<tc>/static`, injected only when the corresponding toolchain has the `stdx` component installed. You normally do not need to set it manually.|
@@ -75,9 +75,7 @@ CJV_MAX_RETRIES=5 CJV_DOWNLOAD_TIMEOUT=600 cjv install sts
 CJV_DIST_SERVER=https://artifacts.corp.example/cjv/dist cjv install nightly
 ```
 
-Every channel and component is then described by `<root>/versions.json`. Relative artifact URLs use that root as their base, absolute URLs are honored as written, and missing content returns an explicit error. See [Internal distribution source](enterprise/distribution-server.md) for the layout.
-
-An enterprise distribution source resolves nightly directly from its manifest. See [Channels](concepts/channels.md) for the two source modes.
+LTS/STS and their components are described by `<root>/versions.json`; nightly and its components are described by `<root>/nightly.json`. cjv loads the file required by the requested channel. Relative artifact URLs use the root as their base, while absolute URLs are honored as written. See [Internal distribution source](enterprise/distribution-server.md) for the layout.
 
 ### `CJV_NO_PATH_SETUP`
 

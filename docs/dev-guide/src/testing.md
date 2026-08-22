@@ -8,7 +8,7 @@ CI 的全部 job 定义在 `.github/workflows/ci.yml`，smoke 单独在 `.github
 
 单元测试和被测代码放在同一个包里，文件名以 `_test.go` 结尾，分布在 `internal/` 各处，目前一百多个文件。它们用 `github.com/stretchr/testify` 的 `assert` 和 `require` 做断言，不依赖网络：需要分发源时用 `internal/testutil` 里的 `MockDistServer` 起一个 `httptest.Server`，返回构造好的 `sdk-versions.json` 和打包好的 mock SDK。
 
-分发源回归测试也使用真实 `httptest.Server`，覆盖默认 `manifest_url`、`<dist_server>/versions.json`、相对与绝对 URL、nightly SDK/组件安装、SHA256 sidecar，以及 `list-remote`、`check`、`update` 共用同一来源。manifest 缺少 nightly 时返回 `ErrManifestChannelMissing`。
+分发源回归测试也使用真实 `httptest.Server`，覆盖 `versions.json` 与按需加载的 `nightly.json`、相对与绝对 URL、nightly SDK/组件安装、SHA256 sidecar，以及旧聚合清单的迁移兼容。测试会断言 LTS 操作不会请求 nightly 文件。
 
 本地跑全部单元测试：
 

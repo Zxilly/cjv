@@ -63,7 +63,7 @@ docs/           两本 mdBook（见“文档站”一章）
 
 ### `dist`：下载与解包
 
-`internal/dist` 负责分发源与网络制品。`source.go` 是统一入口：LTS、STS、nightly 和所有组件共用一份 manifest；默认读取 `manifest_url`，显式 `dist_server` 时读取 `<root>/versions.json`。相对 URL 以 manifest 所在目录解析，绝对 URL 原样使用。`manifest.go` 解析并校验三个通道；`download.go` 做进度、重试和 SHA256 校验；`install.go` 解包归档；`nightly.go` 读取 nightly 资产的 SHA256 sidecar；`platform.go` 统一 host 平台键。
+`internal/dist` 负责分发源与网络制品。`source.go` 是统一入口：LTS/STS 按需缓存 `versions.json`，nightly 按需缓存同目录的 `nightly.json`。显式 `dist_server` 时两者位于分发根下。相对 URL 以 manifest 所在目录解析，绝对 URL 原样使用。`manifest.go` 解析并校验通道数据；`download.go` 做进度、重试和 SHA256 校验；`install.go` 解包归档；`nightly.go` 读取 nightly 资产的 SHA256 sidecar；`platform.go` 统一 host 平台键。
 
 ### `target`：平台身份
 
@@ -79,7 +79,7 @@ docs/           两本 mdBook（见“文档站”一章）
 
 ### `config`：配置与路径
 
-`internal/config` 是配置层。它定义所有 `CJV_*` 环境变量名（包括 `CJV_DIST_SERVER`）、解析 `CJV_HOME`、读写用户与系统后备设置、工具链文件和目录级 override。`manifest_url` 提供默认分发清单，`dist_server` 选择以 `<root>/versions.json` 表示的企业分发源；`mirror` 构建标记选择默认 manifest 地址。
+`internal/config` 是配置层。它定义所有 `CJV_*` 环境变量名（包括 `CJV_DIST_SERVER`）、解析 `CJV_HOME`、读写用户与系统后备设置、工具链文件和目录级 override。`manifest_url` 提供正式通道清单并确定 nightly 文件目录，`dist_server` 选择包含两份清单的企业分发根；`mirror` 构建标记选择默认地址。
 
 ### `selfupdate`：自我更新
 

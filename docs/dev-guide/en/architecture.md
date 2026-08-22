@@ -63,7 +63,7 @@ Files inside the package are split by responsibility: `install.go` owns orchestr
 
 ### `dist`: download and unpacking
 
-`internal/dist` owns distribution sources and network artifacts. `source.go` is the unified entry point: LTS, STS, nightly, and every component share one manifest. The default source reads `manifest_url`, while an explicit `dist_server` reads `<root>/versions.json`. Relative URLs resolve against the manifest directory and absolute URLs are honored as written. `manifest.go` parses and validates all three channels; `download.go` handles progress, retries, and SHA-256; `install.go` unpacks archives; `nightly.go` reads nightly SHA-256 sidecars; and `platform.go` centralizes host platform keys.
+`internal/dist` owns distribution sources and network artifacts. `source.go` is the unified entry point: LTS/STS lazily cache `versions.json`, while nightly lazily caches sibling `nightly.json`. Under `dist_server`, both live at the distribution root. Relative URLs resolve against the manifest directory and absolute URLs are honored as written. `manifest.go` parses and validates channel data; `download.go` handles progress, retries, and SHA-256; `install.go` unpacks archives; `nightly.go` reads nightly SHA-256 sidecars; and `platform.go` centralizes host platform keys.
 
 ### `target`: platform identity
 
@@ -79,7 +79,7 @@ Files inside the package are split by responsibility: `install.go` owns orchestr
 
 ### `config`: configuration and paths
 
-`internal/config` is the configuration layer. It defines all `CJV_*` variables, including `CJV_DIST_SERVER`, resolves `CJV_HOME`, reads user and system fallback settings, reads the toolchain file, and manages directory overrides. `manifest_url` supplies the default distribution manifest, `dist_server` selects an enterprise source represented by `<root>/versions.json`, and the `mirror` build tag selects the default manifest address.
+`internal/config` is the configuration layer. It defines all `CJV_*` variables, including `CJV_DIST_SERVER`, resolves `CJV_HOME`, reads user and system fallback settings, reads the toolchain file, and manages directory overrides. `manifest_url` supplies the release manifest and locates its nightly sibling, `dist_server` selects an enterprise root containing both files, and the `mirror` build tag selects the default address.
 
 ### `selfupdate`: self-update
 

@@ -37,11 +37,11 @@ Concrete nightly versions use a channel-qualified name. See [Toolchains](toolcha
 
 ## Manifest distribution model
 
-All three channels share one JSON version manifest. It records available versions, platform SDK URLs, component URLs, and checksums; cjv resolves the manifest before downloading its selected artifact.
+Release channels and nightly use separate static manifests: `versions.json` records LTS/STS, while `nightly.json` records nightly. Both contain available versions, platform SDK URLs, component URLs, and checksums. cjv loads the file selected by the requested channel, so ordinary LTS/STS operations carry no nightly history cost.
 
-The default manifest is maintained by [`cangjie-version-manifest`](https://github.com/Zxilly/cangjie-version-manifest). Formal release updates are merged through reviewed pull requests, while a scheduled job collects GitCode `Cangjie/nightly_build` Releases and commits nightly updates directly. Clients read the resulting static manifest.
+The default files are maintained by [`cangjie-version-manifest`](https://github.com/Zxilly/cangjie-version-manifest). Formal release updates modify `versions.json` through reviewed pull requests, while a scheduled job collects GitCode `Cangjie/nightly_build` Releases and commits `nightly.json` directly.
 
-Override the manifest address with `manifest_url` in `~/.cjv/settings.toml`. With `dist_server` or `CJV_DIST_SERVER`, cjv reads `<dist_server>/versions.json`, which suits centrally hosted enterprise distribution. See [Configuration](../configuration.md) and [Internal distribution source](../enterprise/distribution-server.md) for precedence and the deployment contract.
+`manifest_url` points to the release-channel file and derives sibling `nightly.json`. With `dist_server` or `CJV_DIST_SERVER`, both files live under the distribution root. See [Configuration](../configuration.md) and [Internal distribution source](../enterprise/distribution-server.md) for precedence and the deployment contract.
 
 ## Channels and components
 

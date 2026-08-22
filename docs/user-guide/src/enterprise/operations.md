@@ -13,21 +13,21 @@
 
 ## Nightly 发布策略
 
-nightly 在统一 manifest 中是普通通道，但发布策略应比 LTS/STS 更严格：
+nightly 由独立的 `nightly.json` 发布，发布策略应比 LTS/STS 更严格：
 
 - 先镜像同一版本的全部批准平台、目标 SDK 和组件，再推进 `channels.nightly.latest`。
 - `latest` 精确选择一个版本；缺少目标或组件时返回对应错误。
 - 保留所有被 `cangjie-sdk.toml` 固定的 nightly 版本及其组件。
 - 让每个 SDK 条目的 URL 精确指向对应的上游或内部制品。
-- manifest 使用原子发布，让客户端始终读取完整版本。
+- `nightly.json` 使用原子发布，让客户端始终读取完整版本。
 
 ## 上线验收清单
 
-- 从普通用户会话执行 `cjv toolchain list-remote --channel lts` 和 `--channel nightly`，确认两者都只命中 `<dist_server>/versions.json`。
+- 从普通用户会话分别执行 LTS 与 nightly 远程列表，确认请求按通道命中 `versions.json` 与 `nightly.json`。
 - 在仅配置 `dist_server` 的终端安装批准的 nightly，确认安装成功。
 - 安装批准版本及所需组件后，执行 `cjv which cjc` 与 `cjc --version`。
 - 检查 manifest 中 host SDK、交叉编译目标、stdx、docs 和 stdx-docs 的 URL，确认都符合企业批准的访问范围。
-- 临时从 manifest 删除 nightly 或某个组件，确认命令返回明确的缺失错误，并核对分发端访问日志。
+- 临时从 `nightly.json` 删除某个版本或组件，确认命令返回明确的缺失错误，并核对分发端访问日志。
 - 断开网络后再次编译，确认已安装工具链完成本地构建。
 - 确认 `auto_install = false`、`auto_self_update = "disable"`，并由企业流程负责升级。
 - 验证企业 CA、代理变量和 `NO_PROXY` 在实际终端与 CI 服务账户下均生效。

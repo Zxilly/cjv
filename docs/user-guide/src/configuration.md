@@ -27,8 +27,8 @@ manifest_url = "https://raw.githubusercontent.com/Zxilly/cangjie-version-manifes
 | ------------------- | ------ | -------------------------- | --------------------------------------------------------------------- |
 | `version`           | int    | （自动维护）               | 设置文件格式版本，由 cjv 自动写入和迁移                                |
 | `default_toolchain` | string | `cjv default <toolchain>`  | 默认工具链，见 [工具链](concepts/toolchains.md)                       |
-| `manifest_url`      | string | 手动编辑 / 系统后备配置     | LTS、STS、nightly 与组件的工具链清单地址                              |
-| `dist_server`       | string | 手动编辑 / 系统后备配置     | 工具链分发根；cjv 读取其下的 `versions.json`，见[内部分发源](enterprise/distribution-server.md) |
+| `manifest_url`      | string | 手动编辑 / 系统后备配置     | LTS/STS 清单地址；nightly 从同目录的 `nightly.json` 按需读取            |
+| `dist_server`       | string | 手动编辑 / 系统后备配置     | 工具链分发根；包含 `versions.json` 与 `nightly.json`，见[内部分发源](enterprise/distribution-server.md) |
 | `auto_self_update`  | string | `cjv set auto-self-update` | `cjv update` 时的自更新行为：`enable` / `disable` / `check`           |
 | `auto_install`      | bool   | `cjv set auto-install`     | 代理模式下是否自动安装缺失的工具链                                    |
 | `home`              | string | `cjv set home`             | 持久化的 `CJV_HOME` 数据目录路径                                     |
@@ -37,7 +37,7 @@ manifest_url = "https://raw.githubusercontent.com/Zxilly/cangjie-version-manifes
 
 > 文件中无法识别的键（例如拼写错误）会以 warn 级别日志提示，但不会阻止 cjv 启动。把 `version` 设成超过当前二进制支持的值则会报错。
 
-`manifest_url` 与 `dist_server` 通过用户设置文件或系统后备配置提供。来源优先级为 `CJV_DIST_SERVER`、`dist_server`、`manifest_url`。三个来源都指向同一种 manifest 契约；前两个把根地址转换成 `<root>/versions.json`。完整契约见[内部分发源](enterprise/distribution-server.md)。
+`manifest_url` 与 `dist_server` 通过用户设置文件或系统后备配置提供。来源优先级为 `CJV_DIST_SERVER`、`dist_server`、`manifest_url`。根地址对应 `<root>/versions.json` 与 `<root>/nightly.json`；直接配置 `manifest_url` 时，nightly 文件位于其同一目录。完整契约见[内部分发源](enterprise/distribution-server.md)。
 
 ## cjv set
 

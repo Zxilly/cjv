@@ -18,7 +18,7 @@ Without a unified enterprise source, the default component source depends on the
 - `docs`: the default manifest's LTS / STS URLs point to [`cangjie-docs-bundle`](https://github.com/Zxilly/cangjie-docs-bundle/releases), while nightly URLs point to [`nightly_build`](https://gitcode.com/Cangjie/nightly_build/releases).
 - `stdx-docs`: the default manifest's LTS / STS URLs point to [`cangjie_stdx`](https://gitcode.com/Cangjie/cangjie_stdx/releases), while nightly URLs point to [`nightly_build`](https://gitcode.com/Cangjie/nightly_build/releases).
 
-With `dist_server` configured, components for all three channels use manifest-declared URLs. Relative URLs are resolved against the distribution root, absolute URLs are used as written, and entries may provide SHA-256 checksums. See [Internal distribution source](../enterprise/distribution-server.md).
+With `dist_server` configured, `versions.json` describes LTS/STS components and `nightly.json` describes nightly components. Relative URLs resolve against the distribution root, absolute URLs are used as written, and entries may provide SHA-256 checksums. See [Internal distribution source](../enterprise/distribution-server.md).
 
 ## Automatically injected environment variables
 

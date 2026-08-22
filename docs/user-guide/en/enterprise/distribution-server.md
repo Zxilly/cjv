@@ -6,13 +6,14 @@
 dist_server = "https://artifacts.corp.example/cjv/dist"
 ```
 
-cjv reads:
+cjv reads two channel-specific files:
 
 ```text
-https://artifacts.corp.example/cjv/dist/versions.json
+https://artifacts.corp.example/cjv/dist/versions.json  # LTS / STS
+https://artifacts.corp.example/cjv/dist/nightly.json   # nightly
 ```
 
-Relative SDK and component URLs are resolved against `dist_server`. Absolute URLs are honored exactly as written and may point to another path or host.
+LTS/STS operations read only `versions.json`; nightly operations read only `nightly.json`. `cjv check` and `cjv update` load the files selected by installed channels. Relative SDK and component URLs resolve against the distribution root, while absolute URLs are honored exactly as written.
 
 ## Recommended layout
 
@@ -20,18 +21,19 @@ Relative SDK and component URLs are resolved against `dist_server`. Absolute URL
 Enterprise artifact repository
 └── cjv/
     ├── dist/                         # dist_server points here
-    │   ├── versions.json
-    │   ├── sdk/                      # LTS / STS SDKs
-    │   ├── components/               # LTS / STS components
-    │   └── nightly/                  # nightly SDKs and components
+    │   ├── versions.json             # LTS / STS and their components
+    │   ├── nightly.json              # nightly and its components
+    │   ├── sdk/
+    │   ├── components/
+    │   └── nightly/
     └── releases/                     # cjv archives and checksums.txt
 ```
 
 The distribution endpoint gives managed clients machine-readable, read-only access through HTTPS GET. Network allowlists, device identity, or an enterprise reverse proxy can enforce access control.
 
-## Manifest contract
+## `versions.json` contract
 
-`versions.json` contains `lts`, `sts`, and `nightly`. Every SDK entry contains `name`, `url`, and `sha256`. A nightly `sha256` may temporarily be empty, in which case cjv reads `<url>.sha256`; enterprise mirrors should normally populate it directly. Component entries also accept an optional `sha256`.
+The top-level `channels` object contains `lts` and `sts`:
 
 ```jsonc
 {
@@ -59,55 +61,50 @@ The distribution endpoint gives managed clients machine-readable, read-only acce
           }
         }
       }
-    },
-    "nightly": {
-      "latest": "1.2.0-alpha.20260822010101",
-      "versions": {
-        "1.2.0-alpha.20260822010101": {
-          "linux-x64": {
-            "name": "cangjie-sdk-linux-x64-1.2.0-alpha.20260822010101.tar.gz",
-            "url": "nightly/20260822/cangjie-sdk-linux-x64-1.2.0-alpha.20260822010101.tar.gz",
-            "sha256": "<64-character hexadecimal SHA-256>"
-          }
-        }
-      },
-      "components": {
-        "1.2.0-alpha.20260822010101": {
-          "docs": {
-            "name": "cangjie-docs-html-1.2.0-alpha.20260822010101.tar.gz",
-            "url": "nightly/20260822/cangjie-docs-html-1.2.0-alpha.20260822010101.tar.gz",
-            "sha256": "<64-character hexadecimal SHA-256>"
-          }
-        }
+    }
+  }
+}
+```
+
+## `nightly.json` contract
+
+`nightly.json` directly represents one channel with `latest`, `versions`, and optional `components`:
+
+```jsonc
+{
+  "latest": "1.2.0-alpha.20260822010101",
+  "versions": {
+    "1.2.0-alpha.20260822010101": {
+      "linux-x64": {
+        "name": "cangjie-sdk-linux-x64-1.2.0-alpha.20260822010101.tar.gz",
+        "url": "nightly/20260822/cangjie-sdk-linux-x64-1.2.0-alpha.20260822010101.tar.gz",
+        "sha256": "<64-character hexadecimal SHA-256>"
+      }
+    }
+  },
+  "components": {
+    "1.2.0-alpha.20260822010101": {
+      "docs": {
+        "name": "cangjie-docs-html-1.2.0-alpha.20260822010101.tar.gz",
+        "url": "nightly/20260822/cangjie-docs-html-1.2.0-alpha.20260822010101.tar.gz",
+        "sha256": "<64-character hexadecimal SHA-256>"
       }
     }
   }
 }
 ```
 
-The version key determines the installed toolchain name, while the manifest URL identifies the exact asset and absorbs upstream Release naming differences.
+Every SDK entry contains `name`, `url`, and `sha256`. A nightly `sha256` may temporarily be empty, in which case cjv reads `<url>.sha256`; enterprise mirrors should normally populate it directly. Component entries accept an optional `sha256`. The version key determines the toolchain name, while the URL identifies the exact asset.
 
-The component layout is shared across channels: `docs` and `stdx-docs` are single entries, while `stdx` is keyed by artifact-platform name. Keep every approved platform in the enterprise manifest.
-
-## How nightly works
-
-Under a unified distribution source, nightly uses the same manifest as LTS and STS:
-
-- `cjv install nightly` installs `channels.nightly.latest`.
-- `cjv install nightly-<version>` installs that exact manifest version.
-- `cjv check`, `cjv update nightly`, and `cjv toolchain list-remote --channel nightly` read the same source.
-- Nightly SDKs and components use manifest URLs and checksums, with version resolution supplied directly by the enterprise manifest.
-- A missing nightly channel, target, or component returns the corresponding missing-content error.
-
-`channels.nightly.latest` selects one exact version, whose targets and components form a publication invariant. Publish and verify all approved artifacts for that nightly before advancing `latest`. Projects gain reproducible builds by pinning an exact nightly version.
+`cjv install nightly` installs `latest` from `nightly.json`. Pinned nightly installs, `check`, `update`, `list-remote`, and component installation all read that same file. Projects gain reproducible builds by pinning an exact nightly version.
 
 ## Publishing order
 
 1. Mirror and verify the approved SDK and component archives.
 2. Compute each SDK SHA-256; compute and publish component hashes as well.
 3. Publish all archives first and verify HTTPS GET from a standard endpoint account.
-4. Generate `versions.json`. Intranet deployments normally use relative paths or approved internal absolute URLs.
-5. Atomically replace the manifest; advance a channel's `latest` only after its artifacts are complete.
+4. Generate `versions.json` and `nightly.json` independently.
+5. Atomically replace the corresponding file; advance its `latest` after artifacts are complete.
 6. Retain every exact version referenced by project toolchain files.
 
 Source precedence is `CJV_DIST_SERVER`, `dist_server` from settings, then `manifest_url`. CI can use the environment variable to select a staging source.

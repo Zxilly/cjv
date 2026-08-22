@@ -18,7 +18,7 @@ cjv 当前支持三类组件：
 - `docs`：默认 manifest 的 LTS / STS URL 指向 [`cangjie-docs-bundle`](https://github.com/Zxilly/cangjie-docs-bundle/releases)，nightly URL 指向 [`nightly_build`](https://gitcode.com/Cangjie/nightly_build/releases)。
 - `stdx-docs`：默认 manifest 的 LTS / STS URL 指向 [`cangjie_stdx`](https://gitcode.com/Cangjie/cangjie_stdx/releases)，nightly URL 指向 [`nightly_build`](https://gitcode.com/Cangjie/nightly_build/releases)。
 
-配置 `dist_server` 后，三个通道的组件都从统一 manifest 读取 URL；相对 URL 以分发根解析，绝对 URL原样使用，组件条目还可提供 SHA-256。见[内部分发源](../enterprise/distribution-server.md)。
+配置 `dist_server` 后，LTS/STS 组件由 `versions.json` 描述，nightly 组件由 `nightly.json` 描述；相对 URL 以分发根解析，绝对 URL 原样使用，组件条目还可提供 SHA-256。见[内部分发源](../enterprise/distribution-server.md)。
 
 ## 自动注入的环境变量
 
