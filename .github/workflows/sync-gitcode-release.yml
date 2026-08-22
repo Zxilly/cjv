@@ -13,8 +13,20 @@ permissions:
 
 jobs:
   sync:
-    name: Sync release assets
+    name: Sync ${{ matrix.asset }}
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        asset:
+          - cjv-mirror_darwin_amd64.tar.gz
+          - cjv-mirror_darwin_arm64.tar.gz
+          - cjv-mirror_linux_amd64.tar.gz
+          - cjv-mirror_linux_arm64.tar.gz
+          - cjv-mirror_windows_amd64.zip
+          - checksums.txt
     steps:
       - name: Checkout release tag
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -25,13 +37,12 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_TAG: ${{ inputs.tag }}
+          RELEASE_ASSET: ${{ matrix.asset }}
         run: |
           mkdir dist
           gh release download "${RELEASE_TAG}" \
             --dir dist \
-            --pattern 'cjv-mirror_*.tar.gz' \
-            --pattern 'cjv-mirror_*.zip' \
-            --pattern checksums.txt
+            --pattern "${RELEASE_ASSET}"
       - name: Upload mirror binaries to GitCode
         uses: Zxilly/upload-gitcode-release@4ecd2bfd44008dd4f2b2487eda7a2e7bbbf12a1b # v1.0.0
         with:
@@ -40,7 +51,4 @@ jobs:
           tag: ${{ inputs.tag }}
           target-commitish: ${{ inputs.tag }}
           body: "See https://github.com/Zxilly/cjv/releases/tag/${{ inputs.tag }} for the full changelog."
-          files: |
-            dist/cjv-mirror_*.tar.gz
-            dist/cjv-mirror_*.zip
-            dist/checksums.txt
+          files: dist/${{ matrix.asset }}

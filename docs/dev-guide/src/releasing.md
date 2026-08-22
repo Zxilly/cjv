@@ -109,7 +109,7 @@ GitHub Release 上挂的是全部产物(官方版 + 镜像版)，GitCode Release
 
 普通 `master` 提交由独立的 `mirror.yml` 推送到 GitCode；发布工作流负责 tag 和 Release 资产，因此两条同步链路均由 CI 显式执行。
 
-GitCode Release 上传遇到临时故障时，手动运行 `sync-gitcode-release.yml` 并填写稳定版 tag。该工作流从已发布的 GitHub Release 下载 mirror 归档与 `checksums.txt`，再同步到 GitCode 的同名 tag。
+GitCode Release 上传遇到临时故障时，手动运行 `sync-gitcode-release.yml` 并填写稳定版 tag。该工作流从已发布的 GitHub Release 下载 mirror 归档与 `checksums.txt`，按资产拆成独立 job、最多两路并行同步到 GitCode 的同名 tag；单个平台失败时可独立重跑。
 
 `release` job 完成后，workflow 通过 `needs: release` 调起 `pages` job，它复用 `./.github/workflows/pages.yml` 重新部署站点(见 [持续集成](ci.md) 和 [落地页](web.md))。
 

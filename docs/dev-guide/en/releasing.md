@@ -115,7 +115,7 @@ The GitHub Release carries every artifact (official plus mirror), while the GitC
 
 An independent `mirror.yml` pushes ordinary `master` commits to GitCode. The release workflow owns tag and Release-asset synchronization, so CI explicitly drives both paths.
 
-If the GitCode Release upload encounters a transient failure, run `sync-gitcode-release.yml` manually with the stable tag. It downloads the mirror archives and `checksums.txt` from the published GitHub Release, then synchronizes them to the matching GitCode tag.
+If the GitCode Release upload encounters a transient failure, run `sync-gitcode-release.yml` manually with the stable tag. It downloads the mirror archives and `checksums.txt` from the published GitHub Release, then synchronizes them to the matching GitCode tag as isolated per-asset jobs with at most two concurrent uploads. A failed platform can be rerun independently.
 
 Once the `release` job finishes, the workflow invokes the `pages` job via `needs: release`, which reuses `./.github/workflows/pages.yml` to redeploy the site (see [Continuous Integration](ci.md) and [Landing Page](web.md)).
 
