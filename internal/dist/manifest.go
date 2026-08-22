@@ -21,8 +21,8 @@ type DownloadInfo struct {
 }
 
 // ComponentInfo is a toolchain add-on archive (docs / stdx / stdx-docs).
-// Upstream archives often have no published checksum, so SHA256 is optional for
-// compatibility; controlled distribution sources can provide one.
+// SHA256 is optional for upstream compatibility and available to controlled
+// distribution sources.
 type ComponentInfo struct {
 	Name   string `json:"name"`
 	URL    string `json:"url"`
@@ -52,10 +52,8 @@ type Manifest struct {
 	} `json:"channels"`
 }
 
-// ErrChannelNotInManifest indicates that a valid manifest intentionally does
-// not describe a channel. Legacy manifests omit nightly and use the GitCode
-// adapter; unified distribution manifests treat the same condition as fatal.
-var ErrChannelNotInManifest = errors.New("channel is not provided by manifest")
+// ErrManifestChannelMissing reports a channel absent from a parsed manifest.
+var ErrManifestChannelMissing = errors.New("manifest channel is missing")
 
 func ParseManifest(data []byte) (*Manifest, error) {
 	var m Manifest
@@ -245,7 +243,7 @@ func (m *Manifest) getChannel(ch toolchain.Channel) (*ChannelInfo, error) {
 		return &m.Channels.STS, nil
 	case toolchain.Nightly:
 		if m.Channels.Nightly == nil {
-			return nil, fmt.Errorf("channel %s: %w", ch, ErrChannelNotInManifest)
+			return nil, fmt.Errorf("channel %s: %w", ch, ErrManifestChannelMissing)
 		}
 		return m.Channels.Nightly, nil
 	default:

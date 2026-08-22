@@ -96,9 +96,8 @@ func decodeSettingsTOML(data []byte) (Settings, toml.MetaData, error) {
 // settings version or a typo'd key is caught identically wherever the file
 // lives.
 //
-// It deliberately does NOT inject environment overrides (for example the
-// GitCode API key or dist server); those are resolved at access time so an
-// ephemeral process-level override is never persisted by a later Save.
+// Environment overrides such as the GitCode API key and dist server are
+// resolved at access time, keeping persisted settings stable across Save.
 func applyDecodedSettings(s *Settings, md toml.MetaData) error {
 	for _, key := range md.Undecoded() {
 		slog.Warn(i18n.T("UnknownSettingsField", i18n.MsgData{
@@ -140,7 +139,7 @@ func (s *Settings) ResolveGitCodeAPIKey() string {
 
 // ResolveDistServer returns the unified distribution server configured for all
 // toolchain channels. The environment override is intentionally resolved at
-// access time so managed CI jobs can select a source without persisting it.
+// access time so managed CI jobs can select an ephemeral source.
 func (s *Settings) ResolveDistServer() string {
 	if v := strings.TrimSpace(os.Getenv(EnvDistServer)); v != "" {
 		return v

@@ -147,7 +147,7 @@ func TestSourceUnifiedResolvesNightlyFromManifestWithoutGitCode(t *testing.T) {
 	assert.Equal(t, server.URL+"/corp/cjv/nightly/nightly.tar.gz", release.Download.URL)
 }
 
-func TestSourceUnifiedMissingNightlyDoesNotFallback(t *testing.T) {
+func TestSourceUnifiedMissingNightlyReturnsManifestError(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte(sourceTestManifest("sdk/lts.tar.gz")))
 	}))
@@ -159,14 +159,14 @@ func TestSourceUnifiedMissingNightlyDoesNotFallback(t *testing.T) {
 	source, err := NewSourceWithOptions(&settings, SourceOptions{
 		FetchLatestNightlyRelease: func(context.Context, string, string) (NightlyRelease, error) {
 			legacyCalled = true
-			return NightlyRelease{}, errors.New("legacy nightly must not be called")
+			return NightlyRelease{}, errors.New("legacy nightly adapter selected")
 		},
 	})
 	require.NoError(t, err)
 
 	_, err = source.ResolveToolchain(context.Background(), toolchain.Nightly, "", "linux-x64")
 	require.Error(t, err)
-	assert.True(t, errors.Is(err, ErrChannelNotInManifest), err)
+	assert.True(t, errors.Is(err, ErrManifestChannelMissing), err)
 	assert.False(t, legacyCalled)
 }
 

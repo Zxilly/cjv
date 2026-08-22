@@ -52,8 +52,8 @@ func (f *ManifestFetcher) Get(ctx context.Context) (*dist.Manifest, error) {
 	return f.source.Manifest(ctx)
 }
 
-// UsesManifestFor reports whether channel is resolved through this source's
-// manifest. Legacy nightly is the only exception.
+// UsesManifestFor reports whether channel metadata comes from this source's
+// manifest.
 func (f *ManifestFetcher) UsesManifestFor(channel toolchain.Channel) bool {
 	return channel != toolchain.Nightly || f.source.Unified()
 }

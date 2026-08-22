@@ -36,7 +36,7 @@ type Source struct {
 }
 
 // SourceOptions supplies the external operations used by the legacy GitCode
-// nightly adapter. Unified sources do not call either function.
+// nightly adapter. Unified sources resolve nightly through their manifest.
 type SourceOptions struct {
 	FetchLatestNightlyRelease func(context.Context, string, string) (NightlyRelease, error)
 	FetchNightlySHA256        func(context.Context, string) (string, error)
@@ -94,7 +94,7 @@ type ToolchainRelease struct {
 }
 
 // Unified reports whether one configured manifest is authoritative for every
-// channel, instead of using the legacy GitCode nightly adapter.
+// channel. The alternative is the compatibility source model.
 func (s *Source) Unified() bool { return s != nil && s.unified }
 
 // ManifestURL returns the effective manifest endpoint.
@@ -226,7 +226,7 @@ func (s *Source) ChannelVersions(ctx context.Context, channel toolchain.Channel,
 }
 
 // LatestAvailableVersion returns the newest channel version available for the
-// requested tuple. It does not resolve or download an artifact checksum.
+// requested tuple using metadata only.
 func (s *Source) LatestAvailableVersion(ctx context.Context, channel toolchain.Channel, tuple string) (string, error) {
 	if channel == toolchain.Nightly && !s.unified {
 		release, err := s.fetchLatest(ctx, DefaultNightlyAPIURL, s.gitCodeKey)
@@ -239,8 +239,8 @@ func (s *Source) LatestAvailableVersion(ctx context.Context, channel toolchain.C
 	return latestVersionForTuple(manifest, channel, tuple)
 }
 
-// ChannelVersionsByTuple returns all manifest versions grouped by tuple.
-// Legacy nightly has no platform catalog and therefore reports ok=false.
+// ChannelVersionsByTuple returns all manifest versions grouped by tuple. The
+// ok result identifies sources that provide a platform catalog.
 func (s *Source) ChannelVersionsByTuple(ctx context.Context, channel toolchain.Channel) (latest string, versions map[string][]string, ok bool, err error) {
 	if channel == toolchain.Nightly && !s.unified {
 		latest, list, fetchErr := s.ChannelVersions(ctx, channel, "")
@@ -333,7 +333,7 @@ func parseDistributionRoot(raw string) (*url.URL, error) {
 		return nil, err
 	}
 	if u.RawQuery != "" || u.Fragment != "" {
-		return nil, fmt.Errorf("distribution server URL must not contain a query or fragment")
+		return nil, fmt.Errorf("distribution server URL requires an empty query and fragment")
 	}
 	u.Path = strings.TrimSuffix(u.Path, "/") + "/"
 	return u, nil

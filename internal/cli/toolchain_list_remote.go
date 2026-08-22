@@ -51,8 +51,8 @@ type platformVersionsEntry struct {
 	Versions []string `json:"versions"`
 }
 
-// Manifest-backed channels populate Platforms. Legacy nightly populates
-// Versions because the GitCode latest endpoint has no per-platform catalog.
+// Manifest-backed channels populate Platforms. The GitCode latest adapter
+// populates a channel-level Versions list.
 type toolchainListRemoteAllPlatformsEntry struct {
 	Channel   string                  `json:"channel"`
 	Latest    string                  `json:"latest,omitempty"`
@@ -242,8 +242,8 @@ func (r toolchainListRemoteResult) Text() string {
 }
 
 func writeSingleChannelHeader(b *strings.Builder, e toolchainListRemoteEntry, tuple string) {
-	// Nightly is platform-orthogonal — show the channel header without
-	// Target to avoid implying that the tag was filtered by platform.
+	// A channel-level source uses the compact header; a platform catalog adds
+	// the selected target.
 	withPlatform := e.PlatformAware && e.Latest != ""
 	switch {
 	case withPlatform:

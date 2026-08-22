@@ -20,9 +20,8 @@ import (
 type Options struct {
 	IsJSON               func() bool
 	EnsurePathConfigured func()
-	// ComponentInstall, when set, replaces the real component installer. It is
-	// deliberately source-free so tests can isolate orchestration without
-	// triggering metadata or archive requests.
+	// ComponentInstall, when set, replaces the real component installer and
+	// gives orchestration tests a source-independent adapter.
 	ComponentInstall     func(context.Context, component.Roots, toolchain.ToolchainName, component.Name, string, string, bool) error
 	EnsureManagedBinary  func() (string, error)
 	CreateProxyLinks     func() error
