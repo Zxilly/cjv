@@ -27,7 +27,7 @@ func NewManifestFetcher(url string, opts Options) *ManifestFetcher {
 }
 
 // NewManifestFetcherForSettings builds the operation-scoped distribution
-// source, including unified dist_server handling.
+// source, including the configured dist_server root.
 func NewManifestFetcherForSettings(settings *config.Settings, opts Options) (*ManifestFetcher, error) {
 	source, err := newDistributionSource(settings)
 	if err != nil {
@@ -45,8 +45,13 @@ func newDistributionSource(settings *config.Settings) (*dist.Source, error) {
 }
 
 func (f *ManifestFetcher) Get(ctx context.Context) (*dist.Manifest, error) {
-	f.noteOnce.Do(func() { f.opts.note(i18n.T("FetchingManifest", nil)) })
+	f.Note()
 	return f.source.Manifest(ctx)
+}
+
+// Note emits the operation-scoped manifest progress message once.
+func (f *ManifestFetcher) Note() {
+	f.noteOnce.Do(func() { f.opts.note(i18n.T("FetchingManifest", nil)) })
 }
 
 func ResolveAndLocate(ctx context.Context, name toolchain.ToolchainName, settings *config.Settings, fetcher *ManifestFetcher) (ResolvedToolchain, error) {
@@ -73,9 +78,7 @@ func ResolveAndLocatePlatform(ctx context.Context, name toolchain.ToolchainName,
 			return ResolvedToolchain{}, err
 		}
 	}
-	if _, err := fetcher.Get(ctx); err != nil {
-		return ResolvedToolchain{}, err
-	}
+	fetcher.Note()
 	release, err := fetcher.source.ResolveToolchain(ctx, name.Channel, name.Version, tuple)
 	if err != nil {
 		return ResolvedToolchain{}, err

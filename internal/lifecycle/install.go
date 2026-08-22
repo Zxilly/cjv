@@ -55,9 +55,7 @@ func (o Options) installComponent(ctx context.Context, roots component.Roots, tc
 	if o.ComponentInstall != nil {
 		return o.ComponentInstall(ctx, roots, tc, name, tuple, downloadsDir, force)
 	}
-	if _, err := fetcher.Get(ctx); err != nil {
-		return err
-	}
+	fetcher.Note()
 	return component.InstallFromSource(ctx, roots, tc, name, tuple, downloadsDir, force, fetcher.source)
 }
 

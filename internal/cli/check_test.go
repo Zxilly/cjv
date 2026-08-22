@@ -51,7 +51,7 @@ func TestRunCheck_NightlyUsesUnifiedDistServer(t *testing.T) {
 	config.IsolateForTest(t, home)
 	require.NoError(t, config.EnsureDirs())
 
-	server := unifiedNightlyMockServer(t)
+	server := splitNightlyMockServer(t)
 	settings := config.DefaultSettings()
 	settings.DistServer = server.URL + "/corp/cjv"
 	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))

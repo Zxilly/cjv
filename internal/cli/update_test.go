@@ -85,7 +85,7 @@ func TestUpdateSingle_NightlyUsesUnifiedDistServer(t *testing.T) {
 
 	oldName := "nightly-1.1.0-alpha.20260821010101"
 	require.NoError(t, os.MkdirAll(filepath.Join(home, "toolchains", oldName), 0o755))
-	server := unifiedNightlyMockServer(t)
+	server := splitNightlyMockServer(t)
 	settings := config.DefaultSettings()
 	settings.DistServer = server.URL + "/corp/cjv"
 	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))

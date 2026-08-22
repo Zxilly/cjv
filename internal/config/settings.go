@@ -125,8 +125,8 @@ func applyDecodedSettings(s *Settings, md toml.MetaData) error {
 	return nil
 }
 
-// ResolveDistServer returns the unified distribution server configured for all
-// toolchain channels. The environment override is intentionally resolved at
+// ResolveDistServer returns the distribution root configured for toolchain
+// channel manifests. The environment override is intentionally resolved at
 // access time so managed CI jobs can select an ephemeral source.
 func (s *Settings) ResolveDistServer() string {
 	if v := strings.TrimSpace(os.Getenv(EnvDistServer)); v != "" {

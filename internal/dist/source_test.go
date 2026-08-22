@@ -77,6 +77,30 @@ func sourceTestManifestWithNightly(nightlySHA string) string {
 }`, sourceTestSHA256, sourceTestSHA256, nightlySHA, sourceTestSHA256)
 }
 
+func sourceTestNightlyChannel(nightlySHA string) string {
+	return fmt.Sprintf(`{
+  "latest":"1.2.0-alpha.20260822010101",
+  "versions": {
+    "1.2.0-alpha.20260822010101": {
+      "linux-x64": {
+        "name":"nightly.tar.gz",
+        "sha256":%q,
+        "url":"nightly/nightly.tar.gz"
+      }
+    }
+  },
+  "components": {
+    "1.2.0-alpha.20260822010101": {
+      "docs": {
+        "name":"docs.tar.gz",
+        "sha256":%q,
+        "url":"nightly/docs.tar.gz"
+      }
+    }
+  }
+}`, nightlySHA, sourceTestSHA256)
+}
+
 func TestSourceDistServerResolvesManifestAndArtifactURLs(t *testing.T) {
 	var requestedPath string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -140,6 +164,80 @@ func TestSourceResolvesNightlyFromManifest(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "1.2.0-alpha.20260822010101", release.Version)
 	assert.Equal(t, server.URL+"/corp/cjv/nightly/nightly.tar.gz", release.Download.URL)
+}
+
+func TestSourceResolvesNightlyFromSeparateManifest(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/corp/cjv/versions.json":
+			_, _ = w.Write([]byte(sourceTestManifest("sdk/lts.tar.gz")))
+		case "/corp/cjv/nightly.json":
+			_, _ = w.Write([]byte(sourceTestNightlyChannel(sourceTestSHA256)))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	settings := config.DefaultSettings()
+	settings.DistServer = server.URL + "/corp/cjv"
+	source, err := NewSource(&settings)
+	require.NoError(t, err)
+
+	release, err := source.ResolveToolchain(context.Background(), toolchain.Nightly, "", "linux-x64")
+	require.NoError(t, err)
+	assert.Equal(t, "1.2.0-alpha.20260822010101", release.Version)
+	assert.Equal(t, server.URL+"/corp/cjv/nightly/nightly.tar.gz", release.Download.URL)
+}
+
+func TestSourceLTSResolutionSkipsNightlyManifest(t *testing.T) {
+	var stableRequests, nightlyRequests int
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/corp/cjv/versions.json":
+			stableRequests++
+			_, _ = w.Write([]byte(sourceTestManifest("sdk/lts.tar.gz")))
+		case "/corp/cjv/nightly.json":
+			nightlyRequests++
+			http.Error(w, "nightly should stay lazy", http.StatusInternalServerError)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	settings := config.DefaultSettings()
+	settings.DistServer = server.URL + "/corp/cjv"
+	source, err := NewSource(&settings)
+	require.NoError(t, err)
+
+	_, err = source.ResolveToolchain(context.Background(), toolchain.LTS, "", "linux-x64")
+	require.NoError(t, err)
+	assert.Equal(t, 1, stableRequests)
+	assert.Zero(t, nightlyRequests)
+}
+
+func TestSourceNightlyFallsBackToAggregatedManifestDuringMigration(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/corp/cjv/versions.json":
+			_, _ = w.Write([]byte(sourceTestManifestWithNightly(sourceTestSHA256)))
+		case "/corp/cjv/nightly.json":
+			http.NotFound(w, r)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	settings := config.DefaultSettings()
+	settings.DistServer = server.URL + "/corp/cjv"
+	source, err := NewSource(&settings)
+	require.NoError(t, err)
+
+	release, err := source.ResolveToolchain(context.Background(), toolchain.Nightly, "", "linux-x64")
+	require.NoError(t, err)
+	assert.Equal(t, "1.2.0-alpha.20260822010101", release.Version)
 }
 
 func TestSourceResolvesNightlyChecksumSidecar(t *testing.T) {

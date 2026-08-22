@@ -11,7 +11,6 @@ import (
 	"github.com/Zxilly/cjv/internal/cli/selfmgmt"
 	componentlib "github.com/Zxilly/cjv/internal/component"
 	"github.com/Zxilly/cjv/internal/config"
-	"github.com/Zxilly/cjv/internal/dist"
 	"github.com/Zxilly/cjv/internal/env"
 	"github.com/Zxilly/cjv/internal/i18n"
 	"github.com/Zxilly/cjv/internal/lifecycle"
@@ -132,10 +131,6 @@ func newManifestFetcherForSettings(settings *config.Settings) (*manifestFetcher,
 		return nil, err
 	}
 	return &manifestFetcher{inner: inner}, nil
-}
-
-func (f *manifestFetcher) get(ctx context.Context) (*dist.Manifest, error) {
-	return f.inner.Get(ctx)
 }
 
 // InstallComponentsForToolchain backs the proxy auto_install path: it

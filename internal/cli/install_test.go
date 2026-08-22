@@ -134,7 +134,7 @@ func validMockServer(t *testing.T) *httptest.Server {
 	return server
 }
 
-func unifiedNightlyMockServer(t *testing.T) *httptest.Server {
+func splitNightlyMockServer(t *testing.T) *httptest.Server {
 	t.Helper()
 	sdkData, sha := createMockSDK()
 	docsData, docsSHA := createMockTarGz(t, map[string]string{"index.html": "nightly docs"})
@@ -175,11 +175,13 @@ func unifiedNightlyMockServer(t *testing.T) *httptest.Server {
 		Latest:   "1.1.0",
 		Versions: map[string]map[string]dist.DownloadInfo{"1.1.0": {tuple: {Name: "sts.zip", SHA256: sha, URL: "sdk/sts.zip"}}},
 	}
-	manifest.Channels.Nightly = &channel
-
 	mux.HandleFunc("/corp/cjv/versions.json", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		require.NoError(t, json.NewEncoder(w).Encode(manifest))
+	})
+	mux.HandleFunc("/corp/cjv/nightly.json", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		require.NoError(t, json.NewEncoder(w).Encode(channel))
 	})
 	mux.HandleFunc("/corp/cjv/nightly/nightly.zip", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/zip")
@@ -331,7 +333,7 @@ func TestInstallToolchainWithOptions_InstallsNightlyFromUnifiedDistServer(t *tes
 	config.IsolateForTest(t, home)
 	require.NoError(t, config.EnsureDirs())
 
-	server := unifiedNightlyMockServer(t)
+	server := splitNightlyMockServer(t)
 	settings := config.DefaultSettings()
 	settings.DistServer = server.URL + "/corp/cjv"
 	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
@@ -347,7 +349,7 @@ func TestInstallToolchainWithOptions_DefaultManifestInstallsNightly(t *testing.T
 	config.IsolateForTest(t, home)
 	require.NoError(t, config.EnsureDirs())
 
-	server := unifiedNightlyMockServer(t)
+	server := splitNightlyMockServer(t)
 	settings := config.DefaultSettings()
 	settings.ManifestURL = server.URL + "/corp/cjv/versions.json"
 	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
@@ -363,7 +365,7 @@ func TestInstallToolchainWithExtras_InstallsNightlyComponentFromUnifiedDistServe
 	config.IsolateForTest(t, home)
 	require.NoError(t, config.EnsureDirs())
 
-	server := unifiedNightlyMockServer(t)
+	server := splitNightlyMockServer(t)
 	settings := config.DefaultSettings()
 	settings.DistServer = server.URL + "/corp/cjv"
 	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))

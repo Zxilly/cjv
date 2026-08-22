@@ -65,6 +65,18 @@ func ParseManifest(data []byte) (*Manifest, error) {
 	return &m, nil
 }
 
+// ParseChannelManifest parses and validates one channel document.
+func ParseChannelManifest(data []byte, channel toolchain.Channel) (*ChannelInfo, error) {
+	var info ChannelInfo
+	if err := json.Unmarshal(data, &info); err != nil {
+		return nil, fmt.Errorf("failed to parse %s manifest: %w", channel, err)
+	}
+	if err := validateChannel(channel, info); err != nil {
+		return nil, err
+	}
+	return &info, nil
+}
+
 func (m *Manifest) GetDownloadInfo(channel toolchain.Channel, version, tuple string) (*DownloadInfo, error) {
 	ch, err := m.getChannel(channel)
 	if err != nil {

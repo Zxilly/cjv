@@ -2,6 +2,7 @@ package dist
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -18,23 +19,41 @@ import (
 	"github.com/Zxilly/cjv/internal/toolchain"
 )
 
-const distributionManifestName = "versions.json"
+const (
+	distributionManifestName = "versions.json"
+	nightlyManifestName      = "nightly.json"
+)
 
 // Source is the configured manifest-backed toolchain distribution source.
 type Source struct {
 	manifestURL string
+	nightlyURL  string
 	root        *url.URL
 	fetchSHA256 func(context.Context, string) (string, error)
 
 	once     sync.Once
 	manifest *Manifest
 	err      error
+
+	nightlyOnce     sync.Once
+	nightlyManifest *Manifest
+	nightlyErr      error
 }
 
 // SourceOptions supplies the external checksum-sidecar operation used by
 // nightly SDK entries whose manifest checksum is empty.
 type SourceOptions struct {
 	FetchNightlySHA256 func(context.Context, string) (string, error)
+}
+
+// ManifestFetchError reports an HTTP response from a manifest endpoint.
+type ManifestFetchError struct {
+	URL        string
+	StatusCode int
+}
+
+func (e *ManifestFetchError) Error() string {
+	return fmt.Sprintf("failed to fetch manifest: HTTP %d", e.StatusCode)
 }
 
 // NewSource resolves the active distribution source from settings.
@@ -59,6 +78,7 @@ func NewSourceWithOptions(settings *config.Settings, opts SourceOptions) (*Sourc
 		}
 		return &Source{
 			manifestURL: settings.ManifestURL,
+			nightlyURL:  root.JoinPath(nightlyManifestName).String(),
 			root:        root,
 			fetchSHA256: opts.FetchNightlySHA256,
 		}, nil
@@ -71,9 +91,18 @@ func NewSourceWithOptions(settings *config.Settings, opts SourceOptions) (*Sourc
 	manifestURL := root.JoinPath(distributionManifestName).String()
 	return &Source{
 		manifestURL: manifestURL,
+		nightlyURL:  root.JoinPath(nightlyManifestName).String(),
 		root:        root,
 		fetchSHA256: opts.FetchNightlySHA256,
 	}, nil
+}
+
+// NightlyManifestURL returns the effective nightly channel endpoint.
+func (s *Source) NightlyManifestURL() string {
+	if s == nil {
+		return ""
+	}
+	return s.nightlyURL
 }
 
 // ToolchainRelease is the source-level result for one concrete toolchain
@@ -106,9 +135,30 @@ func (s *Source) Manifest(ctx context.Context) (*Manifest, error) {
 	return s.manifest, s.err
 }
 
+func (s *Source) manifestForChannel(ctx context.Context, channel toolchain.Channel) (*Manifest, error) {
+	if channel != toolchain.Nightly {
+		return s.Manifest(ctx)
+	}
+	s.nightlyOnce.Do(func() {
+		var channelInfo *ChannelInfo
+		channelInfo, s.nightlyErr = FetchChannelManifest(ctx, s.nightlyURL, toolchain.Nightly)
+		if s.nightlyErr != nil {
+			var fetchErr *ManifestFetchError
+			if errors.As(s.nightlyErr, &fetchErr) && fetchErr.StatusCode == http.StatusNotFound {
+				s.nightlyManifest, s.nightlyErr = s.Manifest(ctx)
+			}
+			return
+		}
+		s.nightlyManifest = &Manifest{}
+		s.nightlyManifest.Channels.Nightly = channelInfo
+		s.nightlyErr = s.resolveManifestURLs(s.nightlyManifest)
+	})
+	return s.nightlyManifest, s.nightlyErr
+}
+
 // ResolveToolchain selects one concrete toolchain artifact from the manifest.
 func (s *Source) ResolveToolchain(ctx context.Context, channel toolchain.Channel, version, tuple string) (ToolchainRelease, error) {
-	manifest, err := s.Manifest(ctx)
+	manifest, err := s.manifestForChannel(ctx, channel)
 	if err != nil {
 		return ToolchainRelease{}, err
 	}
@@ -145,7 +195,7 @@ func (s *Source) ResolveToolchain(ctx context.Context, channel toolchain.Channel
 // ResolveComponent returns the manifest component artifact for a concrete
 // toolchain release.
 func (s *Source) ResolveComponent(ctx context.Context, channel toolchain.Channel, version, component, platform string) (ComponentInfo, error) {
-	manifest, err := s.Manifest(ctx)
+	manifest, err := s.manifestForChannel(ctx, channel)
 	if err != nil {
 		return ComponentInfo{}, err
 	}
@@ -159,7 +209,7 @@ func (s *Source) ResolveComponent(ctx context.Context, channel toolchain.Channel
 // ChannelVersions returns the channel's latest version and the versions
 // available for tuple.
 func (s *Source) ChannelVersions(ctx context.Context, channel toolchain.Channel, tuple string) (string, []string, error) {
-	manifest, err := s.Manifest(ctx)
+	manifest, err := s.manifestForChannel(ctx, channel)
 	if err != nil {
 		return "", nil, err
 	}
@@ -177,7 +227,7 @@ func (s *Source) ChannelVersions(ctx context.Context, channel toolchain.Channel,
 // LatestAvailableVersion returns the newest channel version available for the
 // requested tuple using metadata only.
 func (s *Source) LatestAvailableVersion(ctx context.Context, channel toolchain.Channel, tuple string) (string, error) {
-	manifest, err := s.Manifest(ctx)
+	manifest, err := s.manifestForChannel(ctx, channel)
 	if err != nil {
 		return "", err
 	}
@@ -186,7 +236,7 @@ func (s *Source) LatestAvailableVersion(ctx context.Context, channel toolchain.C
 
 // ChannelVersionsByTuple returns all manifest versions grouped by tuple.
 func (s *Source) ChannelVersionsByTuple(ctx context.Context, channel toolchain.Channel) (latest string, versions map[string][]string, err error) {
-	manifest, err := s.Manifest(ctx)
+	manifest, err := s.manifestForChannel(ctx, channel)
 	if err != nil {
 		return "", nil, err
 	}
@@ -322,13 +372,52 @@ func FetchManifest(ctx context.Context, manifestURL string) (*Manifest, error) {
 	}
 	defer resp.Body.Close() //nolint:errcheck
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("failed to fetch manifest: HTTP %d", resp.StatusCode)
+		return nil, &ManifestFetchError{URL: manifestURL, StatusCode: resp.StatusCode}
 	}
 	data, err := io.ReadAll(io.LimitReader(resp.Body, MaxResponseSize))
 	if err != nil {
 		return nil, err
 	}
 	return ParseManifest(data)
+}
+
+// FetchChannelManifest downloads and validates a single-channel manifest.
+func FetchChannelManifest(ctx context.Context, manifestURL string, channel toolchain.Channel) (*ChannelInfo, error) {
+	u, err := url.Parse(manifestURL)
+	if err != nil {
+		return nil, fmt.Errorf("invalid manifest URL: %w", err)
+	}
+	if err := validateHTTPURL(u, "manifest"); err != nil {
+		return nil, err
+	}
+	if u.Scheme == "http" {
+		slog.Warn("fetching manifest over insecure HTTP", "url", manifestURL)
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, manifestURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("create manifest request: %w", err)
+	}
+	resp, err := HTTPClient().Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch manifest: %w", err)
+	}
+	defer resp.Body.Close() //nolint:errcheck
+	if resp.StatusCode != http.StatusOK {
+		return nil, &ManifestFetchError{URL: manifestURL, StatusCode: resp.StatusCode}
+	}
+	data, err := io.ReadAll(io.LimitReader(resp.Body, MaxResponseSize))
+	if err != nil {
+		return nil, err
+	}
+	channelInfo, channelErr := ParseChannelManifest(data, channel)
+	if channelErr == nil {
+		return channelInfo, nil
+	}
+	aggregated, aggregatedErr := ParseManifest(data)
+	if aggregatedErr == nil {
+		return aggregated.getChannel(channel)
+	}
+	return nil, channelErr
 }
 
 func validateHTTPURL(u *url.URL, label string) error {

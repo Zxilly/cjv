@@ -36,9 +36,11 @@ func TestResolveTargetToolchainUsesManifestNightlyVersion(t *testing.T) {
 			"linux-x64-ohos": {Name: "ohos.tar.gz", URL: "https://example/ohos.tar.gz", SHA256: sha},
 		},
 	}}
-	manifest.Channels.Nightly = &nightly
-
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/nightly.json" {
+			require.NoError(t, json.NewEncoder(w).Encode(nightly))
+			return
+		}
 		require.NoError(t, json.NewEncoder(w).Encode(manifest))
 	}))
 	defer server.Close()

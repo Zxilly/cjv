@@ -76,14 +76,16 @@ func listRemoteMockServer(t *testing.T) *httptest.Server {
 			"1.2.0-alpha.1": platformsForVersion(false),
 		},
 	}
-	manifest.Channels.Nightly = &nightly
-
 	mux := http.NewServeMux()
 	server := httptest.NewServer(mux)
 	t.Cleanup(server.Close)
 	mux.HandleFunc("/sdk-versions.json", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(manifest)
+	})
+	mux.HandleFunc("/nightly.json", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(nightly)
 	})
 	return server
 }
@@ -264,7 +266,7 @@ func TestRunToolchainListRemote_NightlyUsesDistServerManifest(t *testing.T) {
 	config.IsolateForTest(t, home)
 	require.NoError(t, config.EnsureDirs())
 
-	server := unifiedNightlyMockServer(t)
+	server := splitNightlyMockServer(t)
 	settings := config.DefaultSettings()
 	settings.DistServer = server.URL + "/corp/cjv"
 	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
@@ -294,7 +296,7 @@ func TestRunToolchainListRemote_AllPlatformsNightlyDistServerText(t *testing.T) 
 	home := t.TempDir()
 	config.IsolateForTest(t, home)
 	require.NoError(t, config.EnsureDirs())
-	server := unifiedNightlyMockServer(t)
+	server := splitNightlyMockServer(t)
 	settings := config.DefaultSettings()
 	settings.DistServer = server.URL + "/corp/cjv"
 	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))

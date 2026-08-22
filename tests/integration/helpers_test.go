@@ -308,8 +308,8 @@ func newMockSDKServer(t *testing.T, sdkArchive []byte, sdkHash string) *httptest
 	return server
 }
 
-// newUnifiedNightlyServer serves the unified enterprise layout below
-// /corp/cjv, including a manifest-backed nightly channel with relative URLs.
+// newUnifiedNightlyServer serves split release and nightly manifests below
+// /corp/cjv with relative artifact URLs.
 func newUnifiedNightlyServer(t *testing.T, sdkArchive []byte, sdkHash string) *httptest.Server {
 	t.Helper()
 	mux := http.NewServeMux()
@@ -341,11 +341,13 @@ func newUnifiedNightlyServer(t *testing.T, sdkArchive []byte, sdkHash string) *h
 			},
 		},
 	}
-	manifest.Channels.Nightly = &nightly
-
 	mux.HandleFunc("/corp/cjv/versions.json", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(manifest)
+	})
+	mux.HandleFunc("/corp/cjv/nightly.json", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(nightly)
 	})
 	mux.HandleFunc("/corp/cjv/sdk/", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/zip")

@@ -7,7 +7,6 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
-	"sync"
 
 	"github.com/Zxilly/cjv/internal/cjverr"
 	"github.com/Zxilly/cjv/internal/cli/output"
@@ -219,8 +218,6 @@ func updateAll(ctx context.Context) (updateOutcome, error) {
 	if err != nil {
 		return updateOutcome{}, err
 	}
-	var manifestWarnOnce sync.Once
-
 	var errs []error
 	for _, name := range installed {
 		parsed, err := toolchain.ParseToolchainName(name)
@@ -231,13 +228,6 @@ func updateAll(ctx context.Context) (updateOutcome, error) {
 		if parsed.IsCustom() || parsed.Channel == toolchain.UnknownChannel {
 			continue // skip custom/linked toolchains
 		}
-		if _, err := fetcher.get(ctx); err != nil {
-			manifestWarnOnce.Do(func() {
-				slog.Warn("manifest fetch failed; skipping channel updates", "error", err)
-			})
-			continue
-		}
-
 		// Reload settings from the cached SettingsFile so each iteration sees
 		// the latest state saved by reinstallChannel through this same instance.
 		// This does not re-read from disk.
