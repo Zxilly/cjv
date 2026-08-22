@@ -262,6 +262,59 @@ func TestRunToolchainListRemote_NightlyMissingKey_ChannelExplicit_Errors(t *test
 	require.Error(t, err, "explicit --channel nightly must surface the missing-key error")
 }
 
+func TestRunToolchainListRemote_NightlyUsesUnifiedDistServer(t *testing.T) {
+	home := t.TempDir()
+	config.IsolateForTest(t, home)
+	require.NoError(t, config.EnsureDirs())
+	t.Setenv(config.EnvGitCodeAPIKey, "")
+
+	server := unifiedNightlyMockServer(t)
+	settings := config.DefaultSettings()
+	settings.DistServer = server.URL + "/corp/cjv"
+	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
+
+	resetListRemoteFlags()
+	toolchainListRemoteChannel = "nightly"
+	cmd, buf := newListRemoteCmd()
+	output.SetJSONMode(true)
+	t.Cleanup(func() { output.SetJSONMode(false) })
+
+	require.NoError(t, runToolchainListRemote(cmd, nil))
+	var got toolchainListRemoteResult
+	require.NoError(t, json.Unmarshal(buf.Bytes(), &got))
+	require.Len(t, got.Channels, 1)
+	assert.Equal(t, "1.2.0-alpha.20260822010101", got.Channels[0].Latest)
+	assert.Equal(t, []string{"1.2.0-alpha.20260822010101"}, got.Channels[0].Versions)
+
+	output.SetJSONMode(false)
+	textCmd, textBuf := newListRemoteCmd()
+	require.NoError(t, runToolchainListRemote(textCmd, nil))
+	host, err := dist.CurrentHostTuple("")
+	require.NoError(t, err)
+	assert.Contains(t, textBuf.String(), host)
+}
+
+func TestRunToolchainListRemote_AllPlatformsNightlyUnifiedText(t *testing.T) {
+	home := t.TempDir()
+	config.IsolateForTest(t, home)
+	require.NoError(t, config.EnsureDirs())
+	server := unifiedNightlyMockServer(t)
+	settings := config.DefaultSettings()
+	settings.DistServer = server.URL + "/corp/cjv"
+	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
+
+	resetListRemoteFlags()
+	toolchainListRemoteChannel = "nightly"
+	toolchainListRemoteAllPlatforms = true
+	cmd, buf := newListRemoteCmd()
+	require.NoError(t, runToolchainListRemote(cmd, nil))
+
+	host, err := dist.CurrentHostTuple("")
+	require.NoError(t, err)
+	assert.Contains(t, buf.String(), host)
+	assert.Contains(t, buf.String(), "1.2.0-alpha.20260822010101")
+}
+
 func TestRunToolchainListRemote_AllPlatforms(t *testing.T) {
 	setupListRemote(t)
 	resetListRemoteFlags()

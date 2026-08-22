@@ -308,6 +308,58 @@ func newMockSDKServer(t *testing.T, sdkArchive []byte, sdkHash string) *httptest
 	return server
 }
 
+// newUnifiedNightlyServer serves the unified enterprise layout below
+// /corp/cjv, including a manifest-backed nightly channel with relative URLs.
+func newUnifiedNightlyServer(t *testing.T, sdkArchive []byte, sdkHash string) *httptest.Server {
+	t.Helper()
+	mux := http.NewServeMux()
+	server := httptest.NewServer(mux)
+	tuple, err := dist.CurrentHostTuple("")
+	require.NoError(t, err)
+
+	entry := func(name, path string) dist.DownloadInfo {
+		return dist.DownloadInfo{Name: name, URL: path, SHA256: sdkHash}
+	}
+	manifest := dist.Manifest{}
+	manifest.Channels.LTS = dist.ChannelInfo{
+		Latest:   "1.0.5",
+		Versions: map[string]map[string]dist.DownloadInfo{"1.0.5": {tuple: entry("lts.zip", "sdk/lts.zip")}},
+	}
+	manifest.Channels.STS = dist.ChannelInfo{
+		Latest:   "1.1.0",
+		Versions: map[string]map[string]dist.DownloadInfo{"1.1.0": {tuple: entry("sts.zip", "sdk/sts.zip")}},
+	}
+	nightly := dist.ChannelInfo{
+		Latest: "1.2.0-alpha.20260822010101",
+		Versions: map[string]map[string]dist.DownloadInfo{
+			"1.2.0-alpha.20260822010101": {
+				tuple: {
+					Name:       "nightly.zip",
+					URL:        "nightly/nightly.zip",
+					SHA256:     sdkHash,
+					ReleaseTag: "nightly-20260822",
+				},
+			},
+		},
+	}
+	manifest.Channels.Nightly = &nightly
+
+	mux.HandleFunc("/corp/cjv/versions.json", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(manifest)
+	})
+	mux.HandleFunc("/corp/cjv/sdk/", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/zip")
+		_, _ = w.Write(sdkArchive)
+	})
+	mux.HandleFunc("/corp/cjv/nightly/nightly.zip", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/zip")
+		_, _ = w.Write(sdkArchive)
+	})
+	t.Cleanup(server.Close)
+	return server
+}
+
 // mockCJVDownloadServer creates a mock server serving only the CJV binary archive.
 func mockCJVDownloadServer(t *testing.T) *httptest.Server {
 	t.Helper()

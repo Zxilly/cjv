@@ -3,6 +3,7 @@ package dist
 import (
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -13,17 +14,19 @@ import (
 )
 
 type DownloadInfo struct {
-	Name   string `json:"name"`
-	SHA256 string `json:"sha256"`
-	URL    string `json:"url"`
+	Name       string `json:"name"`
+	SHA256     string `json:"sha256"`
+	URL        string `json:"url"`
+	ReleaseTag string `json:"release_tag,omitempty"`
 }
 
-// ComponentInfo is a toolchain add-on archive (docs / stdx / stdx-docs). Unlike
-// the SDK, these archives ship without a published checksum, so it carries only
-// a name and a verbatim download URL taken from the upstream release API.
+// ComponentInfo is a toolchain add-on archive (docs / stdx / stdx-docs).
+// Upstream archives often have no published checksum, so SHA256 is optional for
+// compatibility; controlled distribution sources can provide one.
 type ComponentInfo struct {
-	Name string `json:"name"`
-	URL  string `json:"url"`
+	Name   string `json:"name"`
+	URL    string `json:"url"`
+	SHA256 string `json:"sha256,omitempty"`
 }
 
 // ComponentSet holds the component download links for a single version: the
@@ -43,10 +46,16 @@ type ChannelInfo struct {
 
 type Manifest struct {
 	Channels struct {
-		LTS ChannelInfo `json:"lts"`
-		STS ChannelInfo `json:"sts"`
+		LTS     ChannelInfo  `json:"lts"`
+		STS     ChannelInfo  `json:"sts"`
+		Nightly *ChannelInfo `json:"nightly,omitempty"`
 	} `json:"channels"`
 }
+
+// ErrChannelNotInManifest indicates that a valid manifest intentionally does
+// not describe a channel. Legacy manifests omit nightly and use the GitCode
+// adapter; unified distribution manifests treat the same condition as fatal.
+var ErrChannelNotInManifest = errors.New("channel is not provided by manifest")
 
 func ParseManifest(data []byte) (*Manifest, error) {
 	var m Manifest
@@ -122,6 +131,21 @@ func (m *Manifest) HasComponents(channel toolchain.Channel, version string) bool
 	}
 	_, ok := ch.Components[version]
 	return ok
+}
+
+// HasChannel reports whether the manifest provides metadata for channel.
+func (m *Manifest) HasChannel(channel toolchain.Channel) bool {
+	if m == nil {
+		return false
+	}
+	switch channel {
+	case toolchain.LTS, toolchain.STS:
+		return true
+	case toolchain.Nightly:
+		return m.Channels.Nightly != nil
+	default:
+		return false
+	}
 }
 
 func (m *Manifest) GetLatestVersion(channel toolchain.Channel) (string, error) {
@@ -219,6 +243,11 @@ func (m *Manifest) getChannel(ch toolchain.Channel) (*ChannelInfo, error) {
 		return &m.Channels.LTS, nil
 	case toolchain.STS:
 		return &m.Channels.STS, nil
+	case toolchain.Nightly:
+		if m.Channels.Nightly == nil {
+			return nil, fmt.Errorf("channel %s: %w", ch, ErrChannelNotInManifest)
+		}
+		return m.Channels.Nightly, nil
 	default:
 		return nil, &cjverr.UnknownChannelError{Channel: ch.String()}
 	}
@@ -230,6 +259,11 @@ func (m *Manifest) validate() error {
 	}
 	if err := validateChannel(toolchain.STS, m.Channels.STS); err != nil {
 		return err
+	}
+	if m.Channels.Nightly != nil {
+		if err := validateChannel(toolchain.Nightly, *m.Channels.Nightly); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -254,6 +288,39 @@ func validateChannel(channel toolchain.Channel, ch ChannelInfo) error {
 				return err
 			}
 		}
+	}
+	for version, set := range ch.Components {
+		if set.Docs != nil {
+			if err := validateComponentInfo(label, version, "docs", *set.Docs); err != nil {
+				return err
+			}
+		}
+		if set.StdxDocs != nil {
+			if err := validateComponentInfo(label, version, "stdx-docs", *set.StdxDocs); err != nil {
+				return err
+			}
+		}
+		for platform, info := range set.Stdx {
+			if err := validateComponentInfo(label, version, "stdx/"+platform, info); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func validateComponentInfo(channel, version, component string, info ComponentInfo) error {
+	if info.URL == "" {
+		return fmt.Errorf("channel %s version %s component %s has empty url", channel, version, component)
+	}
+	if info.SHA256 == "" {
+		return nil
+	}
+	if len(info.SHA256) != 64 {
+		return fmt.Errorf("channel %s version %s component %s has invalid sha256 length", channel, version, component)
+	}
+	if _, err := hex.DecodeString(info.SHA256); err != nil {
+		return fmt.Errorf("channel %s version %s component %s has invalid sha256: %w", channel, version, component, err)
 	}
 	return nil
 }

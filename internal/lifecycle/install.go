@@ -4,26 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
-	"log/slog"
-	"net"
-	"net/http"
-	"net/url"
-	"os"
-	"path/filepath"
-	"runtime"
-	"strings"
-	"sync"
 
-	"github.com/Zxilly/cjv/internal/cjverr"
 	"github.com/Zxilly/cjv/internal/component"
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/dist"
-	"github.com/Zxilly/cjv/internal/fstx"
 	"github.com/Zxilly/cjv/internal/i18n"
 	sdktarget "github.com/Zxilly/cjv/internal/target"
 	"github.com/Zxilly/cjv/internal/toolchain"
-	"github.com/Zxilly/cjv/internal/utils"
 	"github.com/fatih/color"
 )
 
@@ -33,10 +20,9 @@ import (
 type Options struct {
 	IsJSON               func() bool
 	EnsurePathConfigured func()
-	// ComponentInstall, when set, replaces the real component installer. It is a
-	// test seam and deliberately manifest-free: the default path resolves the
-	// component download manifest itself (see installComponent), so a stub need
-	// not — and must not trigger — a network manifest fetch.
+	// ComponentInstall, when set, replaces the real component installer. It is
+	// deliberately source-free so tests can isolate orchestration without
+	// triggering metadata or archive requests.
 	ComponentInstall     func(context.Context, component.Roots, toolchain.ToolchainName, component.Name, string, string, bool) error
 	EnsureManagedBinary  func() (string, error)
 	CreateProxyLinks     func() error
@@ -67,24 +53,16 @@ func (o Options) ensurePathConfigured() {
 	EnsurePathConfigured()
 }
 
-// installComponent installs one component. When a test override is set it is
-// used verbatim (no manifest needed). The real path resolves the LTS / STS
-// download links from the manifest, fetched lazily via fetcher so a stubbed
-// installer never reaches the network; nightly toolchains pass a nil manifest
-// and construct their URLs.
 func (o Options) installComponent(ctx context.Context, roots component.Roots, tc toolchain.ToolchainName, name component.Name, tuple, downloadsDir string, force bool, fetcher *ManifestFetcher) error {
 	if o.ComponentInstall != nil {
 		return o.ComponentInstall(ctx, roots, tc, name, tuple, downloadsDir, force)
 	}
-	var mf *dist.Manifest
-	if tc.Channel != toolchain.Nightly {
-		var err error
-		mf, err = fetcher.Get(ctx)
-		if err != nil {
+	if tc.Channel != toolchain.Nightly || fetcher.source.Unified() {
+		if _, err := fetcher.Get(ctx); err != nil {
 			return err
 		}
 	}
-	return component.Install(ctx, roots, tc, name, tuple, downloadsDir, force, mf)
+	return component.InstallFromSource(ctx, roots, tc, name, tuple, downloadsDir, force, fetcher.source)
 }
 
 func (o Options) createProxyLinks() error {
@@ -146,8 +124,10 @@ func InstallToolchainWithExtras(ctx context.Context, input string, targets, comp
 		return fmt.Errorf("cannot combine target variant toolchain name %q with --target; pass the host toolchain name and --target instead", input)
 	}
 
-	fetcher := NewManifestFetcher(settings.ManifestURL, opts)
-
+	fetcher, err := NewManifestFetcherForSettings(settings, opts)
+	if err != nil {
+		return err
+	}
 	resolved, err := ResolveAndLocate(ctx, name, settings, fetcher)
 	if err != nil {
 		return err
@@ -197,7 +177,7 @@ func InstallToolchainWithExtras(ctx context.Context, input string, targets, comp
 }
 
 func resolveTargetToolchain(ctx context.Context, base toolchain.ToolchainName, settings *config.Settings, fetcher *ManifestFetcher, target string, host ResolvedToolchain) (ResolvedToolchain, error) {
-	if base.Channel != toolchain.Nightly || host.NightlyReleaseTag == "" || host.NightlyVersion == "" {
+	if fetcher.source.Unified() || base.Channel != toolchain.Nightly || host.NightlyReleaseTag == "" || host.NightlyVersion == "" {
 		return ResolveAndLocateWithTarget(ctx, base, settings, fetcher, target)
 	}
 	tuple, err := dist.CurrentTargetTuple(settings.DefaultHost, target)
@@ -221,492 +201,4 @@ func LoadSettings() (*config.SettingsFile, *config.Settings, error) {
 		return nil, nil, err
 	}
 	return sf, settings, nil
-}
-
-// ManifestFetcher fetches the SDK manifest at most once per lifecycle operation.
-type ManifestFetcher struct {
-	once sync.Once
-	url  string
-	opts Options
-	m    *dist.Manifest
-	err  error
-}
-
-func NewManifestFetcher(url string, opts Options) *ManifestFetcher {
-	return &ManifestFetcher{url: url, opts: opts}
-}
-
-func (f *ManifestFetcher) Get(ctx context.Context) (*dist.Manifest, error) {
-	f.once.Do(func() {
-		f.opts.note(i18n.T("FetchingManifest", nil))
-		f.m, f.err = FetchManifest(ctx, f.url)
-	})
-	return f.m, f.err
-}
-
-// InstallComponentsForToolchain backs the proxy auto_install path: it resolves
-// tcInput to an already-installed toolchain and installs missing components quietly.
-func InstallComponentsForToolchain(ctx context.Context, tcInput string, components []string, opts Options) error {
-	if len(components) == 0 {
-		return nil
-	}
-	if ctx == nil {
-		ctx = context.Background()
-	}
-	name, err := toolchain.ParseToolchainName(tcInput)
-	if err != nil {
-		return err
-	}
-	installedDir, err := toolchain.FindInstalled(name)
-	if err != nil {
-		return err
-	}
-	return InstallComponentsList(ctx, filepath.Base(installedDir), components, false, true, nil, opts)
-}
-
-// InstallComponentsList expects resolvedName as "<channel>-<version>". For LTS /
-// STS toolchains it resolves the component download links from the version
-// manifest; fetcher may be a manifest fetcher already primed by the caller (so
-// the manifest is fetched at most once per operation) or nil to fetch on demand.
-// Nightly toolchains construct their component URLs and never touch the manifest.
-func InstallComponentsList(ctx context.Context, resolvedName string, components []string, force, quiet bool, fetcher *ManifestFetcher, opts Options) error {
-	resolvedTC, err := toolchain.ParseToolchainName(resolvedName)
-	if err != nil {
-		return err
-	}
-	if resolvedTC.IsCustom() {
-		return &cjverr.ComponentRequiresHostError{Component: strings.Join(components, ", ")}
-	}
-	parsed, err := component.NormalizeList(components)
-	if err != nil {
-		return err
-	}
-	_, settings, err := LoadSettings()
-	if err != nil {
-		return err
-	}
-	tuple := resolvedTC.Target
-	if tuple == "" {
-		tuple, err = dist.CurrentHostTuple(settings.DefaultHost)
-		if err != nil {
-			return err
-		}
-	}
-	// The component download links for LTS / STS live in the manifest; create a
-	// fetcher so installComponent can resolve them (lazily, and at most once per
-	// operation when the caller passes a primed fetcher). Nightly never uses it.
-	if fetcher == nil {
-		fetcher = NewManifestFetcher(settings.ManifestURL, opts)
-	}
-	downloadsDir, err := config.DownloadsDir()
-	if err != nil {
-		return err
-	}
-	roots, err := component.RootsFor(resolvedName)
-	if err != nil {
-		return err
-	}
-	snap, err := component.TakeSnapshot(roots, parsed)
-	if err != nil {
-		return err
-	}
-	defer snap.Cleanup() //nolint:errcheck
-	for _, c := range parsed {
-		if err := opts.installComponent(ctx, roots, resolvedTC, c, tuple, downloadsDir, force, fetcher); err != nil {
-			var alreadyErr *cjverr.ComponentAlreadyInstalledError
-			if errors.As(err, &alreadyErr) {
-				if !quiet && !opts.json() {
-					fmt.Println(err)
-				}
-				continue
-			}
-			_ = snap.Restore() //nolint:errcheck
-			return err
-		}
-		if !quiet {
-			opts.green("ComponentInstalled", i18n.MsgData{"Toolchain": resolvedName, "Component": string(c)})
-		}
-	}
-	return nil
-}
-
-// ResolvedToolchain holds the result of toolchain resolution.
-type ResolvedToolchain struct {
-	Name              string
-	URL               string
-	SHA256            string
-	ArchiveName       string
-	Tuple             string
-	NightlyReleaseTag string
-	NightlyVersion    string
-}
-
-func InstallResolved(ctx context.Context, rt ResolvedToolchain, settings *config.Settings, sf *config.SettingsFile, force bool, opts Options) error {
-	return installResolvedWithDefault(ctx, rt, settings, sf, force, true, opts)
-}
-
-func InstallResolvedNoDefault(ctx context.Context, rt ResolvedToolchain, settings *config.Settings, sf *config.SettingsFile, force bool, opts Options) error {
-	return installResolvedWithDefault(ctx, rt, settings, sf, force, false, opts)
-}
-
-func installResolvedWithDefault(ctx context.Context, rt ResolvedToolchain, settings *config.Settings, sf *config.SettingsFile, force bool, allowDefault bool, opts Options) (retErr error) {
-	resolvedName := rt.Name
-	tcDir, err := config.ToolchainsDir()
-	if err != nil {
-		return err
-	}
-	destDir := filepath.Join(tcDir, resolvedName)
-	isReinstall := false
-	if _, err := os.Stat(destDir); err == nil {
-		if !force {
-			if opts.json() {
-				return &cjverr.ToolchainAlreadyInstalledError{Name: resolvedName}
-			}
-			fmt.Println(i18n.T("ToolchainAlreadyInstalled", i18n.MsgData{"Name": resolvedName}))
-			return nil
-		}
-		isReinstall = true
-	}
-
-	if err := config.EnsureDirs(); err != nil {
-		return err
-	}
-
-	downloadsDir, err := config.DownloadsDir()
-	if err != nil {
-		return err
-	}
-	if u, err := url.Parse(rt.URL); err != nil || u.Path == "" {
-		return fmt.Errorf("invalid toolchain download URL: %s", rt.URL)
-	}
-
-	archivePath, err := dist.DownloadCachedWithName(ctx, rt.URL, rt.SHA256, downloadsDir, rt.ArchiveName)
-	if err != nil {
-		return err
-	}
-	defer func() {
-		if retErr == nil {
-			_ = dist.CleanupDownload(archivePath) //nolint:errcheck
-		}
-	}()
-
-	stagingDir := destDir + toolchain.StagingSuffix
-	if err := utils.RemoveAllRetry(stagingDir); err != nil {
-		return fmt.Errorf("failed to clean staging directory: %w", err)
-	}
-	defer func() {
-		if retErr != nil {
-			_ = utils.RemoveAllRetry(stagingDir) //nolint:errcheck
-		}
-	}()
-
-	opts.note(i18n.T("Extracting", nil))
-	if err := dist.InstallSDK(ctx, archivePath, stagingDir); err != nil {
-		return err
-	}
-	if err := opts.validateInstallation(stagingDir, rt.Tuple); err != nil {
-		return err
-	}
-	if rt.NightlyReleaseTag != "" || rt.NightlyVersion != "" {
-		if err := toolchain.WriteNightlyReleaseMetadata(stagingDir, toolchain.NightlyReleaseMetadata{
-			ReleaseTag: rt.NightlyReleaseTag,
-			Version:    rt.NightlyVersion,
-		}); err != nil {
-			return err
-		}
-	}
-
-	isFirstInstall := allowDefault && (settings.DefaultToolchain == "" || !defaultToolchainExists(settings.DefaultToolchain))
-	if err := swapInstalledToolchain(stagingDir, destDir, isReinstall, func() error {
-		if err := opts.ensureManagedBinary(); err != nil {
-			return err
-		}
-		if err := opts.createProxyLinks(); err != nil {
-			return err
-		}
-		if isFirstInstall {
-			settings.DefaultToolchain = resolvedName
-			if err := sf.Save(settings); err != nil {
-				return err
-			}
-			opts.ensurePathConfigured()
-		}
-		return nil
-	}); err != nil {
-		return err
-	}
-
-	opts.green("ToolchainInstalled", i18n.MsgData{"Name": resolvedName})
-	return nil
-}
-
-func ResolveAndLocate(ctx context.Context, name toolchain.ToolchainName, settings *config.Settings, fetcher *ManifestFetcher) (ResolvedToolchain, error) {
-	return ResolveAndLocateWithTarget(ctx, name, settings, fetcher, "")
-}
-
-func ResolveAndLocateWithTarget(ctx context.Context, name toolchain.ToolchainName, settings *config.Settings, fetcher *ManifestFetcher, target string) (ResolvedToolchain, error) {
-	tuple := name.Target
-	if tuple == "" {
-		var err error
-		tuple, err = dist.CurrentTargetTuple(settings.DefaultHost, target)
-		if err != nil {
-			return ResolvedToolchain{}, err
-		}
-	}
-	return ResolveAndLocatePlatform(ctx, name, settings, fetcher, tuple)
-}
-
-func ResolveAndLocatePlatform(ctx context.Context, name toolchain.ToolchainName, settings *config.Settings, fetcher *ManifestFetcher, tuple string) (ResolvedToolchain, error) {
-	if tuple == "" {
-		var err error
-		tuple, err = dist.CurrentHostTuple(settings.DefaultHost)
-		if err != nil {
-			return ResolvedToolchain{}, err
-		}
-	}
-	if name.Channel == toolchain.Nightly {
-		return resolveNightly(ctx, name, settings, tuple, fetcher.opts)
-	}
-
-	manifest, err := fetcher.Get(ctx)
-	if err != nil {
-		return ResolvedToolchain{}, err
-	}
-
-	channel := name.Channel
-	version := name.Version
-	if channel == toolchain.UnknownChannel {
-		found, err := manifest.FindVersionChannel(version)
-		if err != nil {
-			return ResolvedToolchain{}, err
-		}
-		channel = found
-	}
-	if version == "" {
-		v, err := latestVersion(manifest, channel, tuple)
-		if err != nil {
-			return ResolvedToolchain{}, err
-		}
-		version = v
-	}
-
-	resolved := toolchain.ToolchainName{Channel: channel, Version: version}
-	if id, err := sdktarget.ParseIdentity(tuple); err == nil && id.IsTargetVariant() {
-		resolved.Target = tuple
-	}
-	info, err := manifest.GetDownloadInfo(channel, version, tuple)
-	if err != nil {
-		return ResolvedToolchain{}, err
-	}
-	return ResolvedToolchain{Name: resolved.String(), URL: info.URL, SHA256: info.SHA256, ArchiveName: info.Name, Tuple: tuple}, nil
-}
-
-func latestVersion(manifest *dist.Manifest, channel toolchain.Channel, tuple string) (string, error) {
-	if tuple == "" {
-		return manifest.GetLatestVersion(channel)
-	}
-	versions, err := manifest.ListVersions(channel, tuple)
-	if err != nil {
-		return "", err
-	}
-	if len(versions) > 0 {
-		return versions[0], nil
-	}
-	latest, err := manifest.GetLatestVersion(channel)
-	if err != nil {
-		return "", err
-	}
-	return "", &cjverr.VersionNotAvailableError{Version: latest, Target: tuple}
-}
-
-// FetchNightlySHA256 is a package-level seam for tests that resolve nightly toolchains.
-var FetchNightlySHA256 = dist.FetchNightlySHA256
-
-// FetchLatestNightlyRelease is a package-level seam for tests that resolve
-// pinned nightly asset versions back to their GitCode release tag.
-var FetchLatestNightlyRelease = dist.FetchLatestNightlyRelease
-
-func resolveNightly(ctx context.Context, name toolchain.ToolchainName, settings *config.Settings, tuple string, opts Options) (ResolvedToolchain, error) {
-	if tuple == "" {
-		var err error
-		tuple, err = dist.CurrentHostTuple(settings.DefaultHost)
-		if err != nil {
-			return ResolvedToolchain{}, err
-		}
-	}
-	version := name.Version
-	releaseTag := version
-	if version == "" {
-		opts.note(i18n.T("FetchingNightly", nil))
-		release, err := FetchLatestNightlyRelease(ctx, dist.DefaultNightlyAPIURL, settings.ResolveGitCodeAPIKey())
-		if err != nil {
-			return ResolvedToolchain{}, err
-		}
-		releaseTag = release.TagName
-		version = release.Version
-	} else if release, ok := pinnedNightlyRelease(ctx, version, settings); ok {
-		releaseTag = release.TagName
-		version = release.Version
-	}
-
-	return resolveNightlyRelease(ctx, dist.NightlyRelease{
-		TagName: releaseTag,
-		Version: version,
-	}, tuple, opts)
-}
-
-func pinnedNightlyRelease(ctx context.Context, version string, settings *config.Settings) (dist.NightlyRelease, bool) {
-	apiKey := settings.ResolveGitCodeAPIKey()
-	if apiKey == "" {
-		return dist.NightlyRelease{}, false
-	}
-	release, err := FetchLatestNightlyRelease(ctx, dist.DefaultNightlyAPIURL, apiKey)
-	if err != nil {
-		slog.Debug("failed to resolve pinned nightly release tag", "version", version, "error", err)
-		return dist.NightlyRelease{}, false
-	}
-	if release.Version != version && release.TagName != version {
-		return dist.NightlyRelease{}, false
-	}
-	return release, true
-}
-
-func resolveNightlyRelease(ctx context.Context, release dist.NightlyRelease, tuple string, opts Options) (ResolvedToolchain, error) {
-	version := release.Version
-	releaseTag := release.TagName
-	if releaseTag == "" {
-		releaseTag = version
-	}
-	resolved := toolchain.ToolchainName{Channel: toolchain.Nightly, Version: version}
-	if id, err := sdktarget.ParseIdentity(tuple); err == nil && id.IsTargetVariant() {
-		resolved.Target = tuple
-	}
-
-	url, err := (dist.NightlyRelease{TagName: releaseTag, Version: version}).DownloadURL(dist.DefaultNightlyBaseURL, tuple)
-	if err != nil {
-		return ResolvedToolchain{}, err
-	}
-	sha256, err := FetchNightlySHA256(ctx, url)
-	if err != nil {
-		return ResolvedToolchain{}, err
-	}
-	if sha256 == "" {
-		opts.note(i18n.T("NightlyNoChecksum", nil))
-	}
-	return ResolvedToolchain{
-		Name:              resolved.String(),
-		URL:               url,
-		SHA256:            sha256,
-		Tuple:             tuple,
-		NightlyReleaseTag: releaseTag,
-		NightlyVersion:    version,
-	}, nil
-}
-
-func FetchManifest(ctx context.Context, manifestURL string) (*dist.Manifest, error) {
-	u, err := url.Parse(manifestURL)
-	if err != nil {
-		return nil, fmt.Errorf("invalid manifest URL: %w", err)
-	}
-	switch u.Scheme {
-	case "https":
-	case "http":
-		if !isLoopbackHost(u.Hostname()) && os.Getenv(config.EnvAllowInsecureManifest) != "1" {
-			return nil, fmt.Errorf("refusing to fetch manifest over insecure HTTP from %q: use HTTPS, or set %s=1 to trust an internal mirror", u.Host, config.EnvAllowInsecureManifest)
-		}
-		slog.Warn("fetching manifest over insecure HTTP", "url", manifestURL)
-	default:
-		return nil, fmt.Errorf("invalid manifest URL scheme %q: only https and http are supported", u.Scheme)
-	}
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, manifestURL, nil)
-	if err != nil {
-		return nil, fmt.Errorf("create manifest request: %w", err)
-	}
-	resp, err := dist.HTTPClient().Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to fetch manifest: %w", err)
-	}
-	defer resp.Body.Close() //nolint:errcheck
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("failed to fetch manifest: HTTP %d", resp.StatusCode)
-	}
-	data, err := io.ReadAll(io.LimitReader(resp.Body, dist.MaxResponseSize))
-	if err != nil {
-		return nil, err
-	}
-	return dist.ParseManifest(data)
-}
-
-func isLoopbackHost(host string) bool {
-	if host == "localhost" {
-		return true
-	}
-	if ip := net.ParseIP(host); ip != nil {
-		return ip.IsLoopback()
-	}
-	return false
-}
-
-func defaultToolchainExists(name string) bool {
-	parsed, err := toolchain.ParseToolchainName(name)
-	if err != nil {
-		return false
-	}
-	_, err = toolchain.FindInstalled(parsed)
-	return err == nil
-}
-
-func validateInstallation(dir, tuple string) error {
-	binary := filepath.Join(dir, "bin", "cjc")
-	if tuple != "" {
-		if id, err := sdktarget.ParseIdentity(tuple); err == nil && strings.HasPrefix(id.HostTuple(), "win32-") {
-			binary += ".exe"
-		}
-	} else if runtime.GOOS == "windows" {
-		binary += ".exe"
-	}
-	if _, err := os.Stat(binary); err != nil {
-		return fmt.Errorf("installation validation failed: %w", err)
-	}
-	return nil
-}
-
-func swapInstalledToolchain(stagingDir, destDir string, isReinstall bool, afterSwap func() error) (err error) {
-	tx, txErr := fstx.NewTransaction(destDir)
-	if txErr != nil {
-		return fmt.Errorf("failed to begin install transaction: %w", txErr)
-	}
-	committed := false
-	defer func() {
-		if committed {
-			return
-		}
-		if rbErr := tx.Rollback(); rbErr != nil {
-			err = errors.Join(err, fmt.Errorf("rollback after failed install also failed: %w", rbErr))
-		}
-	}()
-
-	if isReinstall {
-		if err := tx.RemoveDir(destDir); err != nil {
-			return fmt.Errorf("failed to remove existing toolchain: %w", err)
-		}
-	}
-	if err := tx.RenameFile(stagingDir, destDir); err != nil {
-		return fmt.Errorf("failed to place new toolchain: %w", err)
-	}
-	if err := afterSwap(); err != nil {
-		return fmt.Errorf("failed to finalize installation: %w", err)
-	}
-	if err := tx.Commit(); err != nil {
-		return err
-	}
-	committed = true
-	return nil
-}
-
-// EnsurePathConfigured is the default lifecycle hook for first install. CLI
-// adapters inject the real shell/registry writer; proxy auto-install leaves
-// PATH alone because cjv is already reachable.
-func EnsurePathConfigured() {
 }

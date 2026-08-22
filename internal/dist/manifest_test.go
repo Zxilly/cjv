@@ -25,11 +25,58 @@ func TestParseManifest(t *testing.T) {
 	// STS channel
 	assert.NotEmpty(t, m.Channels.STS.Latest)
 	assert.NotEmpty(t, m.Channels.STS.Versions)
+	assert.False(t, m.HasChannel(toolchain.Nightly))
 
 	// Check platform entries for a specific version
 	v, ok := m.Channels.LTS.Versions[m.Channels.LTS.Latest]
 	require.True(t, ok)
 	assert.NotEmpty(t, v)
+}
+
+func TestParseManifestWithNightlyChannel(t *testing.T) {
+	validHash := strings.Repeat("ab", 32)
+	const nightlyVersion = "1.2.0-alpha.20260822010101"
+	json := `{
+  "channels": {
+    "lts": {"latest":"1.0.0","versions":{"1.0.0":{"linux-x64":{"name":"lts.tar.gz","sha256":"` + validHash + `","url":"sdk/lts.tar.gz"}}}},
+    "sts": {"latest":"1.1.0","versions":{"1.1.0":{"linux-x64":{"name":"sts.tar.gz","sha256":"` + validHash + `","url":"sdk/sts.tar.gz"}}}},
+    "nightly": {
+      "latest": "` + nightlyVersion + `",
+      "versions": {
+        "` + nightlyVersion + `": {
+          "linux-x64": {
+            "name": "nightly.tar.gz",
+            "sha256": "` + validHash + `",
+            "url": "nightly/nightly.tar.gz",
+            "release_tag": "nightly-20260822"
+          }
+        }
+      },
+      "components": {
+        "` + nightlyVersion + `": {
+          "docs": {
+            "name": "docs.tar.gz",
+            "url": "nightly/docs.tar.gz",
+            "sha256": "` + validHash + `"
+          }
+        }
+      }
+    }
+  }
+}`
+
+	m, err := ParseManifest([]byte(json))
+	require.NoError(t, err)
+	assert.True(t, m.HasChannel(toolchain.Nightly))
+	latest, err := m.GetLatestVersion(toolchain.Nightly)
+	require.NoError(t, err)
+	assert.Equal(t, nightlyVersion, latest)
+	info, err := m.GetDownloadInfo(toolchain.Nightly, nightlyVersion, "linux-x64")
+	require.NoError(t, err)
+	assert.Equal(t, "nightly-20260822", info.ReleaseTag)
+	docs, err := m.ComponentDownload(toolchain.Nightly, nightlyVersion, "docs", "")
+	require.NoError(t, err)
+	assert.Equal(t, validHash, docs.SHA256)
 }
 
 func TestManifestGetDownloadInfo(t *testing.T) {

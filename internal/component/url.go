@@ -20,17 +20,26 @@ import (
 // stdx asset version), so the manifest carries verbatim links rather than a
 // reconstruction. mf is required for LTS / STS and ignored for nightly.
 func ResolveAssetURL(spec Spec, tc toolchain.ToolchainName, tuple string, mf *dist.Manifest) (string, error) {
+	info, err := ResolveAssetInfo(spec, tc, tuple, mf)
+	if err != nil {
+		return "", err
+	}
+	return info.URL, nil
+}
+
+// ResolveAssetInfo resolves the complete component artifact descriptor.
+func ResolveAssetInfo(spec Spec, tc toolchain.ToolchainName, tuple string, mf *dist.Manifest) (dist.ComponentInfo, error) {
 	if !spec.SupportsChannel(tc.Channel) {
-		return "", &cjverr.ComponentNotAvailableForChannelError{
+		return dist.ComponentInfo{}, &cjverr.ComponentNotAvailableForChannelError{
 			Component: string(spec.Name),
 			Channel:   tc.Channel.String(),
 		}
 	}
 	if tc.Version == "" {
-		return "", fmt.Errorf("component %q requires a resolved toolchain version", spec.Name)
+		return dist.ComponentInfo{}, fmt.Errorf("component %q requires a resolved toolchain version", spec.Name)
 	}
 	if tc.Channel == toolchain.Nightly {
-		return nightlyComponentURL(spec.Name, tc, tuple)
+		return nightlyComponentInfo(spec.Name, tc, tuple)
 	}
 	return manifestComponentURL(mf, spec.Name, tc, tuple)
 }
@@ -38,36 +47,36 @@ func ResolveAssetURL(spec Spec, tc toolchain.ToolchainName, tuple string, mf *di
 // manifestComponentURL looks up the LTS / STS component link in the manifest.
 // For stdx it keys on the archive platform token derived from tuple; docs /
 // stdx-docs have a single archive per version.
-func manifestComponentURL(mf *dist.Manifest, name Name, tc toolchain.ToolchainName, tuple string) (string, error) {
+func manifestComponentURL(mf *dist.Manifest, name Name, tc toolchain.ToolchainName, tuple string) (dist.ComponentInfo, error) {
 	if mf == nil {
-		return "", fmt.Errorf("component %q requires the version manifest", name)
+		return dist.ComponentInfo{}, fmt.Errorf("component %q requires the version manifest", name)
 	}
 	platform := ""
 	if name == Stdx {
 		p, err := stdxPlatform(tuple)
 		if err != nil {
-			return "", err
+			return dist.ComponentInfo{}, err
 		}
 		platform = p
 	}
 	info, err := mf.ComponentDownload(tc.Channel, tc.Version, string(name), platform)
 	if err != nil {
-		return "", err
+		return dist.ComponentInfo{}, err
 	}
-	return info.URL, nil
+	return *info, nil
 }
 
 // nightlyComponentURL constructs the component URL for a nightly toolchain from
 // the release metadata recorded at install time. The stdx asset carries the
 // extra `.1` stdx revision suffix; docs does not.
-func nightlyComponentURL(name Name, tc toolchain.ToolchainName, tuple string) (string, error) {
+func nightlyComponentInfo(name Name, tc toolchain.ToolchainName, tuple string) (dist.ComponentInfo, error) {
 	nightly := nightlyReleaseAsset(tc)
 	var asset string
 	switch name {
 	case Stdx:
 		platform, err := stdxPlatform(tuple)
 		if err != nil {
-			return "", err
+			return dist.ComponentInfo{}, err
 		}
 		asset = fmt.Sprintf("cangjie-stdx-%s-%s.1.zip", platform, nightly.Version)
 	case Docs:
@@ -75,9 +84,13 @@ func nightlyComponentURL(name Name, tc toolchain.ToolchainName, tuple string) (s
 	case StdxDocs:
 		asset = fmt.Sprintf("cangjie-stdx-docs-html-%s.1.tar.gz", nightly.Version)
 	default:
-		return "", &cjverr.UnknownComponentError{Name: string(name)}
+		return dist.ComponentInfo{}, &cjverr.UnknownComponentError{Name: string(name)}
 	}
-	return joinReleaseURL(dist.DefaultNightlyBaseURL, nightly.ReleaseTag, asset)
+	assetURL, err := joinReleaseURL(dist.DefaultNightlyBaseURL, nightly.ReleaseTag, asset)
+	if err != nil {
+		return dist.ComponentInfo{}, err
+	}
+	return dist.ComponentInfo{Name: asset, URL: assetURL}, nil
 }
 
 func stdxPlatform(tuple string) (string, error) {

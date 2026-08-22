@@ -34,10 +34,11 @@ var toolchainListRemoteCmd = &cobra.Command{
 }
 
 type toolchainListRemoteEntry struct {
-	Channel  string   `json:"channel"`
-	Latest   string   `json:"latest,omitempty"`
-	Versions []string `json:"versions"`
-	Error    string   `json:"error,omitempty"`
+	Channel       string   `json:"channel"`
+	Latest        string   `json:"latest,omitempty"`
+	Versions      []string `json:"versions"`
+	Error         string   `json:"error,omitempty"`
+	PlatformAware bool     `json:"-"`
 }
 
 type toolchainListRemoteResult struct {
@@ -50,8 +51,8 @@ type platformVersionsEntry struct {
 	Versions []string `json:"versions"`
 }
 
-// LTS/STS populate Platforms; nightly populates Versions (single resolved SDK
-// version) — nightly latest is platform-orthogonal and has no per-platform breakdown.
+// Manifest-backed channels populate Platforms. Legacy nightly populates
+// Versions because the GitCode latest endpoint has no per-platform catalog.
 type toolchainListRemoteAllPlatformsEntry struct {
 	Channel   string                  `json:"channel"`
 	Latest    string                  `json:"latest,omitempty"`
@@ -110,21 +111,18 @@ func runToolchainListRemoteSingle(ctx context.Context, cmd *cobra.Command, setti
 	needSTS := allChannels || channel == toolchain.STS
 	needNightly := allChannels || channel == toolchain.Nightly
 
-	var manifest *dist.Manifest
-	if needLTS || needSTS {
-		manifest, err = fetchManifest(ctx, settings.ManifestURL)
-		if err != nil {
-			return err
-		}
+	source, err := dist.NewSource(settings)
+	if err != nil {
+		return err
 	}
 	if needLTS {
-		result.Channels = append(result.Channels, buildSingleChannelEntry(manifest, toolchain.LTS, tuple))
+		result.Channels = append(result.Channels, buildSourceChannelEntry(ctx, source, toolchain.LTS, tuple))
 	}
 	if needSTS {
-		result.Channels = append(result.Channels, buildSingleChannelEntry(manifest, toolchain.STS, tuple))
+		result.Channels = append(result.Channels, buildSourceChannelEntry(ctx, source, toolchain.STS, tuple))
 	}
 	if needNightly {
-		entry := buildNightlyEntry(ctx, settings)
+		entry := buildSourceChannelEntry(ctx, source, toolchain.Nightly, tuple)
 		// When the user explicitly asks for only the nightly channel and it
 		// fails, propagate the error so CI gets a non-zero exit code.
 		if !allChannels && entry.Error != "" {
@@ -134,6 +132,25 @@ func runToolchainListRemoteSingle(ctx context.Context, cmd *cobra.Command, setti
 	}
 
 	return output.RenderTo(cmdOutput(cmd), result)
+}
+
+func buildSourceChannelEntry(ctx context.Context, source *dist.Source, ch toolchain.Channel, tuple string) toolchainListRemoteEntry {
+	entry := toolchainListRemoteEntry{
+		Channel:       ch.String(),
+		Versions:      []string{},
+		PlatformAware: ch != toolchain.Nightly || source.Unified(),
+	}
+	latest, versions, err := source.ChannelVersions(ctx, ch, tuple)
+	if err != nil {
+		entry.Error = err.Error()
+		return entry
+	}
+	if toolchainListRemoteLimit > 0 && len(versions) > toolchainListRemoteLimit {
+		versions = versions[:toolchainListRemoteLimit]
+	}
+	entry.Latest = latest
+	entry.Versions = versions
+	return entry
 }
 
 // resolveListRemoteTuple mirrors install's --target semantics: an empty
@@ -148,41 +165,6 @@ func resolveListRemoteTuple(settings *config.Settings) (string, error) {
 	return dist.CurrentTargetTuple(settings.DefaultHost, target)
 }
 
-func buildSingleChannelEntry(m *dist.Manifest, ch toolchain.Channel, tuple string) toolchainListRemoteEntry {
-	entry := toolchainListRemoteEntry{
-		Channel:  ch.String(),
-		Versions: []string{},
-	}
-	versions, err := m.ListVersions(ch, tuple)
-	if err != nil {
-		entry.Error = err.Error()
-		return entry
-	}
-	if toolchainListRemoteLimit > 0 && len(versions) > toolchainListRemoteLimit {
-		versions = versions[:toolchainListRemoteLimit]
-	}
-	entry.Versions = versions
-	if latest, lErr := m.GetLatestVersion(ch); lErr == nil {
-		entry.Latest = latest
-	}
-	return entry
-}
-
-func buildNightlyEntry(ctx context.Context, settings *config.Settings) toolchainListRemoteEntry {
-	entry := toolchainListRemoteEntry{
-		Channel:  toolchain.Nightly.String(),
-		Versions: []string{},
-	}
-	version, err := dist.FetchLatestNightly(ctx, dist.DefaultNightlyAPIURL, settings.ResolveGitCodeAPIKey())
-	if err != nil {
-		entry.Error = err.Error()
-		return entry
-	}
-	entry.Latest = version
-	entry.Versions = []string{version}
-	return entry
-}
-
 func runToolchainListRemoteAllPlatforms(ctx context.Context, cmd *cobra.Command, settings *config.Settings, channel toolchain.Channel, allChannels bool) error {
 	needLTS := allChannels || channel == toolchain.LTS
 	needSTS := allChannels || channel == toolchain.STS
@@ -193,22 +175,18 @@ func runToolchainListRemoteAllPlatforms(ctx context.Context, cmd *cobra.Command,
 		Channels:     []toolchainListRemoteAllPlatformsEntry{},
 	}
 
-	var manifest *dist.Manifest
-	var err error
-	if needLTS || needSTS {
-		manifest, err = fetchManifest(ctx, settings.ManifestURL)
-		if err != nil {
-			return err
-		}
+	source, err := dist.NewSource(settings)
+	if err != nil {
+		return err
 	}
 	if needLTS {
-		result.Channels = append(result.Channels, buildAllPlatformsChannelEntry(manifest, toolchain.LTS))
+		result.Channels = append(result.Channels, buildSourceAllPlatformsEntry(ctx, source, toolchain.LTS))
 	}
 	if needSTS {
-		result.Channels = append(result.Channels, buildAllPlatformsChannelEntry(manifest, toolchain.STS))
+		result.Channels = append(result.Channels, buildSourceAllPlatformsEntry(ctx, source, toolchain.STS))
 	}
 	if needNightly {
-		entry := buildNightlyAllPlatformsEntry(ctx, settings)
+		entry := buildSourceAllPlatformsEntry(ctx, source, toolchain.Nightly)
 		if !allChannels && entry.Error != "" {
 			return errors.New(entry.Error)
 		}
@@ -218,49 +196,31 @@ func runToolchainListRemoteAllPlatforms(ctx context.Context, cmd *cobra.Command,
 	return output.RenderTo(cmdOutput(cmd), result)
 }
 
-func buildAllPlatformsChannelEntry(m *dist.Manifest, ch toolchain.Channel) toolchainListRemoteAllPlatformsEntry {
+func buildSourceAllPlatformsEntry(ctx context.Context, source *dist.Source, ch toolchain.Channel) toolchainListRemoteAllPlatformsEntry {
 	entry := toolchainListRemoteAllPlatformsEntry{Channel: ch.String()}
-	if latest, lErr := m.GetLatestVersion(ch); lErr == nil {
-		entry.Latest = latest
-	}
-	pkVersions, err := m.VersionsByTuple(ch)
-	if err != nil {
-		entry.Error = err.Error()
-		return entry
-	}
-	keys := make([]string, 0, len(pkVersions))
-	for k := range pkVersions {
-		keys = append(keys, k)
-	}
-	// Lexical sort yields host alphabetic, with bare "linux-x64" preceding
-	// "linux-x64-ohos" because '-' (0x2D) sorts after end-of-string.
-	sort.Strings(keys)
-
-	platforms := make([]platformVersionsEntry, 0, len(keys))
-	for _, pk := range keys {
-		versions := pkVersions[pk]
-		if toolchainListRemoteLimit > 0 && len(versions) > toolchainListRemoteLimit {
-			versions = versions[:toolchainListRemoteLimit]
-		}
-		platforms = append(platforms, platformVersionsEntry{
-			Target:   pk,
-			Versions: versions,
-		})
-	}
-	entry.Platforms = platforms
-	return entry
-}
-
-func buildNightlyAllPlatformsEntry(ctx context.Context, settings *config.Settings) toolchainListRemoteAllPlatformsEntry {
-	entry := toolchainListRemoteAllPlatformsEntry{Channel: toolchain.Nightly.String()}
-	version, err := dist.FetchLatestNightly(ctx, dist.DefaultNightlyAPIURL, settings.ResolveGitCodeAPIKey())
+	latest, grouped, hasPlatforms, err := source.ChannelVersionsByTuple(ctx, ch)
 	if err != nil {
 		entry.Error = err.Error()
 		entry.Versions = []string{}
 		return entry
 	}
-	entry.Latest = version
-	entry.Versions = []string{version}
+	entry.Latest = latest
+	if !hasPlatforms {
+		entry.Versions = grouped[""]
+		return entry
+	}
+	keys := make([]string, 0, len(grouped))
+	for key := range grouped {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	for _, key := range keys {
+		versions := grouped[key]
+		if toolchainListRemoteLimit > 0 && len(versions) > toolchainListRemoteLimit {
+			versions = versions[:toolchainListRemoteLimit]
+		}
+		entry.Platforms = append(entry.Platforms, platformVersionsEntry{Target: key, Versions: versions})
+	}
 	return entry
 }
 
@@ -284,7 +244,7 @@ func (r toolchainListRemoteResult) Text() string {
 func writeSingleChannelHeader(b *strings.Builder, e toolchainListRemoteEntry, tuple string) {
 	// Nightly is platform-orthogonal — show the channel header without
 	// Target to avoid implying that the tag was filtered by platform.
-	withPlatform := e.Channel != toolchain.Nightly.String() && e.Latest != ""
+	withPlatform := e.PlatformAware && e.Latest != ""
 	switch {
 	case withPlatform:
 		fmt.Fprintln(b, i18n.T("ListRemoteChannelHeaderTarget", i18n.MsgData{
@@ -349,7 +309,7 @@ func writeAllPlatformsChannelBody(b *strings.Builder, e toolchainListRemoteAllPl
 		fmt.Fprintln(b, "  "+color.YellowString("(%s)", e.Error))
 		return
 	}
-	if e.Channel == toolchain.Nightly.String() {
+	if e.Channel == toolchain.Nightly.String() && len(e.Platforms) == 0 {
 		writeVersionLines(b, e.Versions, e.Latest, "  ")
 		return
 	}

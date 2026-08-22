@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 
 	"github.com/BurntSushi/toml"
 	"github.com/Zxilly/cjv/internal/i18n"
@@ -34,6 +35,7 @@ type Settings struct {
 	Home             string            `toml:"home,omitempty"`
 	DefaultToolchain string            `toml:"default_toolchain"`
 	ManifestURL      string            `toml:"manifest_url"`
+	DistServer       string            `toml:"dist_server,omitempty"`
 	AutoSelfUpdate   string            `toml:"auto_self_update"`
 	AutoInstall      bool              `toml:"auto_install"`
 	DefaultHost      string            `toml:"default_host,omitempty"`
@@ -94,10 +96,9 @@ func decodeSettingsTOML(data []byte) (Settings, toml.MetaData, error) {
 // settings version or a typo'd key is caught identically wherever the file
 // lives.
 //
-// It deliberately does NOT inject environment overrides (e.g. the GitCode API
-// key); those are resolved at access time via ResolveGitCodeAPIKey so an
-// ephemeral env-provided secret is never persisted back into settings.toml by
-// a later Save.
+// It deliberately does NOT inject environment overrides (for example the
+// GitCode API key or dist server); those are resolved at access time so an
+// ephemeral process-level override is never persisted by a later Save.
 func applyDecodedSettings(s *Settings, md toml.MetaData) error {
 	for _, key := range md.Undecoded() {
 		slog.Warn(i18n.T("UnknownSettingsField", i18n.MsgData{
@@ -135,6 +136,16 @@ func (s *Settings) ResolveGitCodeAPIKey() string {
 		return v
 	}
 	return s.GitCodeAPIKey
+}
+
+// ResolveDistServer returns the unified distribution server configured for all
+// toolchain channels. The environment override is intentionally resolved at
+// access time so managed CI jobs can select a source without persisting it.
+func (s *Settings) ResolveDistServer() string {
+	if v := strings.TrimSpace(os.Getenv(EnvDistServer)); v != "" {
+		return v
+	}
+	return strings.TrimSpace(s.DistServer)
 }
 
 // migrateSettings applies in-memory migrations from older settings versions

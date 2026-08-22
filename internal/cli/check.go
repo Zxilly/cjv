@@ -83,23 +83,15 @@ func runCheck(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	var latestNightly string
-	var nightlyErr error
-	for _, name := range installed {
-		parsed, parseErr := toolchain.ParseToolchainName(name)
-		if parseErr == nil && parsed.Channel == toolchain.Nightly {
-			latestNightly, nightlyErr = dist.FetchLatestNightly(ctx, dist.DefaultNightlyAPIURL, settings.ResolveGitCodeAPIKey())
-			break
-		}
+	source, err := dist.NewSource(settings)
+	if err != nil {
+		return err
 	}
 
 	tuple, err := dist.CurrentHostTuple(settings.DefaultHost)
 	if err != nil {
 		return err
 	}
-
-	var manifest *dist.Manifest
-	var manifestErr error
 
 	result := checkResult{CjvVersion: version}
 
@@ -109,32 +101,6 @@ func runCheck(cmd *cobra.Command, args []string) error {
 			continue
 		}
 
-		if parsed.Channel == toolchain.Nightly {
-			if nightlyErr != nil {
-				result.Toolchains = append(result.Toolchains, checkEntry{Name: name, Error: nightlyErr.Error()})
-				continue
-			}
-			latestName := toolchain.ToolchainName{
-				Channel: toolchain.Nightly,
-				Version: latestNightly,
-				Target:  parsed.Target,
-			}.String()
-			entry := checkEntry{Name: name, Latest: latestName}
-			if latestName != name {
-				entry.UpdateAvailable = true
-				result.HasUpdates = true
-			}
-			result.Toolchains = append(result.Toolchains, entry)
-			continue
-		}
-
-		if manifest == nil && manifestErr == nil {
-			manifest, manifestErr = fetchManifest(ctx, settings.ManifestURL)
-		}
-		if manifestErr != nil {
-			return manifestErr
-		}
-
 		infoTuple := tuple
 		target := ""
 		if parsed.Target != "" {
@@ -142,7 +108,7 @@ func runCheck(cmd *cobra.Command, args []string) error {
 			target = parsed.Target
 		}
 
-		latest, err := latestVersion(manifest, parsed.Channel, infoTuple)
+		latest, err := source.LatestAvailableVersion(ctx, parsed.Channel, infoTuple)
 		if err != nil {
 			entry := checkEntry{Name: name}
 			if unavailable, ok := errors.AsType[*cjverr.VersionNotAvailableError](err); ok {
@@ -162,15 +128,6 @@ func runCheck(cmd *cobra.Command, args []string) error {
 		latestName := toolchain.ToolchainName{Channel: parsed.Channel, Version: latest, Target: target}.String()
 		entry := checkEntry{Name: name, Latest: latestName}
 		if latestName != name {
-			_, err = manifest.GetDownloadInfo(parsed.Channel, latest, infoTuple)
-			if err != nil {
-				if _, ok := errors.AsType[*cjverr.VersionNotAvailableError](err); ok {
-					entry.NotForTarget = true
-					entry.Target = infoTuple
-				}
-				result.Toolchains = append(result.Toolchains, entry)
-				continue
-			}
 			entry.UpdateAvailable = true
 			result.HasUpdates = true
 		}

@@ -12,9 +12,26 @@ import (
 func TestSettingsDefault(t *testing.T) {
 	s := DefaultSettings()
 	assert.Equal(t, "", s.DefaultToolchain)
+	assert.Empty(t, s.DistServer)
 	assert.Equal(t, DefaultManifestURL, s.ManifestURL)
 	assert.Equal(t, "check", s.AutoSelfUpdate)
 	assert.True(t, s.AutoInstall)
+}
+
+func TestResolveDistServerPrefersEnvironment(t *testing.T) {
+	s := DefaultSettings()
+	s.DistServer = "https://settings.example.com/cjv"
+	t.Setenv(EnvDistServer, " https://env.example.com/cjv/ ")
+
+	assert.Equal(t, "https://env.example.com/cjv/", s.ResolveDistServer())
+}
+
+func TestResolveDistServerUsesSettings(t *testing.T) {
+	s := DefaultSettings()
+	s.DistServer = " https://settings.example.com/cjv/ "
+	t.Setenv(EnvDistServer, "")
+
+	assert.Equal(t, "https://settings.example.com/cjv/", s.ResolveDistServer())
 }
 
 func TestSettingsRoundTrip(t *testing.T) {
@@ -23,6 +40,7 @@ func TestSettingsRoundTrip(t *testing.T) {
 
 	s := DefaultSettings()
 	s.DefaultToolchain = "lts-1.0.5"
+	s.DistServer = "https://dist.example.com/cjv"
 	s.Overrides = map[string]string{
 		"/home/user/project": "nightly-1.1.0-alpha.20260306010001",
 	}
@@ -32,6 +50,7 @@ func TestSettingsRoundTrip(t *testing.T) {
 	loaded, err := LoadSettings(path)
 	require.NoError(t, err)
 	assert.Equal(t, "lts-1.0.5", loaded.DefaultToolchain)
+	assert.Equal(t, "https://dist.example.com/cjv", loaded.DistServer)
 	assert.Equal(t, "nightly-1.1.0-alpha.20260306010001", loaded.Overrides["/home/user/project"])
 	assert.Equal(t, DefaultManifestURL, loaded.ManifestURL)
 }

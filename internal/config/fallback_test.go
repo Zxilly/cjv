@@ -100,6 +100,7 @@ func TestFallback_AllFieldsMerge(t *testing.T) {
 	fbPath := filepath.Join(tmp, "fallback.toml")
 	require.NoError(t, os.WriteFile(fbPath, []byte(`
 default_toolchain = "nightly"
+dist_server = "https://dist.example.com/cjv"
 manifest_url = "https://fallback.example.com"
 auto_self_update = "enable"
 auto_install = false
@@ -111,9 +112,23 @@ auto_install = false
 	require.NoError(t, err)
 
 	assert.Equal(t, "nightly", s.DefaultToolchain)
+	assert.Equal(t, "https://dist.example.com/cjv", s.DistServer)
 	assert.Equal(t, "https://fallback.example.com", s.ManifestURL)
 	assert.Equal(t, "enable", s.AutoSelfUpdate)
 	assert.False(t, s.AutoInstall)
+}
+
+func TestFallback_UserDistServerTakesPriority(t *testing.T) {
+	tmp := t.TempDir()
+	userPath := filepath.Join(tmp, "user.toml")
+	require.NoError(t, os.WriteFile(userPath, []byte(`dist_server = "https://user.example.com/cjv"`), 0o644))
+	fbPath := filepath.Join(tmp, "fallback.toml")
+	require.NoError(t, os.WriteFile(fbPath, []byte(`dist_server = "https://fallback.example.com/cjv"`), 0o644))
+	t.Setenv(EnvFallbackSettings, fbPath)
+
+	s, _, err := LoadSettingsWithFallback(userPath)
+	require.NoError(t, err)
+	assert.Equal(t, "https://user.example.com/cjv", s.DistServer)
 }
 
 func TestFallback_UserFileNotExistStillMerges(t *testing.T) {

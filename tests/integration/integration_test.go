@@ -58,6 +58,14 @@ func writeIntegrationSettings(t *testing.T, cjvHome string, serverURL string) {
 	require.NoError(t, os.WriteFile(filepath.Join(settingsDir, "settings.toml"), []byte(settingsContent), 0o644))
 }
 
+func writeUnifiedIntegrationSettings(t *testing.T, cjvHome string, distServer string) {
+	t.Helper()
+	settingsContent := fmt.Sprintf("dist_server = %q\nauto_install = false\nauto_self_update = \"disable\"\n", distServer)
+	settingsDir := filepath.Join(cjvHome, ".cjv")
+	require.NoError(t, os.MkdirAll(settingsDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(settingsDir, "settings.toml"), []byte(settingsContent), 0o644))
+}
+
 func copyBinary(t *testing.T, src, dst string) {
 	t.Helper()
 	require.NoError(t, utils.CopyFile(src, dst, 0o755))
@@ -179,6 +187,31 @@ func TestIntegrationInstallFlow(t *testing.T) {
 	stdout, _, err = runCJV(t, binary, cjvHome, "toolchain", "list")
 	require.NoError(t, err)
 	assert.Contains(t, stdout, "No toolchains installed")
+}
+
+func TestIntegrationUnifiedDistServerInstallsNightlyWithoutGitCode(t *testing.T) {
+	binary := buildCJV(t)
+	sdkArchive, sdkHash := testutil.CreateMockSDKZip("1.2.0-alpha.20260822010101")
+	server := newUnifiedNightlyServer(t, sdkArchive, sdkHash)
+	cjvHome := t.TempDir()
+	writeUnifiedIntegrationSettings(t, cjvHome, server.URL+"/corp/cjv")
+	binDir := filepath.Join(cjvHome, "bin")
+	require.NoError(t, os.MkdirAll(binDir, 0o755))
+	managedName := "cjv"
+	if runtime.GOOS == "windows" {
+		managedName += ".exe"
+	}
+	copyBinary(t, binary, filepath.Join(binDir, managedName))
+
+	extraEnv := []string{"CJV_NO_PATH_SETUP=1", "CJV_GITCODE_API_KEY="}
+	stdout, stderr, err := runCJVEnv(t, binary, cjvHome, extraEnv, "toolchain", "list-remote", "--channel", "nightly")
+	require.NoError(t, err, "list-remote failed: stdout=%s stderr=%s", stdout, stderr)
+	assert.Contains(t, stdout, "1.2.0-alpha.20260822010101")
+
+	stdout, stderr, err = runCJVEnv(t, binary, cjvHome, extraEnv, "install", "nightly")
+	require.NoError(t, err, "nightly install failed: stdout=%s stderr=%s", stdout, stderr)
+	assert.Contains(t, stdout, "nightly-1.2.0-alpha.20260822010101")
+	assert.DirExists(t, filepath.Join(cjvHome, "toolchains", "nightly-1.2.0-alpha.20260822010101"))
 }
 
 func TestIntegrationInstallBootstrapsManagedBinaryAndSelfUpdate(t *testing.T) {

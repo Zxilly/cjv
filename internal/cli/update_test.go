@@ -78,6 +78,26 @@ func TestUpdateSingle_ChannelName(t *testing.T) {
 	assert.NoError(t, err)
 }
 
+func TestUpdateSingle_NightlyUsesUnifiedDistServer(t *testing.T) {
+	home := t.TempDir()
+	config.IsolateForTest(t, home)
+	require.NoError(t, config.EnsureDirs())
+	t.Setenv(config.EnvGitCodeAPIKey, "")
+
+	oldName := "nightly-1.1.0-alpha.20260821010101"
+	require.NoError(t, os.MkdirAll(filepath.Join(home, "toolchains", oldName), 0o755))
+	server := unifiedNightlyMockServer(t)
+	settings := config.DefaultSettings()
+	settings.DistServer = server.URL + "/corp/cjv"
+	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
+
+	updates, err := updateSingle(context.Background(), "nightly")
+	require.NoError(t, err)
+	require.Len(t, updates, 1)
+	assert.Equal(t, oldName, updates[0].From)
+	assert.Equal(t, "nightly-1.2.0-alpha.20260822010101", updates[0].To)
+}
+
 func TestUpdateSingle_TargetVariantUpdatesVariant(t *testing.T) {
 	home := t.TempDir()
 	config.IsolateForTest(t, home)

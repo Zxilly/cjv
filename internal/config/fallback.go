@@ -76,6 +76,9 @@ func mergeFromFallback(user, fallback *Settings, meta toml.MetaData) {
 	if !meta.IsDefined("manifest_url") && fallback.ManifestURL != "" {
 		user.ManifestURL = fallback.ManifestURL
 	}
+	if !meta.IsDefined("dist_server") && fallback.DistServer != "" {
+		user.DistServer = fallback.DistServer
+	}
 	if !meta.IsDefined("auto_self_update") && fallback.AutoSelfUpdate != "" {
 		user.AutoSelfUpdate = fallback.AutoSelfUpdate
 	}

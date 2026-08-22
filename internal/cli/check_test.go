@@ -1,11 +1,14 @@
 package cli
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
 
+	"github.com/Zxilly/cjv/internal/cli/output"
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
@@ -41,6 +44,33 @@ func TestRunCheck_WithInstalledToolchain(t *testing.T) {
 	cmd.SetContext(context.Background())
 	err := runCheck(cmd, nil)
 	assert.NoError(t, err)
+}
+
+func TestRunCheck_NightlyUsesUnifiedDistServer(t *testing.T) {
+	home := t.TempDir()
+	config.IsolateForTest(t, home)
+	require.NoError(t, config.EnsureDirs())
+	t.Setenv(config.EnvGitCodeAPIKey, "")
+
+	server := unifiedNightlyMockServer(t)
+	settings := config.DefaultSettings()
+	settings.DistServer = server.URL + "/corp/cjv"
+	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
+	require.NoError(t, InstallToolchainWithOptions(context.Background(), "nightly", false))
+
+	cmd := &cobra.Command{}
+	cmd.SetContext(context.Background())
+	buf := &bytes.Buffer{}
+	cmd.SetOut(buf)
+	output.SetJSONMode(true)
+	t.Cleanup(func() { output.SetJSONMode(false) })
+	require.NoError(t, runCheck(cmd, nil))
+
+	var got checkResult
+	require.NoError(t, json.Unmarshal(buf.Bytes(), &got))
+	require.Len(t, got.Toolchains, 1)
+	assert.Empty(t, got.Toolchains[0].Error)
+	assert.Equal(t, "nightly-1.2.0-alpha.20260822010101", got.Toolchains[0].Latest)
 }
 
 func TestRunCheck_UpToDate(t *testing.T) {

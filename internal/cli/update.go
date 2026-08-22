@@ -147,12 +147,16 @@ func updateSingle(ctx context.Context, input string) ([]updateEntry, error) {
 		if err != nil {
 			return nil, err
 		}
+		fetcher, err := newManifestFetcherForSettings(settings)
+		if err != nil {
+			return nil, err
+		}
 		entry, updated, err := reinstallChannelForPlatform(ctx, reinstallRequest{
 			Channel:      name.Channel,
 			CurrentName:  currentName,
 			Settings:     settings,
 			SettingsFile: sf,
-			Fetcher:      newManifestFetcher(settings.ManifestURL),
+			Fetcher:      fetcher,
 			Target:       name.Target,
 		})
 		return updateEntries(entry, updated), err
@@ -171,7 +175,11 @@ func updateSingle(ctx context.Context, input string) ([]updateEntry, error) {
 		if err != nil {
 			return nil, err
 		}
-		entry, updated, err := reinstallChannel(ctx, name.Channel, installed, settings, sf, newManifestFetcher(settings.ManifestURL))
+		fetcher, err := newManifestFetcherForSettings(settings)
+		if err != nil {
+			return nil, err
+		}
+		entry, updated, err := reinstallChannel(ctx, name.Channel, installed, settings, sf, fetcher)
 		return updateEntries(entry, updated), err
 	}
 
@@ -204,7 +212,10 @@ func updateAll(ctx context.Context) (updateOutcome, error) {
 	}
 	outcome := updateOutcome{settingsFile: sf, settings: settings}
 
-	fetcher := newManifestFetcher(settings.ManifestURL)
+	fetcher, err := newManifestFetcherForSettings(settings)
+	if err != nil {
+		return updateOutcome{}, err
+	}
 	var manifestWarnOnce sync.Once
 
 	var errs []error
@@ -217,7 +228,7 @@ func updateAll(ctx context.Context) (updateOutcome, error) {
 		if parsed.IsCustom() || parsed.Channel == toolchain.UnknownChannel {
 			continue // skip custom/linked toolchains
 		}
-		if parsed.Channel != toolchain.Nightly {
+		if fetcher.usesManifestFor(parsed.Channel) {
 			if _, err := fetcher.get(ctx); err != nil {
 				manifestWarnOnce.Do(func() {
 					slog.Warn("manifest fetch failed; skipping non-nightly updates", "error", err)

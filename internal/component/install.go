@@ -20,6 +20,30 @@ import (
 // read from; it may be nil for nightly toolchains, whose URLs are constructed.
 // force=true reinstalls over an existing manifest.
 func Install(ctx context.Context, roots Roots, tc toolchain.ToolchainName, name Name, tuple, downloadsDir string, force bool, mf *dist.Manifest) (retErr error) {
+	return installWithResolver(ctx, roots, tc, name, tuple, downloadsDir, force, func(spec Spec) (dist.ComponentInfo, error) {
+		return ResolveAssetInfo(spec, tc, tuple, mf)
+	})
+}
+
+// InstallFromSource installs a component through the configured distribution
+// source. Unified sources resolve every channel from the shared manifest;
+// legacy nightly retains its historical release layout.
+func InstallFromSource(ctx context.Context, roots Roots, tc toolchain.ToolchainName, name Name, tuple, downloadsDir string, force bool, source *dist.Source) (retErr error) {
+	return installWithResolver(ctx, roots, tc, name, tuple, downloadsDir, force, func(spec Spec) (dist.ComponentInfo, error) {
+		platform := ""
+		if name == Stdx {
+			var err error
+			platform, err = stdxPlatform(tuple)
+			if err != nil {
+				return dist.ComponentInfo{}, err
+			}
+		}
+		nightly := nightlyReleaseAsset(tc)
+		return source.ResolveComponent(ctx, tc.Channel, tc.Version, string(name), platform, nightly.ReleaseTag)
+	})
+}
+
+func installWithResolver(ctx context.Context, roots Roots, tc toolchain.ToolchainName, name Name, tuple, downloadsDir string, force bool, resolve func(Spec) (dist.ComponentInfo, error)) (retErr error) {
 	spec, err := SpecFor(name)
 	if err != nil {
 		return err
@@ -39,22 +63,22 @@ func Install(ctx context.Context, roots Roots, tc toolchain.ToolchainName, name 
 		}
 	}
 
-	assetURL, err := ResolveAssetURL(spec, tc, tuple, mf)
+	asset, err := resolve(spec)
 	if err != nil {
 		return err
 	}
 	if err := os.MkdirAll(downloadsDir, 0o755); err != nil {
 		return err
 	}
-	if parsed, err := url.Parse(assetURL); err != nil || parsed.Path == "" {
-		return fmt.Errorf("invalid component asset URL: %s", assetURL)
+	if parsed, err := url.Parse(asset.URL); err != nil || parsed.Path == "" {
+		return fmt.Errorf("invalid component asset URL: %s", asset.URL)
 	}
 
 	fmt.Println(i18n.T("FetchingComponent", i18n.MsgData{
 		"Component": string(name),
 		"Toolchain": filepath.Base(roots.TcDir),
 	}))
-	archivePath, err := dist.DownloadCached(ctx, assetURL, "", downloadsDir)
+	archivePath, err := dist.DownloadCached(ctx, asset.URL, asset.SHA256, downloadsDir)
 	if err != nil {
 		return err
 	}

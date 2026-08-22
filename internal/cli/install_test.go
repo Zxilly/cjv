@@ -1,8 +1,10 @@
 package cli
 
 import (
+	"archive/tar"
 	"archive/zip"
 	"bytes"
+	"compress/gzip"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -65,6 +67,22 @@ func createMockSDKWithEnvSetup(includeEnvSetup bool) ([]byte, string) {
 	return buf.Bytes(), hex.EncodeToString(hash[:])
 }
 
+func createMockTarGz(t *testing.T, files map[string]string) ([]byte, string) {
+	t.Helper()
+	var buf bytes.Buffer
+	gz := gzip.NewWriter(&buf)
+	tw := tar.NewWriter(gz)
+	for name, content := range files {
+		require.NoError(t, tw.WriteHeader(&tar.Header{Name: name, Mode: 0o644, Size: int64(len(content))}))
+		_, err := tw.Write([]byte(content))
+		require.NoError(t, err)
+	}
+	require.NoError(t, tw.Close())
+	require.NoError(t, gz.Close())
+	sum := sha256.Sum256(buf.Bytes())
+	return buf.Bytes(), hex.EncodeToString(sum[:])
+}
+
 // Creates a mock distribution server with a valid manifest.
 func validMockServer(t *testing.T) *httptest.Server {
 	t.Helper()
@@ -113,6 +131,65 @@ func validMockServer(t *testing.T) *httptest.Server {
 		}
 	})
 
+	return server
+}
+
+func unifiedNightlyMockServer(t *testing.T) *httptest.Server {
+	t.Helper()
+	sdkData, sha := createMockSDK()
+	docsData, docsSHA := createMockTarGz(t, map[string]string{"index.html": "nightly docs"})
+	tuple, err := dist.CurrentHostTuple("")
+	require.NoError(t, err)
+
+	mux := http.NewServeMux()
+	server := httptest.NewServer(mux)
+	t.Cleanup(server.Close)
+
+	channel := dist.ChannelInfo{
+		Latest: "1.2.0-alpha.20260822010101",
+		Versions: map[string]map[string]dist.DownloadInfo{
+			"1.2.0-alpha.20260822010101": {
+				tuple: {
+					Name:       "nightly.zip",
+					SHA256:     sha,
+					URL:        "nightly/nightly.zip",
+					ReleaseTag: "nightly-20260822",
+				},
+			},
+		},
+		Components: map[string]dist.ComponentSet{
+			"1.2.0-alpha.20260822010101": {
+				Docs: &dist.ComponentInfo{
+					Name:   "docs.tar.gz",
+					URL:    "nightly/docs.tar.gz",
+					SHA256: docsSHA,
+				},
+			},
+		},
+	}
+	manifest := dist.Manifest{}
+	manifest.Channels.LTS = dist.ChannelInfo{
+		Latest:   "1.0.5",
+		Versions: map[string]map[string]dist.DownloadInfo{"1.0.5": {tuple: {Name: "lts.zip", SHA256: sha, URL: "sdk/lts.zip"}}},
+	}
+	manifest.Channels.STS = dist.ChannelInfo{
+		Latest:   "1.1.0",
+		Versions: map[string]map[string]dist.DownloadInfo{"1.1.0": {tuple: {Name: "sts.zip", SHA256: sha, URL: "sdk/sts.zip"}}},
+	}
+	manifest.Channels.Nightly = &channel
+
+	mux.HandleFunc("/corp/cjv/versions.json", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		require.NoError(t, json.NewEncoder(w).Encode(manifest))
+	})
+	mux.HandleFunc("/corp/cjv/nightly/nightly.zip", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/zip")
+		_, _ = w.Write(sdkData)
+	})
+	mux.HandleFunc("/corp/cjv/nightly/docs.tar.gz", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/gzip")
+		_, _ = w.Write(docsData)
+	})
 	return server
 }
 
@@ -248,6 +325,52 @@ func TestInstallToolchainWithOptions_InstallsLTS(t *testing.T) {
 	installed, err := toolchain.ListInstalled()
 	require.NoError(t, err)
 	assert.NotEmpty(t, installed, "should have at least one installed toolchain")
+}
+
+func TestInstallToolchainWithOptions_LTSHasNoNightlyReleaseMetadata(t *testing.T) {
+	home := t.TempDir()
+	config.IsolateForTest(t, home)
+	require.NoError(t, config.EnsureDirs())
+	server := validMockServer(t)
+	settings := config.DefaultSettings()
+	settings.ManifestURL = server.URL + "/sdk-versions.json"
+	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
+
+	require.NoError(t, InstallToolchainWithOptions(context.Background(), "lts", false))
+	_, err := toolchain.ReadNightlyReleaseMetadata(filepath.Join(home, "toolchains", "lts-1.0.5"))
+	require.Error(t, err)
+}
+
+func TestInstallToolchainWithOptions_InstallsNightlyFromUnifiedDistServer(t *testing.T) {
+	home := t.TempDir()
+	config.IsolateForTest(t, home)
+	require.NoError(t, config.EnsureDirs())
+	t.Setenv(config.EnvGitCodeAPIKey, "")
+
+	server := unifiedNightlyMockServer(t)
+	settings := config.DefaultSettings()
+	settings.DistServer = server.URL + "/corp/cjv"
+	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
+
+	require.NoError(t, InstallToolchainWithOptions(context.Background(), "nightly", false))
+	installed, err := toolchain.ListInstalled()
+	require.NoError(t, err)
+	assert.Contains(t, installed, "nightly-1.2.0-alpha.20260822010101")
+}
+
+func TestInstallToolchainWithExtras_InstallsNightlyComponentFromUnifiedDistServer(t *testing.T) {
+	home := t.TempDir()
+	config.IsolateForTest(t, home)
+	require.NoError(t, config.EnsureDirs())
+	t.Setenv(config.EnvGitCodeAPIKey, "")
+
+	server := unifiedNightlyMockServer(t)
+	settings := config.DefaultSettings()
+	settings.DistServer = server.URL + "/corp/cjv"
+	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
+
+	require.NoError(t, InstallToolchainWithExtras(context.Background(), "nightly", nil, []string{"docs"}, false))
+	assert.FileExists(t, filepath.Join(home, "docs", "nightly-1.2.0-alpha.20260822010101", "main", "index.html"))
 }
 
 func TestInstallToolchainWithTargets_InstallsHostAndTargets(t *testing.T) {
@@ -678,13 +801,13 @@ func TestInstallToolchainWithOptions_FailsWhenEnvSetupMissing(t *testing.T) {
 func TestFetchManifest_ValidManifest(t *testing.T) {
 	server := validMockServer(t)
 
-	manifest, err := fetchManifest(context.Background(), server.URL+"/sdk-versions.json")
+	manifest, err := dist.FetchManifest(context.Background(), server.URL+"/sdk-versions.json")
 	require.NoError(t, err)
 	assert.NotNil(t, manifest)
 }
 
 func TestFetchManifest_InvalidURL(t *testing.T) {
-	_, err := fetchManifest(context.Background(), "http://localhost:1/nonexistent")
+	_, err := dist.FetchManifest(context.Background(), "http://localhost:1/nonexistent")
 	assert.Error(t, err)
 }
 
@@ -694,7 +817,7 @@ func TestFetchManifest_HTTPError(t *testing.T) {
 	}))
 	defer server.Close()
 
-	_, err := fetchManifest(context.Background(), server.URL+"/sdk-versions.json")
+	_, err := dist.FetchManifest(context.Background(), server.URL+"/sdk-versions.json")
 	assert.Error(t, err, "should fail on HTTP 404")
 }
 

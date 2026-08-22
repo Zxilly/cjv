@@ -3,15 +3,10 @@ package cli
 import (
 	"context"
 	"fmt"
-	"io"
 	"log/slog"
-	"net"
-	"net/http"
-	"net/url"
 	"os"
 	"runtime"
 
-	"github.com/Zxilly/cjv/internal/cjverr"
 	"github.com/Zxilly/cjv/internal/cli/output"
 	"github.com/Zxilly/cjv/internal/cli/selfmgmt"
 	componentlib "github.com/Zxilly/cjv/internal/component"
@@ -131,8 +126,20 @@ func newManifestFetcher(url string) *manifestFetcher {
 	return &manifestFetcher{inner: lifecycle.NewManifestFetcher(url, lifecycleOptions())}
 }
 
+func newManifestFetcherForSettings(settings *config.Settings) (*manifestFetcher, error) {
+	inner, err := lifecycle.NewManifestFetcherForSettings(settings, lifecycleOptions())
+	if err != nil {
+		return nil, err
+	}
+	return &manifestFetcher{inner: inner}, nil
+}
+
 func (f *manifestFetcher) get(ctx context.Context) (*dist.Manifest, error) {
 	return f.inner.Get(ctx)
+}
+
+func (f *manifestFetcher) usesManifestFor(channel toolchain.Channel) bool {
+	return f.inner.UsesManifestFor(channel)
 }
 
 // InstallComponentsForToolchain backs the proxy auto_install path: it
@@ -215,87 +222,12 @@ func withNightlyChecksumHook(fn func() (resolvedToolchain, error)) (resolvedTool
 	return fn()
 }
 
-func latestVersion(manifest *dist.Manifest, channel toolchain.Channel, tuple string) (string, error) {
-	if tuple == "" {
-		return manifest.GetLatestVersion(channel)
-	}
-	versions, err := manifest.ListVersions(channel, tuple)
-	if err != nil {
-		return "", err
-	}
-	if len(versions) > 0 {
-		return versions[0], nil
-	}
-	latest, err := manifest.GetLatestVersion(channel)
-	if err != nil {
-		return "", err
-	}
-	return "", &cjverr.VersionNotAvailableError{Version: latest, Target: tuple}
-}
-
 // fetchNightlySHA256 is a package-level seam so tests can resolve a nightly
 // toolchain without reaching the network for the checksum sidecar.
 var fetchNightlySHA256 = dist.FetchNightlySHA256
 
 func resolveNightly(ctx context.Context, name toolchain.ToolchainName, settings *config.Settings, tuple string) (resolvedToolchain, error) {
 	return resolveAndLocate(ctx, name, settings, newManifestFetcher(settings.ManifestURL), tuple)
-}
-
-func fetchManifest(ctx context.Context, manifestURL string) (*dist.Manifest, error) {
-	u, err := url.Parse(manifestURL)
-	if err != nil {
-		return nil, fmt.Errorf("invalid manifest URL: %w", err)
-	}
-	switch u.Scheme {
-	case "https":
-		// ok
-	case "http":
-		// The manifest carries both the download URL and its sha256, so an
-		// attacker who can tamper with an unauthenticated HTTP manifest can
-		// swap both and defeat checksum verification. Only permit HTTP for
-		// loopback addresses (local mirrors / tests) unless the operator opts
-		// in for a trusted internal mirror.
-		if !isLoopbackHost(u.Hostname()) && os.Getenv(config.EnvAllowInsecureManifest) != "1" {
-			return nil, fmt.Errorf("refusing to fetch manifest over insecure HTTP from %q: use HTTPS, or set %s=1 to trust an internal mirror", u.Host, config.EnvAllowInsecureManifest)
-		}
-		slog.Warn("fetching manifest over insecure HTTP", "url", manifestURL)
-	default:
-		return nil, fmt.Errorf("invalid manifest URL scheme %q: only https and http are supported", u.Scheme)
-	}
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, manifestURL, nil)
-	if err != nil {
-		return nil, fmt.Errorf("create manifest request: %w", err)
-	}
-
-	resp, err := dist.HTTPClient().Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to fetch manifest: %w", err)
-	}
-	defer resp.Body.Close() //nolint:errcheck // best-effort cleanup
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("failed to fetch manifest: HTTP %d", resp.StatusCode)
-	}
-
-	data, err := io.ReadAll(io.LimitReader(resp.Body, dist.MaxResponseSize))
-	if err != nil {
-		return nil, err
-	}
-
-	return dist.ParseManifest(data)
-}
-
-// isLoopbackHost reports whether host refers to the local machine, so an HTTP
-// manifest served from a local mirror or test server is still permitted.
-func isLoopbackHost(host string) bool {
-	if host == "localhost" {
-		return true
-	}
-	if ip := net.ParseIP(host); ip != nil {
-		return ip.IsLoopback()
-	}
-	return false
 }
 
 // defaultToolchainExists checks whether the configured default toolchain is still installed.
