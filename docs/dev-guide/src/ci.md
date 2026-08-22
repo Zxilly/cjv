@@ -164,7 +164,9 @@ book 必须在 `pnpm build` 之后再构建，因为 `pnpm build` 会清空 `web
 1. 用 `Zxilly/actions-bbr` 打开 TCP BBR，提升上传带宽。
 2. `actions/checkout` 带 `fetch-depth: 0` 拿全部历史，GoReleaser 需要完整 tag 历史生成 changelog。
 3. 跑 GoReleaser(`args: release --clean`)，配置见仓库根目录的 `.goreleaser.yml`，它负责交叉编译、打包、生成 checksum、创建 GitHub Release。
-4. 尝试用 `Zxilly/upload-gitcode-release` 把 mirror 变体的产物(`dist/cjv-mirror_*` 和 `dist/checksums.txt`)单独传到 GitCode release。GitCode 仓库通过 Pull 镜像同步 GitHub 分支和 tag，Release 创建以镜像现有 `master` 为基点；GitCode 侧策略拒绝写入时记录失败，但不阻断 GitHub Release 与 Pages。
+4. 先把发布提交与 tag 显式推送到 GitCode，再用 `Zxilly/upload-gitcode-release` 把 mirror 变体的产物(`dist/cjv-mirror_*` 和 `dist/checksums.txt`)单独传到 GitCode release。代码、tag 或 Release 任一同步失败都会阻断发布。
+
+此外，`mirror.yml` 在每次 push 到 `master` 时把该提交显式推送到 GitCode，使普通提交同步不依赖发布 tag。
 
 `release` 之后有一个 `pages` job，`needs: release`，通过 `uses: ./.github/workflows/pages.yml` 复用上面的 Pages 工作流，在发布完成后重新部署一次落地页，让它指向最新的 release 产物。发布的完整流程见 [发布流程](releasing.md)。
 
