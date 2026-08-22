@@ -1,0 +1,46 @@
+name: Sync GitCode Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Stable release tag to synchronize
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  sync:
+    name: Sync release assets
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout release tag
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ inputs.tag }}
+          fetch-depth: 0
+      - name: Download mirror artifacts from GitHub
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          mkdir dist
+          gh release download "${RELEASE_TAG}" \
+            --dir dist \
+            --pattern 'cjv-mirror_*.tar.gz' \
+            --pattern 'cjv-mirror_*.zip' \
+            --pattern checksums.txt
+      - name: Upload mirror binaries to GitCode
+        uses: Zxilly/upload-gitcode-release@4ecd2bfd44008dd4f2b2487eda7a2e7bbbf12a1b # v1.0.0
+        with:
+          gitcode-token: ${{ secrets.GITCODE_TOKEN }}
+          target-repo: Zxilly/cjv
+          tag: ${{ inputs.tag }}
+          target-commitish: ${{ inputs.tag }}
+          body: "See https://github.com/Zxilly/cjv/releases/tag/${{ inputs.tag }} for the full changelog."
+          files: |
+            dist/cjv-mirror_*.tar.gz
+            dist/cjv-mirror_*.zip
+            dist/checksums.txt
