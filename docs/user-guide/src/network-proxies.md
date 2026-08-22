@@ -50,4 +50,4 @@ cjv 识别下列变量（大小写均可），与多数命令行工具一致：
 
 代理变量在 cjv 启动时从环境读取，因此请在运行 cjv **之前**于当前 shell 里设好（上面那种逐次 `https_proxy=… cjv …` 的前缀写法也可以）。
 
-相关：cjv 自身读取的 `CJV_*` 变量见[环境变量](environment-variables.md)。
+相关：cjv 自身读取的 `CJV_*` 变量见[环境变量](environment-variables.md)。需要自建 manifest、镜像 SDK 与组件或部署完全离线终端时，见[企业内网部署](enterprise-intranet.md)。

@@ -329,18 +329,16 @@ cjv toolchain link <name> <path|url> [--sha256 <hash>] [--force] [--no-stdx]
 Arguments:
 
 - `<name>` (required): the custom toolchain name. It must be a custom name, must not conflict with the reserved channel names `lts`, `sts`, or `nightly`, and must not contain path separators, a `+` prefix, or otherwise be an invalid name.
-- `<path|url>` (required): a local directory, a local archive file (`.zip` / `.tar.gz`), or an `http(s)://` URL. The command first checks whether the argument matches `^https?://`; otherwise it treats the path as local — a regular file is materialized, a directory is referenced.
+- `<path|url>` (required): a local directory, a local archive file (`.zip` / `.tar.gz`), or an HTTP(S) URL. A directory uses reference mode; an archive or URL uses materialize mode.
 
 Two behaviors:
 
 |Aspect|Reference mode (local directory)|Materialize mode (local archive / URL)|
 |------|--------------------------------|--------------------------------------|
 |`<path>` form|Local directory|Local archive `sdk.zip`, or `https://...`|
-|`toolchains/<name>` contents|Symlink / junction (falls back to junction on Windows)|The real directory materialized after extraction|
+|`toolchains/<name>` contents|References the source directory|An installation managed by cjv|
 |Data ownership|Not owned by cjv, only referenced|Owned by cjv|
 |Uninstall behavior|Only the link is deleted; the original directory is preserved|Deletes the entire directory (including stdx)|
-
-In materialize mode a local archive and a URL share the same extraction logic; the only difference is that a URL is downloaded and staged first, while a local archive is read in place and never deleted.
 
 Flags (materialize mode only; apply equally to a local archive and a URL):
 
@@ -367,7 +365,7 @@ cjv toolchain link mysdk https://example.com/sdk.zip \
   --sha256 <hash> --force --no-stdx
 ```
 
-For the full semantics of materialize mode (timing of name validation, bundled stdx, cross-system limitations, etc.), see [Installing a toolchain from a URL or archive](install-from-url.md). For linking a local stdx, see [Components](concepts/components.md).
+For archive formats, bundled stdx, and platform restrictions, see [Installing a toolchain from a URL or archive](install-from-url.md). For linking a local stdx, see [Components](concepts/components.md).
 
 ### `cjv toolchain uninstall`
 
@@ -421,7 +419,7 @@ cjv component link <name> <path> [--toolchain <tc>] [--force]
 |`--toolchain <tc>`|The target toolchain (defaults to the current active toolchain)|
 |`--force`|Replace an existing component installation (whether it was obtained via link or download)|
 
-`<path>` must be a directory with the extracted stdx layout, containing the two subdirectories `dynamic/` and `static/`. After linking, cjv creates symlinks under `<CJV_HOME>/stdx/<tc>/` (falling back to a junction on Windows), and `CANGJIE_STDX_PATH_DYNAMIC` / `CANGJIE_STDX_PATH_STATIC` are injected as usual. `cjv component remove` and uninstalling a toolchain only delete the symlinks and do not touch the original data.
+`<path>` must contain the `dynamic/` and `static/` subdirectories. Related environment variables are configured normally after linking; removing the component or uninstalling the toolchain does not delete the source directory.
 
 ```bash
 # A custom toolchain has no release assets, so use link to attach a local stdx
@@ -586,7 +584,7 @@ See [Configuration](configuration.md) and [Environment Variables](environment-va
 
 ### `cjv self update`
 
-Update cjv itself to the latest version, and refresh the proxy symlinks and the managed env scripts.
+Update cjv itself to the latest version.
 
 ```text
 cjv self update

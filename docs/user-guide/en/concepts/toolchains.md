@@ -77,7 +77,7 @@ Custom toolchains come from two sources, differing in who owns the data. See [Cu
 Whatever the form, a toolchain name must satisfy the following constraints, or the command reports an error:
 
 - must not be empty;
-- must not contain the path separators `/` or `\` (to prevent escaping outside the `toolchains/` directory);
+- must not contain the path separators `/` or `\`;
 - must not be `.` or `..`;
 - It cannot start with a `+` prefix. `+` is the toolchain selection syntax in commands like `cjv exec` and `cjv envsetup`; just write the name directly;
 - trailing `/` or `\` are stripped automatically.
@@ -90,7 +90,7 @@ Custom toolchains let you bring SDKs from outside the official source under cjv'
 
 ### Source 1: link a local directory (cjv does not own the data)
 
-The first way links in an existing local SDK directory. cjv creates a symlink under `<CJV_HOME>/toolchains/<name>/` pointing to your directory (on Windows it falls back to a directory junction), and does not copy any files:
+The first way references an existing local SDK directory without copying its files:
 
 ```bash
 cjv toolchain link my-sdk /path/to/local/sdk
@@ -102,7 +102,7 @@ Because it is only a link, the original data still belongs to you. Any change yo
 
 ### Source 2: install from an archive (cjv owns the data)
 
-When the second argument to `cjv toolchain link` is an archive — a local `.zip` / `.tar.gz` file, or an `http://` / `https://` URL — cjv extracts it and materializes the contents under `<CJV_HOME>/toolchains/<name>/`, producing an installation fully owned by cjv. A URL is downloaded and staged locally first, whereas a local archive is read in place and is never moved or deleted:
+When the second argument to `cjv toolchain link` is a local `.zip` / `.tar.gz` archive or an HTTP(S) URL, cjv installs it under `<CJV_HOME>/toolchains/<name>/`. A local source archive is never moved or deleted:
 
 ```bash
 # Local archive (the source file is kept)

@@ -130,7 +130,7 @@ channal = "lts"    # 键名拼错，应为 channel
 …/cangjie-sdk.toml: toolchain.channel is empty; please specify a channel (e.g. lts, sts, nightly)
 ```
 
-这样设计是为了避免一类难以察觉的问题：以为切到了某个工具链，实际上悄悄用了默认工具链。如果你确实想让某个目录回退到上一级或默认工具链，请删除该文件，而不是把它清空。
+如果想让某个目录回退到上一级或默认工具链，请删除该文件，而不是把它清空。
 
 ## 与 `auto_install` 的关系
 

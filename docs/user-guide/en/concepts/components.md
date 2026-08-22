@@ -87,9 +87,7 @@ A standard channel (such as `lts`) can also use `link` in place of downloading, 
 cjv component link stdx /path/to/local/stdx --toolchain lts --force
 ```
 
-`<path>` must be a directory containing the two subdirectories `dynamic/` and `static/`, that is, the standard stdx layout after extraction. When linking, cjv creates a symlink for each of these two subdirectories under `<CJV_HOME>/stdx/<tc>/` (on Windows, if a symlink requires elevation, it falls back to a directory junction). `CANGJIE_STDX_PATH_DYNAMIC` and `CANGJIE_STDX_PATH_STATIC` are still injected as usual, pointing to these links.
-
-Linking is safe. `cjv component remove stdx` and `cjv toolchain uninstall` only delete the symlinks cjv created, and do not follow the links to delete the data in the original directory.
+`<path>` must contain the `dynamic/` and `static/` subdirectories. After linking, `CANGJIE_STDX_PATH_DYNAMIC` and `CANGJIE_STDX_PATH_STATIC` are configured normally; removing the component or uninstalling the toolchain does not delete the source directory.
 
  >
  > `link` currently works only for `stdx`; `docs` and `stdx-docs` do not support linking and can only be downloaded and installed.

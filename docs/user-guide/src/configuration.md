@@ -6,9 +6,7 @@ cjv 把持久化设置保存在 `~/.cjv/settings.toml` 这个 TOML 文件里。�
 
 ## settings.toml
 
-设置文件始终位于 `<用户主目录>/.cjv/settings.toml`，其中 `<用户主目录>` 是操作系统的用户主目录（如 `~`），而不是 `CJV_HOME`。
-
-这样做是有意为之。`home` 路径本身可以作为一项设置写进文件（见 [`cjv set home`](#cjv-set-home)），如果设置文件也跟着 `CJV_HOME` 走，就会产生先有鸡还是先有蛋的依赖。因此即便你把数据目录改到别处，`settings.toml` 仍留在用户主目录下的 `~/.cjv/` 里。
+设置文件始终位于 `<用户主目录>/.cjv/settings.toml`，不会随 `CJV_HOME` 改变。
 
 一个典型的 `settings.toml` 大致长这样：
 
@@ -29,6 +27,7 @@ gitcode_api_key = "your-token-here"
 | ------------------- | ------ | -------------------------- | --------------------------------------------------------------------- |
 | `version`           | int    | （自动维护）               | 设置文件格式版本，由 cjv 自动写入和迁移                                |
 | `default_toolchain` | string | `cjv default <toolchain>`  | 默认工具链，见 [工具链](concepts/toolchains.md)                       |
+| `manifest_url`      | string | 手动编辑 / 系统后备配置     | LTS / STS 工具链清单地址，见[企业内网部署](enterprise-intranet.md)     |
 | `auto_self_update`  | string | `cjv set auto-self-update` | `cjv update` 时的自更新行为：`enable` / `disable` / `check`           |
 | `auto_install`      | bool   | `cjv set auto-install`     | 代理模式下是否自动安装缺失的工具链                                    |
 | `home`              | string | `cjv set home`             | 持久化的 `CJV_HOME` 数据目录路径                                     |
@@ -37,6 +36,8 @@ gitcode_api_key = "your-token-here"
 | `overrides`         | table  | `cjv override`             | 目录到工具链的覆盖映射，见 [目标与覆盖](concepts/targets-overrides.md) |
 
 > 文件中无法识别的键（例如拼写错误）会以 warn 级别日志提示，但不会阻止 cjv 启动。把 `version` 设成超过当前二进制支持的值则会报错。
+
+`manifest_url` 目前没有对应的 `cjv set` 子命令，需要直接编辑用户设置文件，或由管理员通过系统后备配置提供。清空该字段会恢复默认地址。
 
 ## cjv set
 
@@ -57,7 +58,7 @@ cjv set auto-self-update disable
 cjv set auto-self-update check
 ```
 
-三种取值的含义如下。`enable` 会在 `cjv update` 完成后自动把 cjv 升级到最新版本，并刷新代理符号链接。`disable` 会完全跳过自更新逻辑。`check`（默认）不自动升级，只在更新结束时打印当前 cjv 版本，由你手动决定是否运行 `cjv self update`。
+`enable` 会在 `cjv update` 完成后自动升级 cjv；`disable` 会跳过自更新；`check`（默认）只打印当前 cjv 版本，不自动升级。
 
 无论此设置如何，你都可以随时用 `cjv self update` 手动升级 cjv。
 
@@ -117,10 +118,8 @@ cjv 的全部数据都放在 `CJV_HOME`（默认 `~/.cjv`）下，各子目录�
 
 ```text
 ~/.cjv/
-  bin/            # 代理符号链接和 cjv 二进制文件
+  bin/            # cjv 与 SDK 工具命令入口
   toolchains/     # 已安装的 SDK 工具链（仅 SDK 本体）
-    <tc>/
-      .cjv/components/         # cjv 维护的 component manifest
   stdx/           # stdx component（按工具链拆分，路径通过 CANGJIE_STDX_PATH_* 暴露）
     <tc>/
       dynamic/
@@ -133,9 +132,9 @@ cjv 的全部数据都放在 `CJV_HOME`（默认 `~/.cjv`）下，各子目录�
   settings.toml   # 用户设置
 ```
 
-`bin/` 存放 cjv 二进制本体，以及 `cjc`、`cjpm` 等 SDK 工具的代理符号链接，安装工具链时由 cjv 创建。把这个目录加入 `PATH` 后，直接调用 `cjc` 就会被透明代理到当前活跃的工具链，详见 [代理](concepts/proxies.md)。
+`bin/` 存放 cjv 与 `cjc`、`cjpm` 等 SDK 工具的命令入口。把这个目录加入 `PATH` 后即可直接调用这些命令，详见[代理](concepts/proxies.md)。
 
-`toolchains/<tc>/` 是每个已安装工具链的 SDK 本体。子目录 `.cjv/components/` 存放该工具链已安装组件的 manifest，由 cjv 维护。
+`toolchains/<tc>/` 是每个已安装工具链的 SDK 本体。
 
 `stdx/<tc>/` 按工具链拆分存放 `stdx` 组件，分为 `dynamic/` 与 `static/`。代理或运行时环境中会自动注入 `CANGJIE_STDX_PATH_DYNAMIC` 与 `CANGJIE_STDX_PATH_STATIC` 指向这两个目录，详见 [组件](concepts/components.md)。
 

@@ -109,7 +109,7 @@ Set the environment variable `CJV_NO_PATH_SETUP` to `1` to skip this `PATH` modi
 CJV_NO_PATH_SETUP=1 cjv install lts
 ```
 
-When using the install script, the equivalent is to tell the underlying `cjv init` not to change `PATH`: on Linux / macOS pass `--no-modify-path`, on Windows use `-NoModifyPath`. In that case you need to add the `bin` directory to `PATH` yourself. `cjv init` also prints the path of an `env` script you can `source` (`~/.cjv/env` on Linux / macOS, `~/.cjv/env.ps1` and `~/.cjv/env.bat` on Windows).
+When using the install script, pass `--no-modify-path` on Linux / macOS or `-NoModifyPath` on Windows. In that case you need to add the `bin` directory to `PATH` yourself. `cjv init` also prints the path of an `env` script you can `source` (`~/.cjv/env` on Linux / macOS, `~/.cjv/env.ps1` and `~/.cjv/env.bat` on Windows).
 
 For full documentation of environment variables such as `CJV_NO_PATH_SETUP`, see [Environment Variables](../environment-variables.md).
 

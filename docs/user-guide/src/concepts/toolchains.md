@@ -77,7 +77,7 @@ cjv toolchain link my-sdk /path/to/local/sdk
 无论哪种形式，工具链名称都必须满足以下约束，否则命令会报错：
 
 - 不能为空；
-- 不能包含路径分隔符 `/` 或 `\`(防止逃逸到 `toolchains/` 目录之外)；
+- 不能包含路径分隔符 `/` 或 `\`；
 - 不能是 `.` 或 `..`；
 - 不能以 `+` 前缀开头，`+` 是 `cjv exec`、`cjv envsetup` 等命令里的工具链选择语法，直接写名称即可；
 - 末尾多余的 `/`、`\` 会被自动去掉。
@@ -90,7 +90,7 @@ cjv toolchain link my-sdk /path/to/local/sdk
 
 ### 来源一：链接本地目录(cjv 不拥有数据)
 
-第一种方式是把一个已存在的本地 SDK 目录链接进来。cjv 在 `<CJV_HOME>/toolchains/<名称>/` 下创建一个指向你目录的符号链接(Windows 上回退为 directory junction)，并不复制任何文件：
+第一种方式是引用一个已存在的本地 SDK 目录，不复制其中的文件：
 
 ```bash
 cjv toolchain link my-sdk /path/to/local/sdk
@@ -102,7 +102,7 @@ cjv toolchain link my-sdk /path/to/local/sdk
 
 ### 来源二：从归档安装(cjv 拥有数据)
 
-当 `cjv toolchain link` 的第二个参数是一个归档时——本地的 `.zip` / `.tar.gz` 文件，或一个 `http://` / `https://` 链接——cjv 会解包它，并把内容物化到 `<CJV_HOME>/toolchains/<名称>/` 下，成为一份由 cjv 完整拥有的安装。URL 会先下载到本地暂存，本地归档则就地读取，且不会被移动或删除：
+当 `cjv toolchain link` 的第二个参数是本地 `.zip` / `.tar.gz` 归档或一个 HTTP(S) URL 时，cjv 会把它安装到 `<CJV_HOME>/toolchains/<名称>/`。本地源归档不会被移动或删除：
 
 ```bash
 # 本地归档(源文件保留)

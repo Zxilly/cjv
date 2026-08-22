@@ -65,7 +65,7 @@ cjv override set nightly
 cjv override set lts --path /path/to/project
 ```
 
-`cjv override set` validates the toolchain name first. Standard names (such as `lts`, `sts`, `nightly`, or a specific version) are normalized before being stored, while custom toolchain names are accepted as written. The directory path is normalized to an absolute path before being written, with symbolic links resolved and the drive letter case unified on Windows, so different spellings of the same directory do not produce duplicate entries.
+`cjv override set` validates the toolchain name and records the absolute directory path. Equivalent paths for the same directory do not create duplicate entries.
 
 ### Removing an override
 

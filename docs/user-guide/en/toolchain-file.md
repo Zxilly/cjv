@@ -132,7 +132,7 @@ All of these cases produce an error similar to the following, pointing out the s
 …/cangjie-sdk.toml: toolchain.channel is empty; please specify a channel (e.g. lts, sts, nightly)
 ```
 
-This is designed to avoid a hard-to-notice problem: thinking you have switched to some toolchain while in fact the default toolchain is quietly used. If you really want a directory to fall back to the level above or to the default toolchain, delete the file rather than emptying it.
+To let a directory fall back to the level above or to the default toolchain, delete the file rather than emptying it.
 
 ## Relationship with `auto_install`
 

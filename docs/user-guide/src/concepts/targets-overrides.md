@@ -64,7 +64,7 @@ cjv override set nightly
 cjv override set lts --path /path/to/project
 ```
 
-`cjv override set` 会先校验工具链名。标准名称(如 `lts`、`sts`、`nightly`、具体版本)会被规范化后存储，自定义工具链名按原样接受。目录路径在写入前会被规范化为绝对路径，并解析符号链接、在 Windows 上统一盘符大小写，因此同一目录的不同写法不会产生重复条目。
+`cjv override set` 会校验工具链名并记录目录的绝对路径。同一目录的等价路径不会产生重复条目。
 
 ### 移除覆盖
 

@@ -70,7 +70,7 @@ cjv envsetup --target=ohos | source             # Fish
 cjv envsetup --target=ohos | Invoke-Expression   # PowerShell
 ```
 
-不带 `--target` 时输出的环境指向宿主工具链。带上 `--target` 后，输出的环境整体重新指向 target SDK 目录：`CANGJIE_HOME` 指向 target SDK 自己的目录，而非宿主工具链目录；`PATH` 与库搜索路径全部取自该 target SDK 目录。逻辑上使用的仍是同一条宿主工具链（如 `lts-1.0.5`），只是底层根目录换成了交叉 SDK。
+不带 `--target` 时输出宿主工具链环境；带上 `--target` 后，`CANGJIE_HOME`、`PATH` 与库搜索路径指向对应的 target SDK。
 
 `--target` 同样遵循与代理模式一致的工具链解析优先级，并支持 `+toolchain` 语法指定宿主工具链：
 

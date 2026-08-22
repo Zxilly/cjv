@@ -36,7 +36,9 @@ export CJV_GITCODE_API_KEY=<your-token>
 
 cjv 的多数操作都需要从上游下载资产，但有几种方式可以适配离线、内网或镜像环境。
 
-cjv 提供 `mirror` 构建变体，其默认的工具链清单（manifest）指向 GitCode 而非 GitHub，适合 GitHub 访问不稳定的环境。两种构建的区别仅在默认 manifest 源。
+完整的制品库布局、系统后备配置、批量安装步骤和验收清单见[企业内网部署](enterprise-intranet.md)。本节只列出离线使用的快捷方式。
+
+cjv 提供 `mirror` 构建变体，其默认工具链清单（manifest）与自更新后端指向 GitCode 而非 GitHub，适合 GitHub 访问不稳定的环境；它不是通用的企业内部镜像版。
 
 工具链清单地址保存在 `~/.cjv/settings.toml` 的 `manifest_url` 字段，可手动改为你的内网镜像地址。清空该字段会恢复内置默认值。详见[配置](configuration.md)。
 
@@ -71,7 +73,7 @@ cjv component link stdx /path/to/local/stdx --toolchain mysdk
 # cjv 会把它作为 stdx 组件一并安装（见“从 URL 安装工具链”）
 ```
 
-`cjv component link` 创建的是指向你原始目录的符号链接（Windows 上回退为目录联接 / junction），`cjv component remove stdx` 与 `cjv toolchain uninstall` 都只删除链接，不会触碰你的原始数据。标准通道（lts / sts / nightly）也可以用 `cjv component link stdx ... --force` 以本地目录替代下载，适合离线或调试自编译 stdx 的场景。详见[组件](concepts/components.md)。
+`cjv component remove stdx` 与 `cjv toolchain uninstall` 不会删除链接来源目录。标准通道（lts / sts / nightly）也可以用 `cjv component link stdx ... --force` 以本地目录替代下载，适合离线或调试自编译 stdx 的场景。详见[组件](concepts/components.md)。
 
 ## 卸载一个工具链会清理哪些目录？
 

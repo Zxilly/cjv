@@ -108,7 +108,7 @@ cjv 在自己的 `bin` 目录（默认 `~/.cjv/bin`）下放置二进制以及�
 CJV_NO_PATH_SETUP=1 cjv install lts
 ```
 
-使用安装脚本时，等效做法是让底层的 `cjv init` 不要改 `PATH`：Linux / macOS 传 `--no-modify-path`，Windows 用 `-NoModifyPath`。此时需手动把 `bin` 目录加入 `PATH`。`cjv init` 也会打印出可供 `source` 的 `env` 脚本路径（Linux / macOS 为 `~/.cjv/env`，Windows 为 `~/.cjv/env.ps1` 与 `~/.cjv/env.bat`）。
+使用安装脚本时，Linux / macOS 传 `--no-modify-path`，Windows 用 `-NoModifyPath`。此时需手动把 `bin` 目录加入 `PATH`。`cjv init` 也会打印出可供 `source` 的 `env` 脚本路径（Linux / macOS 为 `~/.cjv/env`，Windows 为 `~/.cjv/env.ps1` 与 `~/.cjv/env.bat`）。
 
 `CJV_NO_PATH_SETUP` 等环境变量的完整说明见[环境变量](../environment-variables.md)。
 

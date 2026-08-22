@@ -328,18 +328,16 @@ cjv toolchain link <name> <path|url> [--sha256 <hash>] [--force] [--no-stdx]
 参数：
 
 - `<name>`（必填）：自定义工具链名。必须是自定义名，不能与保留通道名 `lts`、`sts`、`nightly` 冲突，也不能含路径分隔符、`+` 前缀或为非法名。
-- `<path|url>`（必填）：本地目录、本地归档文件（`.zip` / `.tar.gz`），或 `http(s)://` URL。命令先判断是否匹配 `^https?://`；否则按本地路径处理——普通文件走物化，目录走引用。
+- `<path|url>`（必填）：本地目录、本地归档文件（`.zip` / `.tar.gz`），或 HTTP(S) URL。目录使用引用模式，归档和 URL 使用物化模式。
 
 两种行为：
 
 | 维度 | 引用模式（本地目录） | 物化模式（本地归档 / URL） |
 | --- | --- | --- |
 | `<path>` 形态 | 本地目录 | 本地归档 `sdk.zip`，或 `https://...` |
-| `toolchains/<name>` 内容 | 符号链接 / junction（Windows 回退到 junction） | 解包后落地的真实目录 |
+| `toolchains/<name>` 内容 | 引用原目录 | 由 cjv 管理的安装目录 |
 | 数据归属 | cjv 不拥有，只引用 | cjv 拥有 |
 | 卸载行为 | 只删链接，原目录保留 | 删除整个目录（含 stdx） |
-
-物化模式下本地归档与 URL 共用同一套解包逻辑，区别只在于 URL 先下载暂存、本地归档就地读取且永不删除。
 
 标志（仅物化模式，本地归档与 URL 同样适用）：
 
@@ -366,7 +364,7 @@ cjv toolchain link mysdk https://example.com/sdk.zip \
   --sha256 <hash> --force --no-stdx
 ```
 
-物化模式的完整语义（名称校验时机、随包 stdx、跨系统限制等）见 [从 URL 或本地归档安装工具链](install-from-url.md)。链接本地 stdx 见 [组件](concepts/components.md)。
+物化模式的归档格式、随包 stdx 和平台限制见[从 URL 或本地归档安装工具链](install-from-url.md)。链接本地 stdx 见[组件](concepts/components.md)。
 
 ### `cjv toolchain uninstall`
 
@@ -420,7 +418,7 @@ cjv component link <name> <path> [--toolchain <tc>] [--force]
 | `--toolchain <tc>` | 目标工具链（默认为当前活跃工具链） |
 | `--force` | 替换已存在的组件安装（无论它是 link 还是下载得到的） |
 
-`<path>` 必须是一个解压后的 stdx 布局目录，包含 `dynamic/` 与 `static/` 两个子目录。link 后 cjv 在 `<CJV_HOME>/stdx/<tc>/` 下创建符号链接（Windows 回退到 junction），`CANGJIE_STDX_PATH_DYNAMIC` / `CANGJIE_STDX_PATH_STATIC` 仍按常规注入。`cjv component remove` 与卸载工具链只会删除符号链接，不触及原始数据。
+`<path>` 必须包含 `dynamic/` 与 `static/` 两个子目录。链接后相关环境变量仍会正常配置；移除组件或卸载工具链不会删除原始目录。
 
 ```bash
 # 自定义工具链没有 release 资产，用 link 挂上本地 stdx
@@ -585,7 +583,7 @@ cjv set home /opt/cjv
 
 ### `cjv self update`
 
-将 cjv 自身更新到最新版本，并刷新代理符号链接与托管的 env 脚本。
+将 cjv 自身更新到最新版本。
 
 ```text
 cjv self update

@@ -87,9 +87,7 @@ cjv component link stdx /path/to/local/stdx --toolchain mysdk
 cjv component link stdx /path/to/local/stdx --toolchain lts --force
 ```
 
-`<path>` 必须是一个包含 `dynamic/` 和 `static/` 两个子目录的目录，即解压后的标准 stdx 布局。link 时 cjv 会在 `<CJV_HOME>/stdx/<tc>/` 下为这两个子目录各创建一个符号链接（Windows 上若符号链接需要提权，会回退到 directory junction）。`CANGJIE_STDX_PATH_DYNAMIC` 与 `CANGJIE_STDX_PATH_STATIC` 仍按常规注入，指向这些链接。
-
-链接是安全的。`cjv component remove stdx` 和 `cjv toolchain uninstall` 都只删除 cjv 创建的符号链接，不会顺着链接删除原始目录里的数据。
+`<path>` 必须包含 `dynamic/` 和 `static/` 两个子目录。链接后，`CANGJIE_STDX_PATH_DYNAMIC` 与 `CANGJIE_STDX_PATH_STATIC` 仍会正常配置；移除组件或卸载工具链不会删除原始目录。
 
 > `link` 目前仅对 `stdx` 有效；`docs` 与 `stdx-docs` 不支持链接，只能下载安装。
 

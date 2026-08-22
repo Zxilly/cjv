@@ -4,11 +4,9 @@
 
 代理是 cjv 实现多工具链无缝切换的基础。你切换默认工具链、设置目录覆盖，或在项目里放一个 [工具链文件](../toolchain-file.md)，下一次运行 `cjc` 就会自动落到对应的工具链上，无需改 `PATH`，也无需重新激活。
 
-## 代理符号链接
+## 支持的工具
 
-cjv 安装到 `<CJV_HOME>/bin/`，该目录在首次安装时会被加入 `PATH`(可用 `CJV_NO_PATH_SETUP=1` 跳过这一步)。在这个 bin 目录里，cjv 为每个受支持的 SDK 工具创建一个指向 `cjv` 自身的符号链接(在 Windows 上若无法创建符号链接，则回退到 directory junction 等等效形式)。安装工具链时这些链接会被一并创建。
-
-目前被代理的工具有：
+`<CJV_HOME>/bin/` 加入 `PATH` 后，可以直接调用以下 SDK 工具：
 
 - `cjc`、`cjc-frontend`：编译器
 - `cjpm`：包管理器
@@ -20,22 +18,19 @@ cjv 安装到 `<CJV_HOME>/bin/`，该目录在首次安装时会被加入 `PATH`
 - `cjtrace-recover`、`chir-dis`、`hle`
 - `LSPServer`、`LSPMacroServer`：语言服务
 
-当你在终端里输入 `cjc`，shell 在 `PATH` 中找到的其实是 `<CJV_HOME>/bin/cjc`(Windows 上为 `cjc.exe`)这个链接。它指向 `cjv`，因此真正被执行的是 cjv 二进制本身。cjv 通过自己的 `argv[0]`(被调用时的名字)识别出这次是以 `cjc` 的身份被调用的，于是进入代理模式，而不是解析子命令。`cjpm`、`cjfmt` 等其余工具同理。`bin/` 目录里只有 cjv 一个真实可执行文件，其余都是同名链接。
+首次安装默认会配置 `PATH`；若使用 `CJV_NO_PATH_SETUP=1` 跳过了这一步，需要手动加入该目录。
 
-## 工具解析
+## 工具链选择
 
-进入代理模式后，cjv 按以下步骤决定执行哪个二进制：
+直接调用 SDK 工具时，cjv 按以下顺序选择工具链：
 
-1. 确定工具名。从 `argv[0]` 取基名，在 Windows 上去掉 `.exe` 后缀，例如 `cjc`、`cjpm`。
-2. 解析活跃工具链。使用与 `cjv run`、`cjv exec`、`cjv envsetup` 完全一致的优先级顺序(详见 [目标与覆盖](targets-overrides.md))，从高到低：
-   1. `+toolchain` 选择器(见下文)
-   2. `CJV_TOOLCHAIN` 环境变量
-   3. 目录覆盖(`cjv override set` 设置，见 [目标与覆盖](targets-overrides.md))
-   4. 工具链文件(当前目录或父目录中的 `cangjie-sdk.toml`，见 [工具链文件](../toolchain-file.md))
-   5. 默认工具链(`cjv default` 设置)
-3. 定位工具二进制。在解析出的工具链目录下按固定布局拼出工具路径，例如 `cjc` 位于 `bin/cjc`，`cjpm` 位于 `tools/bin/cjpm`。
-4. 注入运行时环境。代理执行会自动配置好该工具链的运行时环境，包括库搜索路径；若该工具链装有 `stdx` [组件](components.md)，还会注入 `CANGJIE_STDX_PATH_DYNAMIC` 与 `CANGJIE_STDX_PATH_STATIC`(见 [运行时环境](../runtime-environment.md))。
-5. 替换执行。cjv 把控制权交给真正的工具二进制，并原样传递剩余参数、标准输入输出、退出码与信号。在调用方看来就像直接运行了 SDK 自带的 `cjc`。
+1. `+toolchain` 选择器(见下文)
+2. `CJV_TOOLCHAIN` 环境变量
+3. 目录覆盖(`cjv override set`)
+4. 当前目录或父目录中的 `cangjie-sdk.toml`
+5. 默认工具链(`cjv default`)
+
+cjv 会配置所选工具链的运行环境，并原样传递命令参数、标准输入输出和退出码。完整优先级规则见[目标与覆盖](targets-overrides.md)，环境配置见[运行时环境](../runtime-environment.md)。
 
 下面两条命令是等价的：
 
@@ -107,7 +102,7 @@ cjv set auto-install false
 cjv set auto-install true
 ```
 
-该设置存储在 `<CJV_HOME>/settings.toml` 的 `auto_install` 字段，默认值为 `true`。系统级 fallback 设置文件也可提供该字段，详见 [配置](../configuration.md)。
+该设置保存在 `~/.cjv/settings.toml` 的 `auto_install` 字段，默认值为 `true`，详见[配置](../configuration.md)。
 
 ### 不会被自动安装的情形
 
@@ -116,7 +111,3 @@ cjv set auto-install true
 `cjv exec` 的交叉编译目标 SDK 必须先通过 `cjv install <toolchain> --target <suffix>` 安装。代理路径只补齐工具链文件中声明的 `targets`，不会凭空为一次性命令安装目标 SDK。
 
 自动安装中任何一步下载或安装失败时，cjv 不会继续转发调用，而是以工具链或组件未安装错误退出，并在标准错误上给出失败原因。
-
-## 递归保护
-
-代理工具最终执行的是真实 SDK，而某些工具内部又可能再调用 `cjc` 等被代理的命令。为避免在配置异常时陷入无限自我调用，cjv 会限制代理的嵌套层数，超过上限即以递归限制错误中止。正常使用中你不会触及这个上限。

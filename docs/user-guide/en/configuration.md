@@ -6,9 +6,7 @@ This chapter covers all `cjv set` subcommands, the corresponding fields in `sett
 
 ## settings.toml
 
-The settings file always lives at `<user home>/.cjv/settings.toml`, where `<user home>` is the operating system's user home directory (such as `~`), not `CJV_HOME`.
-
-This is intentional. The `home` path itself can be written into the file as a setting (see [`cjv set home`](#cjv-set-home)), and if the settings file followed `CJV_HOME`, it would create a chicken-and-egg dependency. So even if you move the data directory elsewhere, `settings.toml` stays under `~/.cjv/` in the user home directory.
+The settings file always lives at `<user home>/.cjv/settings.toml` and does not move with `CJV_HOME`.
 
 A typical `settings.toml` looks roughly like this:
 
@@ -29,6 +27,7 @@ Field overview:
 |-----|----|---------------------|-----------|
 |`version`|int|(maintained automatically)|Settings file format version, written and migrated automatically by cjv|
 |`default_toolchain`|string|`cjv default <toolchain>`|Default toolchain; see [Toolchains](concepts/toolchains.md)|
+|`manifest_url`|string|Manual edit / system fallback|LTS / STS toolchain manifest URL; see [Enterprise intranet deployment](enterprise-intranet.md)|
 |`auto_self_update`|string|`cjv set auto-self-update`|Self-update behavior during `cjv update`: `enable` / `disable` / `check`|
 |`auto_install`|bool|`cjv set auto-install`|Whether to automatically install missing toolchains in proxy mode|
 |`home`|string|`cjv set home`|Persisted `CJV_HOME` data directory path|
@@ -38,6 +37,8 @@ Field overview:
 
  >
  > Unrecognized keys in the file (for example, typos) are reported with a warn-level log message but do not prevent cjv from starting. Setting `version` to a value higher than the current binary supports does cause an error.
+
+`manifest_url` currently has no corresponding `cjv set` subcommand. Edit the user settings file directly or let an administrator provide it through system fallback settings. An empty value restores the default URL.
 
 ## cjv set
 
@@ -58,7 +59,7 @@ cjv set auto-self-update disable
 cjv set auto-self-update check
 ```
 
-The three values mean the following. `enable` automatically upgrades cjv to the latest version after `cjv update` finishes, and refreshes the proxy symlinks. `disable` skips the self-update logic entirely. `check` (the default) does not upgrade automatically; it only prints the current cjv version when the update finishes, leaving it to you to decide whether to run `cjv self update`.
+`enable` upgrades cjv after `cjv update` finishes; `disable` skips self-update; `check` (the default) only prints the current cjv version and does not upgrade it.
 
 Regardless of this setting, you can upgrade cjv manually at any time with `cjv self update`.
 
@@ -118,10 +119,8 @@ All of cjv's data is kept under `CJV_HOME` (`~/.cjv` by default), with each subd
 
 ```text
 ~/.cjv/
-  bin/            # proxy symlinks and the cjv binary
+  bin/            # cjv and SDK tool command entry points
   toolchains/     # installed SDK toolchains (the SDK proper only)
-    <tc>/
-      .cjv/components/         # component manifests maintained by cjv
   stdx/           # stdx component (split per toolchain; paths exposed via CANGJIE_STDX_PATH_*)
     <tc>/
       dynamic/
@@ -134,9 +133,9 @@ All of cjv's data is kept under `CJV_HOME` (`~/.cjv` by default), with each subd
   settings.toml   # user settings
 ```
 
-`bin/` holds the cjv binary itself, along with the proxy symlinks for SDK tools such as `cjc` and `cjpm`, created by cjv when a toolchain is installed. Once this directory is added to `PATH`, calling `cjc` directly is transparently proxied to the active toolchain. See [Proxies](concepts/proxies.md).
+`bin/` contains the command entry points for cjv and SDK tools such as `cjc` and `cjpm`. Add this directory to `PATH` to invoke them directly; see [Proxies](concepts/proxies.md).
 
-`toolchains/<tc>/` is the SDK itself for each installed toolchain. The subdirectory `.cjv/components/` holds the manifests of the components installed for that toolchain, maintained by cjv.
+`toolchains/<tc>/` is the SDK itself for each installed toolchain.
 
 `stdx/<tc>/` holds the `stdx` component per toolchain, split into `dynamic/` and `static/`. During proxying or in the runtime environment, `CANGJIE_STDX_PATH_DYNAMIC` and `CANGJIE_STDX_PATH_STATIC` are injected automatically to point at these two directories. See [Components](concepts/components.md).
 

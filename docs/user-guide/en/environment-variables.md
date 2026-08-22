@@ -103,13 +103,12 @@ You normally do not need to set them manually; cjv makes sure the Cangjie compil
 
 cjv's downloads automatically honor the standard proxy environment variables, so no cjv configuration is needed on a restricted enterprise network. For how to set them, the supported proxy schemes (http / https / socks5), and caveats, see [Network proxies](network-proxies.md).
 
-## Advanced and internal variables
+## Advanced variables
 
-The following variables target special scenarios or are used internally by cjv, and ordinary users usually need not be concerned with them.
+The following variables target special scenarios and normally do not need to be set.
 
 |Variable|Description|
 |--------|-----------|
 |`CJV_LANG`|Override the interface language (such as `zh`, `en`, `ja`). When unset, it follows the system locale setting.|
-|`CJV_ALLOW_INSECURE_MANIFEST`|When set to `1`, allows fetching the toolchain manifest over plaintext HTTP from non-loopback hosts. HTTPS is required by default, because the manifest carries both download URLs and their checksums. Use this only with trusted internal mirrors; see [Installing a Toolchain from a URL](install-from-url.md).|
-|`CJV_FALLBACK_SETTINGS`|Specifies the path to a system-level fallback settings file, used to provide defaults beyond the user settings (such as an enterprise mirror configuration). When unset, the platform default location is used.|
-|`CJV_RECURSION_COUNT`|Internal use only. cjv sets this variable during proxy execution to detect and prevent infinite recursive calls. Users should not set it manually.|
+|`CJV_ALLOW_INSECURE_MANIFEST`|When set to `1`, allows fetching the toolchain manifest over plaintext HTTP from non-loopback hosts. HTTPS is required by default, because the manifest carries both download URLs and their checksums. Use this only with trusted internal mirrors; see [Enterprise intranet deployment](enterprise-intranet.md).|
+|`CJV_FALLBACK_SETTINGS`|Specifies the path to a system-level fallback settings file, used to provide defaults beyond the user settings (such as an enterprise mirror configuration). When unset, the platform default location is used; see [Enterprise intranet deployment](enterprise-intranet.md).|

@@ -71,7 +71,7 @@ cjv envsetup --target=ohos | source             # Fish
 cjv envsetup --target=ohos | Invoke-Expression   # PowerShell
 ```
 
-Without `--target`, the environment that is output points at the host toolchain. With `--target`, the whole output environment is redirected to the target SDK directory: `CANGJIE_HOME` points at the target SDK's own directory rather than the host toolchain directory; `PATH` and the library search paths all come from that target SDK directory. Logically the same host toolchain is still in use (such as `lts-1.0.5`); only the underlying root directory is switched to the cross SDK.
+Without `--target`, cjv outputs the host toolchain environment. With `--target`, `CANGJIE_HOME`, `PATH`, and library search paths point to the corresponding target SDK.
 
 `--target` also follows the same toolchain resolution priority as proxy mode, and supports the `+toolchain` syntax for specifying the host toolchain:
 

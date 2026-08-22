@@ -103,13 +103,12 @@ CJV_NO_PATH_SETUP=1 cjv install lts
 
 cjv 的下载会自动遵循标准代理环境变量，在企业受限网络里无需任何 cjv 配置。设置方式、支持的代理方案（http / https / socks5）与注意事项详见[网络代理](network-proxies.md)。
 
-## 高级与内部变量
+## 高级变量
 
-以下变量面向特殊场景或由 cjv 内部使用，普通用户通常无需关心。
+以下变量面向特殊场景，普通用户通常无需设置。
 
 | 变量 | 说明 |
 | --- | --- |
 | `CJV_LANG` | 覆盖界面语言（如 `zh`、`en`、`ja`）。未设置时跟随系统区域设置。 |
-| `CJV_ALLOW_INSECURE_MANIFEST` | 设为 `1` 时，允许从非回环（loopback）主机通过明文 HTTP 拉取工具链清单。默认要求 HTTPS，因为清单同时携带下载 URL 与其校验和。仅在信任的内部镜像场景使用，详见[从 URL 安装工具链](install-from-url.md)。 |
-| `CJV_FALLBACK_SETTINGS` | 指定系统级后备设置文件的路径，用于在用户设置之外提供默认值（如企业镜像配置）。未设置时使用平台默认位置。 |
-| `CJV_RECURSION_COUNT` | 仅内部使用。cjv 在代理执行时设置此变量以检测并阻止无限递归调用，用户不应手动设置。 |
+| `CJV_ALLOW_INSECURE_MANIFEST` | 设为 `1` 时，允许从非回环（loopback）主机通过明文 HTTP 拉取工具链清单。默认要求 HTTPS，因为清单同时携带下载 URL 与其校验和。仅在信任的内部镜像场景使用，详见[企业内网部署](enterprise-intranet.md)。 |
+| `CJV_FALLBACK_SETTINGS` | 指定系统级后备设置文件的路径，用于在用户设置之外提供默认值（如企业镜像配置）。未设置时使用平台默认位置，详见[企业内网部署](enterprise-intranet.md)。 |

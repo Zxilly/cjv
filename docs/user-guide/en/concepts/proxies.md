@@ -4,11 +4,9 @@ You will rarely type `cjv run` directly to invoke the Cangjie SDK tools. Most of
 
 Proxying is what lets cjv switch between multiple toolchains seamlessly. When you change the default toolchain, set a directory override, or place a [toolchain file](../toolchain-file.md) in a project, the next run of `cjc` lands on the corresponding toolchain automatically, without changing `PATH` and without reactivating anything.
 
-## Proxy symbolic links
+## Supported tools
 
-cjv installs into `<CJV_HOME>/bin/`, which is added to `PATH` on first install (you can skip this step with `CJV_NO_PATH_SETUP=1`). In this bin directory, cjv creates a symlink to `cjv` itself for each supported SDK tool (on Windows, if a symlink cannot be created, it falls back to a directory junction or equivalent). These links are created together when a toolchain is installed.
-
-The tools currently proxied are:
+After `<CJV_HOME>/bin/` is added to `PATH`, the following SDK tools can be invoked directly:
 
 - `cjc`, `cjc-frontend`: the compiler
 - `cjpm`: the package manager
@@ -20,22 +18,19 @@ The tools currently proxied are:
 - `cjtrace-recover`, `chir-dis`, `hle`
 - `LSPServer`, `LSPMacroServer`: the language service
 
-When you type `cjc` in a terminal, what the shell finds on `PATH` is actually the `<CJV_HOME>/bin/cjc` link (`cjc.exe` on Windows). It points to `cjv`, so what really runs is the cjv binary itself. cjv uses its own `argv[0]` (the name it was invoked by) to recognize that this time it was called as `cjc`, so it enters proxy mode instead of parsing a subcommand. The same applies to `cjpm`, `cjfmt`, and the other tools. The `bin/` directory contains only one real executable, cjv, and everything else is a same-named link.
+The first installation configures `PATH` by default. If you skip that step with `CJV_NO_PATH_SETUP=1`, add this directory manually.
 
-## Tool resolution
+## Toolchain selection
 
-Once in proxy mode, cjv decides which binary to run in the following steps:
+When an SDK tool is invoked directly, cjv selects a toolchain in this order:
 
-1. Determine the tool name. Take the base name from `argv[0]`, dropping the `.exe` suffix on Windows, for example `cjc`, `cjpm`.
-1. Resolve the active toolchain. Using the exact same priority order as `cjv run`, `cjv exec`, `cjv envsetup` (see [Targets and overrides](targets-overrides.md)), from highest to lowest:
-   1. the `+toolchain` selector (see below)
-   1. the `CJV_TOOLCHAIN` environment variable
-   1. directory override (set with `cjv override set`, see [Targets and Overrides](targets-overrides.md))
-   1. toolchain file (`cangjie-sdk.toml` in the current or a parent directory, see [Toolchain File](../toolchain-file.md))
-   1. the default toolchain (set with `cjv default`)
-1. Locate the tool binary. Under the resolved toolchain directory, build the tool path from a fixed layout, for example `cjc` is at `bin/cjc` and `cjpm` is at `tools/bin/cjpm`.
-1. Inject the runtime environment. Proxying automatically sets up the runtime environment for that toolchain, including library search paths; if that toolchain has the `stdx` [component](components.md) installed, it also injects `CANGJIE_STDX_PATH_DYNAMIC` and `CANGJIE_STDX_PATH_STATIC` (see [Runtime environment](../runtime-environment.md)).
-1. Replace execution. cjv hands control over to the real tool binary, passing through the remaining arguments, standard input/output, exit code, and signals unchanged. From the caller's point of view it is as if the SDK's own `cjc` had been run directly.
+1. the `+toolchain` selector (see below)
+1. the `CJV_TOOLCHAIN` environment variable
+1. a directory override (`cjv override set`)
+1. `cangjie-sdk.toml` in the current or a parent directory
+1. the default toolchain (`cjv default`)
+
+cjv configures the selected toolchain's runtime environment and passes through command arguments, standard input/output, and the exit code. See [Targets and overrides](targets-overrides.md) for the complete priority rules and [Runtime environment](../runtime-environment.md) for environment setup.
 
 The following two commands are equivalent:
 
@@ -107,7 +102,7 @@ cjv set auto-install false
 cjv set auto-install true
 ```
 
-This setting is stored in the `auto_install` field of `<CJV_HOME>/settings.toml`, with a default value of `true`. A system-level fallback settings file may also provide this field; see [Configuration](../configuration.md).
+This setting is stored in the `auto_install` field of `~/.cjv/settings.toml` and defaults to `true`; see [Configuration](../configuration.md).
 
 ### Cases that are not auto-installed
 
@@ -116,7 +111,3 @@ A custom toolchain linked via `cjv toolchain link` has no corresponding download
 The cross-compilation target SDK for `cjv exec` must first be installed with `cjv install <toolchain> --target <suffix>`. The proxy path only fills in the `targets` declared in the toolchain file; it will not install a target SDK out of nowhere for a one-off command.
 
 When any download or install step during auto-install fails, cjv does not continue forwarding the call. Instead it exits with a toolchain-or-component-not-installed error and prints the reason for the failure on standard error.
-
-## Recursion protection
-
-A proxied tool ultimately runs the real SDK, and some tools may in turn invoke proxied commands such as `cjc`. To avoid falling into infinite self-invocation when the configuration is broken, cjv limits how deeply proxies may nest and aborts with a recursion-limit error once that limit is exceeded. In normal use you will not reach this limit.

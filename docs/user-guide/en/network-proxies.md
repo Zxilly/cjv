@@ -50,4 +50,4 @@ Note: cjv does **not** recognize `ALL_PROXY` / `all_proxy`. If you have only set
 
 The proxy variables are read from the environment when cjv starts, so set them in your shell **before** running cjv (the per-invocation `https_proxy=… cjv …` prefix form also works).
 
-Related: for the `CJV_*` variables cjv reads itself, see [Environment Variables](environment-variables.md).
+Related: for the `CJV_*` variables cjv reads itself, see [Environment Variables](environment-variables.md). To host a manifest, mirror SDKs and components, or deploy fully offline endpoints, see [Enterprise intranet deployment](enterprise-intranet.md).

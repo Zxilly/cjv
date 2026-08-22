@@ -37,7 +37,9 @@ If you are unsure of your machine's architecture, run `uname -m` in a terminal: 
 
 Most cjv operations download assets from upstream, but there are several ways to adapt to offline, intranet, or mirror environments.
 
-cjv provides a `mirror` build variant whose default toolchain manifest points at GitCode rather than GitHub, suitable for environments where GitHub access is unreliable. The two builds differ only in the default manifest source.
+See [Enterprise intranet deployment](enterprise-intranet.md) for the complete artifact-repository layout, system fallback settings, automated installation procedure, and acceptance checklist. This section lists only the quick offline options.
+
+cjv provides a `mirror` build variant whose default toolchain manifest and self-update backend point at GitCode rather than GitHub. It is suitable where GitHub access is unreliable, but it is not a generic enterprise-mirror build.
 
 The toolchain manifest address is stored in the `manifest_url` field of `~/.cjv/settings.toml` and can be changed to your intranet mirror address. Clearing this field restores the built-in default. See [Configuration](configuration.md).
 
@@ -72,7 +74,7 @@ cjv component link stdx /path/to/local/stdx --toolchain mysdk
 # cjv installs it as the stdx component as well (see "Installing a toolchain from a URL")
 ```
 
-`cjv component link` creates a symlink pointing to your original directory (falling back to a directory junction on Windows), and both `cjv component remove stdx` and `cjv toolchain uninstall` only delete the link, never touching your original data. Standard channels (lts / sts / nightly) can also use `cjv component link stdx ... --force` to substitute a local directory for the download, which suits offline environments or debugging a self-compiled stdx. See [Components](concepts/components.md).
+`cjv component remove stdx` and `cjv toolchain uninstall` do not delete the source directory. Standard channels (lts / sts / nightly) can also use `cjv component link stdx ... --force` to substitute a local directory for the download, which suits offline environments or debugging a self-compiled stdx. See [Components](concepts/components.md).
 
 ## Which directories are cleaned up when a toolchain is uninstalled?
 
