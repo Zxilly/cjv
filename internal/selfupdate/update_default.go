@@ -4,58 +4,74 @@ package selfupdate
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/url"
 	"runtime"
 	"strings"
 
 	"github.com/Zxilly/cjv/internal/i18n"
-	go_selfupdate "github.com/creativeprojects/go-selfupdate"
 )
 
+type githubRelease struct {
+	TagName string `json:"tag_name"`
+	Assets  []struct {
+		Name string `json:"name"`
+		URL  string `json:"browser_download_url"`
+	} `json:"assets"`
+}
+
 func runUpdate(ctx context.Context, updateURL, currentVersion string) error {
-	source, err := go_selfupdate.NewGitHubSource(go_selfupdate.GitHubConfig{})
-	if err != nil {
-		return err
+	slug := extractSlug(updateURL)
+	parts := strings.Split(slug, "/")
+	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
+		return fmt.Errorf("invalid GitHub repository %q", slug)
 	}
-
-	updater, err := go_selfupdate.NewUpdater(go_selfupdate.Config{
-		Source: source,
-		// Verify the downloaded binary against the release checksums.txt before
-		// it replaces the running executable — TLS alone does not protect
-		// against a tampered or corrupted release asset.
-		Validator: &go_selfupdate.ChecksumValidator{UniqueFilename: "checksums.txt"},
-		Filters:   []string{fmt.Sprintf("cjv_%s_%s", runtime.GOOS, runtime.GOARCH)},
-	})
-	if err != nil {
-		return err
-	}
-
-	latest, found, err := updater.DetectLatest(ctx, go_selfupdate.ParseSlug(extractSlug(updateURL)))
+	data, err := fetchReleaseFile(ctx, fmt.Sprintf("https://api.github.com/repos/%s/releases/latest", slug))
 	if err != nil {
 		return fmt.Errorf("failed to check for updates: %w", err)
 	}
-
-	if !found || latest.LessOrEqual(currentVersion) {
+	var release githubRelease
+	if err := json.Unmarshal(data, &release); err != nil {
+		return fmt.Errorf("failed to parse latest release: %w", err)
+	}
+	latest, newer, err := newerReleaseVersion(currentVersion, release.TagName)
+	if err != nil {
+		return err
+	}
+	if !newer {
 		fmt.Println(i18n.T("AlreadyUpToDate", i18n.MsgData{"Version": currentVersion}))
 		return nil
 	}
 
 	fmt.Println(i18n.T("UpdateFound", i18n.MsgData{
 		"Current": currentVersion,
-		"Latest":  latest.Version(),
+		"Latest":  latest,
 	}))
 
-	managedExe, err := ManagedExecutablePath()
-	if err != nil {
-		return err
+	assetName := releaseAssetName("cjv", runtime.GOOS, runtime.GOARCH)
+	assetURL, checksumURL := "", ""
+	for _, asset := range release.Assets {
+		switch asset.Name {
+		case assetName:
+			assetURL = asset.URL
+		case "checksums.txt":
+			checksumURL = asset.URL
+		}
 	}
-
-	if err := updater.UpdateTo(ctx, latest, managedExe); err != nil {
+	if assetURL == "" || checksumURL == "" {
+		return fmt.Errorf("release %s is missing %s or checksums.txt", release.TagName, assetName)
+	}
+	if err := installReleaseArtifact(ctx, releaseArtifact{
+		AssetName:   assetName,
+		BinaryName:  platformBinaryName("cjv", runtime.GOOS),
+		AssetURL:    assetURL,
+		ChecksumURL: checksumURL,
+	}); err != nil {
 		return fmt.Errorf("update failed: %w", err)
 	}
 
-	fmt.Println(i18n.T("UpdateApplied", i18n.MsgData{"Version": latest.Version()}))
+	fmt.Println(i18n.T("UpdateApplied", i18n.MsgData{"Version": latest}))
 	return nil
 }
 
