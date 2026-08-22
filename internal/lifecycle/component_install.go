@@ -36,9 +36,7 @@ func InstallComponentsForToolchain(ctx context.Context, tcInput string, componen
 }
 
 // InstallComponentsList expects resolvedName as "<channel>-<version>". The
-// configured distribution source resolves component artifacts. A unified source
-// uses its manifest for every channel; legacy nightly retains its release URL
-// convention.
+// configured manifest source resolves component artifacts for every channel.
 func InstallComponentsList(ctx context.Context, resolvedName string, components []string, force, quiet bool, fetcher *ManifestFetcher, opts Options) error {
 	resolvedTC, err := toolchain.ParseToolchainName(resolvedName)
 	if err != nil {

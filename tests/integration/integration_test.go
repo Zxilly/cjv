@@ -58,9 +58,9 @@ func writeIntegrationSettings(t *testing.T, cjvHome string, serverURL string) {
 	require.NoError(t, os.WriteFile(filepath.Join(settingsDir, "settings.toml"), []byte(settingsContent), 0o644))
 }
 
-func writeUnifiedIntegrationSettings(t *testing.T, cjvHome string, distServer string) {
+func writeManifestIntegrationSettings(t *testing.T, cjvHome string, manifestURL string) {
 	t.Helper()
-	settingsContent := fmt.Sprintf("dist_server = %q\nauto_install = false\nauto_self_update = \"disable\"\n", distServer)
+	settingsContent := fmt.Sprintf("manifest_url = %q\nauto_install = false\nauto_self_update = \"disable\"\n", manifestURL)
 	settingsDir := filepath.Join(cjvHome, ".cjv")
 	require.NoError(t, os.MkdirAll(settingsDir, 0o755))
 	require.NoError(t, os.WriteFile(filepath.Join(settingsDir, "settings.toml"), []byte(settingsContent), 0o644))
@@ -189,12 +189,12 @@ func TestIntegrationInstallFlow(t *testing.T) {
 	assert.Contains(t, stdout, "No toolchains installed")
 }
 
-func TestIntegrationUnifiedDistServerInstallsNightlyWithoutGitCode(t *testing.T) {
+func TestIntegrationDefaultManifestInstallsNightly(t *testing.T) {
 	binary := buildCJV(t)
 	sdkArchive, sdkHash := testutil.CreateMockSDKZip("1.2.0-alpha.20260822010101")
 	server := newUnifiedNightlyServer(t, sdkArchive, sdkHash)
 	cjvHome := t.TempDir()
-	writeUnifiedIntegrationSettings(t, cjvHome, server.URL+"/corp/cjv")
+	writeManifestIntegrationSettings(t, cjvHome, server.URL+"/corp/cjv/versions.json")
 	binDir := filepath.Join(cjvHome, "bin")
 	require.NoError(t, os.MkdirAll(binDir, 0o755))
 	managedName := "cjv"
@@ -203,7 +203,7 @@ func TestIntegrationUnifiedDistServerInstallsNightlyWithoutGitCode(t *testing.T)
 	}
 	copyBinary(t, binary, filepath.Join(binDir, managedName))
 
-	extraEnv := []string{"CJV_NO_PATH_SETUP=1", "CJV_GITCODE_API_KEY="}
+	extraEnv := []string{"CJV_NO_PATH_SETUP=1"}
 	stdout, stderr, err := runCJVEnv(t, binary, cjvHome, extraEnv, "toolchain", "list-remote", "--channel", "nightly")
 	require.NoError(t, err, "list-remote failed: stdout=%s stderr=%s", stdout, stderr)
 	assert.Contains(t, stdout, "1.2.0-alpha.20260822010101")

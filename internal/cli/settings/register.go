@@ -8,7 +8,6 @@ func RegisterCommands(root *cobra.Command) {
 	setCmd.AddCommand(setAutoSelfUpdateCmd)
 	setCmd.AddCommand(setAutoInstallCmd)
 	setCmd.AddCommand(setDefaultHostCmd)
-	setCmd.AddCommand(setGitCodeAPIKeyCmd)
 	setCmd.AddCommand(setHomeCmd)
 	root.AddCommand(setCmd)
 

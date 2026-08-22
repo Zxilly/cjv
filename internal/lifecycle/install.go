@@ -7,7 +7,6 @@ import (
 
 	"github.com/Zxilly/cjv/internal/component"
 	"github.com/Zxilly/cjv/internal/config"
-	"github.com/Zxilly/cjv/internal/dist"
 	"github.com/Zxilly/cjv/internal/i18n"
 	sdktarget "github.com/Zxilly/cjv/internal/target"
 	"github.com/Zxilly/cjv/internal/toolchain"
@@ -56,10 +55,8 @@ func (o Options) installComponent(ctx context.Context, roots component.Roots, tc
 	if o.ComponentInstall != nil {
 		return o.ComponentInstall(ctx, roots, tc, name, tuple, downloadsDir, force)
 	}
-	if tc.Channel != toolchain.Nightly || fetcher.source.Unified() {
-		if _, err := fetcher.Get(ctx); err != nil {
-			return err
-		}
+	if _, err := fetcher.Get(ctx); err != nil {
+		return err
 	}
 	return component.InstallFromSource(ctx, roots, tc, name, tuple, downloadsDir, force, fetcher.source)
 }
@@ -151,7 +148,7 @@ func InstallToolchainWithExtras(ctx context.Context, input string, targets, comp
 
 	var targetNames []string
 	for _, target := range normalizedTargets {
-		resolvedTarget, err := resolveTargetToolchain(ctx, targetBase, settings, fetcher, target, resolved)
+		resolvedTarget, err := resolveTargetToolchain(ctx, targetBase, settings, fetcher, target)
 		if err != nil {
 			return err
 		}
@@ -175,18 +172,8 @@ func InstallToolchainWithExtras(ctx context.Context, input string, targets, comp
 	return nil
 }
 
-func resolveTargetToolchain(ctx context.Context, base toolchain.ToolchainName, settings *config.Settings, fetcher *ManifestFetcher, target string, host ResolvedToolchain) (ResolvedToolchain, error) {
-	if fetcher.source.Unified() || base.Channel != toolchain.Nightly || host.NightlyReleaseTag == "" || host.NightlyVersion == "" {
-		return ResolveAndLocateWithTarget(ctx, base, settings, fetcher, target)
-	}
-	tuple, err := dist.CurrentTargetTuple(settings.DefaultHost, target)
-	if err != nil {
-		return ResolvedToolchain{}, err
-	}
-	return resolveNightlyRelease(ctx, dist.NightlyRelease{
-		TagName: host.NightlyReleaseTag,
-		Version: host.NightlyVersion,
-	}, tuple, fetcher.opts)
+func resolveTargetToolchain(ctx context.Context, base toolchain.ToolchainName, settings *config.Settings, fetcher *ManifestFetcher, target string) (ResolvedToolchain, error) {
+	return ResolveAndLocateWithTarget(ctx, base, settings, fetcher, target)
 }
 
 // LoadSettings loads the cached user settings file used by lifecycle operations.

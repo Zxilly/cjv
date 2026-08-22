@@ -47,8 +47,7 @@ func TestParseManifestWithNightlyChannel(t *testing.T) {
           "linux-x64": {
             "name": "nightly.tar.gz",
             "sha256": "` + validHash + `",
-            "url": "nightly/nightly.tar.gz",
-            "release_tag": "nightly-20260822"
+            "url": "nightly/nightly.tar.gz"
           }
         }
       },
@@ -73,10 +72,27 @@ func TestParseManifestWithNightlyChannel(t *testing.T) {
 	assert.Equal(t, nightlyVersion, latest)
 	info, err := m.GetDownloadInfo(toolchain.Nightly, nightlyVersion, "linux-x64")
 	require.NoError(t, err)
-	assert.Equal(t, "nightly-20260822", info.ReleaseTag)
+	assert.Equal(t, "nightly/nightly.tar.gz", info.URL)
 	docs, err := m.ComponentDownload(toolchain.Nightly, nightlyVersion, "docs", "")
 	require.NoError(t, err)
 	assert.Equal(t, validHash, docs.SHA256)
+}
+
+func TestParseManifestAllowsNightlySDKWithoutPublishedChecksum(t *testing.T) {
+	validHash := strings.Repeat("ab", 32)
+	json := `{
+  "channels": {
+    "lts": {"latest":"1.0.0","versions":{"1.0.0":{"linux-x64":{"name":"lts.tar.gz","sha256":"` + validHash + `","url":"https://example/lts"}}}},
+    "sts": {"latest":"1.1.0","versions":{"1.1.0":{"linux-x64":{"name":"sts.tar.gz","sha256":"` + validHash + `","url":"https://example/sts"}}}},
+    "nightly": {"latest":"1.2.0-alpha.1","versions":{"1.2.0-alpha.1":{"linux-x64":{"name":"nightly.tar.gz","sha256":"","url":"https://example/nightly"}}}}
+  }
+}`
+
+	manifest, err := ParseManifest([]byte(json))
+	require.NoError(t, err)
+	info, err := manifest.GetDownloadInfo(toolchain.Nightly, "1.2.0-alpha.1", "linux-x64")
+	require.NoError(t, err)
+	assert.Empty(t, info.SHA256)
 }
 
 func TestManifestGetDownloadInfo(t *testing.T) {

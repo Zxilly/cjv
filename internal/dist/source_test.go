@@ -47,7 +47,7 @@ func sourceTestManifest(sdkURL string) string {
 }`, sourceTestSHA256, sdkURL, sourceTestSHA256)
 }
 
-func sourceTestManifestWithNightly() string {
+func sourceTestManifestWithNightly(nightlySHA string) string {
 	return fmt.Sprintf(`{
   "channels": {
     "lts": {"latest":"1.0.0","versions":{"1.0.0":{"linux-x64":{"name":"lts.tar.gz","sha256":%q,"url":"sdk/lts.tar.gz"}}}},
@@ -59,8 +59,7 @@ func sourceTestManifestWithNightly() string {
           "linux-x64": {
             "name":"nightly.tar.gz",
             "sha256":%q,
-            "url":"nightly/nightly.tar.gz",
-            "release_tag":"nightly-20260822"
+            "url":"nightly/nightly.tar.gz"
           }
         }
       },
@@ -75,10 +74,10 @@ func sourceTestManifestWithNightly() string {
       }
     }
   }
-}`, sourceTestSHA256, sourceTestSHA256, sourceTestSHA256, sourceTestSHA256)
+}`, sourceTestSHA256, sourceTestSHA256, nightlySHA, sourceTestSHA256)
 }
 
-func TestSourceUnifiedRootResolvesManifestAndArtifactURLs(t *testing.T) {
+func TestSourceDistServerResolvesManifestAndArtifactURLs(t *testing.T) {
 	var requestedPath string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requestedPath = r.URL.Path
@@ -90,8 +89,6 @@ func TestSourceUnifiedRootResolvesManifestAndArtifactURLs(t *testing.T) {
 	settings.DistServer = server.URL + "/corp/cjv/"
 	source, err := NewSource(&settings)
 	require.NoError(t, err)
-	assert.True(t, source.Unified())
-
 	manifest, err := source.Manifest(context.Background())
 	require.NoError(t, err)
 	assert.Equal(t, "/corp/cjv/versions.json", requestedPath)
@@ -101,7 +98,7 @@ func TestSourceUnifiedRootResolvesManifestAndArtifactURLs(t *testing.T) {
 	assert.Equal(t, server.URL+"/corp/cjv/sdk/cangjie-sdk-linux-x64-1.0.0.tar.gz", info.URL)
 }
 
-func TestSourceUnifiedPreservesAbsoluteArtifactURL(t *testing.T) {
+func TestSourcePreservesAbsoluteArtifactURL(t *testing.T) {
 	const artifactURL = "https://downloads.example.com/cangjie-sdk.tar.gz"
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte(sourceTestManifest(artifactURL)))
@@ -119,19 +116,18 @@ func TestSourceUnifiedPreservesAbsoluteArtifactURL(t *testing.T) {
 	assert.Equal(t, artifactURL, info.URL)
 }
 
-func TestSourceLegacyUsesConfiguredManifestURL(t *testing.T) {
+func TestSourceUsesConfiguredManifestURL(t *testing.T) {
 	settings := config.DefaultSettings()
 	settings.ManifestURL = "https://manifest.example.com/custom.json"
 	source, err := NewSource(&settings)
 	require.NoError(t, err)
 
-	assert.False(t, source.Unified())
 	assert.Equal(t, settings.ManifestURL, source.ManifestURL())
 }
 
-func TestSourceUnifiedResolvesNightlyFromManifestWithoutGitCode(t *testing.T) {
+func TestSourceResolvesNightlyFromManifest(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		_, _ = w.Write([]byte(sourceTestManifestWithNightly()))
+		_, _ = w.Write([]byte(sourceTestManifestWithNightly(sourceTestSHA256)))
 	}))
 	defer server.Close()
 
@@ -143,11 +139,33 @@ func TestSourceUnifiedResolvesNightlyFromManifestWithoutGitCode(t *testing.T) {
 	release, err := source.ResolveToolchain(context.Background(), toolchain.Nightly, "", "linux-x64")
 	require.NoError(t, err)
 	assert.Equal(t, "1.2.0-alpha.20260822010101", release.Version)
-	assert.Equal(t, "nightly-20260822", release.ReleaseTag)
 	assert.Equal(t, server.URL+"/corp/cjv/nightly/nightly.tar.gz", release.Download.URL)
 }
 
-func TestSourceUnifiedMissingNightlyReturnsManifestError(t *testing.T) {
+func TestSourceResolvesNightlyChecksumSidecar(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(sourceTestManifestWithNightly("")))
+	}))
+	defer server.Close()
+
+	settings := config.DefaultSettings()
+	settings.ManifestURL = server.URL + "/versions.json"
+	var checksumAssetURL string
+	source, err := NewSourceWithOptions(&settings, SourceOptions{
+		FetchNightlySHA256: func(_ context.Context, assetURL string) (string, error) {
+			checksumAssetURL = assetURL
+			return sourceTestSHA256, nil
+		},
+	})
+	require.NoError(t, err)
+
+	release, err := source.ResolveToolchain(context.Background(), toolchain.Nightly, "", "linux-x64")
+	require.NoError(t, err)
+	assert.Equal(t, server.URL+"/nightly/nightly.tar.gz", checksumAssetURL)
+	assert.Equal(t, sourceTestSHA256, release.Download.SHA256)
+}
+
+func TestSourceMissingNightlyReturnsManifestError(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte(sourceTestManifest("sdk/lts.tar.gz")))
 	}))
@@ -155,24 +173,17 @@ func TestSourceUnifiedMissingNightlyReturnsManifestError(t *testing.T) {
 
 	settings := config.DefaultSettings()
 	settings.DistServer = server.URL + "/corp/cjv"
-	legacyCalled := false
-	source, err := NewSourceWithOptions(&settings, SourceOptions{
-		FetchLatestNightlyRelease: func(context.Context, string, string) (NightlyRelease, error) {
-			legacyCalled = true
-			return NightlyRelease{}, errors.New("legacy nightly adapter selected")
-		},
-	})
+	source, err := NewSource(&settings)
 	require.NoError(t, err)
 
 	_, err = source.ResolveToolchain(context.Background(), toolchain.Nightly, "", "linux-x64")
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, ErrManifestChannelMissing), err)
-	assert.False(t, legacyCalled)
 }
 
-func TestSourceUnifiedResolvesNightlyComponentFromManifest(t *testing.T) {
+func TestSourceResolvesNightlyComponentFromManifest(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		_, _ = w.Write([]byte(sourceTestManifestWithNightly()))
+		_, _ = w.Write([]byte(sourceTestManifestWithNightly(sourceTestSHA256)))
 	}))
 	defer server.Close()
 
@@ -187,7 +198,6 @@ func TestSourceUnifiedResolvesNightlyComponentFromManifest(t *testing.T) {
 		"1.2.0-alpha.20260822010101",
 		"docs",
 		"",
-		"nightly-20260822",
 	)
 	require.NoError(t, err)
 	assert.Equal(t, "docs.tar.gz", component.Name)

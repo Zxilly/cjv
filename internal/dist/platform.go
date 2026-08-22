@@ -2,46 +2,13 @@ package dist
 
 import sdktarget "github.com/Zxilly/cjv/internal/target"
 
-type tupleMapping struct {
-	Tuple             string // canonical target tuple (used as the manifest index key)
-	NightlyOS         string // OS segment in nightly filenames
-	NightlyArch       string // arch segment in nightly filenames
-	EnvironmentSuffix string // target environment suffix in nightly filenames
-}
-
-func lookup(goos, goarch string) (tupleMapping, error) {
-	id, err := sdktarget.HostIdentity(goos, goarch)
-	if err != nil {
-		return tupleMapping{}, err
-	}
-	return tupleMapping{
-		Tuple:             id.Tuple(),
-		NightlyOS:         id.NightlyOS(),
-		NightlyArch:       id.NightlyArch(),
-		EnvironmentSuffix: id.EnvironmentSuffix(),
-	}, nil
-}
-
-func lookupTuple(tuple string) (tupleMapping, error) {
-	id, err := sdktarget.ParseIdentity(tuple)
-	if err != nil {
-		return tupleMapping{}, err
-	}
-	return tupleMapping{
-		Tuple:             id.Tuple(),
-		NightlyOS:         id.NightlyOS(),
-		NightlyArch:       id.NightlyArch(),
-		EnvironmentSuffix: id.EnvironmentSuffix(),
-	}, nil
-}
-
 // HostTupleFromGo returns the host target tuple for a (goos, goarch) pair.
 func HostTupleFromGo(goos, goarch string) (string, error) {
-	m, err := lookup(goos, goarch)
+	id, err := sdktarget.HostIdentity(goos, goarch)
 	if err != nil {
 		return "", err
 	}
-	return m.Tuple, nil
+	return id.Tuple(), nil
 }
 
 // CurrentHostTuple returns the current host's target tuple. If defaultHost is
@@ -59,42 +26,4 @@ func CurrentTargetTuple(defaultHost, environment string) (string, error) {
 		return "", err
 	}
 	return id.Tuple(), nil
-}
-
-func NightlyFilename(goos, goarch, version string) (string, error) {
-	m, err := lookup(goos, goarch)
-	if err != nil {
-		return "", err
-	}
-	ext := ArchiveExt(goos)
-	return "cangjie-sdk-" + m.NightlyOS + "-" + m.NightlyArch + "-" + version + ext, nil
-}
-
-// NightlyArchiveName builds the nightly archive filename that corresponds to a
-// target tuple, including the cross-compile target suffix when present.
-func NightlyArchiveName(tuple, version string) (string, error) {
-	m, err := lookupTuple(tuple)
-	if err != nil {
-		return "", err
-	}
-	return "cangjie-sdk-" + m.NightlyOS + "-" + m.NightlyArch + m.EnvironmentSuffix + "-" + version + ArchiveExt(NightlyGOOS(m.NightlyOS)), nil
-}
-
-// NightlyGOOS maps the SDK manifest's OS name to Go's GOOS (mac → darwin).
-func NightlyGOOS(nightlyOS string) string {
-	switch nightlyOS {
-	case "windows":
-		return "windows"
-	case "mac":
-		return "darwin"
-	default:
-		return nightlyOS
-	}
-}
-
-func ArchiveExt(goos string) string {
-	if goos == "windows" {
-		return ".zip"
-	}
-	return ".tar.gz"
 }

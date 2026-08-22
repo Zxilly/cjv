@@ -54,7 +54,6 @@ const (
 	EnvMaxRetries       = "CJV_MAX_RETRIES"
 	EnvDownloadTimeout  = "CJV_DOWNLOAD_TIMEOUT"
 	EnvNoPathSetup      = "CJV_NO_PATH_SETUP"
-	EnvGitCodeAPIKey    = "CJV_GITCODE_API_KEY"
 	EnvDistServer       = "CJV_DIST_SERVER"
 	EnvFallbackSettings = "CJV_FALLBACK_SETTINGS"
 	// EnvAllowInsecureManifest, when set to "1", permits fetching the toolchain

@@ -31,16 +31,17 @@ func ValidAutoSelfUpdate(s string) bool {
 const currentSettingsVersion = 1
 
 type Settings struct {
-	Version          int               `toml:"version"`
-	Home             string            `toml:"home,omitempty"`
-	DefaultToolchain string            `toml:"default_toolchain"`
-	ManifestURL      string            `toml:"manifest_url"`
-	DistServer       string            `toml:"dist_server,omitempty"`
-	AutoSelfUpdate   string            `toml:"auto_self_update"`
-	AutoInstall      bool              `toml:"auto_install"`
-	DefaultHost      string            `toml:"default_host,omitempty"`
-	GitCodeAPIKey    string            `toml:"gitcode_api_key,omitempty"`
-	Overrides        map[string]string `toml:"overrides,omitempty"`
+	Version          int    `toml:"version"`
+	Home             string `toml:"home,omitempty"`
+	DefaultToolchain string `toml:"default_toolchain"`
+	ManifestURL      string `toml:"manifest_url"`
+	DistServer       string `toml:"dist_server,omitempty"`
+	AutoSelfUpdate   string `toml:"auto_self_update"`
+	AutoInstall      bool   `toml:"auto_install"`
+	DefaultHost      string `toml:"default_host,omitempty"`
+	// GitCodeAPIKey preserves settings v1 files created by earlier cjv releases.
+	GitCodeAPIKey string            `toml:"gitcode_api_key,omitempty"`
+	Overrides     map[string]string `toml:"overrides,omitempty"`
 }
 
 func DefaultSettings() Settings {
@@ -96,8 +97,8 @@ func decodeSettingsTOML(data []byte) (Settings, toml.MetaData, error) {
 // settings version or a typo'd key is caught identically wherever the file
 // lives.
 //
-// Environment overrides such as the GitCode API key and dist server are
-// resolved at access time, keeping persisted settings stable across Save.
+// Environment overrides such as the dist server are resolved at access time,
+// keeping persisted settings stable across Save.
 func applyDecodedSettings(s *Settings, md toml.MetaData) error {
 	for _, key := range md.Undecoded() {
 		slog.Warn(i18n.T("UnknownSettingsField", i18n.MsgData{
@@ -124,19 +125,6 @@ func applyDecodedSettings(s *Settings, md toml.MetaData) error {
 	return nil
 }
 
-// ResolveGitCodeAPIKey returns the GitCode API token, preferring the
-// CJV_GITCODE_API_KEY environment variable over the persisted setting so
-// CI/deployment can inject the credential without it being written back to
-// settings.toml. The env value is never stored on the Settings struct, so a
-// later Save cannot leak it to disk, and it always wins over a value merged
-// from the system fallback file.
-func (s *Settings) ResolveGitCodeAPIKey() string {
-	if v := os.Getenv(EnvGitCodeAPIKey); v != "" {
-		return v
-	}
-	return s.GitCodeAPIKey
-}
-
 // ResolveDistServer returns the unified distribution server configured for all
 // toolchain channels. The environment override is intentionally resolved at
 // access time so managed CI jobs can select an ephemeral source.
@@ -150,6 +138,9 @@ func (s *Settings) ResolveDistServer() string {
 // migrateSettings applies in-memory migrations from older settings versions
 // to the current version. Add new cases as currentSettingsVersion is bumped.
 func migrateSettings(s *Settings) {
+	// Nightly metadata now comes from manifest_url, so a subsequent Save omits
+	// credentials carried by settings files created by earlier releases.
+	s.GitCodeAPIKey = ""
 	// Example for future migration:
 	//   if s.Version < 2 { /* migrate v1 → v2 */ s.Version = 2 }
 	s.Version = currentSettingsVersion

@@ -150,10 +150,9 @@ func unifiedNightlyMockServer(t *testing.T) *httptest.Server {
 		Versions: map[string]map[string]dist.DownloadInfo{
 			"1.2.0-alpha.20260822010101": {
 				tuple: {
-					Name:       "nightly.zip",
-					SHA256:     sha,
-					URL:        "nightly/nightly.zip",
-					ReleaseTag: "nightly-20260822",
+					Name:   "nightly.zip",
+					SHA256: sha,
+					URL:    "nightly/nightly.zip",
 				},
 			},
 		},
@@ -327,25 +326,10 @@ func TestInstallToolchainWithOptions_InstallsLTS(t *testing.T) {
 	assert.NotEmpty(t, installed, "should have at least one installed toolchain")
 }
 
-func TestInstallToolchainWithOptions_LTSHasNoNightlyReleaseMetadata(t *testing.T) {
-	home := t.TempDir()
-	config.IsolateForTest(t, home)
-	require.NoError(t, config.EnsureDirs())
-	server := validMockServer(t)
-	settings := config.DefaultSettings()
-	settings.ManifestURL = server.URL + "/sdk-versions.json"
-	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
-
-	require.NoError(t, InstallToolchainWithOptions(context.Background(), "lts", false))
-	_, err := toolchain.ReadNightlyReleaseMetadata(filepath.Join(home, "toolchains", "lts-1.0.5"))
-	require.Error(t, err)
-}
-
 func TestInstallToolchainWithOptions_InstallsNightlyFromUnifiedDistServer(t *testing.T) {
 	home := t.TempDir()
 	config.IsolateForTest(t, home)
 	require.NoError(t, config.EnsureDirs())
-	t.Setenv(config.EnvGitCodeAPIKey, "")
 
 	server := unifiedNightlyMockServer(t)
 	settings := config.DefaultSettings()
@@ -358,11 +342,26 @@ func TestInstallToolchainWithOptions_InstallsNightlyFromUnifiedDistServer(t *tes
 	assert.Contains(t, installed, "nightly-1.2.0-alpha.20260822010101")
 }
 
+func TestInstallToolchainWithOptions_DefaultManifestInstallsNightly(t *testing.T) {
+	home := t.TempDir()
+	config.IsolateForTest(t, home)
+	require.NoError(t, config.EnsureDirs())
+
+	server := unifiedNightlyMockServer(t)
+	settings := config.DefaultSettings()
+	settings.ManifestURL = server.URL + "/corp/cjv/versions.json"
+	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
+
+	require.NoError(t, InstallToolchainWithOptions(context.Background(), "nightly", false))
+	installed, err := toolchain.ListInstalled()
+	require.NoError(t, err)
+	assert.Contains(t, installed, "nightly-1.2.0-alpha.20260822010101")
+}
+
 func TestInstallToolchainWithExtras_InstallsNightlyComponentFromUnifiedDistServer(t *testing.T) {
 	home := t.TempDir()
 	config.IsolateForTest(t, home)
 	require.NoError(t, config.EnsureDirs())
-	t.Setenv(config.EnvGitCodeAPIKey, "")
 
 	server := unifiedNightlyMockServer(t)
 	settings := config.DefaultSettings()
@@ -1062,28 +1061,6 @@ func TestInstallToolchainWithOptions_Wrapper(t *testing.T) {
 	assert.NotEmpty(t, installed)
 }
 
-func TestResolveNightlyWithSpecificVersionSkipsLatestLookup(t *testing.T) {
-	t.Setenv(config.EnvGitCodeAPIKey, "")
-	settings := config.DefaultSettings()
-	// No GitCode API key is configured: a specific version must skip the latest
-	// lookup (which requires the key and a network call), so resolution
-	// succeeds offline. Stub the checksum fetch — it now reports a hard error on
-	// network failure instead of silently returning an empty digest.
-	orig := fetchNightlySHA256
-	fetchNightlySHA256 = func(context.Context, string) (string, error) { return "", nil }
-	t.Cleanup(func() { fetchNightlySHA256 = orig })
-
-	resolved, err := resolveNightly(context.Background(), toolchain.ToolchainName{
-		Channel: toolchain.Nightly,
-		Version: "202501010000",
-	}, &settings, "linux-x64")
-
-	require.NoError(t, err)
-	assert.Equal(t, "nightly-202501010000", resolved.Name)
-	assert.Contains(t, resolved.URL, "202501010000")
-	assert.Empty(t, resolved.SHA256)
-}
-
 func TestInstallToolchainWithExtrasRejectsCustomAndTargetVariantWithTargets(t *testing.T) {
 	home := t.TempDir()
 	config.IsolateForTest(t, home)
@@ -1140,21 +1117,4 @@ func TestInstallComponentsListInputValidationAndAlreadyInstalled(t *testing.T) {
 
 	err = installComponentsList(context.Background(), tcName, []string{"docs"}, false, false)
 	require.NoError(t, err)
-}
-
-func TestResolveAndLocateDispatchesNightlyAndDefaultToolchainExistsInvalidName(t *testing.T) {
-	t.Setenv(config.EnvGitCodeAPIKey, "")
-	orig := fetchNightlySHA256
-	fetchNightlySHA256 = func(context.Context, string) (string, error) { return "", nil }
-	t.Cleanup(func() { fetchNightlySHA256 = orig })
-
-	settings := config.DefaultSettings()
-	resolved, err := resolveAndLocate(context.Background(), toolchain.ToolchainName{
-		Channel: toolchain.Nightly,
-		Version: "202501010000",
-	}, &settings, newManifestFetcher(""), "linux-x64")
-
-	require.NoError(t, err)
-	assert.Equal(t, "nightly-202501010000", resolved.Name)
-	assert.False(t, defaultToolchainExists("+bad"))
 }

@@ -23,7 +23,6 @@ const (
 	ErrorCodeUnsupportedPlatform             ErrorCode = "UNSUPPORTED_PLATFORM"
 	ErrorCodeRecursionLimitExceeded          ErrorCode = "RECURSION_LIMIT_EXCEEDED"
 	ErrorCodeUnknownChannel                  ErrorCode = "UNKNOWN_CHANNEL"
-	ErrorCodeGitCodeAPIKeyRequired           ErrorCode = "GITCODE_API_KEY_REQUIRED"
 	ErrorCodeUnsupportedForJSON              ErrorCode = "UNSUPPORTED_FOR_JSON"
 	ErrorCodeUnknownComponent                ErrorCode = "UNKNOWN_COMPONENT"
 	ErrorCodeComponentNotInstalled           ErrorCode = "COMPONENT_NOT_INSTALLED"
@@ -188,15 +187,6 @@ func (e *UnknownChannelError) Error() string {
 }
 func (e *UnknownChannelError) Code() ErrorCode         { return ErrorCodeUnknownChannel }
 func (e *UnknownChannelError) Details() map[string]any { return map[string]any{"channel": e.Channel} }
-
-// GitCodeAPIKeyRequiredError indicates the GitCode API key is not configured.
-type GitCodeAPIKeyRequiredError struct{}
-
-func (e *GitCodeAPIKeyRequiredError) Error() string {
-	return i18n.T("GitCodeAPIKeyRequired", nil)
-}
-func (e *GitCodeAPIKeyRequiredError) Code() ErrorCode         { return ErrorCodeGitCodeAPIKeyRequired }
-func (e *GitCodeAPIKeyRequiredError) Details() map[string]any { return map[string]any{} }
 
 // ExitCodeError carries a process exit code so callers can propagate it
 // without calling os.Exit directly (which would skip deferred cleanup).

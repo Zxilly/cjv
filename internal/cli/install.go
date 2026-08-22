@@ -138,10 +138,6 @@ func (f *manifestFetcher) get(ctx context.Context) (*dist.Manifest, error) {
 	return f.inner.Get(ctx)
 }
 
-func (f *manifestFetcher) usesManifestFor(channel toolchain.Channel) bool {
-	return f.inner.UsesManifestFor(channel)
-}
-
 // InstallComponentsForToolchain backs the proxy auto_install path: it
 // resolves tcInput to an already-installed toolchain and installs missing
 // components quietly.
@@ -210,34 +206,7 @@ func ensurePathConfigured() {
 }
 
 func resolveAndLocate(ctx context.Context, name toolchain.ToolchainName, settings *config.Settings, fetcher *manifestFetcher, tuple string) (resolvedToolchain, error) {
-	return withNightlyChecksumHook(func() (resolvedToolchain, error) {
-		return lifecycle.ResolveAndLocatePlatform(ctx, name, settings, fetcher.inner, tuple)
-	})
-}
-
-func withNightlyChecksumHook(fn func() (resolvedToolchain, error)) (resolvedToolchain, error) {
-	orig := lifecycle.FetchNightlySHA256
-	lifecycle.FetchNightlySHA256 = fetchNightlySHA256
-	defer func() { lifecycle.FetchNightlySHA256 = orig }()
-	return fn()
-}
-
-// fetchNightlySHA256 is a package-level seam so tests can resolve a nightly
-// toolchain without reaching the network for the checksum sidecar.
-var fetchNightlySHA256 = dist.FetchNightlySHA256
-
-func resolveNightly(ctx context.Context, name toolchain.ToolchainName, settings *config.Settings, tuple string) (resolvedToolchain, error) {
-	return resolveAndLocate(ctx, name, settings, newManifestFetcher(settings.ManifestURL), tuple)
-}
-
-// defaultToolchainExists checks whether the configured default toolchain is still installed.
-func defaultToolchainExists(name string) bool {
-	parsed, err := toolchain.ParseToolchainName(name)
-	if err != nil {
-		return false
-	}
-	_, err = toolchain.FindInstalled(parsed)
-	return err == nil
+	return lifecycle.ResolveAndLocatePlatform(ctx, name, settings, fetcher.inner, tuple)
 }
 
 // validateInstallation checks that the installed SDK has essential binaries.

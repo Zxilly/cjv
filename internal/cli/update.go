@@ -58,6 +58,9 @@ type updateOutcome struct {
 
 func runUpdate(cmd *cobra.Command, args []string) error {
 	ctx := cmd.Context()
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	toolchain.CleanupStagingDirs()
 
 	if len(args) == 1 {
@@ -228,13 +231,11 @@ func updateAll(ctx context.Context) (updateOutcome, error) {
 		if parsed.IsCustom() || parsed.Channel == toolchain.UnknownChannel {
 			continue // skip custom/linked toolchains
 		}
-		if fetcher.usesManifestFor(parsed.Channel) {
-			if _, err := fetcher.get(ctx); err != nil {
-				manifestWarnOnce.Do(func() {
-					slog.Warn("manifest fetch failed; skipping non-nightly updates", "error", err)
-				})
-				continue
-			}
+		if _, err := fetcher.get(ctx); err != nil {
+			manifestWarnOnce.Do(func() {
+				slog.Warn("manifest fetch failed; skipping channel updates", "error", err)
+			})
+			continue
 		}
 
 		// Reload settings from the cached SettingsFile so each iteration sees

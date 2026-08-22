@@ -73,30 +73,3 @@ var setDefaultHostCmd = &cobra.Command{
 		})
 	},
 }
-
-var setGitCodeAPIKeyCmd = &cobra.Command{
-	Use:   "gitcode-api-key <key>",
-	Short: i18n.T("SetGitCodeAPIKeyShort", nil),
-	Args:  cobra.ExactArgs(1),
-	RunE: func(cmd *cobra.Command, args []string) error {
-		val := args[0]
-		// Display a masked value: the token is a secret and updateSetting
-		// echoes the display value to stdout (scrollback, CI logs, screen shares).
-		return updateSetting("gitcode-api-key", maskSecret(val), func(s *config.Settings) bool {
-			if s.GitCodeAPIKey == val {
-				return false
-			}
-			s.GitCodeAPIKey = val
-			return true
-		})
-	},
-}
-
-// maskSecret redacts a secret value for display, revealing neither its content
-// nor its length.
-func maskSecret(s string) string {
-	if s == "" {
-		return ""
-	}
-	return "********"
-}

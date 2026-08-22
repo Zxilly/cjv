@@ -2,6 +2,9 @@ package lifecycle
 
 import (
 	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
@@ -12,108 +15,52 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func stubNightlyChecksum(t *testing.T) {
-	t.Helper()
-	orig := FetchNightlySHA256
-	FetchNightlySHA256 = func(context.Context, string) (string, error) { return "", nil }
-	t.Cleanup(func() { FetchNightlySHA256 = orig })
-}
-
-func stubLatestNightlyRelease(t *testing.T, fn func(context.Context, string, string) (dist.NightlyRelease, error)) {
-	t.Helper()
-	orig := FetchLatestNightlyRelease
-	FetchLatestNightlyRelease = fn
-	t.Cleanup(func() { FetchLatestNightlyRelease = orig })
-}
-
 func quietLifecycleOptions() Options {
 	return Options{IsJSON: func() bool { return true }}
 }
 
-func TestResolveNightlyReleaseSeparatesTagAndAssetVersion(t *testing.T) {
-	stubNightlyChecksum(t)
+func TestResolveTargetToolchainUsesManifestNightlyVersion(t *testing.T) {
+	const version = "1.2.0-alpha.20260613020028"
+	const sha = "0000000000000000000000000000000000000000000000000000000000000000"
 
-	const tag = "1.1.0-alpha.20260613020028"
-	const assetVersion = "1.2.0-alpha.20260613020028"
-	resolved, err := resolveNightlyRelease(context.Background(), dist.NightlyRelease{
-		TagName: tag,
-		Version: assetVersion,
-	}, "linux-x64", quietLifecycleOptions())
+	manifest := dist.Manifest{}
+	manifest.Channels.LTS = dist.ChannelInfo{Latest: "1.0.5", Versions: map[string]map[string]dist.DownloadInfo{
+		"1.0.5": {"linux-x64": {Name: "lts.tar.gz", URL: "https://example/lts.tar.gz", SHA256: sha}},
+	}}
+	manifest.Channels.STS = dist.ChannelInfo{Latest: "1.1.0", Versions: map[string]map[string]dist.DownloadInfo{
+		"1.1.0": {"linux-x64": {Name: "sts.tar.gz", URL: "https://example/sts.tar.gz", SHA256: sha}},
+	}}
+	nightly := dist.ChannelInfo{Latest: version, Versions: map[string]map[string]dist.DownloadInfo{
+		version: {
+			"linux-x64":      {Name: "host.tar.gz", URL: "https://example/host.tar.gz", SHA256: sha},
+			"linux-x64-ohos": {Name: "ohos.tar.gz", URL: "https://example/ohos.tar.gz", SHA256: sha},
+		},
+	}}
+	manifest.Channels.Nightly = &nightly
 
-	require.NoError(t, err)
-	assert.Equal(t, "nightly-"+assetVersion, resolved.Name)
-	assert.Equal(t, tag, resolved.NightlyReleaseTag)
-	assert.Equal(t, assetVersion, resolved.NightlyVersion)
-	assert.True(t, strings.Contains(resolved.URL, "/"+tag+"/"), resolved.URL)
-	assert.True(t, strings.Contains(resolved.URL, "cangjie-sdk-linux-x64-"+assetVersion+".tar.gz"), resolved.URL)
-}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		require.NoError(t, json.NewEncoder(w).Encode(manifest))
+	}))
+	defer server.Close()
 
-func TestResolveNightlyPinnedAssetVersionUsesLatestReleaseTag(t *testing.T) {
-	stubNightlyChecksum(t)
-
-	const tag = "1.1.0-alpha.20260613020028"
-	const assetVersion = "1.2.0-alpha.20260613020028"
-	settings := config.DefaultSettings()
-	settings.GitCodeAPIKey = "test-token"
-	stubLatestNightlyRelease(t, func(_ context.Context, _ string, apiKey string) (dist.NightlyRelease, error) {
-		assert.Equal(t, "test-token", apiKey)
-		return dist.NightlyRelease{TagName: tag, Version: assetVersion}, nil
-	})
-
-	resolved, err := resolveNightly(context.Background(), toolchain.ToolchainName{
-		Channel: toolchain.Nightly,
-		Version: assetVersion,
-	}, &settings, "linux-x64", quietLifecycleOptions())
-
-	require.NoError(t, err)
-	assert.Equal(t, "nightly-"+assetVersion, resolved.Name)
-	assert.Equal(t, tag, resolved.NightlyReleaseTag)
-	assert.Equal(t, assetVersion, resolved.NightlyVersion)
-	assert.True(t, strings.Contains(resolved.URL, "/"+tag+"/"), resolved.URL)
-	assert.True(t, strings.Contains(resolved.URL, "cangjie-sdk-linux-x64-"+assetVersion+".tar.gz"), resolved.URL)
-}
-
-func TestResolveNightlyPinnedReleaseTagUsesLatestAssetVersion(t *testing.T) {
-	stubNightlyChecksum(t)
-
-	const tag = "1.1.0-alpha.20260613020028"
-	const assetVersion = "1.2.0-alpha.20260613020028"
-	settings := config.DefaultSettings()
-	settings.GitCodeAPIKey = "test-token"
-	stubLatestNightlyRelease(t, func(_ context.Context, _ string, _ string) (dist.NightlyRelease, error) {
-		return dist.NightlyRelease{TagName: tag, Version: assetVersion}, nil
-	})
-
-	resolved, err := resolveNightly(context.Background(), toolchain.ToolchainName{
-		Channel: toolchain.Nightly,
-		Version: tag,
-	}, &settings, "linux-x64", quietLifecycleOptions())
-
-	require.NoError(t, err)
-	assert.Equal(t, "nightly-"+assetVersion, resolved.Name)
-	assert.True(t, strings.Contains(resolved.URL, "/"+tag+"/"), resolved.URL)
-	assert.True(t, strings.Contains(resolved.URL, "cangjie-sdk-linux-x64-"+assetVersion+".tar.gz"), resolved.URL)
-}
-
-func TestResolveTargetToolchainKeepsNightlyReleaseTag(t *testing.T) {
-	stubNightlyChecksum(t)
-
-	const tag = "1.1.0-alpha.20260613020028"
-	const assetVersion = "1.2.0-alpha.20260613020028"
 	settings := config.DefaultSettings()
 	settings.DefaultHost = "linux-amd64"
-	fetcher := NewManifestFetcher("", quietLifecycleOptions())
+	settings.ManifestURL = server.URL
+	fetcher, err := NewManifestFetcherForSettings(&settings, quietLifecycleOptions())
+	require.NoError(t, err)
 
-	resolved, err := resolveTargetToolchain(context.Background(),
-		toolchain.ToolchainName{Channel: toolchain.Nightly, Version: assetVersion},
+	host, err := ResolveAndLocate(context.Background(), toolchain.ToolchainName{Channel: toolchain.Nightly}, &settings, fetcher)
+	require.NoError(t, err)
+	assert.Equal(t, "nightly-"+version, host.Name)
+
+	target, err := resolveTargetToolchain(
+		context.Background(),
+		toolchain.ToolchainName{Channel: toolchain.Nightly, Version: version},
 		&settings,
 		fetcher,
 		"ohos",
-		ResolvedToolchain{NightlyReleaseTag: tag, NightlyVersion: assetVersion},
 	)
-
 	require.NoError(t, err)
-	assert.Equal(t, "nightly-"+assetVersion+"-linux-x64-ohos", resolved.Name)
-	assert.True(t, strings.Contains(resolved.URL, "/"+tag+"/"), resolved.URL)
-	assert.True(t, strings.Contains(resolved.URL, "cangjie-sdk-linux-x64-ohos-"+assetVersion+".tar.gz"), resolved.URL)
+	assert.Equal(t, "nightly-"+version+"-linux-x64-ohos", target.Name)
+	assert.True(t, strings.HasSuffix(target.URL, "/ohos.tar.gz"), target.URL)
 }

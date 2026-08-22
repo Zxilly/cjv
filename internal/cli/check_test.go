@@ -50,7 +50,6 @@ func TestRunCheck_NightlyUsesUnifiedDistServer(t *testing.T) {
 	home := t.TempDir()
 	config.IsolateForTest(t, home)
 	require.NoError(t, config.EnsureDirs())
-	t.Setenv(config.EnvGitCodeAPIKey, "")
 
 	server := unifiedNightlyMockServer(t)
 	settings := config.DefaultSettings()

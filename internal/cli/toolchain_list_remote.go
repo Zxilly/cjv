@@ -51,13 +51,10 @@ type platformVersionsEntry struct {
 	Versions []string `json:"versions"`
 }
 
-// Manifest-backed channels populate Platforms. The GitCode latest adapter
-// populates a channel-level Versions list.
 type toolchainListRemoteAllPlatformsEntry struct {
 	Channel   string                  `json:"channel"`
 	Latest    string                  `json:"latest,omitempty"`
 	Platforms []platformVersionsEntry `json:"platforms,omitempty"`
-	Versions  []string                `json:"versions,omitempty"`
 	Error     string                  `json:"error,omitempty"`
 }
 
@@ -138,7 +135,7 @@ func buildSourceChannelEntry(ctx context.Context, source *dist.Source, ch toolch
 	entry := toolchainListRemoteEntry{
 		Channel:       ch.String(),
 		Versions:      []string{},
-		PlatformAware: ch != toolchain.Nightly || source.Unified(),
+		PlatformAware: true,
 	}
 	latest, versions, err := source.ChannelVersions(ctx, ch, tuple)
 	if err != nil {
@@ -198,17 +195,12 @@ func runToolchainListRemoteAllPlatforms(ctx context.Context, cmd *cobra.Command,
 
 func buildSourceAllPlatformsEntry(ctx context.Context, source *dist.Source, ch toolchain.Channel) toolchainListRemoteAllPlatformsEntry {
 	entry := toolchainListRemoteAllPlatformsEntry{Channel: ch.String()}
-	latest, grouped, hasPlatforms, err := source.ChannelVersionsByTuple(ctx, ch)
+	latest, grouped, err := source.ChannelVersionsByTuple(ctx, ch)
 	if err != nil {
 		entry.Error = err.Error()
-		entry.Versions = []string{}
 		return entry
 	}
 	entry.Latest = latest
-	if !hasPlatforms {
-		entry.Versions = grouped[""]
-		return entry
-	}
 	keys := make([]string, 0, len(grouped))
 	for key := range grouped {
 		keys = append(keys, key)
@@ -307,10 +299,6 @@ func writeAllPlatformsChannelHeader(b *strings.Builder, e toolchainListRemoteAll
 func writeAllPlatformsChannelBody(b *strings.Builder, e toolchainListRemoteAllPlatformsEntry) {
 	if e.Error != "" {
 		fmt.Fprintln(b, "  "+color.YellowString("(%s)", e.Error))
-		return
-	}
-	if e.Channel == toolchain.Nightly.String() && len(e.Platforms) == 0 {
-		writeVersionLines(b, e.Versions, e.Latest, "  ")
 		return
 	}
 	for _, p := range e.Platforms {

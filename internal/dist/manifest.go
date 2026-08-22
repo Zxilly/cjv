@@ -14,10 +14,9 @@ import (
 )
 
 type DownloadInfo struct {
-	Name       string `json:"name"`
-	SHA256     string `json:"sha256"`
-	URL        string `json:"url"`
-	ReleaseTag string `json:"release_tag,omitempty"`
+	Name   string `json:"name"`
+	SHA256 string `json:"sha256"`
+	URL    string `json:"url"`
 }
 
 // ComponentInfo is a toolchain add-on archive (docs / stdx / stdx-docs).
@@ -282,6 +281,15 @@ func validateChannel(channel toolchain.Channel, ch ChannelInfo) error {
 			return fmt.Errorf("channel %s version %s has no platforms", label, version)
 		}
 		for platform, info := range platforms {
+			if channel == toolchain.Nightly && info.SHA256 == "" {
+				if info.Name == "" {
+					return fmt.Errorf("channel %s version %s platform %s has empty name", label, version, platform)
+				}
+				if info.URL == "" {
+					return fmt.Errorf("channel %s version %s platform %s has empty url", label, version, platform)
+				}
+				continue
+			}
 			if err := validateDownloadInfo(label, version, platform, info); err != nil {
 				return err
 			}

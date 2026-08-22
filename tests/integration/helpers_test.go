@@ -334,10 +334,9 @@ func newUnifiedNightlyServer(t *testing.T, sdkArchive []byte, sdkHash string) *h
 		Versions: map[string]map[string]dist.DownloadInfo{
 			"1.2.0-alpha.20260822010101": {
 				tuple: {
-					Name:       "nightly.zip",
-					URL:        "nightly/nightly.zip",
-					SHA256:     sdkHash,
-					ReleaseTag: "nightly-20260822",
+					Name:   "nightly.zip",
+					URL:    "nightly/nightly.zip",
+					SHA256: sdkHash,
 				},
 			},
 		},

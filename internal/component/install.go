@@ -16,8 +16,7 @@ import (
 // Install downloads and unpacks a component for the given toolchain.
 // tuple is required for stdx (a host tuple selects the host stdx, a target
 // tuple selects the matching cross-compile target stdx) and ignored for
-// docs / stdx-docs. mf is the version manifest the LTS / STS download link is
-// read from; it may be nil for nightly toolchains, whose URLs are constructed.
+// docs / stdx-docs. mf supplies component URLs for every standard channel.
 // force=true reinstalls over an existing manifest.
 func Install(ctx context.Context, roots Roots, tc toolchain.ToolchainName, name Name, tuple, downloadsDir string, force bool, mf *dist.Manifest) (retErr error) {
 	return installWithResolver(ctx, roots, tc, name, tuple, downloadsDir, force, func(spec Spec) (dist.ComponentInfo, error) {
@@ -25,9 +24,8 @@ func Install(ctx context.Context, roots Roots, tc toolchain.ToolchainName, name 
 	})
 }
 
-// InstallFromSource installs a component through the configured distribution
-// source. Unified sources resolve every channel from the shared manifest;
-// legacy nightly retains its historical release layout.
+// InstallFromSource installs a component through the configured manifest
+// distribution source.
 func InstallFromSource(ctx context.Context, roots Roots, tc toolchain.ToolchainName, name Name, tuple, downloadsDir string, force bool, source *dist.Source) (retErr error) {
 	return installWithResolver(ctx, roots, tc, name, tuple, downloadsDir, force, func(spec Spec) (dist.ComponentInfo, error) {
 		platform := ""
@@ -38,8 +36,7 @@ func InstallFromSource(ctx context.Context, roots Roots, tc toolchain.ToolchainN
 				return dist.ComponentInfo{}, err
 			}
 		}
-		nightly := nightlyReleaseAsset(tc)
-		return source.ResolveComponent(ctx, tc.Channel, tc.Version, string(name), platform, nightly.ReleaseTag)
+		return source.ResolveComponent(ctx, tc.Channel, tc.Version, string(name), platform)
 	})
 }
 

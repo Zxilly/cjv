@@ -77,11 +77,6 @@ func TestAllErrorTypes_ProduceReadableMessages(t *testing.T) {
 			[]string{"beta"},
 		},
 		{
-			"GitCodeAPIKeyRequired",
-			&GitCodeAPIKeyRequiredError{},
-			nil,
-		},
-		{
 			"UnknownComponent",
 			&UnknownComponentError{Name: "extra-docs"},
 			[]string{"extra-docs"},

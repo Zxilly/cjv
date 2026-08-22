@@ -4,7 +4,6 @@ import (
 	"testing"
 
 	"github.com/Zxilly/cjv/internal/cjverr"
-	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/dist"
 	"github.com/Zxilly/cjv/internal/toolchain"
 	"github.com/stretchr/testify/assert"
@@ -22,6 +21,8 @@ func manifestWithComponents(channel toolchain.Channel, version string, set dist.
 		m.Channels.LTS = ci
 	case toolchain.STS:
 		m.Channels.STS = ci
+	case toolchain.Nightly:
+		m.Channels.Nightly = &ci
 	}
 	return &m
 }
@@ -159,33 +160,23 @@ func TestAvailableComponentsFiltersBySelectedPlatform(t *testing.T) {
 	assert.Contains(t, got, StdxDocs)
 }
 
-func TestResolveAssetURLNightlyUsesReleaseMetadata(t *testing.T) {
-	home := t.TempDir()
-	config.IsolateForTest(t, home)
-
-	const tag = "1.1.0-alpha.20260613020028"
-	const assetVersion = "1.2.0-alpha.20260613020028"
-	tc := toolchain.ToolchainName{Channel: toolchain.Nightly, Version: assetVersion}
-	roots, err := RootsFor(tc.String())
-	require.NoError(t, err)
-	require.NoError(t, toolchain.WriteNightlyReleaseMetadata(roots.TcDir, toolchain.NightlyReleaseMetadata{
-		ReleaseTag: tag,
-		Version:    assetVersion,
-	}))
+func TestResolveAssetURLNightlyReadsManifest(t *testing.T) {
+	const version = "1.2.0-alpha.20260613020028"
+	tc := toolchain.ToolchainName{Channel: toolchain.Nightly, Version: version}
+	mf := manifestWithComponents(toolchain.Nightly, version, dist.ComponentSet{
+		Docs: &dist.ComponentInfo{URL: "https://example/nightly/docs.tar.gz"},
+		Stdx: map[string]dist.ComponentInfo{"linux-x64": {URL: "https://example/nightly/stdx.zip"}},
+	})
 
 	docsSpec, err := SpecFor(Docs)
 	require.NoError(t, err)
-	docsURL, err := ResolveAssetURL(docsSpec, tc, "", nil)
+	docsURL, err := ResolveAssetURL(docsSpec, tc, "", mf)
 	require.NoError(t, err)
-	assert.Equal(t,
-		"https://gitcode.com/Cangjie/nightly_build/releases/download/"+tag+"/cangjie-docs-html-"+assetVersion+".tar.gz",
-		docsURL)
+	assert.Equal(t, "https://example/nightly/docs.tar.gz", docsURL)
 
 	stdxSpec, err := SpecFor(Stdx)
 	require.NoError(t, err)
-	stdxURL, err := ResolveAssetURL(stdxSpec, tc, "linux-x64", nil)
+	stdxURL, err := ResolveAssetURL(stdxSpec, tc, "linux-x64", mf)
 	require.NoError(t, err)
-	assert.Equal(t,
-		"https://gitcode.com/Cangjie/nightly_build/releases/download/"+tag+"/cangjie-stdx-linux-x64-"+assetVersion+".1.zip",
-		stdxURL)
+	assert.Equal(t, "https://example/nightly/stdx.zip", stdxURL)
 }

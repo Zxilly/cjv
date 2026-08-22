@@ -69,6 +69,14 @@ func listRemoteMockServer(t *testing.T) *httptest.Server {
 			"1.0.0": {hostKey: mkInfo(hostKey + "-1.0.0")},
 		},
 	}
+	nightly := dist.ChannelInfo{
+		Latest: "1.2.0-alpha.2",
+		Versions: map[string]map[string]dist.DownloadInfo{
+			"1.2.0-alpha.2": platformsForVersion(true),
+			"1.2.0-alpha.1": platformsForVersion(false),
+		},
+	}
+	manifest.Channels.Nightly = &nightly
 
 	mux := http.NewServeMux()
 	server := httptest.NewServer(mux)
@@ -88,7 +96,6 @@ func setupListRemote(t *testing.T) {
 	server := listRemoteMockServer(t)
 	settings := config.DefaultSettings()
 	settings.ManifestURL = server.URL + "/sdk-versions.json"
-	settings.GitCodeAPIKey = "" // unset so nightly fetch returns the missing-key error
 	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 }
 
@@ -172,25 +179,25 @@ func TestRunToolchainListRemote_TargetWithChannelAll_LtsFiltered(t *testing.T) {
 	assert.Equal(t, []string{"1.0.5"}, got.Channels[0].Versions)
 	assert.Empty(t, got.Channels[1].Versions, "STS has no ohos build in the mock")
 	assert.Empty(t, got.Channels[1].Error, "missing builds is not a per-channel error")
-	// Nightly latest is target-orthogonal: error must come from missing API key,
-	// not from a 'target unsupported' check.
 	nightly := got.Channels[2]
 	assert.Equal(t, "nightly", nightly.Channel)
-	assert.NotContains(t, nightly.Error, "target")
+	assert.Equal(t, []string{"1.2.0-alpha.2"}, nightly.Versions)
 }
 
-func TestRunToolchainListRemote_NightlyChannelWithTarget_NoTargetCheck(t *testing.T) {
-	// nightly + --target should NOT special-case the target. Without an API
-	// key the error surfaces from the GitCode call, not from a target check.
+func TestRunToolchainListRemote_NightlyChannelFiltersByTarget(t *testing.T) {
 	setupListRemote(t)
 	resetListRemoteFlags()
 	toolchainListRemoteChannel = "nightly"
 	toolchainListRemoteTarget = "ohos"
 
-	cmd, _ := newListRemoteCmd()
-	err := runToolchainListRemote(cmd, nil)
-	require.Error(t, err, "without API key, the GitCode missing-key error should surface")
-	assert.NotContains(t, err.Error(), "target")
+	cmd, buf := newListRemoteCmd()
+	output.SetJSONMode(true)
+	t.Cleanup(func() { output.SetJSONMode(false) })
+	require.NoError(t, runToolchainListRemote(cmd, nil))
+	var got toolchainListRemoteResult
+	require.NoError(t, json.Unmarshal(buf.Bytes(), &got))
+	require.Len(t, got.Channels, 1)
+	assert.Equal(t, []string{"1.2.0-alpha.2"}, got.Channels[0].Versions)
 }
 
 func TestRunToolchainListRemote_TargetAsHostKey_Rejected(t *testing.T) {
@@ -233,7 +240,7 @@ func TestRunToolchainListRemote_UnknownChannelFlag(t *testing.T) {
 	assert.Contains(t, err.Error(), "weekly")
 }
 
-func TestRunToolchainListRemote_NightlyMissingKey_AllChannel(t *testing.T) {
+func TestRunToolchainListRemote_AllChannelsIncludeNightly(t *testing.T) {
 	setupListRemote(t)
 	resetListRemoteFlags()
 
@@ -241,7 +248,7 @@ func TestRunToolchainListRemote_NightlyMissingKey_AllChannel(t *testing.T) {
 	output.SetJSONMode(true)
 	t.Cleanup(func() { output.SetJSONMode(false) })
 
-	require.NoError(t, runToolchainListRemote(cmd, nil), "missing nightly key must not fail the all-channel command")
+	require.NoError(t, runToolchainListRemote(cmd, nil))
 
 	var got toolchainListRemoteResult
 	require.NoError(t, json.Unmarshal(buf.Bytes(), &got))
@@ -249,24 +256,13 @@ func TestRunToolchainListRemote_NightlyMissingKey_AllChannel(t *testing.T) {
 	assert.NotEmpty(t, got.Channels[0].Versions)
 	assert.NotEmpty(t, got.Channels[1].Versions)
 	assert.Equal(t, "nightly", got.Channels[2].Channel)
-	assert.NotEmpty(t, got.Channels[2].Error)
+	assert.Equal(t, "1.2.0-alpha.2", got.Channels[2].Latest)
 }
 
-func TestRunToolchainListRemote_NightlyMissingKey_ChannelExplicit_Errors(t *testing.T) {
-	setupListRemote(t)
-	resetListRemoteFlags()
-	toolchainListRemoteChannel = "nightly"
-
-	cmd, _ := newListRemoteCmd()
-	err := runToolchainListRemote(cmd, nil)
-	require.Error(t, err, "explicit --channel nightly must surface the missing-key error")
-}
-
-func TestRunToolchainListRemote_NightlyUsesUnifiedDistServer(t *testing.T) {
+func TestRunToolchainListRemote_NightlyUsesDistServerManifest(t *testing.T) {
 	home := t.TempDir()
 	config.IsolateForTest(t, home)
 	require.NoError(t, config.EnsureDirs())
-	t.Setenv(config.EnvGitCodeAPIKey, "")
 
 	server := unifiedNightlyMockServer(t)
 	settings := config.DefaultSettings()
@@ -294,7 +290,7 @@ func TestRunToolchainListRemote_NightlyUsesUnifiedDistServer(t *testing.T) {
 	assert.Contains(t, textBuf.String(), host)
 }
 
-func TestRunToolchainListRemote_AllPlatformsNightlyUnifiedText(t *testing.T) {
+func TestRunToolchainListRemote_AllPlatformsNightlyDistServerText(t *testing.T) {
 	home := t.TempDir()
 	config.IsolateForTest(t, home)
 	require.NoError(t, config.EnsureDirs())
@@ -379,34 +375,6 @@ func TestRunToolchainListRemote_AllPlatforms_LimitPerPlatform(t *testing.T) {
 	for _, p := range got.Channels[0].Platforms {
 		assert.Len(t, p.Versions, 1, "platform %s should be limited to 1 version", p.Target)
 	}
-}
-
-func TestRunToolchainListRemote_AllPlatforms_NightlyOnly_NoManifestCall(t *testing.T) {
-	// A 500 from /sdk-versions.json proves the manifest endpoint is never hit
-	// when only nightly is requested.
-	home := t.TempDir()
-	config.IsolateForTest(t, home)
-	require.NoError(t, config.EnsureDirs())
-
-	mux := http.NewServeMux()
-	server := httptest.NewServer(mux)
-	t.Cleanup(server.Close)
-	mux.HandleFunc("/sdk-versions.json", func(w http.ResponseWriter, r *http.Request) {
-		http.Error(w, "should not be called", http.StatusInternalServerError)
-	})
-
-	settings := config.DefaultSettings()
-	settings.ManifestURL = server.URL + "/sdk-versions.json"
-	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
-
-	resetListRemoteFlags()
-	toolchainListRemoteAllPlatforms = true
-	toolchainListRemoteChannel = "nightly"
-
-	cmd, _ := newListRemoteCmd()
-	err := runToolchainListRemote(cmd, nil)
-	require.Error(t, err)
-	assert.NotContains(t, err.Error(), "manifest")
 }
 
 func TestRunToolchainListRemote_TextRendering_SinglePlatform(t *testing.T) {

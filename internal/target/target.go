@@ -15,18 +15,16 @@ var (
 )
 
 // TupleParts decomposes a target tuple into its host portion plus an optional
-// cross-compile target suffix. NightlyOS/NightlyArch carry the GitCode-side
-// naming for the host portion (used to construct nightly download filenames).
+// cross-compile target suffix and the stdx archive platform token.
 type TupleParts struct {
 	Host        string
 	Environment string
-	NightlyOS   string
-	NightlyArch string
+	StdxOS      string
+	StdxArch    string
 }
 
 // Identity is a parsed SDK target tuple. It gives callers a structured view of
-// the host tuple, optional cross-target environment, nightly archive naming, and
-// stdx platform token without making each caller split or suffix-check strings.
+// the host tuple, optional cross-target environment, and stdx platform token.
 type Identity struct {
 	tuple string
 	parts TupleParts
@@ -71,34 +69,12 @@ func (id Identity) IsTargetVariant() bool {
 	return id.parts.Environment != ""
 }
 
-// NightlyOS returns the OS token used by upstream nightly SDK assets.
-func (id Identity) NightlyOS() string {
-	return id.parts.NightlyOS
-}
-
-// NightlyArch returns the architecture token used by upstream nightly SDK
-// assets.
-func (id Identity) NightlyArch() string {
-	return id.parts.NightlyArch
-}
-
-// NightlyGOOS returns the Go GOOS equivalent for the nightly OS token.
-func (id Identity) NightlyGOOS() string {
-	return nightlyGOOS(id.parts.NightlyOS)
-}
-
-// NightlyFilename returns the upstream nightly SDK archive filename for this
-// target identity and version.
-func (id Identity) NightlyFilename(version string) string {
-	return "cangjie-sdk-" + id.NightlyOS() + "-" + id.NightlyArch() + id.EnvironmentSuffix() + "-" + version + archiveExt(id.NightlyGOOS())
-}
-
 // StdxPlatform returns the cangjie_stdx archive platform token for this target.
 // Host SDKs use the host nightly OS/arch token; target variants use the target
 // environment suffix (with an aarch64 default when no arch suffix is present).
 func (id Identity) StdxPlatform() (string, error) {
 	if id.parts.Environment == "" {
-		return id.parts.NightlyOS + "-" + id.parts.NightlyArch, nil
+		return id.parts.StdxOS + "-" + id.parts.StdxArch, nil
 	}
 	return StdxPlatformForEnvironment(id.parts.Environment)
 }
@@ -242,7 +218,7 @@ func HostPartOf(tuple string) (string, error) {
 }
 
 // ParseTuple splits a target tuple into its host portion and optional target
-// suffix. The result also carries nightly-side OS/arch metadata.
+// suffix. The result also carries the stdx archive platform token.
 func ParseTuple(tuple string) (TupleParts, error) {
 	for _, host := range hostTuples {
 		if tuple == host || strings.HasPrefix(tuple, host+"-") {
@@ -313,18 +289,4 @@ func StdxPlatformForTuple(tuple string) (string, error) {
 		return "", err
 	}
 	return id.StdxPlatform()
-}
-
-func nightlyGOOS(nightlyOS string) string {
-	if nightlyOS == "mac" {
-		return "darwin"
-	}
-	return nightlyOS
-}
-
-func archiveExt(goos string) string {
-	if goos == "windows" {
-		return ".zip"
-	}
-	return ".tar.gz"
 }

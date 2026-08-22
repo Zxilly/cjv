@@ -3,34 +3,21 @@ package dist
 import (
 	"context"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 	"os"
-	"path"
-	"regexp"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/Zxilly/cjv/internal/cjverr"
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/utils"
 )
 
-const DefaultNightlyBaseURL = "https://gitcode.com/Cangjie/nightly_build/releases/download"
-
-// GitCodeTokenHeader is the HTTP header used for GitCode API authentication.
-const GitCodeTokenHeader = "PRIVATE-TOKEN"
-
-// DefaultNightlyAPIURL is the GitCode GET .../releases/latest endpoint for the nightly_build repo.
-const DefaultNightlyAPIURL = "https://api.gitcode.com/api/v5/repos/Cangjie/nightly_build/releases/latest"
-
-// MaxResponseSize limits HTTP response body reads to prevent memory exhaustion.
+// MaxResponseSize limits HTTP metadata reads.
 const MaxResponseSize = 10 << 20 // 10 MB
 
 var (
@@ -38,22 +25,7 @@ var (
 	httpClientOnce sync.Once
 )
 
-var nightlySDKVersionRE = regexp.MustCompile(`-(\d+\.\d+\.\d+(?:-[0-9A-Za-z.]+)?(?:\+[0-9A-Za-z.]+)?)$`)
-
-// NightlyRelease is the resolved identity of a GitCode nightly release.
-//
-// TagName is the release/download path segment. Version is the SDK asset
-// version embedded in archive filenames and used as cjv's installed toolchain
-// version. They usually match, but upstream can publish a release where the
-// tag and asset version differ.
-type NightlyRelease struct {
-	TagName string
-	Version string
-}
-
-// HTTPClient returns the shared HTTP client with proper timeout and User-Agent.
-// The client is lazily initialized so that CJV_DOWNLOAD_TIMEOUT can be set
-// via t.Setenv before the first call in tests.
+// HTTPClient returns the shared HTTP client with timeout and User-Agent.
 func HTTPClient() *http.Client {
 	httpClientOnce.Do(func() {
 		httpClient = newHTTPClient()
@@ -77,7 +49,6 @@ func newHTTPClient() *http.Client {
 	}
 }
 
-// uaTransport adds a User-Agent header to all requests.
 type uaTransport struct {
 	base http.RoundTripper
 	ua   string
@@ -94,42 +65,6 @@ func (t *uaTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	return t.base.RoundTrip(req)
 }
 
-func NightlyDownloadURL(baseURL, version, goos, goarch string) (string, error) {
-	filename, err := NightlyFilename(goos, goarch, version)
-	if err != nil {
-		return "", err
-	}
-	return nightlyDownloadURL(baseURL, version, filename)
-}
-
-func (r NightlyRelease) DownloadURL(baseURL, tuple string) (string, error) {
-	version := r.Version
-	if version == "" {
-		version = r.TagName
-	}
-	filename, err := NightlyArchiveName(tuple, version)
-	if err != nil {
-		return "", err
-	}
-	return nightlyDownloadURL(baseURL, r.tag(), filename)
-}
-
-func (r NightlyRelease) tag() string {
-	if r.TagName != "" {
-		return r.TagName
-	}
-	return r.Version
-}
-
-func nightlyDownloadURL(baseURL, version, filename string) (string, error) {
-	base, err := url.Parse(baseURL)
-	if err != nil {
-		return "", fmt.Errorf("invalid nightly base URL: %w", err)
-	}
-	base = base.JoinPath(version, filename)
-	return base.String(), nil
-}
-
 func parseSHA256(content string) string {
 	digest := strings.TrimSpace(content)
 	if len(digest) != 64 {
@@ -141,30 +76,18 @@ func parseSHA256(content string) string {
 	return strings.ToLower(digest)
 }
 
-// errChecksumSidecarMalformed marks a non-transient sidecar failure (the body
-// parsed but was not a valid digest), so it is not retried.
 var errChecksumSidecarMalformed = errors.New("nightly checksum sidecar is malformed (expected 64 hex chars)")
 
-// FetchNightlySHA256 fetches the published sha256 sidecar for assetURL.
-//
-// It distinguishes "no checksum published" from "fetch failed": a 404 returns
-// ("", nil) so the caller can proceed with an explicit no-checksum notice,
-// while any other failure (network error, non-200, malformed body) returns a
-// non-nil error. This prevents a transient failure or a MITM that drops the
-// sidecar request from silently downgrading the install to no integrity check.
-//
-// Transient failures (network/HTTP) are retried with the same policy as the
-// main archive download so a momentary blip on the sidecar does not abort an
-// install the larger download would have recovered; a malformed body is not
-// retried.
+// FetchNightlySHA256 fetches the optional sha256 sidecar for assetURL. A 404
+// represents an upstream release that relies on TLS transport integrity.
 func FetchNightlySHA256(ctx context.Context, assetURL string) (string, error) {
 	var sha string
 	err := utils.RetryWithBackoff(getMaxDownloadRetries()+1,
 		func(e error) bool { return !errors.Is(e, errChecksumSidecarMalformed) },
 		func() error {
-			var ferr error
-			sha, ferr = fetchNightlySHA256Once(ctx, assetURL)
-			return ferr
+			var fetchErr error
+			sha, fetchErr = fetchNightlySHA256Once(ctx, assetURL)
+			return fetchErr
 		})
 	return sha, err
 }
@@ -178,7 +101,7 @@ func fetchNightlySHA256Once(ctx context.Context, assetURL string) (string, error
 	if err != nil {
 		return "", fmt.Errorf("failed to fetch nightly checksum: %w", err)
 	}
-	defer resp.Body.Close() //nolint:errcheck // best-effort cleanup
+	defer resp.Body.Close() //nolint:errcheck
 
 	if resp.StatusCode == http.StatusNotFound {
 		return "", nil
@@ -186,7 +109,6 @@ func fetchNightlySHA256Once(ctx context.Context, assetURL string) (string, error
 	if resp.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("failed to fetch nightly checksum: HTTP %d", resp.StatusCode)
 	}
-
 	body, err := io.ReadAll(io.LimitReader(resp.Body, MaxResponseSize))
 	if err != nil {
 		return "", err
@@ -196,159 +118,4 @@ func fetchNightlySHA256Once(ctx context.Context, assetURL string) (string, error
 		return "", errChecksumSidecarMalformed
 	}
 	return sha, nil
-}
-
-// gitCodeRelease matches the JSON object returned by GitCode GET .../releases/latest
-// (nightly_build responses include many assets; only tag_name is required for cjv).
-type gitCodeRelease struct {
-	TagName         string                `json:"tag_name"`
-	TargetCommitish string                `json:"target_commitish"`
-	Prerelease      bool                  `json:"prerelease"`
-	Name            string                `json:"name"`
-	Body            string                `json:"body"`
-	Author          gitCodeReleaseAuthor  `json:"author"`
-	CreatedAt       string                `json:"created_at"`
-	Assets          []gitCodeReleaseAsset `json:"assets"`
-}
-
-type gitCodeReleaseAuthor struct {
-	ID        string `json:"id"`
-	Login     string `json:"login"`
-	Name      string `json:"name"`
-	AvatarURL string `json:"avatar_url"`
-	HTMLURL   string `json:"html_url"`
-	Type      string `json:"type"`
-	URL       string `json:"url"`
-}
-
-type gitCodeReleaseAsset struct {
-	BrowserDownloadURL string `json:"browser_download_url"`
-	Name               string `json:"name"`
-	Type               string `json:"type"` // e.g. "source", "attach"
-}
-
-// FetchLatestNightly queries the GitCode releases/latest API and returns the
-// SDK asset version of the repository's latest release.
-// apiURL should be the full latest endpoint URL (e.g. DefaultNightlyAPIURL).
-// apiKey is the GitCode API access token; required for authentication.
-func FetchLatestNightly(ctx context.Context, apiURL, apiKey string) (string, error) {
-	release, err := FetchLatestNightlyRelease(ctx, apiURL, apiKey)
-	if err != nil {
-		return "", err
-	}
-	return release.Version, nil
-}
-
-// FetchLatestNightlyRelease queries the GitCode releases/latest API and
-// returns both the release tag and the SDK asset version. The release tag is
-// used for the download URL path; the asset version is used in filenames and
-// installed toolchain names.
-func FetchLatestNightlyRelease(ctx context.Context, apiURL, apiKey string) (NightlyRelease, error) {
-	if apiKey == "" {
-		return NightlyRelease{}, &cjverr.GitCodeAPIKeyRequiredError{}
-	}
-	u, err := url.Parse(apiURL)
-	if err != nil {
-		return NightlyRelease{}, fmt.Errorf("invalid nightly API URL: %w", err)
-	}
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
-	if err != nil {
-		return NightlyRelease{}, fmt.Errorf("failed to create nightly request: %w", err)
-	}
-	req.Header.Set(GitCodeTokenHeader, apiKey)
-	resp, err := HTTPClient().Do(req)
-	if err != nil {
-		return NightlyRelease{}, fmt.Errorf("failed to query nightly versions: %w", err)
-	}
-	defer resp.Body.Close() //nolint:errcheck // best-effort cleanup
-
-	if resp.StatusCode != http.StatusOK {
-		return NightlyRelease{}, fmt.Errorf("failed to query nightly versions: HTTP %d", resp.StatusCode)
-	}
-
-	body, err := io.ReadAll(io.LimitReader(resp.Body, MaxResponseSize))
-	if err != nil {
-		return NightlyRelease{}, err
-	}
-
-	var release gitCodeRelease
-	if err := json.Unmarshal(body, &release); err != nil {
-		return NightlyRelease{}, fmt.Errorf("failed to parse nightly release: %w", err)
-	}
-	return parseNightlyRelease(release)
-}
-
-func parseNightlyRelease(release gitCodeRelease) (NightlyRelease, error) {
-	if release.TagName == "" {
-		return NightlyRelease{}, fmt.Errorf("nightly release has empty tag_name")
-	}
-	version, err := nightlySDKVersionFromAssets(release.Assets)
-	if err != nil {
-		return NightlyRelease{}, err
-	}
-	if version == "" {
-		version = release.TagName
-	}
-	return NightlyRelease{TagName: release.TagName, Version: version}, nil
-}
-
-func nightlySDKVersionFromAssets(assets []gitCodeReleaseAsset) (string, error) {
-	version := ""
-	for _, asset := range assets {
-		name := nightlyReleaseAssetName(asset)
-		v := nightlySDKAssetVersion(name)
-		if v == "" {
-			continue
-		}
-		if version == "" {
-			version = v
-			continue
-		}
-		if version != v {
-			return "", fmt.Errorf("nightly release has multiple SDK asset versions: %s and %s", version, v)
-		}
-	}
-	return version, nil
-}
-
-func nightlyReleaseAssetName(asset gitCodeReleaseAsset) string {
-	if strings.TrimSpace(asset.Name) != "" {
-		return strings.TrimSpace(asset.Name)
-	}
-	if asset.BrowserDownloadURL == "" {
-		return ""
-	}
-	u, err := url.Parse(asset.BrowserDownloadURL)
-	if err != nil {
-		return path.Base(asset.BrowserDownloadURL)
-	}
-	return path.Base(u.Path)
-}
-
-func nightlySDKAssetVersion(name string) string {
-	name = strings.TrimSpace(name)
-	name = strings.TrimSuffix(name, ".sha256")
-	if !strings.HasPrefix(name, "cangjie-sdk-") {
-		return ""
-	}
-	stem, ok := trimNightlyAssetExt(name)
-	if !ok {
-		return ""
-	}
-	stem = strings.TrimSuffix(stem, "-sanitizer")
-	match := nightlySDKVersionRE.FindStringSubmatch(stem)
-	if len(match) != 2 {
-		return ""
-	}
-	return match[1]
-}
-
-func trimNightlyAssetExt(name string) (string, bool) {
-	for _, ext := range []string{".tar.gz", ".zip", ".exe"} {
-		if strings.HasSuffix(name, ext) {
-			return strings.TrimSuffix(name, ext), true
-		}
-	}
-	return name, false
 }

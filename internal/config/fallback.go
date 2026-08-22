@@ -88,7 +88,4 @@ func mergeFromFallback(user, fallback *Settings, meta toml.MetaData) {
 	if !meta.IsDefined("default_host") && fallback.DefaultHost != "" {
 		user.DefaultHost = fallback.DefaultHost
 	}
-	if !meta.IsDefined("gitcode_api_key") && fallback.GitCodeAPIKey != "" {
-		user.GitCodeAPIKey = fallback.GitCodeAPIKey
-	}
 }

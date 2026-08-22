@@ -38,9 +38,6 @@ func NewManifestFetcherForSettings(settings *config.Settings, opts Options) (*Ma
 
 func newDistributionSource(settings *config.Settings) (*dist.Source, error) {
 	return dist.NewSourceWithOptions(settings, dist.SourceOptions{
-		FetchLatestNightlyRelease: func(ctx context.Context, apiURL, apiKey string) (dist.NightlyRelease, error) {
-			return FetchLatestNightlyRelease(ctx, apiURL, apiKey)
-		},
 		FetchNightlySHA256: func(ctx context.Context, assetURL string) (string, error) {
 			return FetchNightlySHA256(ctx, assetURL)
 		},
@@ -50,12 +47,6 @@ func newDistributionSource(settings *config.Settings) (*dist.Source, error) {
 func (f *ManifestFetcher) Get(ctx context.Context) (*dist.Manifest, error) {
 	f.noteOnce.Do(func() { f.opts.note(i18n.T("FetchingManifest", nil)) })
 	return f.source.Manifest(ctx)
-}
-
-// UsesManifestFor reports whether channel metadata comes from this source's
-// manifest.
-func (f *ManifestFetcher) UsesManifestFor(channel toolchain.Channel) bool {
-	return channel != toolchain.Nightly || f.source.Unified()
 }
 
 func ResolveAndLocate(ctx context.Context, name toolchain.ToolchainName, settings *config.Settings, fetcher *ManifestFetcher) (ResolvedToolchain, error) {
@@ -82,8 +73,8 @@ func ResolveAndLocatePlatform(ctx context.Context, name toolchain.ToolchainName,
 			return ResolvedToolchain{}, err
 		}
 	}
-	if name.Channel == toolchain.Nightly && name.Version == "" && !fetcher.source.Unified() {
-		fetcher.opts.note(i18n.T("FetchingNightly", nil))
+	if _, err := fetcher.Get(ctx); err != nil {
+		return ResolvedToolchain{}, err
 	}
 	release, err := fetcher.source.ResolveToolchain(ctx, name.Channel, name.Version, tuple)
 	if err != nil {
@@ -103,85 +94,8 @@ func ResolveAndLocatePlatform(ctx context.Context, name toolchain.ToolchainName,
 		ArchiveName: release.Download.Name,
 		Tuple:       tuple,
 	}
-	if release.Channel == toolchain.Nightly {
-		result.NightlyReleaseTag = release.ReleaseTag
-		result.NightlyVersion = release.Version
-	}
 	return result, nil
 }
 
 // FetchNightlySHA256 is a package-level seam for tests that resolve nightly toolchains.
 var FetchNightlySHA256 = dist.FetchNightlySHA256
-
-// FetchLatestNightlyRelease is a package-level seam for tests that resolve
-// pinned nightly asset versions back to their GitCode release tag.
-var FetchLatestNightlyRelease = dist.FetchLatestNightlyRelease
-
-func resolveNightly(ctx context.Context, name toolchain.ToolchainName, settings *config.Settings, tuple string, opts Options) (ResolvedToolchain, error) {
-	if tuple == "" {
-		var err error
-		tuple, err = dist.CurrentHostTuple(settings.DefaultHost)
-		if err != nil {
-			return ResolvedToolchain{}, err
-		}
-	}
-	if name.Version == "" {
-		opts.note(i18n.T("FetchingNightly", nil))
-	}
-	source, err := newDistributionSource(settings)
-	if err != nil {
-		return ResolvedToolchain{}, err
-	}
-	release, err := source.ResolveToolchain(ctx, toolchain.Nightly, name.Version, tuple)
-	if err != nil {
-		return ResolvedToolchain{}, err
-	}
-	resolved := toolchain.ToolchainName{Channel: toolchain.Nightly, Version: release.Version}
-	if id, parseErr := sdktarget.ParseIdentity(tuple); parseErr == nil && id.IsTargetVariant() {
-		resolved.Target = tuple
-	}
-	if release.Download.SHA256 == "" {
-		opts.note(i18n.T("NightlyNoChecksum", nil))
-	}
-	return ResolvedToolchain{
-		Name:              resolved.String(),
-		URL:               release.Download.URL,
-		SHA256:            release.Download.SHA256,
-		ArchiveName:       release.Download.Name,
-		Tuple:             tuple,
-		NightlyReleaseTag: release.ReleaseTag,
-		NightlyVersion:    release.Version,
-	}, nil
-}
-
-func resolveNightlyRelease(ctx context.Context, release dist.NightlyRelease, tuple string, opts Options) (ResolvedToolchain, error) {
-	version := release.Version
-	releaseTag := release.TagName
-	if releaseTag == "" {
-		releaseTag = version
-	}
-	resolved := toolchain.ToolchainName{Channel: toolchain.Nightly, Version: version}
-	if id, err := sdktarget.ParseIdentity(tuple); err == nil && id.IsTargetVariant() {
-		resolved.Target = tuple
-	}
-
-	url, err := (dist.NightlyRelease{TagName: releaseTag, Version: version}).DownloadURL(dist.DefaultNightlyBaseURL, tuple)
-	if err != nil {
-		return ResolvedToolchain{}, err
-	}
-	sha256, err := FetchNightlySHA256(ctx, url)
-	if err != nil {
-		return ResolvedToolchain{}, err
-	}
-	if sha256 == "" {
-		opts.note(i18n.T("NightlyNoChecksum", nil))
-	}
-	return ResolvedToolchain{
-		Name:              resolved.String(),
-		URL:               url,
-		SHA256:            sha256,
-		Tuple:             tuple,
-		NightlyReleaseTag: releaseTag,
-		NightlyVersion:    version,
-	}, nil
-}

@@ -98,18 +98,8 @@ other = "cjv has been uninstalled"
 [UnsupportedPlatform]
 other = "Unsupported platform: {{.OS}}/{{.Arch}}"
 
-# === Nightly ===
-[GitCodeAPIKeyRequired]
-other = "GitCode API key is required to query nightly versions. Set it with: cjv set gitcode-api-key <your-token>"
-
-[FetchingNightly]
-other = "Fetching latest nightly version..."
-
-[NoNightlyFound]
-other = "No nightly versions found"
-
 [NightlyNoChecksum]
-other = "Note: Nightly builds do not provide SHA256 checksums"
+other = "Note: SHA256 is unavailable in the manifest and sidecar; using HTTPS transport integrity"
 
 # === Auto-install ===
 [AutoInstalling]
@@ -600,9 +590,6 @@ other = "Set whether to auto-install missing toolchains in proxy mode"
 
 [SetDefaultHostShort]
 other = "Set the default host platform triple"
-
-[SetGitCodeAPIKeyShort]
-other = "Set the GitCode API access token for nightly builds"
 
 [SetHomeShort]
 other = "Set persistent CJV_HOME path"

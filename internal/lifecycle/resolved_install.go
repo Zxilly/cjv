@@ -22,13 +22,11 @@ import (
 
 // ResolvedToolchain holds the result of toolchain resolution.
 type ResolvedToolchain struct {
-	Name              string
-	URL               string
-	SHA256            string
-	ArchiveName       string
-	Tuple             string
-	NightlyReleaseTag string
-	NightlyVersion    string
+	Name        string
+	URL         string
+	SHA256      string
+	ArchiveName string
+	Tuple       string
 }
 
 func InstallResolved(ctx context.Context, rt ResolvedToolchain, settings *config.Settings, sf *config.SettingsFile, force bool, opts Options) error {
@@ -97,15 +95,6 @@ func installResolvedWithDefault(ctx context.Context, rt ResolvedToolchain, setti
 	if err := opts.validateInstallation(stagingDir, rt.Tuple); err != nil {
 		return err
 	}
-	if rt.NightlyReleaseTag != "" || rt.NightlyVersion != "" {
-		if err := toolchain.WriteNightlyReleaseMetadata(stagingDir, toolchain.NightlyReleaseMetadata{
-			ReleaseTag: rt.NightlyReleaseTag,
-			Version:    rt.NightlyVersion,
-		}); err != nil {
-			return err
-		}
-	}
-
 	isFirstInstall := allowDefault && (settings.DefaultToolchain == "" || !defaultToolchainExists(settings.DefaultToolchain))
 	if err := swapInstalledToolchain(stagingDir, destDir, isReinstall, func() error {
 		if err := opts.ensureManagedBinary(); err != nil {

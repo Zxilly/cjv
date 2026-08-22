@@ -82,7 +82,6 @@ func TestUpdateSingle_NightlyUsesUnifiedDistServer(t *testing.T) {
 	home := t.TempDir()
 	config.IsolateForTest(t, home)
 	require.NoError(t, config.EnsureDirs())
-	t.Setenv(config.EnvGitCodeAPIKey, "")
 
 	oldName := "nightly-1.1.0-alpha.20260821010101"
 	require.NoError(t, os.MkdirAll(filepath.Join(home, "toolchains", oldName), 0o755))

@@ -34,21 +34,21 @@ func SupportedHostPlatforms() []HostPlatform {
 
 var (
 	hostByGo = map[string]TupleParts{
-		"windows-amd64": {Host: "win32-x64", NightlyOS: "windows", NightlyArch: "x64"},
-		"darwin-arm64":  {Host: "darwin-arm64", NightlyOS: "mac", NightlyArch: "aarch64"},
-		"darwin-amd64":  {Host: "darwin-x64", NightlyOS: "mac", NightlyArch: "x64"},
-		"linux-arm64":   {Host: "linux-arm64", NightlyOS: "linux", NightlyArch: "aarch64"},
-		"linux-amd64":   {Host: "linux-x64", NightlyOS: "linux", NightlyArch: "x64"},
+		"windows-amd64": {Host: "win32-x64", StdxOS: "windows", StdxArch: "x64"},
+		"darwin-arm64":  {Host: "darwin-arm64", StdxOS: "mac", StdxArch: "aarch64"},
+		"darwin-amd64":  {Host: "darwin-x64", StdxOS: "mac", StdxArch: "x64"},
+		"linux-arm64":   {Host: "linux-arm64", StdxOS: "linux", StdxArch: "aarch64"},
+		"linux-amd64":   {Host: "linux-x64", StdxOS: "linux", StdxArch: "x64"},
 	}
 
 	hostByTuple = map[string]TupleParts{
-		"win32-x64":    {Host: "win32-x64", NightlyOS: "windows", NightlyArch: "x64"},
-		"darwin-arm64": {Host: "darwin-arm64", NightlyOS: "mac", NightlyArch: "aarch64"},
-		"darwin-x64":   {Host: "darwin-x64", NightlyOS: "mac", NightlyArch: "x64"},
-		"linux-arm64":  {Host: "linux-arm64", NightlyOS: "linux", NightlyArch: "aarch64"},
-		"linux-x64":    {Host: "linux-x64", NightlyOS: "linux", NightlyArch: "x64"},
-		"ohos-arm64":   {Host: "ohos-arm64", NightlyOS: "ohos", NightlyArch: "aarch64"},
-		"ohos-x64":     {Host: "ohos-x64", NightlyOS: "ohos", NightlyArch: "x64"},
+		"win32-x64":    {Host: "win32-x64", StdxOS: "windows", StdxArch: "x64"},
+		"darwin-arm64": {Host: "darwin-arm64", StdxOS: "mac", StdxArch: "aarch64"},
+		"darwin-x64":   {Host: "darwin-x64", StdxOS: "mac", StdxArch: "x64"},
+		"linux-arm64":  {Host: "linux-arm64", StdxOS: "linux", StdxArch: "aarch64"},
+		"linux-x64":    {Host: "linux-x64", StdxOS: "linux", StdxArch: "x64"},
+		"ohos-arm64":   {Host: "ohos-arm64", StdxOS: "ohos", StdxArch: "aarch64"},
+		"ohos-x64":     {Host: "ohos-x64", StdxOS: "ohos", StdxArch: "x64"},
 	}
 
 	hostTuples = []string{

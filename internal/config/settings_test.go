@@ -132,6 +132,20 @@ func TestLoadSettings_MissingVersion_DefaultsToV1(t *testing.T) {
 	assert.Equal(t, 1, s.Version)
 }
 
+func TestLoadSettingsClearsLegacyGitCodeAPIKey(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "settings.toml")
+	require.NoError(t, os.WriteFile(path, []byte("gitcode_api_key = \"legacy-secret\"\n"), 0o644))
+
+	settings, err := LoadSettings(path)
+	require.NoError(t, err)
+	assert.Empty(t, settings.GitCodeAPIKey)
+
+	require.NoError(t, SaveSettings(settings, path))
+	data, err := os.ReadFile(path)
+	require.NoError(t, err)
+	assert.NotContains(t, string(data), "gitcode_api_key")
+}
+
 func TestLoadSettings_FutureVersion_ReturnsError(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "settings.toml")
 	require.NoError(t, os.WriteFile(path, []byte("version = 999\n"), 0o644))
