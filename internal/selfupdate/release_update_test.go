@@ -123,8 +123,7 @@ func TestInstallReleaseArtifactReplacesRunningExecutable(t *testing.T) {
 	require.NoError(t, err)
 	stdout, err := running.StdoutPipe()
 	require.NoError(t, err)
-	var stderr bytes.Buffer
-	running.Stderr = &stderr
+	running.Stderr = os.Stderr
 	require.NoError(t, running.Start())
 	stopped := false
 	defer func() {
@@ -135,7 +134,7 @@ func TestInstallReleaseArtifactReplacesRunningExecutable(t *testing.T) {
 	}()
 
 	scanner := bufio.NewScanner(stdout)
-	require.True(t, scanner.Scan(), stderr.String())
+	require.True(t, scanner.Scan())
 	assert.Equal(t, "old", scanner.Text())
 
 	require.NoError(t, installReleaseArtifact(context.Background(), releaseArtifact{
@@ -158,7 +157,7 @@ func TestInstallReleaseArtifactReplacesRunningExecutable(t *testing.T) {
 	}
 
 	require.NoError(t, stdin.Close())
-	require.NoError(t, running.Wait(), stderr.String())
+	require.NoError(t, running.Wait())
 	stopped = true
 	CleanupOldBinaries()
 	assert.NoFileExists(t, oldPath)
