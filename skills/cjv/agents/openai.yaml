@@ -1,0 +1,4 @@
+interface:
+  display_name: "cjv User Guide"
+  short_description: "Install, switch, and troubleshoot Cangjie SDK toolchains"
+  default_prompt: "Use $cjv to install and configure the right Cangjie SDK toolchain for this project."
