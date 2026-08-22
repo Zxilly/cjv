@@ -92,7 +92,7 @@ cjv has a mirror build variant for environments where GitHub access is unreliabl
 //go:build mirror
 ```
 
-Two places are currently affected by the tag. The first is the SDK manifest address `DefaultManifestURL` in `internal/config/manifest_default.go` (GitHub raw) and `internal/config/manifest_mirror.go` (GitCode raw). The second is the self-update logic in `internal/selfupdate/update_default.go` (using go-selfupdate's GitHub source) and `internal/selfupdate/update_mirror.go` (a custom GitCode source that detects the latest tag by following the `releases/latest` redirect).
+Two places are currently affected by the tag. The first is the SDK manifest address `DefaultManifestURL` in `internal/config/manifest_default.go` (GitHub raw) and `internal/config/manifest_mirror.go` (GitCode raw). The second is self-update: `internal/selfupdate/update_default.go` queries the GitHub Releases API, while `internal/selfupdate/update_mirror.go` detects the latest GitCode tag by following the `releases/latest` redirect; both use the shared download, checksum, and archive-install path.
 
 Add `-tags=mirror` to build the mirror variant:
 

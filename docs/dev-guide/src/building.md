@@ -92,7 +92,7 @@ cjv 有一个 mirror 构建变体，给 GitHub 访问不稳定的环境用：它
 //go:build mirror
 ```
 
-目前受标签影响的有两处。一是 SDK 清单地址 `internal/config/manifest_default.go`（GitHub raw）与 `internal/config/manifest_mirror.go`（GitCode raw）里的 `DefaultManifestURL`。二是自更新逻辑 `internal/selfupdate/update_default.go`（走 go-selfupdate 的 GitHub source）与 `internal/selfupdate/update_mirror.go`（自己实现的 GitCode source，通过跟随 `releases/latest` 的重定向来探测最新 tag）。
+目前受标签影响的有两处。一是 SDK 清单地址 `internal/config/manifest_default.go`（GitHub raw）与 `internal/config/manifest_mirror.go`（GitCode raw）里的 `DefaultManifestURL`。二是自更新逻辑：`internal/selfupdate/update_default.go` 查询 GitHub Release API，`internal/selfupdate/update_mirror.go` 通过跟随 `releases/latest` 重定向探测 GitCode 最新 tag；两者共用下载、校验和与归档安装逻辑。
 
 加上 `-tags=mirror` 构建 mirror 变体：
 
