@@ -20,17 +20,15 @@ cjv 将两类制品分开处理：
 - **工具链分发源**：SDK、stdx、docs、stdx-docs，以及 LTS、STS、nightly 的版本元数据。企业部署通过 `dist_server` 或 `CJV_DIST_SERVER` 统一控制。
 - **cjv 本体**：安装脚本首次下载 cjv 时可使用 `CJV_UPDATE_ROOT`。企业软件分发系统负责已安装 cjv 的升级，客户端配置 `auto_self_update = "disable"`。
 
-配置 `dist_server` 后，cjv 会读取 `<dist_server>/versions.json`，由这份 manifest 描述所有通道和组件。缺少 nightly 或制品时返回明确错误，当前 manifest 保持为权威来源。
-
-兼容模式使用 `manifest_url` 解析 LTS/STS，并使用 GitCode `nightly_build` Release 解析 nightly。
+配置 `dist_server` 后，cjv 会读取 `<dist_server>/versions.json`，由这份 manifest 描述所有通道和组件。默认 `manifest_url` 与企业 manifest 使用相同契约，均包含 LTS、STS、nightly 和组件。
 
 ## 网络访问范围
 
 | 操作 | 默认来源 | 企业替代方式 |
 | --- | --- | --- |
 | 安装 cjv 本体 | GitHub 或 GitCode Release | 内部托管发布归档与 `checksums.txt`，安装脚本设置 `CJV_UPDATE_ROOT` |
-| 安装、查询或更新工具链 | LTS/STS manifest；nightly GitCode API | 配置统一 `dist_server` |
-| 下载 SDK 和组件 | manifest URL 或 nightly Release | 在 `<dist_server>/versions.json` 中声明批准的相对或绝对 URL |
+| 安装、查询或更新工具链 | 默认 manifest | 配置 `dist_server` |
+| 下载 SDK 和组件 | manifest 中声明的 URL | 在 `<dist_server>/versions.json` 中声明批准的相对或绝对 URL |
 | `cjv self update` | 官方版使用 GitHub，mirror 版使用 GitCode | 关闭自更新，由企业软件分发系统升级 cjv |
 
 `cjpm` 项目依赖仓库和凭据遵循项目自身配置；企业还需配置对应的依赖仓库镜像。cjv 的企业分发源覆盖 SDK 与组件。

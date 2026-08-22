@@ -20,17 +20,15 @@ cjv separates two kinds of artifacts:
 - **Toolchain distribution**: SDKs, stdx, docs, stdx-docs, and the LTS, STS, and nightly metadata. Enterprise deployments control this with `dist_server` or `CJV_DIST_SERVER`.
 - **cjv itself**: `CJV_UPDATE_ROOT` selects the installer's initial download location. Enterprise software distribution owns upgrades of installed cjv binaries, with clients configured as `auto_self_update = "disable"`.
 
-With `dist_server` configured, cjv reads `<dist_server>/versions.json` as the authoritative description of every channel and component. A missing nightly channel or artifact produces an explicit error while the configured manifest remains authoritative.
-
-Compatibility mode resolves LTS/STS through `manifest_url` and nightly through GitCode `nightly_build` Releases.
+With `dist_server` configured, cjv reads `<dist_server>/versions.json` as the authoritative description of every channel and component. The default `manifest_url` and enterprise manifests use the same contract, covering LTS, STS, nightly, and components.
 
 ## Network destinations
 
 | Operation | Default source | Enterprise replacement |
 | --- | --- | --- |
 | Install cjv itself | A GitHub or GitCode Release | Host release archives and `checksums.txt` internally; set `CJV_UPDATE_ROOT` for the installer |
-| Install, query, or update toolchains | LTS/STS manifest; GitCode API for nightly | Configure one `dist_server` |
-| Download SDKs and components | Manifest URLs or nightly Releases | Declare approved relative or absolute URLs in `<dist_server>/versions.json` |
+| Install, query, or update toolchains | Default manifest | Configure `dist_server` |
+| Download SDKs and components | URLs declared by the manifest | Declare approved relative or absolute URLs in `<dist_server>/versions.json` |
 | Run `cjv self update` | GitHub for the official build, GitCode for the mirror build | Disable self-update and upgrade cjv through enterprise software distribution |
 
 The project-specific configuration of `cjpm` supplies dependency repositories and credentials. Enterprise environments configure those dependency mirrors separately, while cjv distributes SDKs and components.

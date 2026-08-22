@@ -8,7 +8,7 @@ All CI jobs are defined in `.github/workflows/ci.yml`, with smoke tests separate
 
 Unit tests live in the same package as the code under test, with file names ending in `_test.go`, scattered throughout `internal/`, currently over a hundred files. They use the `assert` and `require` helpers from `github.com/stretchr/testify` for assertions and do not depend on the network: when a distribution source is needed, they use `MockDistServer` in `internal/testutil` to spin up an `httptest.Server` that returns a constructed `sdk-versions.json` and a packaged mock SDK.
 
-Enterprise-source regressions also use real `httptest.Server` instances. They cover `<dist_server>/versions.json`, relative and absolute URLs, nightly SDK/component installation with the GitCode token environment cleared, and the shared source used by `list-remote`, `check`, and `update`. A unified source missing nightly returns `ErrManifestChannelMissing`; a recording legacy adapter verifies provider selection.
+Distribution-source regressions also use real `httptest.Server` instances. They cover the default `manifest_url`, `<dist_server>/versions.json`, relative and absolute URLs, nightly SDK/component installation, SHA-256 sidecars, and the source shared by `list-remote`, `check`, and `update`. A manifest missing nightly returns `ErrManifestChannelMissing`.
 
 Run all unit tests locally:
 

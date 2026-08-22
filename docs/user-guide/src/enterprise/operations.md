@@ -18,7 +18,7 @@ nightly 在统一 manifest 中是普通通道，但发布策略应比 LTS/STS �
 - 先镜像同一版本的全部批准平台、目标 SDK 和组件，再推进 `channels.nightly.latest`。
 - `latest` 精确选择一个版本；缺少目标或组件时返回对应错误。
 - 保留所有被 `cangjie-sdk.toml` 固定的 nightly 版本及其组件。
-- 上游 Release tag 与 SDK 版本存在差异时，在 SDK 条目写入 `release_tag` 作为权威映射。
+- 让每个 SDK 条目的 URL 精确指向对应的上游或内部制品。
 - manifest 使用原子发布，让客户端始终读取完整版本。
 
 ## 上线验收清单

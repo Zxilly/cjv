@@ -14,9 +14,9 @@ Here `<tc>` is the toolchain name (such as `lts-1.0.5`). Components are stored s
 
 Without a unified enterprise source, the default component source depends on the [channel](channels.md):
 
-- `stdx`: for LTS / STS, downloaded from [`cangjie_stdx`](https://gitcode.com/Cangjie/cangjie_stdx/releases); for nightly, downloaded from [`nightly_build`](https://gitcode.com/Cangjie/nightly_build/releases).
-- `docs`: for LTS / STS, downloaded from the GitHub release at [`cangjie-docs-bundle`](https://github.com/Zxilly/cangjie-docs-bundle/releases); for nightly, downloaded from [`nightly_build`](https://gitcode.com/Cangjie/nightly_build/releases).
-- `stdx-docs`: for LTS / STS, downloaded from [`cangjie_stdx`](https://gitcode.com/Cangjie/cangjie_stdx/releases); for nightly, downloaded from [`nightly_build`](https://gitcode.com/Cangjie/nightly_build/releases).
+- `stdx`: the default manifest's LTS / STS URLs point to [`cangjie_stdx`](https://gitcode.com/Cangjie/cangjie_stdx/releases), while nightly URLs point to [`nightly_build`](https://gitcode.com/Cangjie/nightly_build/releases).
+- `docs`: the default manifest's LTS / STS URLs point to [`cangjie-docs-bundle`](https://github.com/Zxilly/cangjie-docs-bundle/releases), while nightly URLs point to [`nightly_build`](https://gitcode.com/Cangjie/nightly_build/releases).
+- `stdx-docs`: the default manifest's LTS / STS URLs point to [`cangjie_stdx`](https://gitcode.com/Cangjie/cangjie_stdx/releases), while nightly URLs point to [`nightly_build`](https://gitcode.com/Cangjie/nightly_build/releases).
 
 With `dist_server` configured, components for all three channels use manifest-declared URLs. Relative URLs are resolved against the distribution root, absolute URLs are used as written, and entries may provide SHA-256 checksums. See [Internal distribution source](../enterprise/distribution-server.md).
 

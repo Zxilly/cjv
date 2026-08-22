@@ -2,7 +2,7 @@
 
 cjv 把持久化设置保存在 `~/.cjv/settings.toml` 这个 TOML 文件里。日常使用中你不需要手动编辑它，用 `cjv set` 子命令修改即可，它们会校验取值、写回文件，并打印确认信息。
 
-本章介绍 `cjv set` 的全部子命令、`settings.toml` 中对应的字段，以及 `~/.cjv/` 目录的整体布局。运行时通过环境变量做的临时覆盖（如 `CJV_HOME`、`CJV_GITCODE_API_KEY`）见 [环境变量](environment-variables.md)。
+本章介绍 `cjv set` 的全部子命令、`settings.toml` 中对应的字段，以及 `~/.cjv/` 目录的整体布局。运行时通过环境变量做的临时覆盖（如 `CJV_HOME`、`CJV_DIST_SERVER`）见 [环境变量](environment-variables.md)。
 
 ## settings.toml
 
@@ -15,7 +15,7 @@ version = 1
 default_toolchain = "lts"
 auto_self_update = "check"
 auto_install = true
-gitcode_api_key = "your-token-here"
+manifest_url = "https://raw.githubusercontent.com/Zxilly/cangjie-version-manifest/master/versions.json"
 
 [overrides]
 "/home/me/project-a" = "sts"
@@ -27,18 +27,17 @@ gitcode_api_key = "your-token-here"
 | ------------------- | ------ | -------------------------- | --------------------------------------------------------------------- |
 | `version`           | int    | （自动维护）               | 设置文件格式版本，由 cjv 自动写入和迁移                                |
 | `default_toolchain` | string | `cjv default <toolchain>`  | 默认工具链，见 [工具链](concepts/toolchains.md)                       |
-| `manifest_url`      | string | 手动编辑 / 系统后备配置     | 兼容模式的 LTS / STS 工具链清单地址                                  |
-| `dist_server`       | string | 手动编辑 / 系统后备配置     | 统一工具链分发根，覆盖所有通道和组件，见[内部分发源](enterprise/distribution-server.md) |
+| `manifest_url`      | string | 手动编辑 / 系统后备配置     | LTS、STS、nightly 与组件的工具链清单地址                              |
+| `dist_server`       | string | 手动编辑 / 系统后备配置     | 工具链分发根；cjv 读取其下的 `versions.json`，见[内部分发源](enterprise/distribution-server.md) |
 | `auto_self_update`  | string | `cjv set auto-self-update` | `cjv update` 时的自更新行为：`enable` / `disable` / `check`           |
 | `auto_install`      | bool   | `cjv set auto-install`     | 代理模式下是否自动安装缺失的工具链                                    |
 | `home`              | string | `cjv set home`             | 持久化的 `CJV_HOME` 数据目录路径                                     |
 | `default_host`      | string | `cjv set default-host`     | 默认主机平台标识（`goos-goarch` 形式）                                |
-| `gitcode_api_key`   | string | `cjv set gitcode-api-key`  | 兼容模式下查询 GitCode nightly 所需的 API 访问令牌                    |
 | `overrides`         | table  | `cjv override`             | 目录到工具链的覆盖映射，见 [目标与覆盖](concepts/targets-overrides.md) |
 
 > 文件中无法识别的键（例如拼写错误）会以 warn 级别日志提示，但不会阻止 cjv 启动。把 `version` 设成超过当前二进制支持的值则会报错。
 
-`manifest_url` 与 `dist_server` 通过用户设置文件或系统后备配置提供。来源优先级为 `CJV_DIST_SERVER`、`dist_server`、兼容模式的 `manifest_url` / GitCode nightly。完整 manifest 契约见[内部分发源](enterprise/distribution-server.md)。
+`manifest_url` 与 `dist_server` 通过用户设置文件或系统后备配置提供。来源优先级为 `CJV_DIST_SERVER`、`dist_server`、`manifest_url`。三个来源都指向同一种 manifest 契约；前两个把根地址转换成 `<root>/versions.json`。完整契约见[内部分发源](enterprise/distribution-server.md)。
 
 ## cjv set
 
@@ -76,18 +75,6 @@ cjv set auto-install false
 ```
 
 开启时，直接运行 `cjc`、`cjpm` 等 SDK 工具，如果当前解析到的工具链没装，cjv 会先把它装上再代理执行。`cangjie-sdk.toml` 中声明的 [组件](concepts/components.md) 与 [目标](cross-compilation.md) 同样适用：开启 `auto-install` 后，代理执行会按需补齐缺失的组件和目标 SDK。
-
-### cjv set gitcode-api-key
-
-设置 GitCode API 访问令牌。兼容模式使用该令牌查询最新 nightly；统一企业分发源直接从 manifest 解析 nightly。LTS 和 STS 使用 manifest。
-
-```bash
-cjv set gitcode-api-key <your-gitcode-api-key>
-```
-
-出于安全考虑，命令回显时会把令牌打码为 `********`，不会在终端回滚记录、CI 日志或屏幕共享中泄露明文。令牌本身明文存储在 `settings.toml` 中。
-
-你也可以用环境变量 `CJV_GITCODE_API_KEY` 临时提供令牌。它优先于 `settings.toml` 中的持久化值，且不会被写回文件，适合在 CI 或部署环境中注入凭据而不落盘。详见 [环境变量](environment-variables.md)。
 
 ### cjv set home
 

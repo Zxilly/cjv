@@ -18,7 +18,7 @@ Nightly is an ordinary channel in the unified manifest, but its publication poli
 - Mirror every approved platform, target SDK, and component for one version before advancing `channels.nightly.latest`.
 - `latest` selects one exact version; a missing target or component returns its corresponding error.
 - Retain every nightly version pinned by a `cangjie-sdk.toml` file.
-- When an upstream Release tag differs from the SDK version, record `release_tag` as the authoritative mapping.
+- Make each SDK entry's URL point to its exact upstream or internal artifact.
 - Publish manifest updates atomically so clients always observe a complete file.
 
 ## Deployment acceptance checklist

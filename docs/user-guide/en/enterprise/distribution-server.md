@@ -31,7 +31,7 @@ The distribution endpoint gives managed clients machine-readable, read-only acce
 
 ## Manifest contract
 
-`versions.json` contains `lts` and `sts`; enterprise nightly adds the `nightly` channel. Every SDK entry contains `name`, `url`, and `sha256`. Component entries accept an optional `sha256`, which enterprise mirrors should normally provide.
+`versions.json` contains `lts`, `sts`, and `nightly`. Every SDK entry contains `name`, `url`, and `sha256`. A nightly `sha256` may temporarily be empty, in which case cjv reads `<url>.sha256`; enterprise mirrors should normally populate it directly. Component entries also accept an optional `sha256`.
 
 ```jsonc
 {
@@ -67,8 +67,7 @@ The distribution endpoint gives managed clients machine-readable, read-only acce
           "linux-x64": {
             "name": "cangjie-sdk-linux-x64-1.2.0-alpha.20260822010101.tar.gz",
             "url": "nightly/20260822/cangjie-sdk-linux-x64-1.2.0-alpha.20260822010101.tar.gz",
-            "sha256": "<64-character hexadecimal SHA-256>",
-            "release_tag": "1.1.0-alpha.20260822010101"
+            "sha256": "<64-character hexadecimal SHA-256>"
           }
         }
       },
@@ -86,7 +85,7 @@ The distribution endpoint gives managed clients machine-readable, read-only acce
 }
 ```
 
-Set the optional `release_tag` field when the upstream Release tag differs from the SDK asset version. The installed toolchain name uses the version key, while the manifest URL remains authoritative for downloads.
+The version key determines the installed toolchain name, while the manifest URL identifies the exact asset and absorbs upstream Release naming differences.
 
 The component layout is shared across channels: `docs` and `stdx-docs` are single entries, while `stdx` is keyed by artifact-platform name. Keep every approved platform in the enterprise manifest.
 
@@ -111,4 +110,4 @@ Under a unified distribution source, nightly uses the same manifest as LTS and S
 5. Atomically replace the manifest; advance a channel's `latest` only after its artifacts are complete.
 6. Retain every exact version referenced by project toolchain files.
 
-Source precedence is `CJV_DIST_SERVER`, `dist_server` from settings, then the `manifest_url` / GitCode nightly compatibility model. CI can use the environment variable to select a staging source.
+Source precedence is `CJV_DIST_SERVER`, `dist_server` from settings, then `manifest_url`. CI can use the environment variable to select a staging source.

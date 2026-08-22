@@ -2,7 +2,7 @@
 
 cjv keeps its persisted settings in the TOML file `~/.cjv/settings.toml`. In daily use you do not need to edit it by hand; modify it with the `cjv set` subcommands, which validate values, write the file back, and print a confirmation.
 
-This chapter covers all `cjv set` subcommands, the corresponding fields in `settings.toml`, and the overall layout of the `~/.cjv/` directory. Temporary overrides made at runtime via environment variables (such as `CJV_HOME` and `CJV_GITCODE_API_KEY`) are covered in [Environment Variables](environment-variables.md).
+This chapter covers all `cjv set` subcommands, the corresponding fields in `settings.toml`, and the overall layout of the `~/.cjv/` directory. Temporary overrides made at runtime via environment variables (such as `CJV_HOME` and `CJV_DIST_SERVER`) are covered in [Environment Variables](environment-variables.md).
 
 ## settings.toml
 
@@ -15,7 +15,7 @@ version = 1
 default_toolchain = "lts"
 auto_self_update = "check"
 auto_install = true
-gitcode_api_key = "your-token-here"
+manifest_url = "https://raw.githubusercontent.com/Zxilly/cangjie-version-manifest/master/versions.json"
 
 [overrides]
 "/home/me/project-a" = "sts"
@@ -27,19 +27,18 @@ Field overview:
 |-----|----|---------------------|-----------|
 |`version`|int|(maintained automatically)|Settings file format version, written and migrated automatically by cjv|
 |`default_toolchain`|string|`cjv default <toolchain>`|Default toolchain; see [Toolchains](concepts/toolchains.md)|
-|`manifest_url`|string|Manual edit / system fallback|LTS / STS manifest for compatibility mode|
-|`dist_server`|string|Manual edit / system fallback|Unified toolchain distribution root for every channel and component; see [Internal distribution source](enterprise/distribution-server.md)|
+|`manifest_url`|string|Manual edit / system fallback|Toolchain manifest for LTS, STS, nightly, and components|
+|`dist_server`|string|Manual edit / system fallback|Toolchain distribution root; cjv reads its `versions.json`; see [Internal distribution source](enterprise/distribution-server.md)|
 |`auto_self_update`|string|`cjv set auto-self-update`|Self-update behavior during `cjv update`: `enable` / `disable` / `check`|
 |`auto_install`|bool|`cjv set auto-install`|Whether to automatically install missing toolchains in proxy mode|
 |`home`|string|`cjv set home`|Persisted `CJV_HOME` data directory path|
 |`default_host`|string|`cjv set default-host`|Default host platform identity (`goos-goarch` form)|
-|`gitcode_api_key`|string|`cjv set gitcode-api-key`|GitCode API token used for nightly discovery in compatibility mode|
 |`overrides`|table|`cjv override`|Directory-to-toolchain override mapping; see [Targets and Overrides](concepts/targets-overrides.md)|
 
  >
  > Unrecognized keys in the file (for example, typos) are reported with a warn-level log message but do not prevent cjv from starting. Setting `version` to a value higher than the current binary supports does cause an error.
 
-Provide `manifest_url` and `dist_server` through the user settings file or system fallback settings. Source precedence is `CJV_DIST_SERVER`, `dist_server`, then compatibility-mode `manifest_url` / GitCode nightly. See [Internal distribution source](enterprise/distribution-server.md) for the manifest contract.
+Provide `manifest_url` and `dist_server` through the user settings file or system fallback settings. Source precedence is `CJV_DIST_SERVER`, `dist_server`, then `manifest_url`. All three use the same manifest contract; the first two map a root URL to `<root>/versions.json`. See [Internal distribution source](enterprise/distribution-server.md) for the contract.
 
 ## cjv set
 
@@ -77,18 +76,6 @@ cjv set auto-install false
 ```
 
 When enabled, running `cjc`, `cjpm`, or other SDK tools directly will install the resolved toolchain first if it is not present, then proxy the call. The [components](concepts/components.md) and [targets](cross-compilation.md) declared in `cangjie-sdk.toml` apply the same way: with `auto-install` enabled, proxy execution fills in the missing components and target SDKs as needed.
-
-### cjv set gitcode-api-key
-
-Sets the GitCode API access token. Compatibility mode uses it to resolve the latest nightly; a unified enterprise source resolves nightly directly from its manifest. LTS and STS use manifest metadata.
-
-```bash
-cjv set gitcode-api-key <your-gitcode-api-key>
-```
-
-For security, the command masks the token as `********` when echoing it, so it is not leaked in terminal scrollback, CI logs, or screen sharing. The token itself is stored in plaintext in `settings.toml`.
-
-You can also provide the token temporarily with the `CJV_GITCODE_API_KEY` environment variable. It takes priority over the persisted value in `settings.toml`, and is not written back to the file, which suits injecting the credential in CI or deployment environments without persisting it. See [Environment variables](environment-variables.md).
 
 ### cjv set home
 

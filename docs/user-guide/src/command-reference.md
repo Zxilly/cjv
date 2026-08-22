@@ -553,7 +553,6 @@ cjv override list
 cjv set auto-self-update <enable|disable|check>
 cjv set auto-install <true|false>
 cjv set default-host <goos-goarch>
-cjv set gitcode-api-key <key>
 cjv set home <path>
 ```
 
@@ -564,14 +563,12 @@ cjv set home <path>
 | `auto-self-update` | `enable` / `disable` / `check` | 设置自动自更新行为；`check` 只检查不更新 |
 | `auto-install` | `true` / `false` | 代理模式下，解析到的工具链未安装时是否自动安装 |
 | `default-host` | `<goos-goarch>` | 设置默认主机平台标识（如 `linux-amd64`），用于解析下载平台 |
-| `gitcode-api-key` | `<key>` | 设置 GitCode API 访问令牌（查询和下载 nightly 构建需要）；显示时会被掩码 |
 | `home` | `<path>` | 持久化 `CJV_HOME` 到 settings.toml；传空字符串清除该覆盖；`CJV_HOME` 环境变量仍优先生效 |
 
 ```bash
 cjv set auto-self-update check
 cjv set auto-install true
 cjv set default-host linux-amd64
-cjv set gitcode-api-key <your-token>
 cjv set home /opt/cjv
 ```
 

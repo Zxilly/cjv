@@ -31,7 +31,7 @@ https://artifacts.corp.example/cjv/dist/versions.json
 
 ## Manifest 契约
 
-`versions.json` 包含 `lts` 与 `sts`；启用企业 nightly 时再加入 `nightly`。每个 SDK 条目包含 `name`、`url` 和 `sha256`。组件条目支持可选 `sha256`，企业镜像宜一并提供。
+`versions.json` 包含 `lts`、`sts` 与 `nightly`。每个 SDK 条目包含 `name`、`url` 和 `sha256`。nightly 的 `sha256` 可以暂为空，此时 cjv 读取 `<url>.sha256`；企业镜像宜直接填入校验和。组件条目同样支持可选 `sha256`。
 
 ```jsonc
 {
@@ -67,8 +67,7 @@ https://artifacts.corp.example/cjv/dist/versions.json
           "linux-x64": {
             "name": "cangjie-sdk-linux-x64-1.2.0-alpha.20260822010101.tar.gz",
             "url": "nightly/20260822/cangjie-sdk-linux-x64-1.2.0-alpha.20260822010101.tar.gz",
-            "sha256": "<64 位十六进制 SHA-256>",
-            "release_tag": "1.1.0-alpha.20260822010101"
+            "sha256": "<64 位十六进制 SHA-256>"
           }
         }
       },
@@ -86,7 +85,7 @@ https://artifacts.corp.example/cjv/dist/versions.json
 }
 ```
 
-上游 Release tag 与 SDK 资产版本存在差异时填写可选字段 `release_tag`；工具链名称使用版本字段，下载地址以 manifest 中的 URL 为准。
+版本键决定工具链名称，manifest 中的 URL 精确定位下载资产，因此上游 Release 的命名差异由 URL 吸收。
 
 组件结构与普通 manifest 相同：`docs`、`stdx-docs` 各是一项，`stdx` 按制品平台键组织。完整字段可参考企业实际使用的 `versions.json`，并保留所有批准平台。
 
@@ -111,4 +110,4 @@ https://artifacts.corp.example/cjv/dist/versions.json
 5. 最后原子替换 manifest；只有制品齐全时才推进各通道的 `latest`。
 6. 保留项目工具链文件引用的全部精确版本。
 
-来源优先级为 `CJV_DIST_SERVER`、设置文件中的 `dist_server`、`manifest_url` / GitCode nightly 兼容模式。CI 可用环境变量临时选择测试源。
+来源优先级为 `CJV_DIST_SERVER`、设置文件中的 `dist_server`、`manifest_url`。CI 可用环境变量临时选择测试源。

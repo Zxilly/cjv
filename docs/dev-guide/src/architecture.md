@@ -63,11 +63,11 @@ docs/           两本 mdBook（见“文档站”一章）
 
 ### `dist`：下载与解包
 
-`internal/dist` 负责分发源与网络制品。`source.go` 是统一入口：默认兼容模式下 LTS/STS 读 `manifest_url`、nightly 使用 GitCode adapter；显式 `dist_server` 下三个通道和所有组件共用一份权威 manifest，相对 URL 以分发根解析，绝对 URL原样使用。`manifest.go` 解析 LTS、STS 与可选 nightly；`download.go` 做进度、重试和 SHA256 校验；`install.go` 解包归档；`nightly.go` 保留兼容 adapter 所需的 GitCode Release 解析；`platform.go` 统一平台键和归档命名。
+`internal/dist` 负责分发源与网络制品。`source.go` 是统一入口：LTS、STS、nightly 和所有组件共用一份 manifest；默认读取 `manifest_url`，显式 `dist_server` 时读取 `<root>/versions.json`。相对 URL 以 manifest 所在目录解析，绝对 URL 原样使用。`manifest.go` 解析并校验三个通道；`download.go` 做进度、重试和 SHA256 校验；`install.go` 解包归档；`nightly.go` 读取 nightly 资产的 SHA256 sidecar；`platform.go` 统一 host 平台键。
 
 ### `target`：平台身份
 
-`internal/target` 是平台与目标 tuple 的单一事实源。它解析目标 tuple（host 部分加可选的交叉编译环境后缀），给出清单索引键、nightly 归档命名、stdx 平台 token 等结构化视图，免得每个调用方各自去切字符串。`catalog.go` 列出 cjv 出 host 二进制的全部 `(GOOS, GOARCH)` 组合，是发布产物和落地页下载入口的源头；它带 `go:generate` 指令，跑 `scripts/gen-platform-surfaces.go` 生成。
+`internal/target` 是平台与目标 tuple 的单一事实源。它解析目标 tuple（host 部分加可选的交叉编译环境后缀），给出清单索引键、stdx 平台 token 等结构化视图，免得每个调用方各自去切字符串。`catalog.go` 列出 cjv 出 host 二进制的全部 `(GOOS, GOARCH)` 组合，是发布产物和落地页下载入口的源头；它带 `go:generate` 指令，跑 `scripts/gen-platform-surfaces.go` 生成。
 
 ### `env`：运行时环境
 
@@ -79,7 +79,7 @@ docs/           两本 mdBook（见“文档站”一章）
 
 ### `config`：配置与路径
 
-`internal/config` 是配置层。它定义所有 `CJV_*` 环境变量名（包括 `CJV_DIST_SERVER`）、解析 `CJV_HOME`、读写用户与系统后备设置、工具链文件和目录级 override。`dist_server` 选择统一源，兼容模式的默认 manifest URL 按 `mirror` 构建标记切换。
+`internal/config` 是配置层。它定义所有 `CJV_*` 环境变量名（包括 `CJV_DIST_SERVER`）、解析 `CJV_HOME`、读写用户与系统后备设置、工具链文件和目录级 override。`manifest_url` 提供默认分发清单，`dist_server` 选择以 `<root>/versions.json` 表示的企业分发源；`mirror` 构建标记选择默认 manifest 地址。
 
 ### `selfupdate`：自我更新
 
@@ -102,7 +102,7 @@ docs/           两本 mdBook（见“文档站”一章）
 
 进程从 `cmd/cjv/main.go` 的 `run` 起步：`logging.Init` 配好日志，程序名是 `cjv` 不是某个工具名，于是走 `cli.Execute`。cobra 把 `install` 子命令路由到 `internal/cli/install.go` 的 `runInstall`。`runInstall` 收集 `--target`、`--component`、`--force` 等标志，组好 `lifecycle.Options`（把 `output`、`component`、`proxy`、`selfupdate` 的实现接进去），调进 `internal/lifecycle`。
 
-`lifecycle` 编排其余步骤：先让 `dist.Source` 按配置解析通道、版本、平台和组件制品，再让通用下载与解包逻辑落到 staging 目录，最后由 `component`、`proxy` 与 `fstx` 完成组件、代理链接和事务替换。统一企业源与默认 GitCode nightly 共用同一条安装尾部。一路上的进度和结果通过 `output` 渲染（受 `--json` 控制），错误最终在 `main` 翻译成退出码。
+`lifecycle` 编排其余步骤：先让 `dist.Source` 从 manifest 解析通道、版本、平台和组件制品，再让通用下载与解包逻辑落到 staging 目录，最后由 `component`、`proxy` 与 `fstx` 完成组件、代理链接和事务替换。所有通道共用这条安装路径。一路上的进度和结果通过 `output` 渲染（受 `--json` 控制），错误最终在 `main` 翻译成退出码。
 
 代理路径是另一条主线。运行 `cjc build` 时，被调用的其实是名为 `cjc` 的 cjv 链接，`main` 认出工具名走 `proxy.Run`：`proxy` 经 `env.ResolveRuntime` 让 `resolve` 定出活动工具链、在工具链目录里找到真正的 `cjc`、组装好运行环境，然后 `exec` 过去。这条线不碰 `cli`，也不渲染 cjv 自己的输出，纯粹把工具透传出去。
 

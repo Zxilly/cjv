@@ -554,7 +554,6 @@ Modify cjv settings (stored in `<CJV_HOME>/settings.toml`).
 cjv set auto-self-update <enable|disable|check>
 cjv set auto-install <true|false>
 cjv set default-host <goos-goarch>
-cjv set gitcode-api-key <key>
 cjv set home <path>
 ```
 
@@ -565,14 +564,12 @@ Subcommands:
 |`auto-self-update`|`enable` / `disable` / `check`|Set the automatic self-update behavior; `check` only checks without updating|
 |`auto-install`|`true` / `false`|Whether to automatically install the resolved toolchain in proxy mode when it is not yet installed|
 |`default-host`|`<goos-goarch>`|Set the default host platform identifier (e.g. `linux-amd64`), used to resolve the download platform|
-|`gitcode-api-key`|`<key>`|Set the GitCode API access token (required to query and download nightly builds); it is masked when displayed|
 |`home`|`<path>`|Persist `CJV_HOME` to settings.toml; pass an empty string to clear this override; the `CJV_HOME` environment variable still takes precedence|
 
 ```bash
 cjv set auto-self-update check
 cjv set auto-install true
 cjv set default-host linux-amd64
-cjv set gitcode-api-key <your-token>
 cjv set home /opt/cjv
 ```
 

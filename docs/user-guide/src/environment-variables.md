@@ -17,8 +17,7 @@ CJV_LOG=debug cjv install lts
 | `CJV_LOG` | `warn` | 日志级别，可选 `debug`、`info`、`warn`、`error`。无法识别的值按 `warn` 处理。日志输出到标准错误（stderr）。 |
 | `CJV_MAX_RETRIES` | `3` | 单次下载失败后的最大重试次数。取值需为非负整数，非法值将被忽略并回退到默认值。 |
 | `CJV_DOWNLOAD_TIMEOUT` | `180` | HTTP 下载的超时时间（秒）。取值需为正整数，非法值将被忽略并回退到默认值。 |
-| `CJV_DIST_SERVER` | 无 | 覆盖统一工具链分发根。设置后 LTS、STS、nightly 和组件都从 `<root>/versions.json` 解析。 |
-| `CJV_GITCODE_API_KEY` | 无 | 兼容模式下查询 GitCode nightly 的 API 令牌。环境变量优先于持久化令牌。 |
+| `CJV_DIST_SERVER` | 无 | 覆盖工具链分发根。LTS、STS、nightly 和组件都从 `<root>/versions.json` 解析。 |
 | `CJV_NO_PATH_SETUP` | 无 | 设为 `1` 跳过首次安装时的 `PATH` 自动配置（适用于 CI 环境和集成测试）。其他值（包括未设置）不生效。 |
 | `CANGJIE_STDX_PATH_DYNAMIC` | 由 cjv 注入 | 指向 `<CJV_HOME>/stdx/<tc>/dynamic`，仅当对应工具链安装了 `stdx` 组件时注入。通常无需手动设置。 |
 | `CANGJIE_STDX_PATH_STATIC` | 由 cjv 注入 | 指向 `<CJV_HOME>/stdx/<tc>/static`，仅当对应工具链安装了 `stdx` 组件时注入。通常无需手动设置。 |
@@ -77,20 +76,6 @@ CJV_DIST_SERVER=https://artifacts.corp.example/cjv/dist cjv install nightly
 ```
 
 设置后，所有通道与组件都由 `<root>/versions.json` 描述。相对制品 URL 以该根为基准，绝对 URL 按 manifest 原样使用；缺失内容返回明确错误。完整布局见[内部分发源](enterprise/distribution-server.md)。
-
-### `CJV_GITCODE_API_KEY`
-
-兼容模式通过 GitCode API 令牌查询最新 nightly。环境变量适合为当前进程或 CI 注入凭据：
-
-```bash
-CJV_GITCODE_API_KEY=your_token cjv install nightly
-```
-
-该环境变量的优先级高于持久化设置。长期使用可保存为：
-
-```bash
-cjv set gitcode-api-key <key>
-```
 
 企业分发源直接从 manifest 解析 nightly。关于两种来源的区别，参见[通道](concepts/channels.md)。
 
