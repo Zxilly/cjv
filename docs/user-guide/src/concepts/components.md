@@ -12,11 +12,13 @@ cjv 当前支持三类组件：
 
 其中 `<tc>` 是工具链名（如 `lts-1.0.5`）。组件按工具链拆分存放，每个工具链各有一份独立的组件。卸载工具链时，对应的 `stdx/<tc>/` 与 `docs/<tc>/` 会一并清理。
 
-组件的下载来源取决于[通道](channels.md)：
+未配置统一企业分发源时，组件的默认下载来源取决于[通道](channels.md)：
 
 - `stdx`：LTS / STS 从 [`cangjie_stdx`](https://gitcode.com/Cangjie/cangjie_stdx/releases) 下载，nightly 从 [`nightly_build`](https://gitcode.com/Cangjie/nightly_build/releases) 下载。
 - `docs`：LTS / STS 从 [`cangjie-docs-bundle`](https://github.com/Zxilly/cangjie-docs-bundle/releases) 的 GitHub release 下载，nightly 从 [`nightly_build`](https://gitcode.com/Cangjie/nightly_build/releases) 下载。
 - `stdx-docs`：LTS / STS 从 [`cangjie_stdx`](https://gitcode.com/Cangjie/cangjie_stdx/releases) 下载，nightly 从 [`nightly_build`](https://gitcode.com/Cangjie/nightly_build/releases) 下载。
+
+配置 `dist_server` 后，三个通道的组件都从统一 manifest 读取 URL；相对 URL 以分发根解析，绝对 URL原样使用，组件条目还可提供 SHA-256。见[内部分发源](../enterprise/distribution-server.md)。
 
 ## 自动注入的环境变量
 

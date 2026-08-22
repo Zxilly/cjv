@@ -17,7 +17,8 @@ CJV_LOG=debug cjv install lts
 | `CJV_LOG` | `warn` | 日志级别，可选 `debug`、`info`、`warn`、`error`。无法识别的值按 `warn` 处理。日志输出到标准错误（stderr）。 |
 | `CJV_MAX_RETRIES` | `3` | 单次下载失败后的最大重试次数。取值需为非负整数，非法值将被忽略并回退到默认值。 |
 | `CJV_DOWNLOAD_TIMEOUT` | `180` | HTTP 下载的超时时间（秒）。取值需为正整数，非法值将被忽略并回退到默认值。 |
-| `CJV_GITCODE_API_KEY` | 无 | GitCode API 访问令牌，用于查询和下载 nightly 工具链与组件。优先级高于 `settings.toml` 中持久化的令牌，且不会被写回磁盘。 |
+| `CJV_DIST_SERVER` | 无 | 覆盖统一工具链分发根。设置后 LTS、STS、nightly 和组件都从 `<root>/versions.json` 解析，并禁止回退公网。 |
+| `CJV_GITCODE_API_KEY` | 无 | 兼容模式下查询 GitCode nightly 的 API 令牌。优先级高于持久化令牌，且不会被写回磁盘。 |
 | `CJV_NO_PATH_SETUP` | 无 | 设为 `1` 跳过首次安装时的 `PATH` 自动配置（适用于 CI 环境和集成测试）。其他值（包括未设置）不生效。 |
 | `CANGJIE_STDX_PATH_DYNAMIC` | 由 cjv 注入 | 指向 `<CJV_HOME>/stdx/<tc>/dynamic`，仅当对应工具链安装了 `stdx` 组件时注入。通常无需手动设置。 |
 | `CANGJIE_STDX_PATH_STATIC` | 由 cjv 注入 | 指向 `<CJV_HOME>/stdx/<tc>/static`，仅当对应工具链安装了 `stdx` 组件时注入。通常无需手动设置。 |
@@ -67,9 +68,19 @@ CJV_MAX_RETRIES=5 CJV_DOWNLOAD_TIMEOUT=600 cjv install sts
 
 `CJV_MAX_RETRIES` 指失败后的重试次数，`CJV_DOWNLOAD_TIMEOUT` 以秒为单位。两者的非法值都会被忽略并回退到默认值。
 
+### `CJV_DIST_SERVER`
+
+`CJV_DIST_SERVER` 临时覆盖 `settings.toml` 或系统后备配置中的 `dist_server`。它适合在 CI 中切换正式源与预发布源：
+
+```bash
+CJV_DIST_SERVER=https://artifacts.corp.example/cjv/dist cjv install nightly
+```
+
+设置后，所有通道与组件都必须由 `<root>/versions.json` 描述。相对制品 URL 以该根为基准，绝对 URL 按 manifest 原样使用；缺失内容不会自动回退 GitCode。完整布局见[内部分发源](enterprise/distribution-server.md)。
+
 ### `CJV_GITCODE_API_KEY`
 
-查询和下载 nightly 工具链及其组件需要 GitCode API 令牌。设置该环境变量可以在不把令牌写入 `settings.toml` 的情况下提供凭据，适合 CI 与部署场景：
+未配置统一 `dist_server` 时，查询最新 nightly 需要 GitCode API 令牌。设置该环境变量可以在不把令牌写入 `settings.toml` 的情况下提供凭据：
 
 ```bash
 CJV_GITCODE_API_KEY=your_token cjv install nightly
@@ -81,7 +92,7 @@ CJV_GITCODE_API_KEY=your_token cjv install nightly
 cjv set gitcode-api-key <key>
 ```
 
-关于 nightly 通道与 GitCode 的更多说明，参见[通道](concepts/channels.md)。
+使用企业分发源时不需要该令牌。关于两种来源的区别，参见[通道](concepts/channels.md)。
 
 ### `CJV_NO_PATH_SETUP`
 
@@ -110,5 +121,5 @@ cjv 的下载会自动遵循标准代理环境变量，在企业受限网络里�
 | 变量 | 说明 |
 | --- | --- |
 | `CJV_LANG` | 覆盖界面语言（如 `zh`、`en`、`ja`）。未设置时跟随系统区域设置。 |
-| `CJV_ALLOW_INSECURE_MANIFEST` | 设为 `1` 时，允许从非回环（loopback）主机通过明文 HTTP 拉取工具链清单。默认要求 HTTPS，因为清单同时携带下载 URL 与其校验和。仅在信任的内部镜像场景使用，详见[企业内网部署](enterprise-intranet.md)。 |
-| `CJV_FALLBACK_SETTINGS` | 指定系统级后备设置文件的路径，用于在用户设置之外提供默认值（如企业镜像配置）。未设置时使用平台默认位置，详见[企业内网部署](enterprise-intranet.md)。 |
+| `CJV_ALLOW_INSECURE_MANIFEST` | 设为 `1` 时，允许从非回环（loopback）主机通过明文 HTTP 拉取工具链清单。默认要求 HTTPS，因为清单同时携带下载 URL 与其校验和。仅在信任的内部镜像场景使用，详见[内部分发源](enterprise/distribution-server.md)。 |
+| `CJV_FALLBACK_SETTINGS` | 指定系统级后备设置文件的路径，用于在用户设置之外提供默认值（如企业分发配置）。未设置时使用平台默认位置，详见[部署受管客户端](enterprise/client-deployment.md)。 |

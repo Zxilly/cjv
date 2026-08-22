@@ -18,8 +18,15 @@
 - [运行时环境](runtime-environment.md)
 - [环境变量](environment-variables.md)
 - [网络代理](network-proxies.md)
-- [企业内网部署](enterprise-intranet.md)
 - [配置](configuration.md)
+
+# 企业部署
+
+- [企业部署概览](enterprise/index.md)
+  - [内部分发源](enterprise/distribution-server.md)
+  - [部署受管客户端](enterprise/client-deployment.md)
+  - [代理与完全离线环境](enterprise/restricted-networks.md)
+  - [发布、升级与验收](enterprise/operations.md)
 
 # 参考
 

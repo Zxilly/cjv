@@ -8,7 +8,7 @@ cjv 支持三个内置通道：
 | --------- | ----------------- | ------------------------- | ------------------------------ |
 | `lts`     | 长期支持版        | 官方版本清单（manifest）  | 无                             |
 | `sts`     | 短期支持版        | 官方版本清单（manifest）  | 无                             |
-| `nightly` | 每日构建（预览版）| GitCode `nightly_build`   | 需要 `CJV_GITCODE_API_KEY`     |
+| `nightly` | 每日构建（预览版）| 默认 GitCode；也可由统一 manifest 提供 | 默认模式需要 `CJV_GITCODE_API_KEY` |
 
 通道名大小写不敏感，`LTS`、`Lts`、`lts` 等价。
 
@@ -44,7 +44,7 @@ cjv install 1.0.5
 
 裸版本号（如 `1.0.5`）只在 LTS / STS 的版本清单中查找，命中哪个通道就归属哪个通道，nightly 不参与裸版本号匹配。关于工具链命名的完整规则，参见[工具链](toolchains.md)。
 
-## 下载来源的差异
+## 下载来源
 
 三个通道安装的都是仓颉 SDK，区别在于取构建产物的位置不同。
 
@@ -54,11 +54,11 @@ LTS 与 STS 的可用版本、下载地址和校验和来自一份官方维护�
 
 清单地址可在 `~/.cjv/settings.toml` 中通过 `manifest_url` 覆盖（例如切换到镜像源），留空则恢复内置默认值。详见[配置](../configuration.md)。
 
-### nightly：GitCode 每日构建仓库
+### nightly：默认 GitCode，企业源使用统一 manifest
 
-nightly 不走版本清单。cjv 通过 GitCode 的发布 API 查询 `Cangjie/nightly_build` 仓库的最新发布，解析出 SDK 版本，再从该仓库的发布资产中下载对应平台的构建产物。
+未配置 `dist_server` 时，cjv 通过 GitCode 的发布 API 查询 `Cangjie/nightly_build` 仓库的最新发布，解析 SDK 版本，再下载对应平台的 Release 资产。
 
-GitCode 的发布 API 需要鉴权，因此安装或检查 nightly 必须配置一个 GitCode API 访问令牌。未配置时，相关命令会失败并提示：
+GitCode 的发布 API 需要鉴权，因此默认模式下安装或检查浮动的 `nightly` 必须配置 API 访问令牌。未配置时，相关命令会失败并提示：
 
 ```text
 查询 nightly 版本需要 GitCode API 密钥。请通过以下命令设置: cjv set gitcode-api-key <your-token>
@@ -76,9 +76,11 @@ export CJV_GITCODE_API_KEY=<your-token>
 
 关于 `CJV_GITCODE_API_KEY` 的完整说明见[环境变量](../environment-variables.md)，关于 `cjv set` 见[配置](../configuration.md)。
 
+配置 `dist_server` 或 `CJV_DIST_SERVER` 后，三个通道改为共用 `<dist_server>/versions.json`。nightly 的最新版本、精确版本、平台 SDK 和组件都由 manifest 描述，不需要 GitCode 令牌；缺少内容会直接报错，不会回退公网。部署契约见[内部分发源](../enterprise/distribution-server.md)。
+
 ## 通道与组件来源
 
-组件（component）的下载来源同样按通道区分。stdx、docs、stdx-docs 在 LTS / STS 与 nightly 下分别来自不同的发布仓库：
+默认模式下，stdx、docs、stdx-docs 在 LTS / STS 与 nightly 下分别来自不同的发布仓库：
 
 | 组件        | LTS / STS 来源             | nightly 来源         |
 | ----------- | -------------------------- | -------------------- |
@@ -86,10 +88,10 @@ export CJV_GITCODE_API_KEY=<your-token>
 | `docs`      | `cangjie-docs-bundle` 发布 | `nightly_build` 发布 |
 | `stdx-docs` | `cangjie_stdx` 发布        | `nightly_build` 发布 |
 
-nightly 工具链的所有组件都从 `nightly_build` 仓库拉取，因此安装 nightly 组件同样依赖前面配置的 GitCode API 令牌。组件机制本身的说明见[组件](components.md)。
+统一企业分发源下，三个通道的组件都使用 manifest 中声明的 URL，并可携带 SHA-256。默认 GitCode nightly 的组件仍按 `nightly_build` Release 布局下载。组件机制本身的说明见[组件](components.md)。
 
 ```bash
-# 安装 nightly 时一并装上组件（组件也走 nightly_build 来源）
+# 安装 nightly 时一并装上组件
 cjv install nightly -c stdx,docs
 ```
 
@@ -106,7 +108,7 @@ channel = "lts"
 
 ## 检查更新
 
-`cjv check` 会为已安装的通道型工具链查询是否有更新。nightly 的检查同样会调用 GitCode API，因此若你装有 nightly 工具链却未配置令牌，这一步会报错，LTS / STS 的检查不受影响。
+`cjv check` 会为已安装的通道型工具链查询是否有更新。默认模式下 nightly 检查调用 GitCode API，需要令牌；配置统一企业分发源后，三个通道都查询同一 manifest。
 
 ```bash
 cjv check

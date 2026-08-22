@@ -49,6 +49,8 @@ docs/           两本 mdBook（见“文档站”一章）
 
 `internal/lifecycle` 把一次工具链安装编排起来：下载、解压、校验、装组件、配 PATH、建代理链接，按顺序串成一条流程。它刻意不依赖 `cli`，而是通过一个 `Options` 结构体接收回调（`IsJSON`、`ComponentInstall`、`CreateProxyLinks`、`ValidateInstallation` 等），把展示和具体实现留在外面。这样同一套安装流程既能被 `cli install` 调用，也能被代理路径的自动安装复用，`cli` 在 `lifecycleOptions()` 里把这些回调接到 `output`、`component`、`proxy`、`selfupdate` 上。
 
+包内再按职责分文件：`install.go` 只做安装编排，`source.go` 把通道请求交给分发源并产出 `ResolvedToolchain`，`component_install.go` 管组件批量安装与回滚，`resolved_install.go` 管下载后的落盘、校验和事务替换。分发源选择不会渗进安装事务。
+
 ### `resolve`：活动工具链解析
 
 `internal/resolve` 回答“现在该用哪个工具链”。`Active` 综合命令行的 `+toolchain` 覆盖、`CJV_TOOLCHAIN` 环境变量、目录级与全局的 override、默认设置，定出活动工具链的名字和目录，连同它的目标平台和组件一起返回成 `ActiveToolchain`。解析过程中如果工具链没装，它能通过 `AutoInstallFunc` 这个测试缝触发自动安装；生产环境里这个缝默认接到 `lifecycle`，这样 `resolve` 不必反向依赖 `cli`。
@@ -61,7 +63,7 @@ docs/           两本 mdBook（见“文档站”一章）
 
 ### `dist`：下载与解包
 
-`internal/dist` 负责把 SDK 和组件从网上弄下来。`manifest.go` 解析版本清单（LTS / STS 两个通道，version -> platform -> 下载信息的嵌套结构）；`download.go` 做带进度条、重试和 SHA256 校验的下载；`install.go` 把归档解包到目标目录（`ExtractFlattened` 处理单层顶级目录的剥离）；`nightly.go` 处理 nightly 构建；`platform.go` 把 `(GOOS, GOARCH)` 和目标 tuple 映射到清单索引键与 nightly 文件名，底层委托给 `target`。
+`internal/dist` 负责分发源与网络制品。`source.go` 是统一入口：默认兼容模式下 LTS/STS 读 `manifest_url`、nightly 使用 GitCode adapter；显式 `dist_server` 下三个通道和所有组件共用一份权威 manifest，相对 URL 以分发根解析，绝对 URL原样使用。`manifest.go` 解析 LTS、STS 与可选 nightly；`download.go` 做进度、重试和 SHA256 校验；`install.go` 解包归档；`nightly.go` 保留兼容 adapter 所需的 GitCode Release 解析；`platform.go` 统一平台键和归档命名。
 
 ### `target`：平台身份
 
@@ -77,7 +79,7 @@ docs/           两本 mdBook（见“文档站”一章）
 
 ### `config`：配置与路径
 
-`internal/config` 是配置层。它定义所有 `CJV_*` 环境变量名（`EnvHome`、`EnvToolchain`、`EnvLog` 等）、解析 `CJV_HOME`（区分来自环境变量、来自 `settings.toml`、还是默认 `<user-home>/.cjv`）、读写 `settings.toml` 与工具链文件、管理目录级 override。清单 URL 也在这里按 `mirror` 构建标记切换（`manifest_default.go` 走 GitHub，`manifest_mirror.go` 走镜像）。
+`internal/config` 是配置层。它定义所有 `CJV_*` 环境变量名（包括 `CJV_DIST_SERVER`）、解析 `CJV_HOME`、读写用户与系统后备设置、工具链文件和目录级 override。未配置统一分发根时，默认 manifest URL 仍按 `mirror` 构建标记切换；显式 `dist_server` 则优先于该兼容配置。
 
 ### `selfupdate`：自我更新
 
@@ -100,8 +102,8 @@ docs/           两本 mdBook（见“文档站”一章）
 
 进程从 `cmd/cjv/main.go` 的 `run` 起步：`logging.Init` 配好日志，程序名是 `cjv` 不是某个工具名，于是走 `cli.Execute`。cobra 把 `install` 子命令路由到 `internal/cli/install.go` 的 `runInstall`。`runInstall` 收集 `--target`、`--component`、`--force` 等标志，组好 `lifecycle.Options`（把 `output`、`component`、`proxy`、`selfupdate` 的实现接进去），调进 `internal/lifecycle`。
 
-`lifecycle` 编排其余步骤：经 `config` / `target` 把请求的版本和平台解析成清单键，让 `dist` 去下载和校验归档、解包到 staging 目录，让 `component` 装上请求的组件，让 `proxy` 建出代理链接、相关的 PATH 配置就位，整个落地过程借 `fstx` 事务完成以便失败回滚。一路上的进度和结果通过 `output` 渲染（受 `--json` 控制），文本来自 `i18n`，出错则是 `cjverr` 的类型化错误，最终在 `main` 那层被翻译成退出码。
+`lifecycle` 编排其余步骤：先让 `dist.Source` 按配置解析通道、版本、平台和组件制品，再让通用下载与解包逻辑落到 staging 目录，最后由 `component`、`proxy` 与 `fstx` 完成组件、代理链接和事务替换。统一企业源与默认 GitCode nightly 共用同一条安装尾部。一路上的进度和结果通过 `output` 渲染（受 `--json` 控制），错误最终在 `main` 翻译成退出码。
 
 代理路径是另一条主线。运行 `cjc build` 时，被调用的其实是名为 `cjc` 的 cjv 链接，`main` 认出工具名走 `proxy.Run`：`proxy` 经 `env.ResolveRuntime` 让 `resolve` 定出活动工具链、在工具链目录里找到真正的 `cjc`、组装好运行环境，然后 `exec` 过去。这条线不碰 `cli`，也不渲染 cjv 自己的输出，纯粹把工具透传出去。
 
-想深入某一块，从这几处入手最快：命令定义看 `internal/cli/root.go` 起，安装编排看 `internal/lifecycle/install.go`，代理看 `internal/proxy/proxy.go`。测试怎么组织见[测试](testing.md)。
+想深入某一块，从这几处入手最快：命令定义看 `internal/cli/root.go`，安装编排看 `internal/lifecycle/install.go`，分发源看 `internal/dist/source.go`，落盘事务看 `internal/lifecycle/resolved_install.go`，代理看 `internal/proxy/proxy.go`。测试怎么组织见[测试](testing.md)。

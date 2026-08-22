@@ -17,7 +17,8 @@ CJV_LOG=debug cjv install lts
 |`CJV_LOG`|`warn`|Log level; one of `debug`, `info`, `warn`, `error`. Unrecognized values are treated as `warn`. Logs are written to standard error (stderr).|
 |`CJV_MAX_RETRIES`|`3`|Maximum number of retries after a single download failure. The value must be a non-negative integer; invalid values are ignored and fall back to the default.|
 |`CJV_DOWNLOAD_TIMEOUT`|`180`|Timeout for HTTP downloads, in seconds. The value must be a positive integer; invalid values are ignored and fall back to the default.|
-|`CJV_GITCODE_API_KEY`|None|GitCode API access token, used to query and download nightly toolchains and components. It takes priority over the token persisted in `settings.toml`, and is not written back to disk.|
+|`CJV_DIST_SERVER`|None|Overrides the unified toolchain distribution root. LTS, STS, nightly, and components are resolved from `<root>/versions.json`, with no public fallback.|
+|`CJV_GITCODE_API_KEY`|None|GitCode API token for nightly discovery in compatibility mode. It takes priority over the persisted token and is not written back to disk.|
 |`CJV_NO_PATH_SETUP`|None|Set to `1` to skip the automatic `PATH` configuration on first install (useful for CI environments and integration tests). Any other value (including unset) has no effect.|
 |`CANGJIE_STDX_PATH_DYNAMIC`|Injected by cjv|Points to `<CJV_HOME>/stdx/<tc>/dynamic`, injected only when the corresponding toolchain has the `stdx` component installed. You normally do not need to set it manually.|
 |`CANGJIE_STDX_PATH_STATIC`|Injected by cjv|Points to `<CJV_HOME>/stdx/<tc>/static`, injected only when the corresponding toolchain has the `stdx` component installed. You normally do not need to set it manually.|
@@ -67,9 +68,19 @@ CJV_MAX_RETRIES=5 CJV_DOWNLOAD_TIMEOUT=600 cjv install sts
 
 `CJV_MAX_RETRIES` is the number of retries after a failure, and `CJV_DOWNLOAD_TIMEOUT` is in seconds. Invalid values for either are ignored and fall back to the default.
 
+### `CJV_DIST_SERVER`
+
+`CJV_DIST_SERVER` temporarily overrides `dist_server` from user or system fallback settings. It is useful for selecting production or staging sources in CI:
+
+```bash
+CJV_DIST_SERVER=https://artifacts.corp.example/cjv/dist cjv install nightly
+```
+
+Every channel and component must then be described by `<root>/versions.json`. Relative artifact URLs use that root as their base, while absolute URLs are honored as written; missing content does not fall back to GitCode. See [Internal distribution source](enterprise/distribution-server.md) for the layout.
+
 ### `CJV_GITCODE_API_KEY`
 
-Querying and downloading nightly toolchains and their components requires a GitCode API token. Setting this environment variable provides the credential without writing the token into `settings.toml`, which suits CI and deployment scenarios:
+Without a unified `dist_server`, resolving the latest nightly requires a GitCode API token. This environment variable supplies it without writing the token into `settings.toml`:
 
 ```bash
 CJV_GITCODE_API_KEY=your_token cjv install nightly
@@ -81,7 +92,7 @@ This environment variable takes priority over the persisted setting, and is not 
 cjv set gitcode-api-key <key>
 ```
 
-For more about the nightly channel and GitCode, see [Channels](concepts/channels.md).
+An enterprise distribution source does not require this token. See [Channels](concepts/channels.md) for the two source modes.
 
 ### `CJV_NO_PATH_SETUP`
 
@@ -110,5 +121,5 @@ The following variables target special scenarios and normally do not need to be 
 |Variable|Description|
 |--------|-----------|
 |`CJV_LANG`|Override the interface language (such as `zh`, `en`, `ja`). When unset, it follows the system locale setting.|
-|`CJV_ALLOW_INSECURE_MANIFEST`|When set to `1`, allows fetching the toolchain manifest over plaintext HTTP from non-loopback hosts. HTTPS is required by default, because the manifest carries both download URLs and their checksums. Use this only with trusted internal mirrors; see [Enterprise intranet deployment](enterprise-intranet.md).|
-|`CJV_FALLBACK_SETTINGS`|Specifies the path to a system-level fallback settings file, used to provide defaults beyond the user settings (such as an enterprise mirror configuration). When unset, the platform default location is used; see [Enterprise intranet deployment](enterprise-intranet.md).|
+|`CJV_ALLOW_INSECURE_MANIFEST`|When set to `1`, allows fetching the toolchain manifest over plaintext HTTP from non-loopback hosts. HTTPS is required by default because the manifest carries download URLs and checksums. Use this only with trusted internal mirrors; see [Internal distribution source](enterprise/distribution-server.md).|
+|`CJV_FALLBACK_SETTINGS`|Selects a system-level fallback settings file used for defaults such as enterprise distribution configuration. When unset, the platform default path is used; see [Deploy managed clients](enterprise/client-deployment.md).|

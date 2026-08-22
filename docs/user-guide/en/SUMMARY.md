@@ -18,8 +18,15 @@
 - [Runtime Environment](runtime-environment.md)
 - [Environment Variables](environment-variables.md)
 - [Network proxies](network-proxies.md)
-- [Enterprise intranet deployment](enterprise-intranet.md)
 - [Configuration](configuration.md)
+
+# Enterprise Deployment
+
+- [Enterprise deployment overview](enterprise/index.md)
+  - [Internal distribution source](enterprise/distribution-server.md)
+  - [Deploy managed clients](enterprise/client-deployment.md)
+  - [Proxy and fully offline environments](enterprise/restricted-networks.md)
+  - [Publishing, upgrades, and acceptance](enterprise/operations.md)
 
 # Reference
 

@@ -8,7 +8,7 @@ cjv supports three built-in channels:
 |--------|-------|---------------|----------------------|
 |`lts`|Long-term support release|Official version manifest|None|
 |`sts`|Short-term support release|Official version manifest|None|
-|`nightly`|Daily build (preview)|GitCode `nightly_build`|Requires `CJV_GITCODE_API_KEY`|
+|`nightly`|Daily build (preview)|GitCode by default; a unified manifest can provide it|The default mode requires `CJV_GITCODE_API_KEY`|
 
 Channel names are case-insensitive; `LTS`, `Lts`, and `lts` are equivalent.
 
@@ -44,7 +44,7 @@ cjv install 1.0.5
 
 A bare version number (such as `1.0.5`) is looked up only in the LTS / STS version manifest; it belongs to whichever channel it matches, and nightly does not take part in bare version matching. For the full rules on toolchain naming, see [Toolchains](toolchains.md).
 
-## Differences in download sources
+## Download sources
 
 All three channels install the Cangjie SDK; they differ in where the build artifacts are fetched from.
 
@@ -54,11 +54,11 @@ The available versions, download URLs, and checksums for LTS and STS come from a
 
 The manifest address can be overridden in `~/.cjv/settings.toml` through `manifest_url` (for example to switch to a mirror); leaving it empty restores the built-in default. See [Configuration](../configuration.md).
 
-### nightly: the GitCode daily build repository
+### nightly: GitCode by default, unified manifest for enterprise sources
 
-nightly does not go through the version manifest. cjv queries the latest release of the `Cangjie/nightly_build` repository via GitCode's release API, resolves the SDK version, and then downloads the build artifact for the corresponding platform from that repository's release assets.
+Without `dist_server`, cjv queries the latest release of the `Cangjie/nightly_build` repository through GitCode's release API, resolves the SDK version, and downloads the platform asset from that Release.
 
-GitCode's release API requires authentication, so installing or checking nightly requires a configured GitCode API access token. When it is not configured, the relevant commands fail with a prompt:
+GitCode's release API requires authentication, so installing or checking the moving `nightly` alias in the default mode requires an API access token. Without one, the relevant commands fail with a prompt:
 
 ```text
 GitCode API key is required to query nightly versions. Set it with: cjv set gitcode-api-key <your-token>
@@ -76,9 +76,11 @@ export CJV_GITCODE_API_KEY=<your-token>
 
 For the full description of `CJV_GITCODE_API_KEY` see [Environment variables](../environment-variables.md), and for `cjv set` see [Configuration](../configuration.md).
 
+With `dist_server` or `CJV_DIST_SERVER` configured, all three channels share `<dist_server>/versions.json`. The manifest describes nightly latest, exact versions, platform SDKs, and components, so no GitCode token is required. Missing content fails without a public fallback. See [Internal distribution source](../enterprise/distribution-server.md) for the deployment contract.
+
 ## Channels and component sources
 
-The download sources for components are likewise distinguished by channel. stdx, docs, and stdx-docs come from different release repositories under LTS / STS versus nightly:
+In the default mode, stdx, docs, and stdx-docs come from different release repositories under LTS / STS versus nightly:
 
 |Components|LTS / STS source|nightly source|
 |----------|----------------|--------------|
@@ -86,10 +88,10 @@ The download sources for components are likewise distinguished by channel. stdx,
 |`docs`|`cangjie-docs-bundle` release|`nightly_build` release|
 |`stdx-docs`|`cangjie_stdx` release|`nightly_build` release|
 
-All components of a nightly toolchain are pulled from the `nightly_build` repository, so installing nightly components also depends on the GitCode API token configured earlier. For an explanation of the component mechanism itself, see [Components](components.md).
+Under a unified enterprise source, components for all three channels use the URLs declared by the manifest and may carry SHA-256 checksums. Default GitCode nightly components retain the `nightly_build` Release layout. For the component mechanism itself, see [Components](components.md).
 
 ```bash
-# Install components together with nightly (the components also come from the nightly_build source)
+# Install components together with nightly
 cjv install nightly -c stdx,docs
 ```
 
@@ -106,7 +108,7 @@ channel = "lts"
 
 ## Checking for updates
 
-`cjv check` queries whether updates are available for installed channel toolchains. The nightly check also calls the GitCode API, so if you have a nightly toolchain installed but no token configured, this step reports an error; the LTS / STS checks are unaffected.
+`cjv check` queries whether updates are available for installed channel toolchains. In the default mode, nightly checks call the GitCode API and require a token. With a unified enterprise source, all three channels are checked against the same manifest.
 
 ```bash
 cjv check

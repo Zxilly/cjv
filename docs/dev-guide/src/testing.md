@@ -8,6 +8,8 @@ CI 的全部 job 定义在 `.github/workflows/ci.yml`，smoke 单独在 `.github
 
 单元测试和被测代码放在同一个包里，文件名以 `_test.go` 结尾，分布在 `internal/` 各处，目前一百多个文件。它们用 `github.com/stretchr/testify` 的 `assert` 和 `require` 做断言，不依赖网络：需要分发源时用 `internal/testutil` 里的 `MockDistServer` 起一个 `httptest.Server`，返回构造好的 `sdk-versions.json` 和打包好的 mock SDK。
 
+企业分发源的回归测试也使用真实 `httptest.Server`，覆盖 `<dist_server>/versions.json`、相对与绝对 URL、无 GitCode token 的 nightly SDK/组件安装，以及 `list-remote`、`check`、`update` 共用同一来源。统一源缺 nightly 时还会注入一个会记录调用的 legacy adapter，断言失败过程中没有 provider 回退。
+
 本地跑全部单元测试：
 
 ```bash

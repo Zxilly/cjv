@@ -47,7 +47,9 @@ Each directory under `internal/` is a package, divided by subsystem. They are li
 
 ### `lifecycle`: installation orchestration
 
-`internal/lifecycle` orchestrates a single toolchain installation: download, extract, verify, install components, configure PATH, and create proxy links, strung together into one sequential flow. It deliberately does not depend on `cli`; instead it receives callbacks through an `Options` struct (`IsJSON`, `ComponentInstall`, `CreateProxyLinks`, `ValidateInstallation`, and so on), leaving presentation and the concrete implementations on the outside. This way the same installation flow can be invoked by `cli install` and also reused by the automatic install on the proxy path, with `cli` wiring these callbacks to `output`, `component`, `proxy`, and `selfupdate` in `lifecycleOptions()`.
+`internal/lifecycle` orchestrates a single toolchain installation: download, extract, verify, install components, configure PATH, and create proxy links, strung together into one sequential flow. It deliberately does not depend on `cli`; instead it receives callbacks through an `Options` struct (`IsJSON`, `ComponentInstall`, `CreateProxyLinks`, `ValidateInstallation`, and so on), leaving presentation and concrete implementations outside. The same flow serves both `cli install` and proxy auto-install.
+
+Files inside the package are split by responsibility: `install.go` owns orchestration, `source.go` turns channel requests into `ResolvedToolchain` values, `component_install.go` owns component batches and rollback, and `resolved_install.go` owns materialization, validation, and transactional replacement. Distribution-source selection does not leak into the install transaction.
 
 ### `resolve`: active toolchain resolution
 
@@ -61,7 +63,7 @@ Each directory under `internal/` is a package, divided by subsystem. They are li
 
 ### `dist`: download and unpacking
 
-`internal/dist` is responsible for fetching the SDK and components off the network. `manifest.go` parses the version manifest (the LTS / STS channels, a nested structure of version -> platform -> download info); `download.go` performs downloads with a progress bar, retries, and SHA256 verification; `install.go` unpacks the archive into the target directory (`ExtractFlattened` handles stripping a single top-level directory); `nightly.go` handles nightly builds; `platform.go` maps `(GOOS, GOARCH)` and the target tuple to manifest index keys and nightly file names, delegating to `target` underneath.
+`internal/dist` owns distribution sources and network artifacts. `source.go` is the unified entry point: compatibility mode uses `manifest_url` for LTS/STS and a GitCode adapter for nightly, while an explicit `dist_server` makes one manifest authoritative for all three channels and every component. Relative URLs use the distribution root and absolute URLs are honored as written. `manifest.go` parses LTS, STS, and optional nightly data; `download.go` handles progress, retries, and SHA-256; `install.go` unpacks archives; `nightly.go` retains GitCode Release parsing for compatibility; and `platform.go` centralizes platform keys and archive naming.
 
 ### `target`: platform identity
 
@@ -77,7 +79,7 @@ Each directory under `internal/` is a package, divided by subsystem. They are li
 
 ### `config`: configuration and paths
 
-`internal/config` is the configuration layer. It defines the names of all `CJV_*` environment variables (`EnvHome`, `EnvToolchain`, `EnvLog`, and so on), resolves `CJV_HOME` (distinguishing whether it comes from an environment variable, from `settings.toml`, or from the default `<user-home>/.cjv`), reads and writes `settings.toml` and the toolchain file, and manages directory-level overrides. The manifest URL is also switched here by the `mirror` build tag (`manifest_default.go` uses GitHub, `manifest_mirror.go` uses the mirror).
+`internal/config` is the configuration layer. It defines all `CJV_*` variables, including `CJV_DIST_SERVER`, resolves `CJV_HOME`, reads user and system fallback settings, reads the toolchain file, and manages directory overrides. Without a unified distribution root, the default manifest URL is still selected by the `mirror` build tag; an explicit `dist_server` takes precedence over that compatibility configuration.
 
 ### `selfupdate`: self-update
 
@@ -100,8 +102,8 @@ Tying the above together, here is roughly how `cjv install <toolchain>` runs.
 
 The process starts in `run` in `cmd/cjv/main.go`: `logging.Init` sets up logging, the program name is `cjv` rather than some tool name, so it takes the `cli.Execute` path. cobra routes the `install` subcommand to `runInstall` in `internal/cli/install.go`. `runInstall` collects the `--target`, `--component`, `--force` and other flags, assembles a `lifecycle.Options` (wiring in the implementations of `output`, `component`, `proxy`, `selfupdate`), and calls into `internal/lifecycle`.
 
-`lifecycle` orchestrates the remaining steps: through `config` / `target` it resolves the requested version and platform into a manifest key, has `dist` download and verify the archive and unpack it into the staging directory, has `component` install the requested components, and has `proxy` create the proxy links with the relevant PATH configuration in place; the whole materialization is carried out within an `fstx` transaction so that it can roll back on failure. Progress and results along the way are rendered through `output` (controlled by `--json`), with text coming from `i18n`, and errors being the typed errors from `cjverr`, which are finally translated into an exit code at the `main` level.
+`lifecycle` first asks `dist.Source` to resolve the requested channel, version, platform, and component artifacts. The shared download and extraction path then materializes a staging directory, after which `component`, `proxy`, and `fstx` complete component installation, proxy links, and transactional replacement. A unified enterprise source and the default GitCode nightly adapter share this same installation tail. Progress goes through `output`, and errors are translated into an exit code at `main`.
 
 The proxy path is the other main line. When you run `cjc build`, what is actually invoked is the cjv link named `cjc`, and `main` recognizes the tool name and takes the `proxy.Run` path: `proxy`, through `env.ResolveRuntime`, has `resolve` determine the active toolchain, finds the real `cjc` inside the toolchain directory, assembles the run environment, and then `exec`s into it. This line does not touch `cli` and does not render any of cjv's own output; it purely passes the tool straight through.
 
-To dig into a particular area, these are the quickest places to start: for command definitions begin with `internal/cli/root.go`, for installation orchestration see `internal/lifecycle/install.go`, and for the proxy see `internal/proxy/proxy.go`. For how the tests are organized, see [Testing](testing.md).
+To dig into a particular area, start with `internal/cli/root.go` for commands, `internal/lifecycle/install.go` for orchestration, `internal/dist/source.go` for distribution selection, `internal/lifecycle/resolved_install.go` for materialization, and `internal/proxy/proxy.go` for proxying. See [Testing](testing.md) for test organization.

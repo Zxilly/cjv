@@ -27,18 +27,19 @@ Field overview:
 |-----|----|---------------------|-----------|
 |`version`|int|(maintained automatically)|Settings file format version, written and migrated automatically by cjv|
 |`default_toolchain`|string|`cjv default <toolchain>`|Default toolchain; see [Toolchains](concepts/toolchains.md)|
-|`manifest_url`|string|Manual edit / system fallback|LTS / STS toolchain manifest URL; see [Enterprise intranet deployment](enterprise-intranet.md)|
+|`manifest_url`|string|Manual edit / system fallback|LTS / STS manifest used when `dist_server` is not configured|
+|`dist_server`|string|Manual edit / system fallback|Unified toolchain distribution root for every channel and component; see [Internal distribution source](enterprise/distribution-server.md)|
 |`auto_self_update`|string|`cjv set auto-self-update`|Self-update behavior during `cjv update`: `enable` / `disable` / `check`|
 |`auto_install`|bool|`cjv set auto-install`|Whether to automatically install missing toolchains in proxy mode|
 |`home`|string|`cjv set home`|Persisted `CJV_HOME` data directory path|
 |`default_host`|string|`cjv set default-host`|Default host platform identity (`goos-goarch` form)|
-|`gitcode_api_key`|string|`cjv set gitcode-api-key`|GitCode API access token, required for nightly builds|
+|`gitcode_api_key`|string|`cjv set gitcode-api-key`|GitCode API token used for nightly discovery in compatibility mode|
 |`overrides`|table|`cjv override`|Directory-to-toolchain override mapping; see [Targets and Overrides](concepts/targets-overrides.md)|
 
  >
  > Unrecognized keys in the file (for example, typos) are reported with a warn-level log message but do not prevent cjv from starting. Setting `version` to a value higher than the current binary supports does cause an error.
 
-`manifest_url` currently has no corresponding `cjv set` subcommand. Edit the user settings file directly or let an administrator provide it through system fallback settings. An empty value restores the default URL.
+`manifest_url` and `dist_server` currently have no corresponding `cjv set` subcommand. Edit the user settings file directly or let an administrator provide them through system fallback settings. `CJV_DIST_SERVER` takes precedence over `dist_server`; once a unified source is configured, `manifest_url` is not used for toolchain resolution. See [Internal distribution source](enterprise/distribution-server.md) for the complete precedence and manifest contract.
 
 ## cjv set
 
@@ -79,7 +80,7 @@ When enabled, running `cjc`, `cjpm`, or other SDK tools directly will install th
 
 ### cjv set gitcode-api-key
 
-Sets the GitCode API access token. Querying and downloading nightly toolchains and their components requires it; LTS and STS do not.
+Sets the GitCode API access token. Without `dist_server`, resolving the latest nightly requires it. A unified enterprise source provides nightly through its manifest and does not require a GitCode token. LTS and STS do not use this token.
 
 ```bash
 cjv set gitcode-api-key <your-gitcode-api-key>

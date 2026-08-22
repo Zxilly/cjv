@@ -12,11 +12,13 @@ cjv currently supports three kinds of components:
 
 Here `<tc>` is the toolchain name (such as `lts-1.0.5`). Components are stored split by toolchain, with each toolchain having its own independent set of components. When a toolchain is uninstalled, its `stdx/<tc>/` and `docs/<tc>/` are cleaned up along with it.
 
-The download source for components depends on the [channel](channels.md):
+Without a unified enterprise source, the default component source depends on the [channel](channels.md):
 
 - `stdx`: for LTS / STS, downloaded from [`cangjie_stdx`](https://gitcode.com/Cangjie/cangjie_stdx/releases); for nightly, downloaded from [`nightly_build`](https://gitcode.com/Cangjie/nightly_build/releases).
 - `docs`: for LTS / STS, downloaded from the GitHub release at [`cangjie-docs-bundle`](https://github.com/Zxilly/cangjie-docs-bundle/releases); for nightly, downloaded from [`nightly_build`](https://gitcode.com/Cangjie/nightly_build/releases).
 - `stdx-docs`: for LTS / STS, downloaded from [`cangjie_stdx`](https://gitcode.com/Cangjie/cangjie_stdx/releases); for nightly, downloaded from [`nightly_build`](https://gitcode.com/Cangjie/nightly_build/releases).
+
+With `dist_server` configured, components for all three channels use manifest-declared URLs. Relative URLs are resolved against the distribution root, absolute URLs are used as written, and entries may provide SHA-256 checksums. See [Internal distribution source](../enterprise/distribution-server.md).
 
 ## Automatically injected environment variables
 

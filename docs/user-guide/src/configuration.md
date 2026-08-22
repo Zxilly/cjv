@@ -27,17 +27,18 @@ gitcode_api_key = "your-token-here"
 | ------------------- | ------ | -------------------------- | --------------------------------------------------------------------- |
 | `version`           | int    | （自动维护）               | 设置文件格式版本，由 cjv 自动写入和迁移                                |
 | `default_toolchain` | string | `cjv default <toolchain>`  | 默认工具链，见 [工具链](concepts/toolchains.md)                       |
-| `manifest_url`      | string | 手动编辑 / 系统后备配置     | LTS / STS 工具链清单地址，见[企业内网部署](enterprise-intranet.md)     |
+| `manifest_url`      | string | 手动编辑 / 系统后备配置     | 未配置 `dist_server` 时使用的 LTS / STS 工具链清单地址                |
+| `dist_server`       | string | 手动编辑 / 系统后备配置     | 统一工具链分发根，覆盖所有通道和组件，见[内部分发源](enterprise/distribution-server.md) |
 | `auto_self_update`  | string | `cjv set auto-self-update` | `cjv update` 时的自更新行为：`enable` / `disable` / `check`           |
 | `auto_install`      | bool   | `cjv set auto-install`     | 代理模式下是否自动安装缺失的工具链                                    |
 | `home`              | string | `cjv set home`             | 持久化的 `CJV_HOME` 数据目录路径                                     |
 | `default_host`      | string | `cjv set default-host`     | 默认主机平台标识（`goos-goarch` 形式）                                |
-| `gitcode_api_key`   | string | `cjv set gitcode-api-key`  | GitCode API 访问令牌，nightly 构建需要                                |
+| `gitcode_api_key`   | string | `cjv set gitcode-api-key`  | 兼容模式下查询 GitCode nightly 所需的 API 访问令牌                    |
 | `overrides`         | table  | `cjv override`             | 目录到工具链的覆盖映射，见 [目标与覆盖](concepts/targets-overrides.md) |
 
 > 文件中无法识别的键（例如拼写错误）会以 warn 级别日志提示，但不会阻止 cjv 启动。把 `version` 设成超过当前二进制支持的值则会报错。
 
-`manifest_url` 目前没有对应的 `cjv set` 子命令，需要直接编辑用户设置文件，或由管理员通过系统后备配置提供。清空该字段会恢复默认地址。
+`manifest_url` 与 `dist_server` 目前没有对应的 `cjv set` 子命令，需要直接编辑用户设置文件，或由管理员通过系统后备配置提供。`CJV_DIST_SERVER` 环境变量优先于设置文件中的 `dist_server`；配置统一分发根后，`manifest_url` 不再参与工具链解析。完整优先级和 manifest 契约见[内部分发源](enterprise/distribution-server.md)。
 
 ## cjv set
 
@@ -78,7 +79,7 @@ cjv set auto-install false
 
 ### cjv set gitcode-api-key
 
-设置 GitCode API 访问令牌。查询和下载 nightly 工具链及其组件需要它，LTS 和 STS 不需要。
+设置 GitCode API 访问令牌。未配置 `dist_server` 时，查询最新 nightly 需要它；使用统一企业分发源时，nightly 来自 manifest，不需要 GitCode 令牌。LTS 和 STS 不需要该令牌。
 
 ```bash
 cjv set gitcode-api-key <your-gitcode-api-key>
