@@ -99,18 +99,10 @@ checksum:
 
 1. 校验 tag 是稳定版(见上)。
 2. 启用 TCP BBR(`Zxilly/actions-bbr`)，提升后续拉取/上传的吞吐。
-3. `actions/checkout`，`fetch-depth: 0` 拉全部历史，goreleaser 生成 changelog 和镜像 push 都需要完整历史。
+3. `actions/checkout`，`fetch-depth: 0` 拉全部历史，供 goreleaser 生成 changelog。
 4. `actions/setup-go`，`go-version: stable`。
-5. 镜像仓库到 GitCode：加一个带 `GITCODE_TOKEN` 的 `gitcode` remote，把 `HEAD` 推到 `master`，再把当前 tag 推过去。
-
-   ```bash
-   git remote add gitcode "https://Zxilly:${GITCODE_TOKEN}@gitcode.com/Zxilly/cjv.git"
-   git push gitcode "HEAD:refs/heads/master"
-   git push gitcode "${GITHUB_REF}"
-   ```
-
-6. 跑 goreleaser：`goreleaser/goreleaser-action`，参数 `release --clean`，用 `GITHUB_TOKEN` 创建 GitHub Release 并上传全部 10 个归档和 `checksums.txt`。
-7. 把镜像版产物上传到 GitCode Release：`Zxilly/upload-gitcode-release`，只挑 `dist/cjv-mirror_*.tar.gz`、`dist/cjv-mirror_*.zip` 和 `dist/checksums.txt`，正文指回 GitHub Release 看完整 changelog。
+5. 跑 goreleaser：`goreleaser/goreleaser-action`，参数 `release --clean`，用 `GITHUB_TOKEN` 创建 GitHub Release 并上传全部 10 个归档和 `checksums.txt`。
+6. 把镜像版产物上传到 GitCode Release：`Zxilly/upload-gitcode-release`，只挑 `dist/cjv-mirror_*.tar.gz`、`dist/cjv-mirror_*.zip` 和 `dist/checksums.txt`，正文指回 GitHub Release 看完整 changelog。GitCode 仓库通过 Pull 镜像同步 GitHub 分支和 tag；Release 以镜像当前 `master` 为创建基点。
 
 GitHub Release 上挂的是全部产物(官方版 + 镜像版)，GitCode Release 上只挂镜像版加校验和。官方版不上 GitCode 是有意的：走 GitCode 的用户用的就是镜像版。
 

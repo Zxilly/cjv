@@ -101,21 +101,13 @@ checksum:
 
 1. Enable TCP BBR (`Zxilly/actions-bbr`) to improve the throughput of subsequent downloads and uploads.
 
-1. `actions/checkout` with `fetch-depth: 0` to pull the full history, which goreleaser needs both for generating the changelog and for the mirror push.
+1. `actions/checkout` with `fetch-depth: 0` to pull the full history that goreleaser needs for generating the changelog.
 
 1. `actions/setup-go` with `go-version: stable`.
 
-1. Mirror the repository to GitCode: add a `gitcode` remote carrying `GITCODE_TOKEN`, push `HEAD` to `master`, then push the current tag.
-
-   ```bash
-   git remote add gitcode "https://Zxilly:${GITCODE_TOKEN}@gitcode.com/Zxilly/cjv.git"
-   git push gitcode "HEAD:refs/heads/master"
-   git push gitcode "${GITHUB_REF}"
-   ```
-
 1. Run goreleaser: `goreleaser/goreleaser-action` with `release --clean`, using `GITHUB_TOKEN` to create the GitHub Release and upload all 10 archives plus `checksums.txt`.
 
-1. Upload the mirror artifacts to the GitCode Release: `Zxilly/upload-gitcode-release` picks only `dist/cjv-mirror_*.tar.gz`, `dist/cjv-mirror_*.zip`, and `dist/checksums.txt`, with the body pointing back to the GitHub Release for the full changelog.
+1. Upload the mirror artifacts to the GitCode Release: `Zxilly/upload-gitcode-release` picks only `dist/cjv-mirror_*.tar.gz`, `dist/cjv-mirror_*.zip`, and `dist/checksums.txt`, with the body pointing back to the GitHub Release for the full changelog. GitCode synchronizes the GitHub branches and tags through its Pull mirror; Release creation uses the mirror's current `master` as its base.
 
 The GitHub Release carries every artifact (official plus mirror), while the GitCode Release carries only the mirror builds plus the checksums. Leaving the official builds off GitCode is intentional: users coming through GitCode use the mirror builds.
 
