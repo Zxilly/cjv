@@ -42,7 +42,9 @@ Provide `manifest_url` and `dist_server` through the user settings file or syste
 
 ## cjv set
 
-`cjv set` modifies a single setting in `settings.toml`. It writes to disk only when the new value differs from the current one, and prints `Setting '<key>' updated to '<value>'`.
+`cjv set` modifies one setting in `settings.toml`, persisting only fields you explicitly choose. Other fields continue to inherit system fallback or built-in defaults. When the choice stored in the user file changes, the command writes it and prints `Setting '<key>' updated to '<value>'`. The first explicit setting also pins a value equal to the current inherited value; repeating an already persisted choice does not write again.
+
+`false` and empty strings are explicit user values, so system fallback values do not replace them. For example, `cjv set auto-install false` keeps automatic installation disabled, and `cjv default none` clears the default toolchain. To resume inheritance for a field, remove that field from the user settings file. Temporary environment overrides are not written to the file by these changes.
 
 ### cjv set auto-self-update
 
@@ -85,7 +87,7 @@ Persists the `CJV_HOME` data directory path to `settings.toml`. A relative path 
 # Persist the data directory to a specific location
 cjv set home /opt/cjv-data
 
-# Pass an empty string to clear this override and restore the default ~/.cjv
+# An empty string selects ~/.cjv instead of inheriting a system home setting
 cjv set home ""
 ```
 

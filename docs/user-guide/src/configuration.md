@@ -41,7 +41,9 @@ manifest_url = "https://raw.githubusercontent.com/Zxilly/cangjie-version-manifes
 
 ## cjv set
 
-`cjv set` 修改 `settings.toml` 中的单项设置。只有当新值与当前值不同时才会写盘，并打印 `设置 '<key>' 已更新为 '<value>'`。
+`cjv set` 修改 `settings.toml` 中的单项设置，只保存你明确选择的字段，其他字段继续继承系统后备配置或内置默认值。当用户文件中的选择发生变化时，命令写盘并打印 `设置 '<key>' 已更新为 '<value>'`。即使新值等于当前继承的值，第一次显式设置也会将它固定；重复设置已经保存的相同值不会再次写盘。
+
+`false` 和空字符串都是明确的用户值，不会被系统后备值覆盖。例如，`cjv set auto-install false` 会保持关闭，`cjv default none` 会取消默认工具链。要恢复某个字段的继承关系，从用户设置文件中删除该字段即可。环境变量提供的临时覆盖不会随这些修改写入文件。
 
 ### cjv set auto-self-update
 
@@ -84,7 +86,7 @@ cjv set auto-install false
 # 把数据目录持久化到指定位置
 cjv set home /opt/cjv-data
 
-# 传空字符串可清除该覆盖，恢复到默认 ~/.cjv
+# 传空字符串可固定使用默认 ~/.cjv，不继承系统配置中的 home
 cjv set home ""
 ```
 

@@ -45,11 +45,13 @@ docs/           两本 mdBook（见“文档站”一章）
 - `cli/settings` 构造 `set`、`default`、`override` 配置子命令。每次注册都创建新命令，目录路径和清理标志由各自的 closure 持有。
 - `cli/selfmgmt` 构造 `cjv self` 命令，接收本次调用的 renderer，并将卸载确认标志保存在命令内。显式与自动自更新共同调用 `UpdateManaged`，由它统一准备受管二进制、更新、刷新代理链接和 env 脚本；调用方决定输出方式和错误是否致命。
 
-### `lifecycle`：安装编排
+### `lifecycle`：安装与内容生命周期
 
-`internal/lifecycle` 把下载、解压、校验、组件、PATH 和代理链接串成一条安装流程。它通过 `Options` 接收 `IsJSON`、`ComponentInstall`、`CreateProxyLinks`、`ValidateInstallation` 等 adapter，依赖方向从 `cli` 指向 `lifecycle`。同一流程服务 `cli install` 与代理自动安装。
+`internal/lifecycle` 把下载、解压、校验、组件、PATH 和代理链接串成一条安装流程。它通过 `Options` 接收 `Report`、`ComponentInstall`、`CreateProxyLinks`、`ValidateInstallation` 等 adapter，依赖方向从 `cli` 指向 `lifecycle`。`Report` 只报告进度，未设置时保持静默；输出格式由 CLI 决定。同一流程服务 `cli install` 与代理自动安装，已有 SDK 的重复安装在文本与 JSON 模式下都成功，`component add` 的 JSON 结果也由 CLI 统一渲染。
 
 包内按职责分文件：`install.go` 负责安装编排，`source.go` 把通道请求交给分发源并产出 `ResolvedToolchain`，`component_install.go` 编排组件批量安装并交给 `component.ApplyChanges` 负责回滚，`resolved_install.go` 管下载后的落盘、校验和事务替换。分发源选择集中在 `source.go`。工具链替换的回归测试直接调用这些生产安装入口，验证最终步骤失败后的旧安装恢复和回滚错误传播。
+
+`UpgradeToolchain` 与 `RemoveToolchain` 统一处理 SDK、外置的 stdx/docs 内容及默认工具链、目录 override 引用。升级会为下载组件获取新版本对应的制品，为链接组件保留原始来源；替代工具链已存在时保留其组件选择，只补齐缺少的组件。失败时撤回本次新建且未被引用的替代安装，恢复受阻时保留仍需使用的内容并报告错误。同名强制重装保留已有组件清单和外置内容。URL 安装中的附带 stdx 仍在 SDK 安装后处理，可能出现 SDK 成功、stdx 失败的部分成功。
 
 ### `resolve`：活动工具链解析
 
@@ -57,7 +59,7 @@ docs/           两本 mdBook（见“文档站”一章）
 
 ### `toolchain` 与 `component`：已装内容的模型
 
-`internal/toolchain` 管已安装的 SDK：列出已装工具链（`ListInstalled`）、解析活动工具链目录、清理 staging 与备份残留目录。它定义了 staging（`.staging`）、备份（`.old`）、事务（`.fstx-`）这些目录后缀约定，以及工具链名字的解析与版本比较。
+`internal/toolchain` 管已安装的 SDK：列出已装工具链（`ListInstalled`）、解析活动工具链目录，并在清理临时目录前调用 `fstx` 恢复事务。它定义了 staging（`.staging`）、备份（`.old`）、事务（`.fstx-`）这些目录后缀约定，以及工具链名字的解析与版本比较；需要恢复的备份不会作为普通残留直接删除。
 
 `internal/component` 管工具链的附加组件：`stdx`、`docs`、`stdx-docs`。每个组件是单独下载的归档，解压后的文件通过逐组件的清单（manifest）记录，从而能独立卸载。`component` 还定义了组件装到哪（`InstallLocation`：有的落进工具链目录树，有的作为纯数据放到 `<CJV_HOME>/docs/<tc>/`）以及组件要注入哪些环境变量。
 
@@ -73,7 +75,7 @@ docs/           两本 mdBook（见“文档站”一章）
 
 ### `env`：运行时环境
 
-`internal/env` 组装运行仓颉工具所需的环境。`Runtime` 把活动工具链和派生出的 SDK 环境包在一起，对外暴露几种窄视图：给代理子进程的环境、直接执行工具链用的环境、写进 shell 的环境。它处理 `LD_LIBRARY_PATH` / `PATH` 拼装（按平台分 `ldpath_unix.go` / `ldpath_windows.go`）、`SDKROOT`、shell 检测与各 shell 的脚本格式（`shelldetect.go`、`shell_*.go`、`shellformat.go`），是 `cjv env` 和代理执行共用的底座。
+`internal/env` 组装运行仓颉工具所需的环境。`Runtime` 持有活动工具链和私有的 SDK 环境配置，调用方不再读取或修改内部配置。`ProxyEnv`、`ToolchainEnv` 都显式接收基础环境，按同一规则合并 PATH、动态库路径、`SDKROOT` 和组件变量；不会在合并时偷读进程中的另一份环境。`Contributions` 返回不含继承值的 SDK 贡献，`ShellScript` 根据相同合并结果生成 shell 差异脚本。平台变量名、路径次序与大小写规则集中在环境 module 中，shell 检测及格式化仍由 `shelldetect.go`、`shell_*.go`、`shellformat.go` 负责。
 
 ### `proxy`：透明代理
 
@@ -87,6 +89,8 @@ docs/           两本 mdBook（见“文档站”一章）
 
 `internal/config` 是配置层。它定义所有 `CJV_*` 环境变量名（包括 `CJV_DIST_SERVER`）、解析 `CJV_HOME`、读写用户与系统后备设置、工具链文件和目录级 override。`manifest_url` 提供正式通道清单并确定 nightly 文件目录，`dist_server` 选择包含两份清单的企业分发根；`mirror` 构建标记选择默认地址。
 
+`SettingsFile.Load` 返回生效配置的副本，同时保留用户字段的来源。`Update(SettingsUpdate)` 只保存明确选择的字段，未指定字段继续继承系统或内置默认值；显式选择与继承值相同的值仍可将其固定，`false` 和空字符串也不会被当成未设置。`Save` 支持恢复已加载快照的值与字段存在性。写入前完成配置校验和缓存准备，文件发布成功后不会因重新读取失败而误报保存失败。环境覆盖保持临时生效，不会落盘。
+
 ### `selfupdate`：自我更新
 
 `internal/selfupdate` 负责发现、校验和安装 cjv 更新。具体走 GitHub 还是 GitCode 由 `mirror` 构建标记在编译期选定（`update_default.go` / `update_mirror.go`）。`Update` 返回状态（`skipped`、`dev`、`up-to-date`、`updated`）及版本，供 `cli/selfmgmt` 渲染，不自行向 stdout 打印结果。它还管理把当前二进制确立为受管可执行文件、以及更新时替换正在运行的二进制（Windows 与其他平台分 `replace_windows.go` / `replace_other.go`）。
@@ -97,7 +101,7 @@ docs/           两本 mdBook（见“文档站”一章）
 
 - `i18n` 国际化。消息存在 `locales/en.toml` 和 `locales/zh-CN.toml` 里并嵌进二进制，`i18n.T` 按消息 ID 取串。所有面向用户的文本都走它，错误信息也是。
 - `cjverr` 错误类型。定义带稳定机器码（`ErrorCode`）的结构化错误，`Error()` 方法通过 `i18n` 产出人读信息，`Coded` 接口让 `output` 能在 JSON 模式下输出错误码。`ExitCodeError` 携带进程退出码。
-- `fstx` 文件系统事务。把一组文件增删改包成可回滚的事务，工具链替换这类操作靠它保证失败时不留半成品。
+- `fstx` 文件系统事务。落盘日志记录受管路径、备份和事务状态，读取时限制日志大小与路径范围。启动清理及安装、删除重试会先恢复未完成操作；提交及准备发布的状态保留已就绪内容，再清理备份。恢复受阻时保留日志和备份并报告位置，后续可以重试，而不是依赖进程内的 undo 闭包。
 - `utils` 杂项工具：原子写、文件操作、Windows junction、重试、控制台 UTF-8、打开浏览器、版本号解析等，多数按平台分文件。
 - `logging` 用 `CJV_LOG` 环境变量配 `slog` 全局 logger（默认 `warn`）。
 - `testutil` 测试辅助：mock 下载服务器、Windows 注册表守卫。它带 `_test.go` 之外的源文件，供其他包的测试导入。
@@ -108,7 +112,7 @@ docs/           两本 mdBook（见“文档站”一章）
 
 进程从 `cmd/cjv/main.go` 的 `run` 起步：`logging.Init` 配好日志，程序名是 `cjv` 不是某个工具名，于是走 `cli.Execute`。cobra 把 `install` 子命令路由到 `internal/cli/install.go` 的 `runInstall`。`runInstall` 收集 `--target`、`--component`、`--force` 等标志，组好 `lifecycle.Options`（把 `output`、`component`、`proxy`、`selfupdate` 的实现接进去），调进 `internal/lifecycle`。
 
-`lifecycle` 编排其余步骤：先让 `dist.Source` 从 manifest 解析通道、版本、平台和组件制品，再让通用下载与解包逻辑落到 staging 目录，最后由 `component`、`proxy` 与 `fstx` 完成组件、代理链接和事务替换。所有通道共用这条安装路径。CLI 将当前输出模式传入安装选项，并用本次调用的 renderer 渲染命令结果；错误由 `cli.Execute` 输出，再由 `main` 翻译成退出码。
+`lifecycle` 编排其余步骤：先让 `dist.Source` 从 manifest 解析通道、版本、平台和组件制品，再让通用下载与解包逻辑落到 staging 目录，最后由 `component`、`proxy` 与 `fstx` 完成组件、代理链接和事务替换。所有通道共用这条安装路径。CLI 按输出模式选择进度报告方式，并用本次调用的 renderer 渲染命令结果；错误由 `cli.Execute` 输出，再由 `main` 翻译成退出码。
 
 代理路径是另一条主线。运行 `cjc build` 时，被调用的其实是名为 `cjc` 的 cjv 链接，`main` 认出工具名走 `proxy.Run`：`proxy` 经 `env.ResolveRuntime` 让 `resolve` 定出活动工具链、在工具链目录里找到真正的 `cjc`、组装好运行环境，然后按平台替换当前进程或运行子进程。这条线绕过 cobra 命令树，保留工具的标准流和退出语义。
 

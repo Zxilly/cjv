@@ -57,6 +57,12 @@ cjv component remove stdx-docs
 
 `cjv component add` skips a component that is already installed. To force a re-download and reinstall, add `--force`.
 
+Repeating `cjv install` for an existing SDK also succeeds without replacing it, in both text and `--json` modes. `cjv --json component add stdx` emits a JSON result for scripts to inspect.
+
+`cjv update` prepares the new SDK and components before moving the default toolchain and directory overrides, then removes the old SDK, stdx, and documentation. Downloaded components use artifacts for the new version; linked components retain their original source directories. If the replacement is already installed, its existing component choices are kept and only missing components are added. On failure, cjv attempts to restore old content and retract a newly created, unreferenced replacement. Blocked recovery retains the required content and reports its location for a later retry.
+
+Reinstalling only the SDK under the same name with `--force` preserves existing components and their ownership records. Bundled stdx in a [URL install](../install-from-url.md) is handled after the SDK: if stdx fails, the successfully installed SDK remains available.
+
 ## Viewing components
 
 `cjv component list` shows the installed and available status of components for the current toolchain:

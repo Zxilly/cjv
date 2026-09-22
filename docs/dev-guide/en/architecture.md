@@ -45,11 +45,13 @@ Each directory under `internal/` is a package, divided by subsystem. They are li
 - `cli/settings` constructs the `set`, `default`, and `override` commands afresh on every registration. Each command closure owns its directory paths and cleanup flags.
 - `cli/selfmgmt` constructs `cjv self` with the invocation's renderer and keeps uninstall confirmation local to the command. Explicit and automatic self-updates share `UpdateManaged`, which prepares the managed binary, updates it, and refreshes proxy links and env scripts. Callers decide how to render the result and whether failures are fatal.
 
-### `lifecycle`: installation orchestration
+### `lifecycle`: installation and content lifecycle
 
-`internal/lifecycle` orchestrates download, extraction, verification, components, PATH configuration, and proxy links as one installation flow. It receives adapters such as `IsJSON`, `ComponentInstall`, `CreateProxyLinks`, and `ValidateInstallation` through `Options`, with dependencies directed from `cli` toward `lifecycle`. The same flow serves `cli install` and proxy auto-install.
+`internal/lifecycle` orchestrates download, extraction, verification, components, PATH configuration, and proxy links as one installation flow. It receives adapters such as `Report`, `ComponentInstall`, `CreateProxyLinks`, and `ValidateInstallation` through `Options`, with dependencies directed from `cli` toward `lifecycle`. `Report` carries progress and leaves operations silent when unset; the CLI owns output formatting. The same flow serves `cli install` and proxy auto-install. Reinstalling an existing SDK without force succeeds in both text and JSON modes, and the CLI also renders the JSON result of `component add`.
 
 Files inside the package are split by responsibility: `install.go` owns orchestration, `source.go` turns channel requests into `ResolvedToolchain` values, `component_install.go` orchestrates component batches with rollback delegated to `component.ApplyChanges`, and `resolved_install.go` owns materialization, validation, and transactional replacement. Distribution-source selection stays local to `source.go`. Toolchain replacement regressions call these production installation entry points to verify restoration after finalization fails and propagation of rollback errors.
+
+`UpgradeToolchain` and `RemoveToolchain` coordinate the SDK, external stdx/docs content, the default toolchain, and directory override references. Upgrades fetch downloaded components for the replacement version and retain the original sources of linked components. An existing replacement keeps its own component choices, with only missing components added. A failed operation retracts a newly created, unreferenced replacement; blocked recovery retains content still needed by references and reports the error. A forced reinstall under the same name preserves existing component manifests and external content. Bundled stdx in a URL install is still handled after SDK installation, so the SDK can succeed while stdx fails.
 
 ### `resolve`: active toolchain resolution
 
@@ -57,7 +59,7 @@ Files inside the package are split by responsibility: `install.go` owns orchestr
 
 ### `toolchain` and `component`: models of what is installed
 
-`internal/toolchain` manages the installed SDKs: it lists the installed toolchains (`ListInstalled`), resolves the active toolchain directory, and cleans up leftover staging and backup directories. It defines the directory-suffix conventions for staging (`.staging`), backups (`.old`), and transactions (`.fstx-`), as well as the parsing of toolchain names and version comparison.
+`internal/toolchain` manages the installed SDKs: it lists the installed toolchains (`ListInstalled`), resolves the active toolchain directory, and calls `fstx` recovery before cleaning temporary directories. It defines the directory-suffix conventions for staging (`.staging`), backups (`.old`), and transactions (`.fstx-`), as well as the parsing of toolchain names and version comparison. Backups needed for recovery are not deleted as ordinary leftovers.
 
 `internal/component` manages the add-on components of a toolchain: `stdx`, `docs`, `stdx-docs`. Each component is a separately downloaded archive, and its extracted files are recorded through a per-component manifest, so it can be uninstalled independently. `component` also defines where each component installs to (`InstallLocation`: some land inside the toolchain directory tree, while others are placed as pure data under `<CJV_HOME>/docs/<tc>/`) and which environment variables a component needs to inject.
 
@@ -73,7 +75,7 @@ Files inside the package are split by responsibility: `install.go` owns orchestr
 
 ### `env`: runtime environment
 
-`internal/env` assembles the environment needed to run the Cangjie tools. `Runtime` wraps the active toolchain together with the SDK environment derived from it, and exposes several narrow views: the environment for proxied subprocesses, the environment for executing the toolchain directly, and the environment to write into a shell. It handles `LD_LIBRARY_PATH` / `PATH` assembly (split by platform across `ldpath_unix.go` / `ldpath_windows.go`), `SDKROOT`, shell detection, and the script formats for each shell (`shelldetect.go`, `shell_*.go`, `shellformat.go`), and is the foundation shared by `cjv env` and proxy execution.
+`internal/env` assembles the environment needed to run the Cangjie tools. `Runtime` owns the active toolchain and private SDK configuration, which callers no longer inspect or mutate. `ProxyEnv` and `ToolchainEnv` take an explicit base environment and share the rules for merging PATH, library paths, `SDKROOT`, and component variables, without reading a different environment from the process during the merge. `Contributions` returns SDK additions without inherited values; `ShellScript` derives shell changes from the same merged result. Platform variable names, path ordering, and casing rules stay inside this module, while shell detection and formatting remain in `shelldetect.go`, `shell_*.go`, and `shellformat.go`.
 
 ### `proxy`: transparent proxy
 
@@ -87,6 +89,8 @@ Files inside the package are split by responsibility: `install.go` owns orchestr
 
 `internal/config` is the configuration layer. It defines all `CJV_*` variables, including `CJV_DIST_SERVER`, resolves `CJV_HOME`, reads user and system fallback settings, reads the toolchain file, and manages directory overrides. `manifest_url` supplies the release manifest and locates its nightly sibling, `dist_server` selects an enterprise root containing both files, and the `mirror` build tag selects the default address.
 
+`SettingsFile.Load` returns a copy of the effective settings while retaining the provenance of user-defined fields. `Update(SettingsUpdate)` persists only explicit choices, leaving unspecified fields inherited from system or built-in defaults. An explicit choice can pin a value equal to an inherited one; `false` and empty strings are also explicit values. `Save` can restore a loaded snapshot's values and field presence. Validation and cache preparation happen before publication, so a successful write cannot be reported as failed because a subsequent read failed. Environment overrides remain transient.
+
 ### `selfupdate`: self-update
 
 `internal/selfupdate` discovers, verifies, and installs cjv updates. Whether it uses GitHub or GitCode is selected at compile time by the `mirror` build tag (`update_default.go` / `update_mirror.go`). `Update` returns a status (`skipped`, `dev`, `up-to-date`, or `updated`) and version information for `cli/selfmgmt` to render, without printing its own results to stdout. It also establishes the current binary as the managed executable and replaces running binaries during updates, with platform-specific code in `replace_windows.go` / `replace_other.go`.
@@ -97,7 +101,7 @@ The remaining few are supporting packages shared across the layers:
 
 - `i18n` internationalization. Messages live in `locales/en.toml` and `locales/zh-CN.toml` and are embedded into the binary, and `i18n.T` looks up a string by message ID. All user-facing text goes through it, error messages included.
 - `cjverr` error types. It defines structured errors carrying a stable machine code (`ErrorCode`); the `Error()` method produces the human-readable message through `i18n`, and the `Coded` interface lets `output` emit the error code in JSON mode. `ExitCodeError` carries the process exit code.
-- `fstx` filesystem transactions. It wraps a set of file additions, deletions, and modifications into a rollbackable transaction, which operations such as toolchain replacement rely on to ensure nothing half-finished is left behind on failure.
+- `fstx` filesystem transactions. On-disk journals record managed paths, backups, and transaction state, with size and path limits enforced when reading them. Startup cleanup and installation or removal retries recover unfinished operations first. Committed and prepared-for-publication states retain ready content before cleaning backups. If recovery is blocked, the journal and backups remain and their location is reported for a later retry, without relying on in-process undo closures.
 - `utils` miscellaneous utilities: atomic writes, file operations, Windows junctions, retries, console UTF-8, opening a browser, version-number parsing, and so on, most of them split into per-platform files.
 - `logging` configures the global `slog` logger via the `CJV_LOG` environment variable (defaulting to `warn`).
 - `testutil` test helpers: a mock download server and a Windows registry guard. It carries source files outside of `_test.go` so that the tests of other packages can import them.
@@ -108,7 +112,7 @@ Tying the above together, here is roughly how `cjv install <toolchain>` runs.
 
 The process starts in `run` in `cmd/cjv/main.go`: `logging.Init` sets up logging, the program name is `cjv` rather than some tool name, so it takes the `cli.Execute` path. cobra routes the `install` subcommand to `runInstall` in `internal/cli/install.go`. `runInstall` collects the `--target`, `--component`, `--force` and other flags, assembles a `lifecycle.Options` (wiring in the implementations of `output`, `component`, `proxy`, `selfupdate`), and calls into `internal/lifecycle`.
 
-`lifecycle` first asks `dist.Source` to resolve the requested channel, version, platform, and component artifacts from the manifest. The shared download and extraction path then materializes a staging directory, after which `component`, `proxy`, and `fstx` complete component installation, proxy links, and transactional replacement. Every channel shares this installation path. The CLI passes its output mode into installation options and renders the command result through the invocation's renderer. `cli.Execute` renders errors, and `main` translates them into exit codes.
+`lifecycle` first asks `dist.Source` to resolve the requested channel, version, platform, and component artifacts from the manifest. The shared download and extraction path then materializes a staging directory, after which `component`, `proxy`, and `fstx` complete component installation, proxy links, and transactional replacement. Every channel shares this installation path. The CLI selects progress reporting for its output mode and renders the command result through the invocation's renderer. `cli.Execute` renders errors, and `main` translates them into exit codes.
 
 The proxy path is the other main line. When you run `cjc build`, what is actually invoked is the cjv link named `cjc`, and `main` recognizes the tool name and takes the `proxy.Run` path: `proxy`, through `env.ResolveRuntime`, has `resolve` determine the active toolchain, finds the real `cjc`, and assembles its environment before replacing the current process or running a child, depending on the platform. This path bypasses cobra while preserving the tool's standard streams and exit semantics.
 
