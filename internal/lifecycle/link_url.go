@@ -178,17 +178,6 @@ func installLinkedToolchain(ctx context.Context, name string, force, noStdx bool
 		return err
 	}
 
-	// The SDK swap replaced toolchains/<name> (and with it the component manifest
-	// under .cjv/components) but left the sibling stdx/<name> tree from the prior
-	// install intact. On a --force re-link, clear it so a changed stdx bundle does
-	// not leave orphaned stale libraries behind (and so the component would not be
-	// detected as already-installed against a now-missing manifest).
-	if isReinstall {
-		if stdxDir, err := config.StdxDirFor(name); err == nil {
-			_ = utils.RemoveAllRetry(stdxDir) //nolint:errcheck // best-effort
-		}
-	}
-
 	// Install bundled stdx as a component of this toolchain, if present. The SDK
 	// is already committed at this point; if stdx fails we keep the working SDK
 	// (matching `install -c stdx` half-failure semantics) but surface recovery

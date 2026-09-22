@@ -148,6 +148,11 @@ func validateInstallation(dir, tuple string) error {
 }
 
 func swapInstalledToolchain(stagingDir, destDir string, isReinstall bool, afterSwap, publish func() error) (err error) {
+	if isReinstall {
+		if err := preserveComponentMetadata(stagingDir, destDir); err != nil {
+			return err
+		}
+	}
 	tx, txErr := fstx.NewTransaction(destDir)
 	if txErr != nil {
 		return fmt.Errorf("failed to begin install transaction: %w", txErr)

@@ -68,15 +68,6 @@ func (app *application) runInstall(cmd *cobra.Command, args []string) error {
 	})
 }
 
-// noteStep emits a progress/status line to stdout in text mode; in JSON
-// mode it is suppressed so stdout remains a single JSON document.
-func (app *application) noteStep(s string) {
-	if app.output.IsJSON() {
-		return
-	}
-	fmt.Println(s)
-}
-
 // InstallToolchainWithOptions installs a toolchain with optional force re-install.
 func (app *application) InstallToolchainWithOptions(ctx context.Context, input string, force bool) error {
 	return app.InstallToolchainWithExtras(ctx, input, nil, nil, force)
@@ -113,14 +104,6 @@ func (app *application) InstallComponentsForToolchain(ctx context.Context, tcInp
 // per-component status lines; used by the proxy auto-install path.
 func (app *application) installComponentsList(ctx context.Context, resolvedName string, components []string, force, quiet bool) error {
 	return lifecycle.InstallComponentsList(ctx, resolvedName, components, force, quiet, nil, app.lifecycleOptions())
-}
-
-func (app *application) installResolved(ctx context.Context, rt lifecycle.ResolvedToolchain, settings *config.Settings, sf *config.SettingsFile, force bool) (retErr error) {
-	return lifecycle.InstallResolved(ctx, rt, settings, sf, force, app.lifecycleOptions())
-}
-
-func (app *application) installResolvedNoDefault(ctx context.Context, rt lifecycle.ResolvedToolchain, settings *config.Settings, sf *config.SettingsFile, force bool) (retErr error) {
-	return lifecycle.InstallResolvedNoDefault(ctx, rt, settings, sf, force, app.lifecycleOptions())
 }
 
 // ensurePathConfigured adds the cjv bin directory to the user's PATH

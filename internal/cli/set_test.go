@@ -6,17 +6,19 @@ import (
 	"testing"
 
 	"github.com/Zxilly/cjv/internal/config"
+	"github.com/Zxilly/cjv/internal/lifecycle"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-// Tests for updateSettingsAfterUninstall -- when a toolchain is removed,
+// Tests for removal through the lifecycle module. When a toolchain is removed,
 // settings must be cleaned up: overrides referencing it removed, and
 // a new default selected if needed.
 
 func TestUpdateSettingsAfterUninstall_RemovesOverrides(t *testing.T) {
 	home := t.TempDir()
 	config.IsolateForTest(t, home)
+	require.NoError(t, os.MkdirAll(filepath.Join(home, "toolchains", "lts-1.0.5"), 0o755))
 
 	// Create settings with overrides, some pointing to the uninstalled toolchain
 	settings := config.DefaultSettings()
@@ -26,7 +28,7 @@ func TestUpdateSettingsAfterUninstall_RemovesOverrides(t *testing.T) {
 	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 
 	// The uninstalled toolchain's overrides should be removed
-	require.NoError(t, updateSettingsAfterUninstall("lts-1.0.5"))
+	require.NoError(t, lifecycle.RemoveToolchain("lts-1.0.5"))
 
 	// Reload and verify
 	reloaded, err := config.LoadSettings(filepath.Join(home, ".cjv", "settings.toml"))
@@ -39,6 +41,7 @@ func TestUpdateSettingsAfterUninstall_RemovesOverrides(t *testing.T) {
 func TestUpdateSettingsAfterUninstall_SelectsNewDefault(t *testing.T) {
 	home := t.TempDir()
 	config.IsolateForTest(t, home)
+	require.NoError(t, os.MkdirAll(filepath.Join(home, "toolchains", "lts-1.0.5"), 0o755))
 
 	// Create a remaining toolchain
 	tcDir := filepath.Join(home, "toolchains")
@@ -48,7 +51,7 @@ func TestUpdateSettingsAfterUninstall_SelectsNewDefault(t *testing.T) {
 	settings.DefaultToolchain = "lts-1.0.5"
 	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 
-	require.NoError(t, updateSettingsAfterUninstall("lts-1.0.5"))
+	require.NoError(t, lifecycle.RemoveToolchain("lts-1.0.5"))
 
 	reloaded, _ := config.LoadSettings(filepath.Join(home, ".cjv", "settings.toml"))
 	assert.Equal(t, "sts-2.0.0", reloaded.DefaultToolchain,
@@ -58,6 +61,7 @@ func TestUpdateSettingsAfterUninstall_SelectsNewDefault(t *testing.T) {
 func TestUpdateSettingsAfterUninstall_ClearsDefaultWhenNoneRemain(t *testing.T) {
 	home := t.TempDir()
 	config.IsolateForTest(t, home)
+	require.NoError(t, os.MkdirAll(filepath.Join(home, "toolchains", "lts-1.0.5"), 0o755))
 
 	// No other toolchains installed
 	require.NoError(t, os.MkdirAll(filepath.Join(home, "toolchains"), 0o755))
@@ -66,7 +70,7 @@ func TestUpdateSettingsAfterUninstall_ClearsDefaultWhenNoneRemain(t *testing.T) 
 	settings.DefaultToolchain = "lts-1.0.5"
 	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 
-	require.NoError(t, updateSettingsAfterUninstall("lts-1.0.5"))
+	require.NoError(t, lifecycle.RemoveToolchain("lts-1.0.5"))
 
 	reloaded, _ := config.LoadSettings(filepath.Join(home, ".cjv", "settings.toml"))
 	assert.Empty(t, reloaded.DefaultToolchain,
@@ -76,6 +80,7 @@ func TestUpdateSettingsAfterUninstall_ClearsDefaultWhenNoneRemain(t *testing.T) 
 func TestUpdateSettingsAfterUninstall_NoChangeWhenUnrelated(t *testing.T) {
 	home := t.TempDir()
 	config.IsolateForTest(t, home)
+	require.NoError(t, os.MkdirAll(filepath.Join(home, "toolchains", "lts-1.0.5"), 0o755))
 
 	settings := config.DefaultSettings()
 	settings.DefaultToolchain = "sts-2.0.0"
@@ -83,7 +88,7 @@ func TestUpdateSettingsAfterUninstall_NoChangeWhenUnrelated(t *testing.T) {
 	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 
 	// Uninstalling a different toolchain should change nothing
-	require.NoError(t, updateSettingsAfterUninstall("lts-1.0.5"))
+	require.NoError(t, lifecycle.RemoveToolchain("lts-1.0.5"))
 
 	reloaded, _ := config.LoadSettings(filepath.Join(home, ".cjv", "settings.toml"))
 	assert.Equal(t, "sts-2.0.0", reloaded.DefaultToolchain)

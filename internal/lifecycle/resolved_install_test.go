@@ -270,3 +270,29 @@ func TestFirstInstallSettingsWriteFailureRollsBackPreparedSDK(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, before, after)
 }
+
+func TestCustomToolchainNamesRemainManageable(t *testing.T) {
+	names := []string{".local-sdk"}
+	if runtime.GOOS != "windows" {
+		names = append(names, "sdk:debug")
+	}
+	for _, name := range names {
+		t.Run(name, func(t *testing.T) {
+			home, _, serverURL := prepareInstallTest(t)
+			url := serverURL + "/download/cangjie-sdk-1.0.5.zip"
+			require.NoError(t, lifecycle.InstallToolchainFromURL(t.Context(), name, url, "", false, true, lifecycle.Options{}))
+			dest := filepath.Join(home, "toolchains", name)
+			assert.FileExists(t, compilerPath(dest))
+			marker := filepath.Join(dest, "old-only")
+			require.NoError(t, os.WriteFile(marker, []byte("old SDK"), 0o644))
+			require.NoError(t, lifecycle.InstallToolchainFromURL(t.Context(), name, url, "", true, true, lifecycle.Options{}))
+			assert.FileExists(t, compilerPath(dest))
+			assert.NoFileExists(t, marker)
+			require.NoError(t, lifecycle.RemoveToolchain(name))
+			assert.NoDirExists(t, dest)
+			entries, err := os.ReadDir(filepath.Join(home, "toolchains"))
+			require.NoError(t, err)
+			assert.Empty(t, entries)
+		})
+	}
+}

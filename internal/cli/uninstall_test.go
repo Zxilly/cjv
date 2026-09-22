@@ -8,6 +8,8 @@ import (
 	"testing"
 
 	"github.com/Zxilly/cjv/internal/config"
+	"github.com/Zxilly/cjv/internal/fstx"
+	"github.com/Zxilly/cjv/internal/lifecycle"
 	"github.com/Zxilly/cjv/internal/toolchain"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -50,6 +52,28 @@ func TestRunUninstall_NotInstalled(t *testing.T) {
 
 	err := app.runUninstall(nil, []string{"nonexistent-99.99"})
 	assert.Error(t, err, "uninstalling non-existent toolchain should error")
+}
+
+func TestRunUninstallRecoversBeforeCheckingInstallation(t *testing.T) {
+	app := newApplication("dev", "")
+	home := t.TempDir()
+	config.IsolateForTest(t, home)
+	require.NoError(t, config.EnsureDirs())
+	name := "lts-1.0.5"
+	dir := filepath.Join(home, "toolchains", name)
+	require.NoError(t, os.MkdirAll(dir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "compiler"), []byte("old compiler"), 0o644))
+	tx, err := fstx.NewToolchainTransaction(home, name)
+	require.NoError(t, err)
+	require.NoError(t, tx.RemoveDir(dir))
+	assert.NoDirExists(t, dir)
+	// The CLI must recover before its confirmation/existence check, not report
+	// "not installed" for content that is still owned by a retained journal.
+	require.NoError(t, app.runUninstall(nil, []string{name}))
+	assert.NoDirExists(t, dir)
+	entries, err := os.ReadDir(filepath.Dir(dir))
+	require.NoError(t, err)
+	assert.Empty(t, entries)
 }
 
 func TestRunUninstall_PreservesSettingsWhenRemoveFails(t *testing.T) {
@@ -106,7 +130,7 @@ func TestUpdateSettingsAfterUninstallDoesNotPromoteTargetVariantToDefault(t *tes
 	settings.DefaultToolchain = name
 	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 
-	require.NoError(t, updateSettingsAfterUninstall(name))
+	require.NoError(t, lifecycle.RemoveToolchain(name))
 
 	loaded, err := config.LoadSettings(filepath.Join(home, ".cjv", "settings.toml"))
 	require.NoError(t, err)

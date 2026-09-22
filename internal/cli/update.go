@@ -15,8 +15,6 @@ import (
 	"github.com/Zxilly/cjv/internal/i18n"
 	"github.com/Zxilly/cjv/internal/lifecycle"
 	"github.com/Zxilly/cjv/internal/toolchain"
-	"github.com/Zxilly/cjv/internal/utils"
-	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 )
 
@@ -275,58 +273,8 @@ func (app *application) reinstallChannelForPlatform(ctx context.Context, req rei
 		return updateEntry{}, false, err
 	}
 
-	if resolved.Name == req.CurrentName {
-		if !app.output.IsJSON() {
-			color.Green(i18n.T("AlreadyUpToDate", i18n.MsgData{
-				"Version": req.CurrentName,
-			}))
-		}
-		return updateEntry{}, false, nil
-	}
-
-	app.noteStep(i18n.T("UpdateFound", i18n.MsgData{
-		"Current": req.CurrentName,
-		"Latest":  resolved.Name,
-	}))
-	update := updateEntry{From: req.CurrentName, To: resolved.Name}
-
-	if req.Target == "" {
-		if err := app.installResolved(ctx, resolved, req.Settings, req.SettingsFile, false); err != nil {
-			return updateEntry{}, false, err
-		}
-	} else {
-		if err := app.installResolvedNoDefault(ctx, resolved, req.Settings, req.SettingsFile, false); err != nil {
-			return updateEntry{}, false, err
-		}
-	}
-
-	if req.Target == "" {
-		if req.Settings.DefaultToolchain == req.CurrentName {
-			req.Settings.DefaultToolchain = resolved.Name
-		}
-
-		for dir, tc := range req.Settings.Overrides {
-			if tc == req.CurrentName {
-				req.Settings.Overrides[dir] = resolved.Name
-			}
-		}
-	}
-
-	if err := req.SettingsFile.Save(req.Settings); err != nil {
-		return updateEntry{}, false, err
-	}
-
-	tcDir, err := config.ToolchainsDir()
-	if err != nil {
-		return updateEntry{}, false, err
-	}
-	oldDir := filepath.Join(tcDir, req.CurrentName)
-	if err := utils.RemoveAllRetry(oldDir); err != nil {
-		slog.Warn("failed to remove old toolchain", "name", req.CurrentName, "error", err)
-		fmt.Fprintf(os.Stderr, "\n%s\n", i18n.T("OldToolchainRemoveWarning", i18n.MsgData{"Dir": oldDir}))
-	}
-
-	return update, true, nil
+	updated, err := lifecycle.UpgradeToolchain(ctx, req.CurrentName, resolved, req.SettingsFile, req.Fetcher, app.lifecycleOptions())
+	return updateEntry{From: req.CurrentName, To: resolved.Name}, updated, err
 }
 
 func findInstalledForChannel(channel toolchain.Channel) (string, error) {
