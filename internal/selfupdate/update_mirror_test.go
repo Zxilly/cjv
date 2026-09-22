@@ -4,8 +4,10 @@ package selfupdate
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -17,9 +19,30 @@ func TestUpdateGitCodeReturnsFetchError(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	err := Update(ctx, "https://gitcode.com/Zxilly/cjv/releases", "1.0.0")
+	_, err := Update(ctx, "https://gitcode.com/Zxilly/cjv/releases", "1.0.0")
 
 	require.Error(t, err)
+}
+
+func updateTestBinaryName() string { return mirrorBinaryName }
+
+func serveUpdateRelease(t *testing.T, tag string, archive []byte, digest string) string {
+	t.Helper()
+	assetName := releaseAssetName(updateTestBinaryName(), runtime.GOOS, runtime.GOARCH)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/owner/repo/releases/latest":
+			http.Redirect(w, r, "/owner/repo/releases/tag/"+tag, http.StatusFound)
+		case "/owner/repo/releases/download/" + tag + "/" + assetName:
+			_, _ = w.Write(archive)
+		case "/owner/repo/releases/download/" + tag + "/checksums.txt":
+			_, _ = fmt.Fprintf(w, "%s  %s\n", digest, assetName)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(server.Close)
+	return server.URL + "/owner/repo/releases"
 }
 
 func TestMirrorAssetName(t *testing.T) {

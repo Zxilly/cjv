@@ -64,6 +64,9 @@ other = "发现新版本: {{.Current}} → {{.Latest}}"
 [UpdateApplied]
 other = "已更新到 {{.Version}}"
 
+[SelfUpdateProxyRefreshFailed]
+other = "刷新代理工具失败：{{.Err}}"
+
 [MirrorNoAutoUpdate]
 other = "当前构建未配置自动更新源，请手动下载最新版本。"
 

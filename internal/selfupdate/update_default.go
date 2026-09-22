@@ -9,8 +9,6 @@ import (
 	"net/url"
 	"runtime"
 	"strings"
-
-	"github.com/Zxilly/cjv/internal/i18n"
 )
 
 type githubRelease struct {
@@ -21,33 +19,27 @@ type githubRelease struct {
 	} `json:"assets"`
 }
 
-func runUpdate(ctx context.Context, updateURL, currentVersion string) error {
+func runUpdate(ctx context.Context, updateURL, currentVersion string) (Result, error) {
 	slug := extractSlug(updateURL)
 	parts := strings.Split(slug, "/")
 	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
-		return fmt.Errorf("invalid GitHub repository %q", slug)
+		return Result{}, fmt.Errorf("invalid GitHub repository %q", slug)
 	}
 	data, err := fetchReleaseFile(ctx, fmt.Sprintf("https://api.github.com/repos/%s/releases/latest", slug))
 	if err != nil {
-		return fmt.Errorf("failed to check for updates: %w", err)
+		return Result{}, fmt.Errorf("failed to check for updates: %w", err)
 	}
 	var release githubRelease
 	if err := json.Unmarshal(data, &release); err != nil {
-		return fmt.Errorf("failed to parse latest release: %w", err)
+		return Result{}, fmt.Errorf("failed to parse latest release: %w", err)
 	}
 	latest, newer, err := newerReleaseVersion(currentVersion, release.TagName)
 	if err != nil {
-		return err
+		return Result{}, err
 	}
 	if !newer {
-		fmt.Println(i18n.T("AlreadyUpToDate", i18n.MsgData{"Version": currentVersion}))
-		return nil
+		return Result{CurrentVersion: currentVersion, Version: currentVersion, Status: StatusUpToDate}, nil
 	}
-
-	fmt.Println(i18n.T("UpdateFound", i18n.MsgData{
-		"Current": currentVersion,
-		"Latest":  latest,
-	}))
 
 	assetName := releaseAssetName("cjv", runtime.GOOS, runtime.GOARCH)
 	assetURL, checksumURL := "", ""
@@ -60,7 +52,7 @@ func runUpdate(ctx context.Context, updateURL, currentVersion string) error {
 		}
 	}
 	if assetURL == "" || checksumURL == "" {
-		return fmt.Errorf("release %s is missing %s or checksums.txt", release.TagName, assetName)
+		return Result{}, fmt.Errorf("release %s is missing %s or checksums.txt", release.TagName, assetName)
 	}
 	if err := installReleaseArtifact(ctx, releaseArtifact{
 		AssetName:   assetName,
@@ -68,11 +60,9 @@ func runUpdate(ctx context.Context, updateURL, currentVersion string) error {
 		AssetURL:    assetURL,
 		ChecksumURL: checksumURL,
 	}); err != nil {
-		return fmt.Errorf("update failed: %w", err)
+		return Result{}, fmt.Errorf("update failed: %w", err)
 	}
-
-	fmt.Println(i18n.T("UpdateApplied", i18n.MsgData{"Version": latest}))
-	return nil
+	return Result{CurrentVersion: currentVersion, Version: latest, Status: StatusUpdated}, nil
 }
 
 // extractSlug extracts an "owner/repo" slug from a full release URL.

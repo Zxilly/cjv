@@ -64,6 +64,9 @@ other = "Update available: {{.Current}} → {{.Latest}}"
 [UpdateApplied]
 other = "Updated to {{.Version}}"
 
+[SelfUpdateProxyRefreshFailed]
+other = "Failed to refresh proxy tools: {{.Err}}"
+
 [MirrorNoAutoUpdate]
 other = "Auto-update is not configured for this build. Please download the latest version manually."
 

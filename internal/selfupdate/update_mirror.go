@@ -10,34 +10,26 @@ import (
 	"runtime"
 	"strings"
 	"time"
-
-	"github.com/Zxilly/cjv/internal/i18n"
 )
 
 const mirrorBinaryName = "cjv-mirror"
 
-func runUpdate(ctx context.Context, updateURL, currentVersion string) error {
+func runUpdate(ctx context.Context, updateURL, currentVersion string) (Result, error) {
 	base, err := gitCodeReleasesBase(updateURL)
 	if err != nil {
-		return err
+		return Result{}, err
 	}
 	tag, err := fetchGitCodeLatestTag(ctx, base+"/latest")
 	if err != nil {
-		return fmt.Errorf("failed to check for updates: %w", err)
+		return Result{}, fmt.Errorf("failed to check for updates: %w", err)
 	}
 	latest, newer, err := newerReleaseVersion(currentVersion, tag)
 	if err != nil {
-		return err
+		return Result{}, err
 	}
 	if !newer {
-		fmt.Println(i18n.T("AlreadyUpToDate", i18n.MsgData{"Version": currentVersion}))
-		return nil
+		return Result{CurrentVersion: currentVersion, Version: currentVersion, Status: StatusUpToDate}, nil
 	}
-
-	fmt.Println(i18n.T("UpdateFound", i18n.MsgData{
-		"Current": currentVersion,
-		"Latest":  latest,
-	}))
 
 	assetName := mirrorAssetName(runtime.GOOS, runtime.GOARCH)
 	if err := installReleaseArtifact(ctx, releaseArtifact{
@@ -46,11 +38,9 @@ func runUpdate(ctx context.Context, updateURL, currentVersion string) error {
 		AssetURL:    base + "/download/" + tag + "/" + assetName,
 		ChecksumURL: base + "/download/" + tag + "/checksums.txt",
 	}); err != nil {
-		return fmt.Errorf("update failed: %w", err)
+		return Result{}, fmt.Errorf("update failed: %w", err)
 	}
-
-	fmt.Println(i18n.T("UpdateApplied", i18n.MsgData{"Version": latest}))
-	return nil
+	return Result{CurrentVersion: currentVersion, Version: latest, Status: StatusUpdated}, nil
 }
 
 func gitCodeReleasesBase(rawURL string) (string, error) {

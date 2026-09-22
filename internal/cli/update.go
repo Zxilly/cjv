@@ -10,11 +10,10 @@ import (
 
 	"github.com/Zxilly/cjv/internal/cjverr"
 	"github.com/Zxilly/cjv/internal/cli/output"
+	"github.com/Zxilly/cjv/internal/cli/selfmgmt"
 	clisettings "github.com/Zxilly/cjv/internal/cli/settings"
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/i18n"
-	"github.com/Zxilly/cjv/internal/proxy"
-	"github.com/Zxilly/cjv/internal/selfupdate"
 	"github.com/Zxilly/cjv/internal/toolchain"
 	"github.com/Zxilly/cjv/internal/utils"
 	"github.com/fatih/color"
@@ -42,8 +41,9 @@ type updateEntry struct {
 }
 
 type updateResult struct {
-	Updates       []updateEntry `json:"updates"`
-	NoneInstalled bool          `json:"none_installed,omitempty"`
+	Updates       []updateEntry          `json:"updates"`
+	NoneInstalled bool                   `json:"none_installed,omitempty"`
+	SelfUpdate    *selfmgmt.UpdateResult `json:"self_update,omitempty"`
 }
 
 func (r updateResult) Text() string { return "" }
@@ -89,18 +89,24 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 			settings = reloaded
 		}
 	}
+	var selfUpdate *selfmgmt.UpdateResult
 	if !noSelfUpdate && settings != nil && settings.AutoSelfUpdate != config.AutoSelfUpdateDisable {
-		selfupdate.CleanupOldBinaries()
-
 		switch settings.AutoSelfUpdate {
 		case config.AutoSelfUpdateEnable:
-			if _, err := selfupdate.EnsureManagedExecutable(); err != nil {
-				slog.Warn("failed to bootstrap managed cjv binary for self-update", "error", err)
-			} else if err := selfupdate.Update(ctx, updateURL, version); err != nil {
-				slog.Warn("self-update failed", "error", err)
-			} else if err := proxy.CreateAllProxyLinks(); err != nil {
-				slog.Warn("failed to refresh proxies after self-update", "error", err)
+			selfResult, selfErr := selfmgmt.UpdateManaged(ctx, updateURL, version)
+			if selfResult.Status != "" {
+				selfUpdate = &selfResult
 			}
+			if selfErr != nil {
+				slog.Warn("self-update failed", "error", selfErr)
+			} else {
+				if !output.IsJSON() {
+					if renderErr := output.RenderTo(cmdOutput(cmd), selfResult); renderErr != nil {
+						return renderErr
+					}
+				}
+			}
+
 		default:
 			if settings.AutoSelfUpdate != config.AutoSelfUpdateCheck {
 				slog.Warn("unknown auto_self_update value, treating as check", "value", settings.AutoSelfUpdate)
@@ -126,6 +132,7 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 	return output.RenderTo(cmdOutput(cmd), updateResult{
 		Updates:       outcome.updates,
 		NoneInstalled: outcome.noneInstalled,
+		SelfUpdate:    selfUpdate,
 	})
 }
 

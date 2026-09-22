@@ -34,6 +34,7 @@ const (
 	ErrorCodeComponentLinkInvalidPath        ErrorCode = "COMPONENT_LINK_INVALID_PATH"
 	ErrorCodeDocsNotInstalled                ErrorCode = "DOCS_NOT_INSTALLED"
 	ErrorCodeDocsTopicNotFound               ErrorCode = "DOCS_TOPIC_NOT_FOUND"
+	ErrorCodeSelfUpdateFinalizationFailed    ErrorCode = "SELF_UPDATE_FINALIZATION_FAILED"
 )
 
 // Coded is implemented by errors that carry a stable machine-readable code
