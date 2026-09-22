@@ -15,6 +15,7 @@ import (
 	"github.com/Zxilly/cjv/internal/component"
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/dist"
+	"github.com/Zxilly/cjv/internal/fstx"
 	"github.com/Zxilly/cjv/internal/i18n"
 	"github.com/Zxilly/cjv/internal/toolchain"
 	"github.com/Zxilly/cjv/internal/utils"
@@ -75,6 +76,9 @@ func installLinkedToolchain(ctx context.Context, name string, force, noStdx bool
 	if err != nil {
 		return err
 	}
+	if err := fstx.Recover(tcDir); err != nil {
+		return err
+	}
 	destDir := filepath.Join(tcDir, name)
 	isReinstall := false
 	if _, err := os.Stat(destDir); err == nil {
@@ -120,7 +124,8 @@ func installLinkedToolchain(ctx context.Context, name string, force, noStdx bool
 		return fmt.Errorf("failed to clean staging directory: %w", err)
 	}
 	defer func() {
-		if retErr != nil {
+		var recoveryErr *fstx.RecoveryError
+		if retErr != nil && !errors.As(retErr, &recoveryErr) {
 			_ = utils.RemoveAllRetry(stagingDir) //nolint:errcheck // best-effort
 		}
 	}()
@@ -169,7 +174,7 @@ func installLinkedToolchain(ctx context.Context, name string, force, noStdx bool
 			return err
 		}
 		return opts.createProxyLinks()
-	}); err != nil {
+	}, nil); err != nil {
 		return err
 	}
 

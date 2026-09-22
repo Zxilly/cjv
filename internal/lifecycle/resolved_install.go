@@ -42,6 +42,9 @@ func installResolvedWithDefault(ctx context.Context, rt ResolvedToolchain, setti
 	if err != nil {
 		return err
 	}
+	if err := fstx.Recover(tcDir); err != nil {
+		return err
+	}
 	destDir := filepath.Join(tcDir, resolvedName)
 	isReinstall := false
 	if _, err := os.Stat(destDir); err == nil {
@@ -79,7 +82,8 @@ func installResolvedWithDefault(ctx context.Context, rt ResolvedToolchain, setti
 		return fmt.Errorf("failed to clean staging directory: %w", err)
 	}
 	defer func() {
-		if retErr != nil {
+		var recoveryErr *fstx.RecoveryError
+		if retErr != nil && !errors.As(retErr, &recoveryErr) {
 			_ = utils.RemoveAllRetry(stagingDir) //nolint:errcheck
 		}
 	}()
@@ -92,6 +96,17 @@ func installResolvedWithDefault(ctx context.Context, rt ResolvedToolchain, setti
 		return err
 	}
 	isFirstInstall := allowDefault && (settings.DefaultToolchain == "" || !defaultToolchainExists(settings.DefaultToolchain))
+	var publishDefault func() error
+	if isFirstInstall {
+		publishDefault = func() error {
+			if _, err := sf.Update(config.SettingsUpdate{DefaultToolchain: &resolvedName}); err != nil {
+				return err
+			}
+			settings.DefaultToolchain = resolvedName
+			opts.ensurePathConfigured()
+			return nil
+		}
+	}
 	if err := swapInstalledToolchain(stagingDir, destDir, isReinstall, func() error {
 		if err := opts.ensureManagedBinary(); err != nil {
 			return err
@@ -99,15 +114,8 @@ func installResolvedWithDefault(ctx context.Context, rt ResolvedToolchain, setti
 		if err := opts.createProxyLinks(); err != nil {
 			return err
 		}
-		if isFirstInstall {
-			settings.DefaultToolchain = resolvedName
-			if err := sf.Save(settings); err != nil {
-				return err
-			}
-			opts.ensurePathConfigured()
-		}
 		return nil
-	}); err != nil {
+	}, publishDefault); err != nil {
 		return err
 	}
 
@@ -139,7 +147,7 @@ func validateInstallation(dir, tuple string) error {
 	return nil
 }
 
-func swapInstalledToolchain(stagingDir, destDir string, isReinstall bool, afterSwap func() error) (err error) {
+func swapInstalledToolchain(stagingDir, destDir string, isReinstall bool, afterSwap, publish func() error) (err error) {
 	tx, txErr := fstx.NewTransaction(destDir)
 	if txErr != nil {
 		return fmt.Errorf("failed to begin install transaction: %w", txErr)
@@ -165,7 +173,11 @@ func swapInstalledToolchain(stagingDir, destDir string, isReinstall bool, afterS
 	if err := afterSwap(); err != nil {
 		return fmt.Errorf("failed to finalize installation: %w", err)
 	}
-	if err := tx.Commit(); err != nil {
+	commit := tx.Commit
+	if publish != nil {
+		commit = func() error { return tx.CommitWith(publish) }
+	}
+	if err := commit(); err != nil {
 		return err
 	}
 	committed = true
