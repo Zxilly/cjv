@@ -375,12 +375,11 @@ func TestInstallRejectsUnknownAndUnsupportedComponents(t *testing.T) {
 func TestMoveStagedFilesErrorBranches(t *testing.T) {
 	parentFile := filepath.Join(t.TempDir(), "not-a-directory")
 	require.NoError(t, os.WriteFile(parentFile, []byte("file"), 0o644))
-	_, err := moveStagedFiles(t.TempDir(), filepath.Join(parentFile, "dest"), []string{"file.txt"})
+	err := moveStagedFiles(t.TempDir(), filepath.Join(parentFile, "dest"), []string{"file.txt"})
 	require.Error(t, err)
 
 	stageDir := t.TempDir()
 	destDir := t.TempDir()
-	moved, err := moveStagedFiles(stageDir, destDir, []string{"missing.txt"})
+	err = moveStagedFiles(stageDir, destDir, []string{"missing.txt"})
 	require.Error(t, err)
-	assert.Empty(t, moved)
 }

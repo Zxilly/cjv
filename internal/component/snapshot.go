@@ -11,7 +11,7 @@ import (
 	"github.com/Zxilly/cjv/internal/utils"
 )
 
-type Snapshot struct {
+type snapshot struct {
 	tempDir string
 	entries []snapshotEntry
 }
@@ -22,16 +22,16 @@ type snapshotEntry struct {
 	existed bool
 }
 
-func TakeSnapshot(roots Roots, names []Name) (*Snapshot, error) {
+func takeSnapshot(roots Roots, names []Name) (*snapshot, error) {
 	tempDir, err := os.MkdirTemp("", "cjv-component-snapshot-*")
 	if err != nil {
 		return nil, err
 	}
-	s := &Snapshot{tempDir: tempDir}
+	s := &snapshot{tempDir: tempDir}
 	ok := false
 	defer func() {
 		if !ok {
-			_ = s.Cleanup()
+			_ = s.cleanup()
 		}
 	}()
 
@@ -59,7 +59,7 @@ func TakeSnapshot(roots Roots, names []Name) (*Snapshot, error) {
 	return s, nil
 }
 
-func (s *Snapshot) addPath(live, label string) error {
+func (s *snapshot) addPath(live, label string) error {
 	entry := snapshotEntry{
 		live:   live,
 		backup: filepath.Join(s.tempDir, label),
@@ -79,7 +79,7 @@ func (s *Snapshot) addPath(live, label string) error {
 	return nil
 }
 
-func (s *Snapshot) Restore() error {
+func (s *snapshot) restore() error {
 	var errs []error
 	for i := len(s.entries) - 1; i >= 0; i-- {
 		entry := s.entries[i]
@@ -97,7 +97,7 @@ func (s *Snapshot) Restore() error {
 	return errors.Join(errs...)
 }
 
-func (s *Snapshot) Cleanup() error {
+func (s *snapshot) cleanup() error {
 	if s == nil || s.tempDir == "" {
 		return nil
 	}

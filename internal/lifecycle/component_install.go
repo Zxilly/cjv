@@ -74,26 +74,22 @@ func InstallComponentsList(ctx context.Context, resolvedName string, components 
 	if err != nil {
 		return err
 	}
-	snap, err := component.TakeSnapshot(roots, parsed)
-	if err != nil {
-		return err
-	}
-	defer snap.Cleanup() //nolint:errcheck
-	for _, c := range parsed {
-		if err := opts.installComponent(ctx, roots, resolvedTC, c, tuple, downloadsDir, force, fetcher); err != nil {
-			var alreadyErr *cjverr.ComponentAlreadyInstalledError
-			if errors.As(err, &alreadyErr) {
-				if !quiet && !opts.json() {
-					fmt.Println(err)
+	return component.ApplyChanges(roots, parsed, func() error {
+		for _, c := range parsed {
+			if err := opts.installComponent(ctx, roots, resolvedTC, c, tuple, downloadsDir, force, fetcher); err != nil {
+				var alreadyErr *cjverr.ComponentAlreadyInstalledError
+				if errors.As(err, &alreadyErr) {
+					if !quiet && !opts.json() {
+						fmt.Println(err)
+					}
+					continue
 				}
-				continue
+				return err
 			}
-			_ = snap.Restore() //nolint:errcheck
-			return err
+			if !quiet {
+				opts.green("ComponentInstalled", i18n.MsgData{"Toolchain": resolvedName, "Component": string(c)})
+			}
 		}
-		if !quiet {
-			opts.green("ComponentInstalled", i18n.MsgData{"Toolchain": resolvedName, "Component": string(c)})
-		}
-	}
-	return nil
+		return nil
+	})
 }
