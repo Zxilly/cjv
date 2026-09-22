@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"context"
+	"io"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -20,24 +21,19 @@ import (
 )
 
 func TestRunInitNonInteractiveNoToolchainWritesManagedFiles(t *testing.T) {
+	app := newApplication("dev", "")
 	home := t.TempDir()
 	config.IsolateForTest(t, home)
 	config.ResetDefaultSettingsFileCache()
 
-	oldYes := initYes
-	oldToolchain := initDefaultToolchain
-	oldNoModifyPath := initNoModifyPath
-	initYes = true
-	initDefaultToolchain = "none"
-	initNoModifyPath = true
+	app.initYes = true
+	app.initDefaultToolchain = "none"
+	app.initNoModifyPath = true
 	t.Cleanup(func() {
-		initYes = oldYes
-		initDefaultToolchain = oldToolchain
-		initNoModifyPath = oldNoModifyPath
 		config.ResetDefaultSettingsFileCache()
 	})
 
-	err := runInit(&cobra.Command{}, nil)
+	err := app.runInit(&cobra.Command{}, nil)
 
 	require.NoError(t, err)
 	assert.FileExists(t, filepath.Join(home, "bin", proxy.CjvBinaryName()))
@@ -57,59 +53,117 @@ func TestRunInitNonInteractiveNoToolchainWritesManagedFiles(t *testing.T) {
 	assert.NoDirExists(t, filepath.Join(home, "toolchains", "lts-1.0.5"))
 }
 
+func TestInstallInitRestoresHomeEnvironment(t *testing.T) {
+	for _, state := range []string{"unset", "empty", "custom"} {
+		for _, fail := range []bool{false, true} {
+			name := state + "/success"
+			if fail {
+				name = state + "/bin-file-failure"
+			}
+			t.Run(name, func(t *testing.T) {
+				userHome := t.TempDir()
+				config.IsolateForTest(t, userHome)
+				t.Setenv(config.EnvNoPathSetup, "1")
+				t.Setenv(config.EnvHome, "")
+				switch state {
+				case "unset":
+					require.NoError(t, os.Unsetenv(config.EnvHome))
+				case "custom":
+					t.Setenv(config.EnvHome, filepath.Join(userHome, "original"))
+				}
+				before, wasPresent := os.LookupEnv(config.EnvHome)
+				initialHome, err := config.Home()
+				require.NoError(t, err)
+				selectedHome := filepath.Join(userHome, "selected")
+				if fail {
+					require.NoError(t, os.MkdirAll(selectedHome, 0o755))
+					require.NoError(t, os.WriteFile(filepath.Join(selectedHome, "bin"), []byte("keep this file"), 0o644))
+				}
+
+				app := newApplication("dev", "")
+				_, err = captureStdout(t, func() error {
+					return app.installInit(t.Context(), initialHome, initCustomizeOptions{
+						home:      selectedHome,
+						toolchain: "none",
+					})
+				})
+				if fail {
+					require.Error(t, err)
+					contents, readErr := os.ReadFile(filepath.Join(selectedHome, "bin"))
+					require.NoError(t, readErr)
+					assert.Equal(t, "keep this file", string(contents))
+				} else {
+					require.NoError(t, err)
+					assert.FileExists(t, filepath.Join(selectedHome, "bin", proxy.CjvBinaryName()))
+					assert.FileExists(t, filepath.Join(selectedHome, "bin", proxy.PlatformBinaryName("cjc")))
+				}
+				after, isPresent := os.LookupEnv(config.EnvHome)
+				assert.Equal(t, wasPresent, isPresent, "preserve whether CJV_HOME existed")
+				assert.Equal(t, before, after, "preserve the caller's CJV_HOME")
+				path, err := config.SettingsPath()
+				require.NoError(t, err)
+				settings, err := config.LoadSettings(path)
+				require.NoError(t, err)
+				assert.Equal(t, selectedHome, settings.Home, "selected home remains persisted")
+
+				// A later invocation must be able to change the persisted home
+				// without an environment override left behind by init masking it.
+				if state != "custom" {
+					nextHome := filepath.Join(userHome, "next")
+					next := newApplication("dev", "")
+					next.rootCmd.SetOut(io.Discard)
+					require.NoError(t, next.execute([]string{"set", "home", nextHome}))
+					resolved, source, resolveErr := config.ResolveHomeWithSource()
+					require.NoError(t, resolveErr)
+					assert.Equal(t, nextHome, resolved)
+					assert.Equal(t, config.HomeSourcePersisted, source)
+				}
+			})
+		}
+	}
+}
+
 func TestRunInitContinuesWhenDefaultToolchainInstallFails(t *testing.T) {
+	app := newApplication("dev", "")
 	home := t.TempDir()
 	config.IsolateForTest(t, home)
 	config.ResetDefaultSettingsFileCache()
 
-	oldYes := initYes
-	oldToolchain := initDefaultToolchain
-	oldNoModifyPath := initNoModifyPath
-	initYes = true
-	initDefaultToolchain = "local-sdk"
-	initNoModifyPath = true
+	app.initYes = true
+	app.initDefaultToolchain = "local-sdk"
+	app.initNoModifyPath = true
+	originalNoPathSetup := os.Getenv(config.EnvNoPathSetup)
 	t.Cleanup(func() {
-		initYes = oldYes
-		initDefaultToolchain = oldToolchain
-		initNoModifyPath = oldNoModifyPath
-		_ = os.Unsetenv(config.EnvNoPathSetup)
 		config.ResetDefaultSettingsFileCache()
 	})
 
-	err := runInit(&cobra.Command{}, nil)
+	err := app.runInit(&cobra.Command{}, nil)
 
 	require.NoError(t, err)
 	assert.FileExists(t, filepath.Join(home, "bin", proxy.CjvBinaryName()))
-	assert.Empty(t, os.Getenv(config.EnvNoPathSetup))
+	assert.Equal(t, originalNoPathSetup, os.Getenv(config.EnvNoPathSetup))
 }
 
 func TestRunInitCoversAlreadyInstalledAndModifyPathBranches(t *testing.T) {
+	app := newApplication("dev", "")
 	home := t.TempDir()
 	config.IsolateForTest(t, home)
 	config.ResetDefaultSettingsFileCache()
 
-	oldYes := initYes
-	oldToolchain := initDefaultToolchain
-	oldNoModifyPath := initNoModifyPath
-	oldEnsurePath := ensurePathConfiguredFn
 	var pathConfigured bool
-	initYes = true
-	initDefaultToolchain = "none"
-	initNoModifyPath = false
-	ensurePathConfiguredFn = func() { pathConfigured = true }
+	app.initYes = true
+	app.initDefaultToolchain = "none"
+	app.initNoModifyPath = false
+	app.ensurePathConfiguredFn = func() { pathConfigured = true }
 	t.Cleanup(func() {
-		initYes = oldYes
-		initDefaultToolchain = oldToolchain
-		initNoModifyPath = oldNoModifyPath
-		ensurePathConfiguredFn = oldEnsurePath
 		config.ResetDefaultSettingsFileCache()
 	})
 
-	require.NoError(t, runInit(&cobra.Command{}, nil))
+	require.NoError(t, app.runInit(&cobra.Command{}, nil))
 	require.True(t, pathConfigured)
 
 	pathConfigured = false
-	require.NoError(t, runInit(&cobra.Command{}, nil))
+	require.NoError(t, app.runInit(&cobra.Command{}, nil))
 	require.True(t, pathConfigured)
 
 	assert.NotEmpty(t, yesNoStr(true))
@@ -117,38 +171,29 @@ func TestRunInitCoversAlreadyInstalledAndModifyPathBranches(t *testing.T) {
 }
 
 func TestRunInitPassesConfiguredComponentsToDefaultToolchainInstall(t *testing.T) {
+	app := newApplication("dev", "")
 	home := t.TempDir()
 	config.IsolateForTest(t, home)
 	config.ResetDefaultSettingsFileCache()
 
-	oldYes := initYes
-	oldToolchain := initDefaultToolchain
-	oldNoModifyPath := initNoModifyPath
-	oldComponents := initComponents
-	oldInstall := installToolchainWithExtrasFn
-	initYes = true
-	initDefaultToolchain = "sts"
-	initNoModifyPath = true
-	initComponents = []string{"stdx", "docs"}
+	app.initYes = true
+	app.initDefaultToolchain = "sts"
+	app.initNoModifyPath = true
+	app.initComponents = []string{"stdx", "docs"}
 
 	var gotInput string
 	var gotComponents []string
-	installToolchainWithExtrasFn = func(ctx context.Context, input string, targets, components []string, force bool) error {
+	app.installToolchainWithExtrasFn = func(ctx context.Context, input string, targets, components []string, force bool) error {
 		gotInput = input
 		gotComponents = append([]string(nil), components...)
 		return nil
 	}
 
 	t.Cleanup(func() {
-		initYes = oldYes
-		initDefaultToolchain = oldToolchain
-		initNoModifyPath = oldNoModifyPath
-		initComponents = oldComponents
-		installToolchainWithExtrasFn = oldInstall
 		config.ResetDefaultSettingsFileCache()
 	})
 
-	err := runInit(&cobra.Command{}, nil)
+	err := app.runInit(&cobra.Command{}, nil)
 
 	require.NoError(t, err)
 	assert.Equal(t, "sts", gotInput)

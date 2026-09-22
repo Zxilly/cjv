@@ -17,6 +17,7 @@ import (
 // toolchain properly removes the directory and updates settings.
 
 func TestRunUninstall_RemovesToolchain(t *testing.T) {
+	app := newApplication("dev", "")
 	home := t.TempDir()
 	config.IsolateForTest(t, home)
 	require.NoError(t, config.EnsureDirs())
@@ -26,14 +27,14 @@ func TestRunUninstall_RemovesToolchain(t *testing.T) {
 	settings := config.DefaultSettings()
 	settings.ManifestURL = server.URL + "/sdk-versions.json"
 	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
-	require.NoError(t, InstallToolchainWithOptions(context.Background(), "lts", false))
+	require.NoError(t, app.InstallToolchainWithOptions(context.Background(), "lts", false))
 
 	// Verify installed
 	installed, _ := toolchain.ListInstalled()
 	require.NotEmpty(t, installed)
 
 	// Uninstall
-	err := runUninstall(nil, []string{installed[0]})
+	err := app.runUninstall(nil, []string{installed[0]})
 	require.NoError(t, err)
 
 	// Verify removed
@@ -42,15 +43,17 @@ func TestRunUninstall_RemovesToolchain(t *testing.T) {
 }
 
 func TestRunUninstall_NotInstalled(t *testing.T) {
+	app := newApplication("dev", "")
 	home := t.TempDir()
 	config.IsolateForTest(t, home)
 	require.NoError(t, os.MkdirAll(filepath.Join(home, "toolchains"), 0o755))
 
-	err := runUninstall(nil, []string{"nonexistent-99.99"})
+	err := app.runUninstall(nil, []string{"nonexistent-99.99"})
 	assert.Error(t, err, "uninstalling non-existent toolchain should error")
 }
 
 func TestRunUninstall_PreservesSettingsWhenRemoveFails(t *testing.T) {
+	app := newApplication("dev", "")
 	if runtime.GOOS != "windows" {
 		t.Skip("Windows keeps the process working directory locked")
 	}
@@ -78,7 +81,7 @@ func TestRunUninstall_PreservesSettingsWhenRemoveFails(t *testing.T) {
 		_ = os.RemoveAll(filepath.Join(home, "toolchains"))
 	})
 
-	err = runUninstall(nil, []string{name})
+	err = app.runUninstall(nil, []string{name})
 
 	require.Error(t, err)
 	loaded, err := config.LoadSettings(settingsPath)
@@ -111,6 +114,7 @@ func TestUpdateSettingsAfterUninstallDoesNotPromoteTargetVariantToDefault(t *tes
 }
 
 func TestRunUninstall_MultipleInstalled(t *testing.T) {
+	app := newApplication("dev", "")
 	home := t.TempDir()
 	config.IsolateForTest(t, home)
 	require.NoError(t, config.EnsureDirs())
@@ -121,7 +125,7 @@ func TestRunUninstall_MultipleInstalled(t *testing.T) {
 	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 
 	// Install lts
-	require.NoError(t, InstallToolchainWithOptions(context.Background(), "lts", false))
+	require.NoError(t, app.InstallToolchainWithOptions(context.Background(), "lts", false))
 	// Create a fake sts toolchain
 	require.NoError(t, os.MkdirAll(filepath.Join(home, "toolchains", "sts-2.0.0"), 0o755))
 
@@ -129,7 +133,7 @@ func TestRunUninstall_MultipleInstalled(t *testing.T) {
 	require.Len(t, installed, 2)
 
 	// Uninstall sts, lts should remain
-	err := runUninstall(nil, []string{"sts-2.0.0"})
+	err := app.runUninstall(nil, []string{"sts-2.0.0"})
 	require.NoError(t, err)
 
 	remaining, _ := toolchain.ListInstalled()

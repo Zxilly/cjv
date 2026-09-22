@@ -13,12 +13,14 @@ import (
 )
 
 func TestExecRun_NoArgs(t *testing.T) {
+	app := newApplication("dev", "")
 	cmd := &cobra.Command{}
-	err := execRun(cmd, nil)
+	err := app.execRun(cmd, nil)
 	assert.Error(t, err, "should error with no arguments")
 }
 
 func TestExecRun_NoToolchain(t *testing.T) {
+	app := newApplication("dev", "")
 	home := t.TempDir()
 	config.IsolateForTest(t, home)
 	t.Setenv("CJV_TOOLCHAIN", "")
@@ -31,7 +33,7 @@ func TestExecRun_NoToolchain(t *testing.T) {
 	t.Chdir(t.TempDir())
 
 	cmd := &cobra.Command{}
-	err := execRun(cmd, []string{"./some_binary"})
+	err := app.execRun(cmd, []string{"./some_binary"})
 	assert.Error(t, err, "should error when no toolchain configured")
 }
 
@@ -54,6 +56,7 @@ func TestExtractPlusToolchainFromExecArgs(t *testing.T) {
 }
 
 func TestExecRunExecutesCommandWithActiveToolchain(t *testing.T) {
+	app := newApplication("dev", "")
 	home := t.TempDir()
 	config.IsolateForTest(t, home)
 	t.Setenv(config.EnvToolchain, "")
@@ -67,6 +70,6 @@ func TestExecRunExecutesCommandWithActiveToolchain(t *testing.T) {
 
 	cmd := &cobra.Command{}
 	cmd.SetContext(context.Background())
-	require.NoError(t, execRun(cmd, []string{"go", "version"}))
-	require.NoError(t, execRun(cmd, []string{"--help"}))
+	require.NoError(t, app.execRun(cmd, []string{"go", "version"}))
+	require.NoError(t, app.execRun(cmd, []string{"--help"}))
 }

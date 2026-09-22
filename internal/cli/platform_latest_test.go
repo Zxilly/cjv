@@ -10,7 +10,6 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/Zxilly/cjv/internal/cli/output"
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/dist"
 	"github.com/Zxilly/cjv/internal/toolchain"
@@ -79,13 +78,14 @@ func manifestWithPlatformGap() dist.Manifest {
 }
 
 func TestResolveAndLocateUsesLatestVersionAvailableForTarget(t *testing.T) {
+	app := newApplication("dev", "")
 	server := manifestOnlyServer(t, manifestWithPlatformGap())
 	settings := config.DefaultSettings()
 	settings.ManifestURL = server.URL + "/sdk-versions.json"
 
 	resolved, err := resolveAndLocate(context.Background(), toolchain.ToolchainName{
 		Channel: toolchain.LTS,
-	}, &settings, newManifestFetcher(settings.ManifestURL), "linux-x64")
+	}, &settings, app.newManifestFetcher(settings.ManifestURL), "linux-x64")
 
 	require.NoError(t, err)
 	assert.Equal(t, "lts-1.5.0", resolved.Name)
@@ -93,6 +93,7 @@ func TestResolveAndLocateUsesLatestVersionAvailableForTarget(t *testing.T) {
 }
 
 func TestRunCheckUsesLatestVersionAvailableForInstalledTarget(t *testing.T) {
+	app := newApplication("dev", "")
 	home := t.TempDir()
 	config.IsolateForTest(t, home)
 	require.NoError(t, config.EnsureDirs())
@@ -103,14 +104,13 @@ func TestRunCheckUsesLatestVersionAvailableForInstalledTarget(t *testing.T) {
 	settings.ManifestURL = server.URL + "/sdk-versions.json"
 	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 
-	output.SetJSONMode(true)
-	t.Cleanup(func() { output.SetJSONMode(false) })
+	app.output.SetJSONMode(true)
 
 	var buf bytes.Buffer
 	cmd := &cobra.Command{}
 	cmd.SetContext(context.Background())
 	cmd.SetOut(&buf)
-	require.NoError(t, runCheck(cmd, nil))
+	require.NoError(t, app.runCheck(cmd, nil))
 
 	var got checkResult
 	require.NoError(t, json.Unmarshal(buf.Bytes(), &got))

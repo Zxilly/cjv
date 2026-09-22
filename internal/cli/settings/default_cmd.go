@@ -2,6 +2,7 @@ package settings
 
 import (
 	"fmt"
+	"io"
 	"log/slog"
 
 	"github.com/Zxilly/cjv/internal/i18n"
@@ -9,17 +10,19 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var defaultCmd = &cobra.Command{
-	Use:   "default [toolchain]",
-	Short: i18n.T("DefaultCmdShort", nil),
-	Long:  i18n.T("DefaultCmdLong", nil),
-	Args:  cobra.MaximumNArgs(1),
-	RunE:  runDefault,
+func newDefaultCommand() *cobra.Command {
+	return &cobra.Command{
+		Use:   "default [toolchain]",
+		Short: i18n.T("DefaultCmdShort", nil),
+		Long:  i18n.T("DefaultCmdLong", nil),
+		Args:  cobra.MaximumNArgs(1),
+		RunE:  runDefault,
+	}
 }
 
 func runDefault(cmd *cobra.Command, args []string) error {
 	if len(args) == 0 {
-		return showDefault()
+		return showDefault(cmd.OutOrStdout())
 	}
 
 	name := args[0]
@@ -34,8 +37,8 @@ func runDefault(cmd *cobra.Command, args []string) error {
 		if err := sf.Save(settings); err != nil {
 			return err
 		}
-		fmt.Println(i18n.T("DefaultCleared", nil))
-		return nil
+		_, err := fmt.Fprintln(cmd.OutOrStdout(), i18n.T("DefaultCleared", nil))
+		return err
 	}
 
 	// Validate and normalize toolchain name.
@@ -59,10 +62,10 @@ func runDefault(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	fmt.Println(i18n.T("ToolchainSetDefault", i18n.MsgData{
+	_, err = fmt.Fprintln(cmd.OutOrStdout(), i18n.T("ToolchainSetDefault", i18n.MsgData{
 		"Name": normalizedName,
 	}))
-	return nil
+	return err
 }
 
 func ensureActiveToolchainName(input string, parsed toolchain.ToolchainName) error {
@@ -76,17 +79,17 @@ func ensureActiveToolchainName(input string, parsed toolchain.ToolchainName) err
 	return fmt.Errorf("target variant %q cannot be used as an active toolchain; use host toolchain %q and configure targets instead", input, hostName)
 }
 
-func showDefault() error {
+func showDefault(w io.Writer) error {
 	_, settings, err := LoadSettings()
 	if err != nil {
 		return err
 	}
 	if settings.DefaultToolchain == "" {
-		fmt.Println(i18n.T("NoDefaultToolchain", nil))
-		return nil
+		_, err := fmt.Fprintln(w, i18n.T("NoDefaultToolchain", nil))
+		return err
 	}
-	fmt.Println(i18n.T("CurrentDefault", i18n.MsgData{
+	_, err = fmt.Fprintln(w, i18n.T("CurrentDefault", i18n.MsgData{
 		"Name": settings.DefaultToolchain,
 	}))
-	return nil
+	return err
 }

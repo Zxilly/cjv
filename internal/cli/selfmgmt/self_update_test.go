@@ -39,11 +39,9 @@ func TestSelfUpdateReportsAppliedVersionAfterProxyRefresh(t *testing.T) {
 				require.NoError(t, os.WriteFile(filepath.Join(obstruction, "keep"), []byte("obstruction"), 0o644))
 			}
 			updateURL := serveManagedUpdate(t)
-			previousJSON := output.IsJSON()
-			output.SetJSONMode(true)
-			t.Cleanup(func() { output.SetJSONMode(previousJSON) })
+			renderer := &output.Renderer{JSON: true}
 			var stdout, stderr bytes.Buffer
-			cmd := NewSelfCommand("1.0.0", updateURL)
+			cmd := NewSelfCommand("1.0.0", updateURL, renderer)
 			cmd.SetOut(&stdout)
 			cmd.SetErr(&stderr)
 			cmd.SilenceErrors = true
@@ -68,7 +66,7 @@ func TestSelfUpdateReportsAppliedVersionAfterProxyRefresh(t *testing.T) {
 				assert.Contains(t, err.Error(), "1.1.0")
 				var renameErr *os.LinkError
 				require.ErrorAs(t, err, &renameErr, "the proxy failure must remain inspectable")
-				require.ErrorIs(t, output.RenderErrorTo(&stdout, &stderr, err), err)
+				require.ErrorIs(t, renderer.RenderErrorTo(&stdout, &stderr, err), err)
 				var envelope struct {
 					Error struct {
 						Code    string `json:"code"`

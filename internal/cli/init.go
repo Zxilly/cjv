@@ -11,7 +11,6 @@ import (
 	"strings"
 
 	"github.com/Zxilly/cjv/internal/cjverr"
-	"github.com/Zxilly/cjv/internal/cli/output"
 	"github.com/Zxilly/cjv/internal/cli/selfmgmt"
 	componentlib "github.com/Zxilly/cjv/internal/component"
 	"github.com/Zxilly/cjv/internal/config"
@@ -28,28 +27,6 @@ import (
 	"github.com/mattn/go-isatty"
 	"github.com/spf13/cobra"
 )
-
-var (
-	initYes              bool
-	initDefaultToolchain string
-	initNoModifyPath     bool
-	initComponents       []string
-)
-
-func init() {
-	initCmd.Flags().BoolVarP(&initYes, "yes", "y", false, i18n.T("FlagSkipConfirm", nil))
-	initCmd.Flags().StringVar(&initDefaultToolchain, "default-toolchain", "lts", i18n.T("InitFlagDefaultToolchain", nil))
-	initCmd.Flags().StringSliceVarP(&initComponents, "component", "c", nil, i18n.T("InstallFlagComponent", nil))
-	initCmd.Flags().BoolVar(&initNoModifyPath, "no-modify-path", false, i18n.T("InitFlagNoModifyPath", nil))
-	rootCmd.AddCommand(initCmd)
-}
-
-var initCmd = &cobra.Command{
-	Use:   "init",
-	Short: i18n.T("InitCmdShort", nil),
-	Long:  i18n.T("InitCmdLong", nil),
-	RunE:  runInit,
-}
 
 const (
 	menuProceed   = "proceed"
@@ -255,8 +232,8 @@ func runInitCustomizePrompt(opts *initCustomizeOptions) error {
 	return nil
 }
 
-func runInit(cmd *cobra.Command, _ []string) error {
-	if output.IsJSON() {
+func (app *application) runInit(cmd *cobra.Command, _ []string) error {
+	if app.output.IsJSON() {
 		return &cjverr.UnsupportedForJSONError{Command: "init"}
 	}
 	selfmgmt.CheckSudoSafety()
@@ -272,9 +249,9 @@ func runInit(cmd *cobra.Command, _ []string) error {
 	}
 
 	// Effective options — initialized from CLI flags, may be modified by interactive menu
-	toolchain := initDefaultToolchain
-	components := append([]string(nil), initComponents...)
-	modifyPath := !initNoModifyPath
+	toolchain := app.initDefaultToolchain
+	components := append([]string(nil), app.initComponents...)
+	modifyPath := !app.initNoModifyPath
 
 	fmt.Println()
 	color.Cyan(i18n.T("InitWelcome", nil))
@@ -315,8 +292,8 @@ func runInit(cmd *cobra.Command, _ []string) error {
 	// bootstrap pipes the script through stdin) we cannot prompt, so fall back
 	// to a non-interactive standard install with the default options instead of
 	// failing with an opaque form error.
-	interactive := !initYes && initStdinIsTerminal()
-	if !initYes && !interactive {
+	interactive := !app.initYes && initStdinIsTerminal()
+	if !app.initYes && !interactive {
 		fmt.Println()
 		fmt.Println(i18n.T("InitNonInteractive", nil))
 	}
@@ -399,10 +376,38 @@ func runInit(cmd *cobra.Command, _ []string) error {
 		}
 	}
 
+	return app.installInit(cmd.Context(), initialHome, initCustomizeOptions{
+		home:       home,
+		toolchain:  toolchain,
+		components: components,
+		modifyPath: modifyPath,
+	})
+}
+
+// installInit applies the selected options after the interactive menu and
+// reinstall confirmation. It is shared by interactive and unattended init.
+func (app *application) installInit(ctx context.Context, initialHome string, opts initCustomizeOptions) (retErr error) {
+	home := opts.home
+	binDir := filepath.Join(home, "bin")
 	if home != initialHome {
+		previousHome, hadHome := os.LookupEnv(config.EnvHome)
+		defer func() {
+			var err error
+			if hadHome {
+				err = os.Setenv(config.EnvHome, previousHome)
+			} else {
+				err = os.Unsetenv(config.EnvHome)
+			}
+			if err != nil {
+				retErr = errors.Join(retErr, fmt.Errorf("restore %s after init: %w", config.EnvHome, err))
+			}
+		}()
+		// The selected home stays persisted, but its environment override is
+		// needed only while this installation targets that directory.
 		if err := activateInitHomePath(home); err != nil {
 			return err
 		}
+		var err error
 		home, err = config.Home()
 		if err != nil {
 			return err
@@ -413,7 +418,6 @@ func runInit(cmd *cobra.Command, _ []string) error {
 		}
 	}
 
-	ctx := cmd.Context()
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -427,22 +431,22 @@ func runInit(cmd *cobra.Command, _ []string) error {
 	if err := proxy.CreateAllProxyLinks(); err != nil {
 		return err
 	}
-	if modifyPath {
-		ensurePathConfiguredFn()
+	if opts.modifyPath {
+		app.ensurePathConfiguredFn()
 	}
 	if err := env.WriteEnvScripts(home, binDir); err != nil {
 		slog.Warn("failed to write env scripts", "error", err)
 	}
 
-	if toolchain != "none" {
-		// Prevent install from re-configuring PATH — init already did it
-		if err := os.Setenv(config.EnvNoPathSetup, "1"); err != nil {
-			return err
-		}
-		defer os.Unsetenv(config.EnvNoPathSetup) //nolint:errcheck // best-effort cleanup
-		if err := installToolchainWithExtrasFn(ctx, toolchain, nil, components, false); err != nil {
+	if opts.toolchain != "none" {
+		// Init has already handled PATH. Keep this policy in the invocation
+		// rather than overwriting the caller's process environment.
+		configurePath := app.ensurePathConfiguredFn
+		app.ensurePathConfiguredFn = func() {}
+		defer func() { app.ensurePathConfiguredFn = configurePath }()
+		if err := app.installToolchainWithExtrasFn(ctx, opts.toolchain, nil, opts.components, false); err != nil {
 			fmt.Fprintf(os.Stderr, "\n%s\n", i18n.T("InitToolchainFailed", i18n.MsgData{
-				"Name": toolchain,
+				"Name": opts.toolchain,
 				"Err":  err.Error(),
 			}))
 		}
@@ -464,14 +468,30 @@ func runInit(cmd *cobra.Command, _ []string) error {
 	}
 	fmt.Println()
 
-	if toolchain == "none" {
+	if opts.toolchain == "none" {
 		printInitMarkdown(i18n.T("InitInstallHint", nil))
 		fmt.Println("    cjv install <toolchain>")
 		fmt.Println()
 	}
-	if !modifyPath {
+	if !opts.modifyPath {
 		fmt.Println(i18n.T("InitNoModifyPath", i18n.MsgData{"BinDir": binDir}))
 	}
 
 	return nil
+}
+
+func (app *application) initInitCommands() {
+	app.initCmd = &cobra.Command{
+		Use:   "init",
+		Short: i18n.T("InitCmdShort", nil),
+		Long:  i18n.T("InitCmdLong", nil),
+		RunE:  app.runInit,
+	}
+
+	app.initCmd.Flags().BoolVarP(&app.initYes, "yes", "y", false, i18n.T("FlagSkipConfirm", nil))
+	app.initCmd.Flags().StringVar(&app.initDefaultToolchain, "default-toolchain", "lts", i18n.T("InitFlagDefaultToolchain", nil))
+	app.initCmd.Flags().StringSliceVarP(&app.initComponents, "component", "c", nil, i18n.T("InstallFlagComponent", nil))
+	app.initCmd.Flags().BoolVar(&app.initNoModifyPath, "no-modify-path", false, i18n.T("InitFlagNoModifyPath", nil))
+	app.rootCmd.AddCommand(app.initCmd)
+
 }

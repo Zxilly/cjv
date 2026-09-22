@@ -12,6 +12,7 @@ import (
 )
 
 func TestToolchainLinkCommandCreatesCustomLinkAndProxyLinks(t *testing.T) {
+	app := newApplication("dev", "")
 	home := t.TempDir()
 	target := t.TempDir()
 	config.IsolateForTest(t, home)
@@ -20,7 +21,7 @@ func TestToolchainLinkCommandCreatesCustomLinkAndProxyLinks(t *testing.T) {
 	require.NoError(t, os.MkdirAll(filepath.Dir(cjcPath), 0o755))
 	require.NoError(t, os.WriteFile(cjcPath, []byte("stub"), 0o755))
 
-	err := toolchainLinkCmd.RunE(toolchainLinkCmd, []string{"my-sdk", target})
+	err := app.toolchainLinkCmd.RunE(app.toolchainLinkCmd, []string{"my-sdk", target})
 
 	require.NoError(t, err)
 	assert.FileExists(t, filepath.Join(home, "bin", proxy.CjvBinaryName()))
@@ -28,15 +29,16 @@ func TestToolchainLinkCommandCreatesCustomLinkAndProxyLinks(t *testing.T) {
 	_, statErr := os.Lstat(filepath.Join(home, "toolchains", "my-sdk"))
 	assert.NoError(t, statErr)
 
-	err = toolchainLinkCmd.RunE(toolchainLinkCmd, []string{"my-sdk", target})
+	err = app.toolchainLinkCmd.RunE(app.toolchainLinkCmd, []string{"my-sdk", target})
 	require.Error(t, err)
 }
 
 func TestToolchainLinkCommandRejectsInvalidInputs(t *testing.T) {
+	app := newApplication("dev", "")
 	home := t.TempDir()
 	config.IsolateForTest(t, home)
 
-	require.Error(t, toolchainLinkCmd.RunE(toolchainLinkCmd, []string{"lts", t.TempDir()}))
-	require.Error(t, toolchainLinkCmd.RunE(toolchainLinkCmd, []string{"bad/path", t.TempDir()}))
-	require.Error(t, toolchainLinkCmd.RunE(toolchainLinkCmd, []string{"my-sdk", filepath.Join(t.TempDir(), "missing")}))
+	require.Error(t, app.toolchainLinkCmd.RunE(app.toolchainLinkCmd, []string{"lts", t.TempDir()}))
+	require.Error(t, app.toolchainLinkCmd.RunE(app.toolchainLinkCmd, []string{"bad/path", t.TempDir()}))
+	require.Error(t, app.toolchainLinkCmd.RunE(app.toolchainLinkCmd, []string{"my-sdk", filepath.Join(t.TempDir(), "missing")}))
 }

@@ -71,6 +71,7 @@ func TestLookPathInEnv_ExtensionHandling(t *testing.T) {
 }
 
 func TestRunRun_NoToolchain(t *testing.T) {
+	app := newApplication("dev", "")
 	home := t.TempDir()
 	cwd := t.TempDir()
 	config.IsolateForTest(t, home)
@@ -83,11 +84,12 @@ func TestRunRun_NoToolchain(t *testing.T) {
 	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 
 	cmd := &cobra.Command{}
-	err := runRun(cmd, []string{"cjc", "--version"})
+	err := app.runRun(cmd, []string{"cjc", "--version"})
 	assert.Error(t, err, "should error when no toolchain is configured")
 }
 
 func TestRunRunExecutesFallbackCommandForInstalledToolchain(t *testing.T) {
+	app := newApplication("dev", "")
 	home := t.TempDir()
 	config.IsolateForTest(t, home)
 	t.Setenv(config.EnvToolchain, "")
@@ -99,15 +101,16 @@ func TestRunRunExecutesFallbackCommandForInstalledToolchain(t *testing.T) {
 
 	cmd := &cobra.Command{}
 	cmd.SetContext(context.Background())
-	err := runRun(cmd, []string{"lts", "go", "version"})
+	err := app.runRun(cmd, []string{"lts", "go", "version"})
 
 	require.NoError(t, err)
 }
 
 func TestRunRunHandlesHelpAndInvalidArgs(t *testing.T) {
+	app := newApplication("dev", "")
 	cmd := &cobra.Command{Use: "run"}
 
-	require.NoError(t, runRun(cmd, []string{"--help"}))
-	require.Error(t, runRun(cmd, []string{"lts"}))
-	require.Error(t, runRun(cmd, []string{"bad/name", "go"}))
+	require.NoError(t, app.runRun(cmd, []string{"--help"}))
+	require.Error(t, app.runRun(cmd, []string{"lts"}))
+	require.Error(t, app.runRun(cmd, []string{"bad/name", "go"}))
 }

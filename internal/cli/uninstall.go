@@ -9,7 +9,6 @@ import (
 	"slices"
 
 	"github.com/Zxilly/cjv/internal/cjverr"
-	"github.com/Zxilly/cjv/internal/cli/output"
 	clisettings "github.com/Zxilly/cjv/internal/cli/settings"
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/i18n"
@@ -20,23 +19,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// uninstallYes skips the confirmation prompt; bound to --yes on both
-// `cjv uninstall` and `cjv toolchain uninstall`.
-var uninstallYes bool
-
-func init() {
-	uninstallCmd.Flags().BoolVarP(&uninstallYes, "yes", "y", false, i18n.T("FlagSkipConfirm", nil))
-	rootCmd.AddCommand(uninstallCmd)
-}
-
-var uninstallCmd = &cobra.Command{
-	Use:   "uninstall <toolchain>",
-	Short: i18n.T("UninstallCmdShort", nil),
-	Args:  cobra.ExactArgs(1),
-	RunE:  runUninstall,
-}
-
-func runUninstall(cmd *cobra.Command, args []string) error {
+func (app *application) runUninstall(cmd *cobra.Command, args []string) error {
 	name := args[0]
 
 	// Validate name (path traversal, empty, +prefix, etc.)
@@ -60,7 +43,7 @@ func runUninstall(cmd *cobra.Command, args []string) error {
 	// Confirm before destroying the toolchain and its components. Skipped with
 	// --yes, in JSON mode, or when stdin is not an interactive terminal (so
 	// scripts/CI are not blocked waiting on a prompt).
-	if !uninstallYes && !output.IsJSON() && initStdinIsTerminal() {
+	if !app.uninstallYes && !app.output.IsJSON() && initStdinIsTerminal() {
 		confirm := false
 		if err := huh.NewConfirm().
 			Title(i18n.T("ToolchainUninstallConfirm", i18n.MsgData{"Name": name})).
@@ -104,7 +87,7 @@ func runUninstall(cmd *cobra.Command, args []string) error {
 		_ = utils.RemoveAllRetry(stdxDir) //nolint:errcheck // best-effort cleanup
 	}
 
-	return output.RenderTo(cmdOutput(cmd), uninstallResult{Name: name})
+	return app.output.RenderTo(cmdOutput(cmd), uninstallResult{Name: name})
 }
 
 type uninstallResult struct {
@@ -174,4 +157,17 @@ func cloneSettings(settings *config.Settings) *config.Settings {
 	cp := *settings
 	cp.Overrides = maps.Clone(settings.Overrides)
 	return &cp
+}
+
+func (app *application) initUninstallCommands() {
+	app.uninstallCmd = &cobra.Command{
+		Use:   "uninstall <toolchain>",
+		Short: i18n.T("UninstallCmdShort", nil),
+		Args:  cobra.ExactArgs(1),
+		RunE:  app.runUninstall,
+	}
+
+	app.uninstallCmd.Flags().BoolVarP(&app.uninstallYes, "yes", "y", false, i18n.T("FlagSkipConfirm", nil))
+	app.rootCmd.AddCommand(app.uninstallCmd)
+
 }

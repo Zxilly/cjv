@@ -6,28 +6,11 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/Zxilly/cjv/internal/cli/output"
 	componentlib "github.com/Zxilly/cjv/internal/component"
 	"github.com/Zxilly/cjv/internal/i18n"
 	"github.com/Zxilly/cjv/internal/utils"
 	"github.com/spf13/cobra"
 )
-
-// openURLFunc is overridable in tests to suppress real browser launches.
-var openURLFunc = utils.OpenURL
-
-var (
-	docPath      bool
-	docToolchain string
-)
-
-var docCmd = &cobra.Command{
-	Use:     "doc [topic]",
-	Aliases: []string{"docs"},
-	Short:   i18n.T("DocCmdShort", nil),
-	Args:    cobra.MaximumNArgs(1),
-	RunE:    runDoc,
-}
 
 type docResult struct {
 	Toolchain string `json:"toolchain"`
@@ -43,19 +26,13 @@ func (r docResult) Text() string {
 	return ""
 }
 
-func init() {
-	docCmd.Flags().BoolVar(&docPath, "path", false, i18n.T("DocFlagPath", nil))
-	docCmd.Flags().StringVar(&docToolchain, "toolchain", "", i18n.T("DocFlagToolchain", nil))
-	rootCmd.AddCommand(docCmd)
-}
-
-func runDoc(cmd *cobra.Command, args []string) error {
+func (app *application) runDoc(cmd *cobra.Command, args []string) error {
 	topic := ""
 	if len(args) > 0 {
 		topic = args[0]
 	}
 
-	_, parsedName, err := resolveToolchainArg(docToolchain)
+	_, parsedName, err := resolveToolchainArg(app.docToolchain)
 	if err != nil {
 		return err
 	}
@@ -72,19 +49,19 @@ func runDoc(cmd *cobra.Command, args []string) error {
 
 	// In JSON mode, never launch a browser — JSON consumers want the path,
 	// not a side effect.
-	if docPath || output.IsJSON() {
-		return output.RenderTo(cmdOutput(cmd), docResult{Toolchain: tcName, Topic: topic, Path: docFile, Opened: false})
+	if app.docPath || app.output.IsJSON() {
+		return app.output.RenderTo(cmdOutput(cmd), docResult{Toolchain: tcName, Topic: topic, Path: docFile, Opened: false})
 	}
 
 	// Attempt the launch first, then report the outcome — printing "opening..."
 	// before a launch that immediately fails (e.g. headless/SSH session)
 	// produces contradictory "opening" + "failed" messages.
-	if err := openURLFunc(fileURL(docFile)); err != nil {
+	if err := app.openURLFunc(fileURL(docFile)); err != nil {
 		fmt.Fprintln(os.Stderr, i18n.T("OpeningDocsBrowserFailed", i18n.MsgData{"Path": docFile}))
 		return err
 	}
 	fmt.Fprintln(os.Stderr, i18n.T("OpeningDocs", nil))
-	return output.RenderTo(cmdOutput(cmd), docResult{Toolchain: tcName, Topic: topic, Path: docFile, Opened: true})
+	return app.output.RenderTo(cmdOutput(cmd), docResult{Toolchain: tcName, Topic: topic, Path: docFile, Opened: true})
 }
 
 // fileURL returns a file:// URL pointing at an absolute local file path. We
@@ -96,4 +73,20 @@ func fileURL(absPath string) string {
 		clean = "/" + clean
 	}
 	return (&url.URL{Scheme: "file", Path: clean}).String()
+}
+
+func (app *application) initDocCommands() {
+	app.openURLFunc = utils.OpenURL
+	app.docCmd = &cobra.Command{
+		Use:     "doc [topic]",
+		Aliases: []string{"docs"},
+		Short:   i18n.T("DocCmdShort", nil),
+		Args:    cobra.MaximumNArgs(1),
+		RunE:    app.runDoc,
+	}
+
+	app.docCmd.Flags().BoolVar(&app.docPath, "path", false, i18n.T("DocFlagPath", nil))
+	app.docCmd.Flags().StringVar(&app.docToolchain, "toolchain", "", i18n.T("DocFlagToolchain", nil))
+	app.rootCmd.AddCommand(app.docCmd)
+
 }

@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/Zxilly/cjv/internal/cli/output"
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
@@ -19,15 +18,17 @@ import (
 // by comparing installed versions against the manifest.
 
 func TestRunCheck_NoToolchains(t *testing.T) {
+	app := newApplication("dev", "")
 	home := t.TempDir()
 	config.IsolateForTest(t, home)
 
 	cmd := &cobra.Command{}
-	err := runCheck(cmd, nil)
+	err := app.runCheck(cmd, nil)
 	assert.NoError(t, err, "no toolchains should be a no-op, not error")
 }
 
 func TestRunCheck_WithInstalledToolchain(t *testing.T) {
+	app := newApplication("dev", "")
 	home := t.TempDir()
 	config.IsolateForTest(t, home)
 	require.NoError(t, config.EnsureDirs())
@@ -37,16 +38,17 @@ func TestRunCheck_WithInstalledToolchain(t *testing.T) {
 	settings := config.DefaultSettings()
 	settings.ManifestURL = server.URL + "/sdk-versions.json"
 	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
-	require.NoError(t, InstallToolchainWithOptions(context.Background(), "lts", false))
+	require.NoError(t, app.InstallToolchainWithOptions(context.Background(), "lts", false))
 
 	// Run check — should compare against manifest
 	cmd := &cobra.Command{}
 	cmd.SetContext(context.Background())
-	err := runCheck(cmd, nil)
+	err := app.runCheck(cmd, nil)
 	assert.NoError(t, err)
 }
 
 func TestRunCheck_NightlyUsesUnifiedDistServer(t *testing.T) {
+	app := newApplication("dev", "")
 	home := t.TempDir()
 	config.IsolateForTest(t, home)
 	require.NoError(t, config.EnsureDirs())
@@ -55,15 +57,15 @@ func TestRunCheck_NightlyUsesUnifiedDistServer(t *testing.T) {
 	settings := config.DefaultSettings()
 	settings.DistServer = server.URL + "/corp/cjv"
 	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
-	require.NoError(t, InstallToolchainWithOptions(context.Background(), "nightly", false))
+	require.NoError(t, app.InstallToolchainWithOptions(context.Background(), "nightly", false))
 
 	cmd := &cobra.Command{}
 	cmd.SetContext(context.Background())
 	buf := &bytes.Buffer{}
 	cmd.SetOut(buf)
-	output.SetJSONMode(true)
-	t.Cleanup(func() { output.SetJSONMode(false) })
-	require.NoError(t, runCheck(cmd, nil))
+	app.output.SetJSONMode(true)
+
+	require.NoError(t, app.runCheck(cmd, nil))
 
 	var got checkResult
 	require.NoError(t, json.Unmarshal(buf.Bytes(), &got))
@@ -74,6 +76,8 @@ func TestRunCheck_NightlyUsesUnifiedDistServer(t *testing.T) {
 
 func TestRunCheck_UpToDate(t *testing.T) {
 	// Install latest, then check — should show "all up to date"
+	app := newApplication("dev", "")
+
 	home := t.TempDir()
 	config.IsolateForTest(t, home)
 	require.NoError(t, config.EnsureDirs())
@@ -83,17 +87,19 @@ func TestRunCheck_UpToDate(t *testing.T) {
 	settings.ManifestURL = server.URL + "/sdk-versions.json"
 	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 
-	require.NoError(t, InstallToolchainWithOptions(context.Background(), "lts", false))
-	require.NoError(t, InstallToolchainWithOptions(context.Background(), "sts", false))
+	require.NoError(t, app.InstallToolchainWithOptions(context.Background(), "lts", false))
+	require.NoError(t, app.InstallToolchainWithOptions(context.Background(), "sts", false))
 
 	cmd := &cobra.Command{}
 	cmd.SetContext(context.Background())
-	err := runCheck(cmd, nil)
+	err := app.runCheck(cmd, nil)
 	assert.NoError(t, err)
 }
 
 func TestRunCheck_MixedVersions(t *testing.T) {
 	// One channel up to date, one outdated
+	app := newApplication("dev", "")
+
 	home := t.TempDir()
 	config.IsolateForTest(t, home)
 	require.NoError(t, config.EnsureDirs())
@@ -104,19 +110,21 @@ func TestRunCheck_MixedVersions(t *testing.T) {
 	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 
 	// Install latest lts
-	require.NoError(t, InstallToolchainWithOptions(context.Background(), "lts", false))
+	require.NoError(t, app.InstallToolchainWithOptions(context.Background(), "lts", false))
 	// Create an old sts
 	require.NoError(t, os.MkdirAll(filepath.Join(home, "toolchains", "sts-1.0.0"), 0o755))
 
 	cmd := &cobra.Command{}
 	cmd.SetContext(context.Background())
-	err := runCheck(cmd, nil)
+	err := app.runCheck(cmd, nil)
 	assert.NoError(t, err)
 }
 
 func TestRunCheck_UpdateAvailable(t *testing.T) {
 	// Install an "old" version by creating the directory manually,
 	// then check against the manifest that has a newer version.
+	app := newApplication("dev", "")
+
 	home := t.TempDir()
 	config.IsolateForTest(t, home)
 	require.NoError(t, config.EnsureDirs())
@@ -132,11 +140,12 @@ func TestRunCheck_UpdateAvailable(t *testing.T) {
 
 	cmd := &cobra.Command{}
 	cmd.SetContext(context.Background())
-	err := runCheck(cmd, nil)
+	err := app.runCheck(cmd, nil)
 	assert.NoError(t, err, "check should succeed even when updates are available")
 }
 
 func TestRunCheck_MultipleToolchains(t *testing.T) {
+	app := newApplication("dev", "")
 	home := t.TempDir()
 	config.IsolateForTest(t, home)
 	require.NoError(t, config.EnsureDirs())
@@ -152,11 +161,12 @@ func TestRunCheck_MultipleToolchains(t *testing.T) {
 
 	cmd := &cobra.Command{}
 	cmd.SetContext(context.Background())
-	err := runCheck(cmd, nil)
+	err := app.runCheck(cmd, nil)
 	assert.NoError(t, err)
 }
 
 func TestRunCheck_CustomToolchainSkipped(t *testing.T) {
+	app := newApplication("dev", "")
 	home := t.TempDir()
 	config.IsolateForTest(t, home)
 	require.NoError(t, config.EnsureDirs())
@@ -172,6 +182,6 @@ func TestRunCheck_CustomToolchainSkipped(t *testing.T) {
 
 	cmd := &cobra.Command{}
 	cmd.SetContext(context.Background())
-	err := runCheck(cmd, nil)
+	err := app.runCheck(cmd, nil)
 	assert.NoError(t, err)
 }

@@ -2,6 +2,7 @@ package cli
 
 import (
 	"strings"
+	"sync"
 	"text/template"
 
 	"github.com/Zxilly/cjv/internal/i18n"
@@ -43,13 +44,17 @@ const localizedUsageTemplate = `{{i18n "HelpUsageHeader"}}{{if .Runnable}}
 {{useCommandHelp .}}{{end}}
 `
 
-func configureCobraHelp(cmd *cobra.Command) {
+var registerHelpTemplates = sync.OnceFunc(func() {
 	cobra.AddTemplateFuncs(template.FuncMap{
 		"commandPlaceholder": commandPlaceholder,
 		"i18n":               func(messageID string) string { return i18n.T(messageID, nil) },
 		"localizedUseLine":   localizedUseLine,
 		"useCommandHelp":     useCommandHelp,
 	})
+})
+
+func configureCobraHelp(cmd *cobra.Command) {
+	registerHelpTemplates()
 	cmd.SetHelpTemplate(localizedHelpTemplate)
 	cmd.SetUsageTemplate(localizedUsageTemplate)
 	localizeCobraHelpTree(cmd)

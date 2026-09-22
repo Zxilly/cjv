@@ -1,6 +1,7 @@
 package settings
 
 import (
+	"io"
 	"os"
 	"path/filepath"
 	"testing"
@@ -15,13 +16,7 @@ func TestOverrideSetPreservesBareVersion(t *testing.T) {
 	dir := t.TempDir()
 	config.IsolateForTest(t, tmp)
 
-	prev := overrideSetPath
-	overrideSetPath = dir
-	defer func() {
-		overrideSetPath = prev
-	}()
-
-	require.NoError(t, overrideSetCmd.RunE(overrideSetCmd, []string{"1.0.5"}))
+	require.NoError(t, executeSettings(t, "override", "set", "1.0.5", "--path", dir))
 
 	settingsPath, err := config.SettingsPath()
 	require.NoError(t, err)
@@ -35,13 +30,7 @@ func TestOverrideSetRejectsTargetVariant(t *testing.T) {
 	dir := t.TempDir()
 	config.IsolateForTest(t, tmp)
 
-	prev := overrideSetPath
-	overrideSetPath = dir
-	defer func() {
-		overrideSetPath = prev
-	}()
-
-	err := overrideSetCmd.RunE(overrideSetCmd, []string{"sts-2.0.0-win32-x64-ohos"})
+	err := executeSettings(t, "override", "set", "sts-2.0.0-win32-x64-ohos", "--path", dir)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "target variant")
 
@@ -89,7 +78,7 @@ func TestUnsetNonexistentOverrides_RemovesStale(t *testing.T) {
 	require.NoError(t, config.SaveSettings(&stg, settingsPath))
 
 	sf := config.NewSettingsFile(settingsPath)
-	require.NoError(t, unsetNonexistentOverrides(&stg, sf))
+	require.NoError(t, unsetNonexistentOverrides(io.Discard, &stg, sf))
 
 	assert.Contains(t, stg.Overrides, existingDir,
 		"override for existing dir should be preserved")
@@ -112,7 +101,7 @@ func TestUnsetNonexistentOverrides_NoOpWhenAllExist(t *testing.T) {
 	require.NoError(t, config.SaveSettings(&stg, settingsPath))
 
 	sf := config.NewSettingsFile(settingsPath)
-	require.NoError(t, unsetNonexistentOverrides(&stg, sf))
+	require.NoError(t, unsetNonexistentOverrides(io.Discard, &stg, sf))
 
 	assert.Len(t, stg.Overrides, 2, "all overrides should be preserved")
 }
@@ -128,16 +117,7 @@ func TestOverrideUnsetCommandRemovesMatchingNormalizedPath(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, config.SaveSettings(&settings, settingsPath))
 
-	oldPath := overrideUnsetPath
-	oldNonexistent := overrideUnsetNonexistent
-	overrideUnsetPath = dir
-	overrideUnsetNonexistent = false
-	t.Cleanup(func() {
-		overrideUnsetPath = oldPath
-		overrideUnsetNonexistent = oldNonexistent
-	})
-
-	require.NoError(t, overrideUnsetCmd.RunE(overrideUnsetCmd, nil))
+	require.NoError(t, executeSettings(t, "override", "unset", "--path", dir))
 
 	got, err := config.LoadSettings(settingsPath)
 	require.NoError(t, err)
@@ -149,16 +129,7 @@ func TestOverrideUnsetCommandErrorsWhenMissing(t *testing.T) {
 	dir := t.TempDir()
 	config.IsolateForTest(t, tmp)
 
-	oldPath := overrideUnsetPath
-	oldNonexistent := overrideUnsetNonexistent
-	overrideUnsetPath = dir
-	overrideUnsetNonexistent = false
-	t.Cleanup(func() {
-		overrideUnsetPath = oldPath
-		overrideUnsetNonexistent = oldNonexistent
-	})
-
-	err := overrideUnsetCmd.RunE(overrideUnsetCmd, nil)
+	err := executeSettings(t, "override", "unset", "--path", dir)
 	require.Error(t, err)
 	// The "no override set" message is localized; assert on the directory it
 	// references (present in every locale's template) rather than English text.
@@ -170,7 +141,7 @@ func TestOverrideListCommandHandlesEmptyAndSortedEntries(t *testing.T) {
 	tmp := t.TempDir()
 	config.IsolateForTest(t, tmp)
 
-	require.NoError(t, overrideListCmd.RunE(overrideListCmd, nil))
+	require.NoError(t, executeSettings(t, "override", "list"))
 
 	settings := config.DefaultSettings()
 	settings.Overrides[filepath.Join(tmp, "b")] = "sts"
@@ -179,5 +150,6 @@ func TestOverrideListCommandHandlesEmptyAndSortedEntries(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, config.SaveSettings(&settings, settingsPath))
 
-	require.NoError(t, overrideListCmd.RunE(overrideListCmd, nil))
+	config.ResetDefaultSettingsFileCache()
+	require.NoError(t, executeSettings(t, "override", "list"))
 }

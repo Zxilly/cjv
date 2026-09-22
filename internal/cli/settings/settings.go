@@ -2,6 +2,7 @@ package settings
 
 import (
 	"fmt"
+	"io"
 
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/i18n"
@@ -22,7 +23,7 @@ func LoadSettings() (*config.SettingsFile, *config.Settings, error) {
 
 // updateSetting loads settings, applies mutate, saves if changed, and prints confirmation.
 // mutate should return true if the setting was changed.
-func updateSetting(key, displayValue string, mutate func(*config.Settings) bool) error {
+func updateSetting(w io.Writer, key, displayValue string, mutate func(*config.Settings) bool) error {
 	sf, settings, err := LoadSettings()
 	if err != nil {
 		return err
@@ -33,9 +34,9 @@ func updateSetting(key, displayValue string, mutate func(*config.Settings) bool)
 	if err := sf.Save(settings); err != nil {
 		return err
 	}
-	fmt.Println(i18n.T("SettingUpdated", i18n.MsgData{
+	_, err = fmt.Fprintln(w, i18n.T("SettingUpdated", i18n.MsgData{
 		"Key":   key,
 		"Value": displayValue,
 	}))
-	return nil
+	return err
 }

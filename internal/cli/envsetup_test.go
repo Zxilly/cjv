@@ -10,12 +10,10 @@ import (
 	"testing"
 
 	"github.com/Zxilly/cjv/internal/cjverr"
-	"github.com/Zxilly/cjv/internal/cli/output"
 	componentlib "github.com/Zxilly/cjv/internal/component"
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/dist"
 	"github.com/Zxilly/cjv/internal/toolchain"
-	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -57,29 +55,11 @@ func hostBackendFixture() string {
 // production rather than bypassed.
 func executeEnvsetup(t *testing.T, args ...string) (string, error) {
 	t.Helper()
-	var jsonOn bool
-	root := &cobra.Command{
-		Use:           "cjv",
-		SilenceUsage:  true,
-		SilenceErrors: true,
-		PersistentPreRun: func(_ *cobra.Command, _ []string) {
-			output.SetJSONMode(jsonOn)
-		},
-	}
-	root.PersistentFlags().BoolVar(&jsonOn, "json", false, "")
-	root.AddCommand(newEnvsetupCmd())
-	t.Cleanup(func() { output.SetJSONMode(false) })
-
+	app := newApplication("dev", "")
 	var buf bytes.Buffer
-	root.SetOut(&buf)
-	root.SetErr(&buf)
-	root.SetArgs(append([]string{"envsetup"}, args...))
-	err := root.Execute()
-	// Mirror production's Execute() wrapper (root.go), which renders the JSON
-	// error envelope to stdout on failure so --json error output is testable.
-	if err != nil {
-		_ = output.RenderErrorTo(root.OutOrStdout(), root.ErrOrStderr(), err)
-	}
+	app.rootCmd.SetOut(&buf)
+	app.rootCmd.SetErr(&buf)
+	err := app.execute(append([]string{"envsetup"}, args...))
 	return buf.String(), err
 }
 

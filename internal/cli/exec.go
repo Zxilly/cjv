@@ -7,7 +7,6 @@ import (
 	"os/exec"
 
 	"github.com/Zxilly/cjv/internal/cjverr"
-	"github.com/Zxilly/cjv/internal/cli/output"
 	componentlib "github.com/Zxilly/cjv/internal/component"
 	"github.com/Zxilly/cjv/internal/env"
 	"github.com/Zxilly/cjv/internal/i18n"
@@ -15,15 +14,6 @@ import (
 	"github.com/Zxilly/cjv/internal/toolchain"
 	"github.com/spf13/cobra"
 )
-
-var execCmd = &cobra.Command{
-	Use:                "exec [+toolchain] <command> [args...]",
-	Short:              i18n.T("ExecCmdShort", nil),
-	Long:               i18n.T("ExecCmdLong", nil),
-	Args:               cobra.ArbitraryArgs,
-	RunE:               execRun,
-	DisableFlagParsing: true,
-}
 
 // extractPlusToolchainFromArgs extracts an optional +toolchain prefix from args
 // (used by envsetup, which lets cobra parse flags). A bare "+" is ignored.
@@ -34,12 +24,12 @@ func extractPlusToolchainFromArgs(args []string) (string, []string) {
 	return "", args
 }
 
-func execRun(cmd *cobra.Command, args []string) error {
-	tcOverride, remaining, err := stripJSONModeFlagPrefix(args, true)
+func (app *application) execRun(cmd *cobra.Command, args []string) error {
+	tcOverride, remaining, err := app.stripJSONModeFlagPrefix(args, true)
 	if err != nil {
 		return err
 	}
-	if output.IsJSON() {
+	if app.output.IsJSON() {
 		return &cjverr.UnsupportedForJSONError{Command: "exec"}
 	}
 	ctx := cmd.Context()
@@ -81,6 +71,16 @@ func execRun(cmd *cobra.Command, args []string) error {
 	return process.Run(c)
 }
 
-func init() {
-	rootCmd.AddCommand(execCmd)
+func (app *application) initExecCommands() {
+	app.execCmd = &cobra.Command{
+		Use:                "exec [+toolchain] <command> [args...]",
+		Short:              i18n.T("ExecCmdShort", nil),
+		Long:               i18n.T("ExecCmdLong", nil),
+		Args:               cobra.ArbitraryArgs,
+		RunE:               app.execRun,
+		DisableFlagParsing: true,
+	}
+
+	app.rootCmd.AddCommand(app.execCmd)
+
 }

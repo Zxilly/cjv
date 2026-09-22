@@ -11,7 +11,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Zxilly/cjv/internal/cli/output"
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/dist"
 	"github.com/Zxilly/cjv/internal/toolchain"
@@ -101,15 +100,6 @@ func setupListRemote(t *testing.T) {
 	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 }
 
-// resetListRemoteFlags clears state between subtests because flags are
-// package-level vars mutated by previous tests.
-func resetListRemoteFlags() {
-	toolchainListRemoteChannel = "all"
-	toolchainListRemoteTarget = ""
-	toolchainListRemoteAllPlatforms = false
-	toolchainListRemoteLimit = 0
-}
-
 func newListRemoteCmd() (*cobra.Command, *bytes.Buffer) {
 	cmd := &cobra.Command{}
 	cmd.SetContext(context.Background())
@@ -119,15 +109,15 @@ func newListRemoteCmd() (*cobra.Command, *bytes.Buffer) {
 }
 
 func TestRunToolchainListRemote_DefaultCurrentHost(t *testing.T) {
+	app := newApplication("dev", "")
 	setupListRemote(t)
-	resetListRemoteFlags()
-	toolchainListRemoteChannel = "lts"
+
+	app.toolchainListRemoteChannel = "lts"
 
 	cmd, buf := newListRemoteCmd()
-	output.SetJSONMode(true)
-	t.Cleanup(func() { output.SetJSONMode(false) })
+	app.output.SetJSONMode(true)
 
-	require.NoError(t, runToolchainListRemote(cmd, nil))
+	require.NoError(t, app.runToolchainListRemote(cmd, nil))
 
 	hostKey, err := dist.CurrentHostTuple("")
 	require.NoError(t, err)
@@ -142,16 +132,16 @@ func TestRunToolchainListRemote_DefaultCurrentHost(t *testing.T) {
 }
 
 func TestRunToolchainListRemote_TargetComposesPlatformKey(t *testing.T) {
+	app := newApplication("dev", "")
 	setupListRemote(t)
-	resetListRemoteFlags()
-	toolchainListRemoteChannel = "lts"
-	toolchainListRemoteTarget = "ohos"
+
+	app.toolchainListRemoteChannel = "lts"
+	app.toolchainListRemoteTarget = "ohos"
 
 	cmd, buf := newListRemoteCmd()
-	output.SetJSONMode(true)
-	t.Cleanup(func() { output.SetJSONMode(false) })
+	app.output.SetJSONMode(true)
 
-	require.NoError(t, runToolchainListRemote(cmd, nil))
+	require.NoError(t, app.runToolchainListRemote(cmd, nil))
 
 	expected, err := dist.CurrentTargetTuple("", "ohos")
 	require.NoError(t, err)
@@ -165,15 +155,15 @@ func TestRunToolchainListRemote_TargetComposesPlatformKey(t *testing.T) {
 }
 
 func TestRunToolchainListRemote_TargetWithChannelAll_LtsFiltered(t *testing.T) {
+	app := newApplication("dev", "")
 	setupListRemote(t)
-	resetListRemoteFlags()
-	toolchainListRemoteTarget = "ohos"
+
+	app.toolchainListRemoteTarget = "ohos"
 
 	cmd, buf := newListRemoteCmd()
-	output.SetJSONMode(true)
-	t.Cleanup(func() { output.SetJSONMode(false) })
+	app.output.SetJSONMode(true)
 
-	require.NoError(t, runToolchainListRemote(cmd, nil))
+	require.NoError(t, app.runToolchainListRemote(cmd, nil))
 
 	var got toolchainListRemoteResult
 	require.NoError(t, json.Unmarshal(buf.Bytes(), &got))
@@ -187,15 +177,16 @@ func TestRunToolchainListRemote_TargetWithChannelAll_LtsFiltered(t *testing.T) {
 }
 
 func TestRunToolchainListRemote_NightlyChannelFiltersByTarget(t *testing.T) {
+	app := newApplication("dev", "")
 	setupListRemote(t)
-	resetListRemoteFlags()
-	toolchainListRemoteChannel = "nightly"
-	toolchainListRemoteTarget = "ohos"
+
+	app.toolchainListRemoteChannel = "nightly"
+	app.toolchainListRemoteTarget = "ohos"
 
 	cmd, buf := newListRemoteCmd()
-	output.SetJSONMode(true)
-	t.Cleanup(func() { output.SetJSONMode(false) })
-	require.NoError(t, runToolchainListRemote(cmd, nil))
+	app.output.SetJSONMode(true)
+
+	require.NoError(t, app.runToolchainListRemote(cmd, nil))
 	var got toolchainListRemoteResult
 	require.NoError(t, json.Unmarshal(buf.Bytes(), &got))
 	require.Len(t, got.Channels, 1)
@@ -203,26 +194,27 @@ func TestRunToolchainListRemote_NightlyChannelFiltersByTarget(t *testing.T) {
 }
 
 func TestRunToolchainListRemote_TargetAsHostKey_Rejected(t *testing.T) {
+	app := newApplication("dev", "")
 	setupListRemote(t)
-	resetListRemoteFlags()
-	toolchainListRemoteTarget = "linux-x64"
+
+	app.toolchainListRemoteTarget = "linux-x64"
 
 	cmd, _ := newListRemoteCmd()
-	err := runToolchainListRemote(cmd, nil)
+	err := app.runToolchainListRemote(cmd, nil)
 	require.Error(t, err)
 }
 
 func TestRunToolchainListRemote_LimitTruncates(t *testing.T) {
+	app := newApplication("dev", "")
 	setupListRemote(t)
-	resetListRemoteFlags()
-	toolchainListRemoteChannel = "lts"
-	toolchainListRemoteLimit = 2
+
+	app.toolchainListRemoteChannel = "lts"
+	app.toolchainListRemoteLimit = 2
 
 	cmd, buf := newListRemoteCmd()
-	output.SetJSONMode(true)
-	t.Cleanup(func() { output.SetJSONMode(false) })
+	app.output.SetJSONMode(true)
 
-	require.NoError(t, runToolchainListRemote(cmd, nil))
+	require.NoError(t, app.runToolchainListRemote(cmd, nil))
 
 	var got toolchainListRemoteResult
 	require.NoError(t, json.Unmarshal(buf.Bytes(), &got))
@@ -231,26 +223,26 @@ func TestRunToolchainListRemote_LimitTruncates(t *testing.T) {
 }
 
 func TestRunToolchainListRemote_UnknownChannelFlag(t *testing.T) {
+	app := newApplication("dev", "")
 	setupListRemote(t)
-	resetListRemoteFlags()
-	toolchainListRemoteChannel = "weekly"
+
+	app.toolchainListRemoteChannel = "weekly"
 
 	cmd, _ := newListRemoteCmd()
-	err := runToolchainListRemote(cmd, nil)
+	err := app.runToolchainListRemote(cmd, nil)
 	require.Error(t, err)
 	// Locale-independent: the rejected value is echoed in the message.
 	assert.Contains(t, err.Error(), "weekly")
 }
 
 func TestRunToolchainListRemote_AllChannelsIncludeNightly(t *testing.T) {
+	app := newApplication("dev", "")
 	setupListRemote(t)
-	resetListRemoteFlags()
 
 	cmd, buf := newListRemoteCmd()
-	output.SetJSONMode(true)
-	t.Cleanup(func() { output.SetJSONMode(false) })
+	app.output.SetJSONMode(true)
 
-	require.NoError(t, runToolchainListRemote(cmd, nil))
+	require.NoError(t, app.runToolchainListRemote(cmd, nil))
 
 	var got toolchainListRemoteResult
 	require.NoError(t, json.Unmarshal(buf.Bytes(), &got))
@@ -262,6 +254,7 @@ func TestRunToolchainListRemote_AllChannelsIncludeNightly(t *testing.T) {
 }
 
 func TestRunToolchainListRemote_NightlyUsesDistServerManifest(t *testing.T) {
+	app := newApplication("dev", "")
 	home := t.TempDir()
 	config.IsolateForTest(t, home)
 	require.NoError(t, config.EnsureDirs())
@@ -271,28 +264,27 @@ func TestRunToolchainListRemote_NightlyUsesDistServerManifest(t *testing.T) {
 	settings.DistServer = server.URL + "/corp/cjv"
 	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 
-	resetListRemoteFlags()
-	toolchainListRemoteChannel = "nightly"
+	app.toolchainListRemoteChannel = "nightly"
 	cmd, buf := newListRemoteCmd()
-	output.SetJSONMode(true)
-	t.Cleanup(func() { output.SetJSONMode(false) })
+	app.output.SetJSONMode(true)
 
-	require.NoError(t, runToolchainListRemote(cmd, nil))
+	require.NoError(t, app.runToolchainListRemote(cmd, nil))
 	var got toolchainListRemoteResult
 	require.NoError(t, json.Unmarshal(buf.Bytes(), &got))
 	require.Len(t, got.Channels, 1)
 	assert.Equal(t, "1.2.0-alpha.20260822010101", got.Channels[0].Latest)
 	assert.Equal(t, []string{"1.2.0-alpha.20260822010101"}, got.Channels[0].Versions)
 
-	output.SetJSONMode(false)
+	app.output.SetJSONMode(false)
 	textCmd, textBuf := newListRemoteCmd()
-	require.NoError(t, runToolchainListRemote(textCmd, nil))
+	require.NoError(t, app.runToolchainListRemote(textCmd, nil))
 	host, err := dist.CurrentHostTuple("")
 	require.NoError(t, err)
 	assert.Contains(t, textBuf.String(), host)
 }
 
 func TestRunToolchainListRemote_AllPlatformsNightlyDistServerText(t *testing.T) {
+	app := newApplication("dev", "")
 	home := t.TempDir()
 	config.IsolateForTest(t, home)
 	require.NoError(t, config.EnsureDirs())
@@ -301,11 +293,10 @@ func TestRunToolchainListRemote_AllPlatformsNightlyDistServerText(t *testing.T) 
 	settings.DistServer = server.URL + "/corp/cjv"
 	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 
-	resetListRemoteFlags()
-	toolchainListRemoteChannel = "nightly"
-	toolchainListRemoteAllPlatforms = true
+	app.toolchainListRemoteChannel = "nightly"
+	app.toolchainListRemoteAllPlatforms = true
 	cmd, buf := newListRemoteCmd()
-	require.NoError(t, runToolchainListRemote(cmd, nil))
+	require.NoError(t, app.runToolchainListRemote(cmd, nil))
 
 	host, err := dist.CurrentHostTuple("")
 	require.NoError(t, err)
@@ -314,16 +305,16 @@ func TestRunToolchainListRemote_AllPlatformsNightlyDistServerText(t *testing.T) 
 }
 
 func TestRunToolchainListRemote_AllPlatforms(t *testing.T) {
+	app := newApplication("dev", "")
 	setupListRemote(t)
-	resetListRemoteFlags()
-	toolchainListRemoteAllPlatforms = true
-	toolchainListRemoteChannel = "lts"
+
+	app.toolchainListRemoteAllPlatforms = true
+	app.toolchainListRemoteChannel = "lts"
 
 	cmd, buf := newListRemoteCmd()
-	output.SetJSONMode(true)
-	t.Cleanup(func() { output.SetJSONMode(false) })
+	app.output.SetJSONMode(true)
 
-	require.NoError(t, runToolchainListRemote(cmd, nil))
+	require.NoError(t, app.runToolchainListRemote(cmd, nil))
 
 	var got toolchainListRemoteAllPlatformsResult
 	require.NoError(t, json.Unmarshal(buf.Bytes(), &got))
@@ -358,17 +349,17 @@ func TestRunToolchainListRemote_AllPlatforms(t *testing.T) {
 }
 
 func TestRunToolchainListRemote_AllPlatforms_LimitPerPlatform(t *testing.T) {
+	app := newApplication("dev", "")
 	setupListRemote(t)
-	resetListRemoteFlags()
-	toolchainListRemoteAllPlatforms = true
-	toolchainListRemoteChannel = "lts"
-	toolchainListRemoteLimit = 1
+
+	app.toolchainListRemoteAllPlatforms = true
+	app.toolchainListRemoteChannel = "lts"
+	app.toolchainListRemoteLimit = 1
 
 	cmd, buf := newListRemoteCmd()
-	output.SetJSONMode(true)
-	t.Cleanup(func() { output.SetJSONMode(false) })
+	app.output.SetJSONMode(true)
 
-	require.NoError(t, runToolchainListRemote(cmd, nil))
+	require.NoError(t, app.runToolchainListRemote(cmd, nil))
 
 	var got toolchainListRemoteAllPlatformsResult
 	require.NoError(t, json.Unmarshal(buf.Bytes(), &got))
@@ -380,12 +371,13 @@ func TestRunToolchainListRemote_AllPlatforms_LimitPerPlatform(t *testing.T) {
 }
 
 func TestRunToolchainListRemote_TextRendering_SinglePlatform(t *testing.T) {
+	app := newApplication("dev", "")
 	setupListRemote(t)
-	resetListRemoteFlags()
-	toolchainListRemoteChannel = "lts"
+
+	app.toolchainListRemoteChannel = "lts"
 
 	cmd, buf := newListRemoteCmd()
-	require.NoError(t, runToolchainListRemote(cmd, nil))
+	require.NoError(t, app.runToolchainListRemote(cmd, nil))
 
 	got := buf.String()
 	hostKey, err := dist.CurrentHostTuple("")
@@ -396,13 +388,14 @@ func TestRunToolchainListRemote_TextRendering_SinglePlatform(t *testing.T) {
 }
 
 func TestRunToolchainListRemote_TextRendering_AllPlatforms(t *testing.T) {
+	app := newApplication("dev", "")
 	setupListRemote(t)
-	resetListRemoteFlags()
-	toolchainListRemoteAllPlatforms = true
-	toolchainListRemoteChannel = "lts"
+
+	app.toolchainListRemoteAllPlatforms = true
+	app.toolchainListRemoteChannel = "lts"
 
 	cmd, buf := newListRemoteCmd()
-	require.NoError(t, runToolchainListRemote(cmd, nil))
+	require.NoError(t, app.runToolchainListRemote(cmd, nil))
 
 	got := buf.String()
 	hostKey, err := dist.CurrentHostTuple("")
@@ -451,15 +444,15 @@ func TestParseListRemoteChannel(t *testing.T) {
 }
 
 func TestRunToolchainListRemote_TargetMutuallyExclusiveWithAllPlatforms(t *testing.T) {
+	app := newApplication("dev", "")
 	home := t.TempDir()
 	config.IsolateForTest(t, home)
 	require.NoError(t, config.EnsureDirs())
-	resetListRemoteFlags()
 
-	rootCmd.SetArgs([]string{"toolchain", "list-remote", "--all-platforms", "--target", "ohos"})
-	rootCmd.SetOut(&bytes.Buffer{})
-	rootCmd.SetErr(&bytes.Buffer{})
-	err := rootCmd.Execute()
+	app.rootCmd.SetArgs([]string{"toolchain", "list-remote", "--all-platforms", "--target", "ohos"})
+	app.rootCmd.SetOut(&bytes.Buffer{})
+	app.rootCmd.SetErr(&bytes.Buffer{})
+	err := app.rootCmd.Execute()
 	require.Error(t, err)
 	// cobra: "if any flags in the group [...] are set none of the others can be"
 	assert.True(t,

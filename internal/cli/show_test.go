@@ -12,6 +12,7 @@ import (
 )
 
 func TestRunShowActiveShowsNotInstalledGracefully(t *testing.T) {
+	app := newApplication("dev", "")
 	home := t.TempDir()
 	cwd := t.TempDir()
 	config.IsolateForTest(t, home)
@@ -22,11 +23,12 @@ func TestRunShowActiveShowsNotInstalledGracefully(t *testing.T) {
 	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 
 	// Should succeed (not error) — uninstalled toolchains are shown with annotation
-	err := runShowActive(showActiveCmd, nil)
+	err := app.runShowActive(app.showActiveCmd, nil)
 	require.NoError(t, err)
 }
 
 func TestRunShowInstalled_ListsToolchains(t *testing.T) {
+	app := newApplication("dev", "")
 	home := t.TempDir()
 	config.IsolateForTest(t, home)
 
@@ -35,20 +37,22 @@ func TestRunShowInstalled_ListsToolchains(t *testing.T) {
 	require.NoError(t, os.MkdirAll(filepath.Join(tcDir, "sts-2.0.0"), 0o755))
 
 	cmd := &cobra.Command{}
-	err := runShowInstalled(cmd, nil)
+	err := app.runShowInstalled(cmd, nil)
 	assert.NoError(t, err)
 }
 
 func TestRunShowInstalled_NoToolchains(t *testing.T) {
+	app := newApplication("dev", "")
 	home := t.TempDir()
 	config.IsolateForTest(t, home)
 
 	cmd := &cobra.Command{}
-	err := runShowInstalled(cmd, nil)
+	err := app.runShowInstalled(cmd, nil)
 	assert.NoError(t, err) // prints "no toolchains installed", not error
 }
 
 func TestRunShowDefault_WithDefault(t *testing.T) {
+	app := newApplication("dev", "")
 	home := t.TempDir()
 	config.IsolateForTest(t, home)
 	require.NoError(t, os.MkdirAll(filepath.Join(home, "toolchains", "lts-1.0.5"), 0o755))
@@ -58,20 +62,22 @@ func TestRunShowDefault_WithDefault(t *testing.T) {
 	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 
 	cmd := &cobra.Command{}
-	err := runShowDefault(cmd, nil)
+	err := app.runShowDefault(cmd, nil)
 	assert.NoError(t, err)
 }
 
 func TestRunShowDefault_NoToolchains(t *testing.T) {
+	app := newApplication("dev", "")
 	home := t.TempDir()
 	config.IsolateForTest(t, home)
 
 	cmd := &cobra.Command{}
-	err := runShowDefault(cmd, nil)
+	err := app.runShowDefault(cmd, nil)
 	assert.NoError(t, err)
 }
 
 func TestRunShowActive_WithActiveToolchain(t *testing.T) {
+	app := newApplication("dev", "")
 	home := t.TempDir()
 	cwd := t.TempDir()
 	config.IsolateForTest(t, home)
@@ -84,11 +90,12 @@ func TestRunShowActive_WithActiveToolchain(t *testing.T) {
 	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 
 	cmd := &cobra.Command{}
-	err := runShowActive(cmd, nil)
+	err := app.runShowActive(cmd, nil)
 	assert.NoError(t, err)
 }
 
 func TestRunShowActive_NoActiveToolchain(t *testing.T) {
+	app := newApplication("dev", "")
 	home := t.TempDir()
 	cwd := t.TempDir()
 	config.IsolateForTest(t, home)
@@ -100,6 +107,6 @@ func TestRunShowActive_NoActiveToolchain(t *testing.T) {
 	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 
 	cmd := &cobra.Command{}
-	err := runShowActive(cmd, nil)
+	err := app.runShowActive(cmd, nil)
 	assert.Error(t, err, "should error when no toolchain is active")
 }

@@ -9,31 +9,16 @@ import (
 	"path/filepath"
 
 	"github.com/Zxilly/cjv/internal/cjverr"
-	"github.com/Zxilly/cjv/internal/cli/output"
 	"github.com/Zxilly/cjv/internal/cli/selfmgmt"
 	clisettings "github.com/Zxilly/cjv/internal/cli/settings"
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/i18n"
+	"github.com/Zxilly/cjv/internal/lifecycle"
 	"github.com/Zxilly/cjv/internal/toolchain"
 	"github.com/Zxilly/cjv/internal/utils"
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 )
-
-var noSelfUpdate bool
-
-func init() {
-	updateCmd.Flags().BoolVar(&noSelfUpdate, "no-self-update", false, i18n.T("UpdateFlagNoSelfUpdate", nil))
-	rootCmd.AddCommand(updateCmd)
-}
-
-var updateCmd = &cobra.Command{
-	Use:   "update [toolchain]",
-	Short: i18n.T("UpdateCmdShort", nil),
-	Long:  i18n.T("UpdateCmdLong", nil),
-	Args:  cobra.MaximumNArgs(1),
-	RunE:  runUpdate,
-}
 
 type updateEntry struct {
 	From string `json:"from"`
@@ -55,7 +40,7 @@ type updateOutcome struct {
 	noneInstalled bool
 }
 
-func runUpdate(cmd *cobra.Command, args []string) error {
+func (app *application) runUpdate(cmd *cobra.Command, args []string) error {
 	ctx := cmd.Context()
 	if ctx == nil {
 		ctx = context.Background()
@@ -63,17 +48,17 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 	toolchain.CleanupStagingDirs()
 
 	if len(args) == 1 {
-		updates, err := updateSingle(ctx, args[0])
+		updates, err := app.updateSingle(ctx, args[0])
 		if err != nil {
 			return err
 		}
-		if !output.IsJSON() {
+		if !app.output.IsJSON() {
 			return nil
 		}
-		return output.RenderTo(cmdOutput(cmd), updateResult{Updates: updates})
+		return app.output.RenderTo(cmdOutput(cmd), updateResult{Updates: updates})
 	}
 
-	outcome, err := updateAll(ctx)
+	outcome, err := app.updateAll(ctx)
 
 	// Self-update check and cache cleanup run regardless of updateAll errors.
 	// updateAll may partially succeed (some toolchains updated, others failed),
@@ -90,18 +75,18 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 		}
 	}
 	var selfUpdate *selfmgmt.UpdateResult
-	if !noSelfUpdate && settings != nil && settings.AutoSelfUpdate != config.AutoSelfUpdateDisable {
+	if !app.noSelfUpdate && settings != nil && settings.AutoSelfUpdate != config.AutoSelfUpdateDisable {
 		switch settings.AutoSelfUpdate {
 		case config.AutoSelfUpdateEnable:
-			selfResult, selfErr := selfmgmt.UpdateManaged(ctx, updateURL, version)
+			selfResult, selfErr := selfmgmt.UpdateManaged(ctx, app.updateURL, app.version)
 			if selfResult.Status != "" {
 				selfUpdate = &selfResult
 			}
 			if selfErr != nil {
 				slog.Warn("self-update failed", "error", selfErr)
 			} else {
-				if !output.IsJSON() {
-					if renderErr := output.RenderTo(cmdOutput(cmd), selfResult); renderErr != nil {
+				if !app.output.IsJSON() {
+					if renderErr := app.output.RenderTo(cmdOutput(cmd), selfResult); renderErr != nil {
 						return renderErr
 					}
 				}
@@ -111,8 +96,8 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 			if settings.AutoSelfUpdate != config.AutoSelfUpdateCheck {
 				slog.Warn("unknown auto_self_update value, treating as check", "value", settings.AutoSelfUpdate)
 			}
-			if !output.IsJSON() {
-				fmt.Printf("\n  cjv %s\n", version)
+			if !app.output.IsJSON() {
+				fmt.Printf("\n  cjv %s\n", app.version)
 			}
 		}
 	}
@@ -126,17 +111,17 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	if !output.IsJSON() {
+	if !app.output.IsJSON() {
 		return nil
 	}
-	return output.RenderTo(cmdOutput(cmd), updateResult{
+	return app.output.RenderTo(cmdOutput(cmd), updateResult{
 		Updates:       outcome.updates,
 		NoneInstalled: outcome.noneInstalled,
 		SelfUpdate:    selfUpdate,
 	})
 }
 
-func updateSingle(ctx context.Context, input string) ([]updateEntry, error) {
+func (app *application) updateSingle(ctx context.Context, input string) ([]updateEntry, error) {
 	name, err := toolchain.ParseToolchainName(input)
 	if err != nil {
 		return nil, err
@@ -156,11 +141,11 @@ func updateSingle(ctx context.Context, input string) ([]updateEntry, error) {
 		if err != nil {
 			return nil, err
 		}
-		fetcher, err := newManifestFetcherForSettings(settings)
+		fetcher, err := app.newManifestFetcherForSettings(settings)
 		if err != nil {
 			return nil, err
 		}
-		entry, updated, err := reinstallChannelForPlatform(ctx, reinstallRequest{
+		entry, updated, err := app.reinstallChannelForPlatform(ctx, reinstallRequest{
 			Channel:      name.Channel,
 			CurrentName:  currentName,
 			Settings:     settings,
@@ -184,16 +169,16 @@ func updateSingle(ctx context.Context, input string) ([]updateEntry, error) {
 		if err != nil {
 			return nil, err
 		}
-		fetcher, err := newManifestFetcherForSettings(settings)
+		fetcher, err := app.newManifestFetcherForSettings(settings)
 		if err != nil {
 			return nil, err
 		}
-		entry, updated, err := reinstallChannel(ctx, name.Channel, installed, settings, sf, fetcher)
+		entry, updated, err := app.reinstallChannel(ctx, name.Channel, installed, settings, sf, fetcher)
 		return updateEntries(entry, updated), err
 	}
 
 	// Specific version — just install it (InstallToolchainWithOptions handles "already installed")
-	return nil, InstallToolchainWithOptions(ctx, input, false)
+	return nil, app.InstallToolchainWithOptions(ctx, input, false)
 }
 
 func updateEntries(entry updateEntry, updated bool) []updateEntry {
@@ -203,13 +188,13 @@ func updateEntries(entry updateEntry, updated bool) []updateEntry {
 	return []updateEntry{entry}
 }
 
-func updateAll(ctx context.Context) (updateOutcome, error) {
+func (app *application) updateAll(ctx context.Context) (updateOutcome, error) {
 	installed, err := toolchain.ListInstalled()
 	if err != nil {
 		return updateOutcome{}, err
 	}
 	if len(installed) == 0 {
-		if !output.IsJSON() {
+		if !app.output.IsJSON() {
 			fmt.Println(i18n.T("NoToolchainsInstalled", nil))
 		}
 		return updateOutcome{noneInstalled: true}, nil
@@ -221,7 +206,7 @@ func updateAll(ctx context.Context) (updateOutcome, error) {
 	}
 	outcome := updateOutcome{settingsFile: sf, settings: settings}
 
-	fetcher, err := newManifestFetcherForSettings(settings)
+	fetcher, err := app.newManifestFetcherForSettings(settings)
 	if err != nil {
 		return updateOutcome{}, err
 	}
@@ -245,7 +230,7 @@ func updateAll(ctx context.Context) (updateOutcome, error) {
 		}
 		outcome.settings = settings
 
-		entry, updated, err := reinstallChannelForPlatform(ctx, reinstallRequest{
+		entry, updated, err := app.reinstallChannelForPlatform(ctx, reinstallRequest{
 			Channel:      parsed.Channel,
 			CurrentName:  name,
 			Settings:     settings,
@@ -270,12 +255,12 @@ type reinstallRequest struct {
 	CurrentName  string
 	Settings     *config.Settings
 	SettingsFile *config.SettingsFile
-	Fetcher      *manifestFetcher
+	Fetcher      *lifecycle.ManifestFetcher
 	Target       string
 }
 
-func reinstallChannel(ctx context.Context, channel toolchain.Channel, currentName string, settings *config.Settings, sf *config.SettingsFile, fetcher *manifestFetcher) (updateEntry, bool, error) {
-	return reinstallChannelForPlatform(ctx, reinstallRequest{
+func (app *application) reinstallChannel(ctx context.Context, channel toolchain.Channel, currentName string, settings *config.Settings, sf *config.SettingsFile, fetcher *lifecycle.ManifestFetcher) (updateEntry, bool, error) {
+	return app.reinstallChannelForPlatform(ctx, reinstallRequest{
 		Channel:      channel,
 		CurrentName:  currentName,
 		Settings:     settings,
@@ -284,14 +269,14 @@ func reinstallChannel(ctx context.Context, channel toolchain.Channel, currentNam
 	})
 }
 
-func reinstallChannelForPlatform(ctx context.Context, req reinstallRequest) (updateEntry, bool, error) {
+func (app *application) reinstallChannelForPlatform(ctx context.Context, req reinstallRequest) (updateEntry, bool, error) {
 	resolved, err := resolveAndLocate(ctx, toolchain.ToolchainName{Channel: req.Channel}, req.Settings, req.Fetcher, req.Target)
 	if err != nil {
 		return updateEntry{}, false, err
 	}
 
 	if resolved.Name == req.CurrentName {
-		if !output.IsJSON() {
+		if !app.output.IsJSON() {
 			color.Green(i18n.T("AlreadyUpToDate", i18n.MsgData{
 				"Version": req.CurrentName,
 			}))
@@ -299,18 +284,18 @@ func reinstallChannelForPlatform(ctx context.Context, req reinstallRequest) (upd
 		return updateEntry{}, false, nil
 	}
 
-	noteStep(i18n.T("UpdateFound", i18n.MsgData{
+	app.noteStep(i18n.T("UpdateFound", i18n.MsgData{
 		"Current": req.CurrentName,
 		"Latest":  resolved.Name,
 	}))
 	update := updateEntry{From: req.CurrentName, To: resolved.Name}
 
 	if req.Target == "" {
-		if err := installResolved(ctx, resolved, req.Settings, req.SettingsFile, false); err != nil {
+		if err := app.installResolved(ctx, resolved, req.Settings, req.SettingsFile, false); err != nil {
 			return updateEntry{}, false, err
 		}
 	} else {
-		if err := installResolvedNoDefault(ctx, resolved, req.Settings, req.SettingsFile, false); err != nil {
+		if err := app.installResolvedNoDefault(ctx, resolved, req.Settings, req.SettingsFile, false); err != nil {
 			return updateEntry{}, false, err
 		}
 	}
@@ -355,4 +340,18 @@ func findInstalledForChannel(channel toolchain.Channel) (string, error) {
 		return "", err
 	}
 	return filepath.Base(dir), nil
+}
+
+func (app *application) initUpdateCommands() {
+	app.updateCmd = &cobra.Command{
+		Use:   "update [toolchain]",
+		Short: i18n.T("UpdateCmdShort", nil),
+		Long:  i18n.T("UpdateCmdLong", nil),
+		Args:  cobra.MaximumNArgs(1),
+		RunE:  app.runUpdate,
+	}
+
+	app.updateCmd.Flags().BoolVar(&app.noSelfUpdate, "no-self-update", false, i18n.T("UpdateFlagNoSelfUpdate", nil))
+	app.rootCmd.AddCommand(app.updateCmd)
+
 }

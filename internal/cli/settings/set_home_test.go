@@ -18,7 +18,7 @@ func TestSetHomeCommandPersists(t *testing.T) {
 	t.Setenv(config.EnvHome, "") // ensure persisted source wins
 
 	target := filepath.Join(tmp, "data")
-	require.NoError(t, setHomeCmd.RunE(setHomeCmd, []string{target}))
+	require.NoError(t, executeSettings(t, "set", "home", target))
 
 	// settings.toml should now contain the absolute path.
 	settingsPath, err := config.SettingsPath()
@@ -44,7 +44,7 @@ func TestSetHomeCommandEnvStillWins(t *testing.T) {
 	t.Setenv(config.EnvHome, "") // first persist without env
 
 	persisted := filepath.Join(tmp, "persisted")
-	require.NoError(t, setHomeCmd.RunE(setHomeCmd, []string{persisted}))
+	require.NoError(t, executeSettings(t, "set", "home", persisted))
 	config.ResetDefaultSettingsFileCache()
 
 	// Now set CJV_HOME to something else.
@@ -65,9 +65,9 @@ func TestSetHomeCommandEmptyClears(t *testing.T) {
 	t.Setenv(config.EnvHome, "")
 
 	// First persist a value.
-	require.NoError(t, setHomeCmd.RunE(setHomeCmd, []string{filepath.Join(tmp, "data")}))
+	require.NoError(t, executeSettings(t, "set", "home", filepath.Join(tmp, "data")))
 	// Then clear.
-	require.NoError(t, setHomeCmd.RunE(setHomeCmd, []string{""}))
+	require.NoError(t, executeSettings(t, "set", "home", ""))
 	config.ResetDefaultSettingsFileCache()
 
 	settingsPath, err := config.SettingsPath()

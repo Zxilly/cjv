@@ -18,6 +18,7 @@ import (
 // Tests for runWhich — shows the full path to a tool binary.
 
 func TestRunWhich_FindsTool(t *testing.T) {
+	app := newApplication("dev", "")
 	home := t.TempDir()
 	cwd := t.TempDir()
 	config.IsolateForTest(t, home)
@@ -30,14 +31,15 @@ func TestRunWhich_FindsTool(t *testing.T) {
 	settings := config.DefaultSettings()
 	settings.ManifestURL = server.URL + "/sdk-versions.json"
 	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
-	require.NoError(t, InstallToolchainWithOptions(context.Background(), "lts", false))
+	require.NoError(t, app.InstallToolchainWithOptions(context.Background(), "lts", false))
 
 	cmd := &cobra.Command{}
-	err := runWhich(cmd, []string{"cjc"})
+	err := app.runWhich(cmd, []string{"cjc"})
 	assert.NoError(t, err)
 }
 
 func TestRunWhich_NoActiveToolchain(t *testing.T) {
+	app := newApplication("dev", "")
 	home := t.TempDir()
 	cwd := t.TempDir()
 	config.IsolateForTest(t, home)
@@ -49,11 +51,12 @@ func TestRunWhich_NoActiveToolchain(t *testing.T) {
 	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 
 	cmd := &cobra.Command{}
-	err := runWhich(cmd, []string{"cjc"})
+	err := app.runWhich(cmd, []string{"cjc"})
 	assert.Error(t, err, "should error when no toolchain is active")
 }
 
 func TestRunWhich_ToolchainFileTargetsTriggerAutoInstall(t *testing.T) {
+	app := newApplication("dev", "")
 	home := t.TempDir()
 	cwd := t.TempDir()
 	config.IsolateForTest(t, home)
@@ -92,7 +95,7 @@ targets = ["ohos"]
 	t.Cleanup(func() { resolve.AutoInstallFunc = oldAutoInstall })
 
 	cmd := &cobra.Command{}
-	err := runWhich(cmd, []string{"cjc"})
+	err := app.runWhich(cmd, []string{"cjc"})
 	require.NoError(t, err)
 	assert.Equal(t, "sts-2.0.0", gotInput)
 	assert.Equal(t, []string{"ohos"}, gotTargets)

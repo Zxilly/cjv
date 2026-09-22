@@ -7,7 +7,6 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/Zxilly/cjv/internal/cli/output"
 	clisettings "github.com/Zxilly/cjv/internal/cli/settings"
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/dist"
@@ -17,21 +16,6 @@ import (
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 )
-
-var (
-	toolchainListRemoteChannel      string
-	toolchainListRemoteTarget       string
-	toolchainListRemoteAllPlatforms bool
-	toolchainListRemoteLimit        int
-)
-
-var toolchainListRemoteCmd = &cobra.Command{
-	Use:   "list-remote",
-	Short: i18n.T("ToolchainListRemoteShort", nil),
-	Long:  i18n.T("ToolchainListRemoteLong", nil),
-	Args:  cobra.NoArgs,
-	RunE:  runToolchainListRemote,
-}
 
 type toolchainListRemoteEntry struct {
 	Channel       string   `json:"channel"`
@@ -63,10 +47,10 @@ type toolchainListRemoteAllPlatformsResult struct {
 	Channels     []toolchainListRemoteAllPlatformsEntry `json:"channels"`
 }
 
-func runToolchainListRemote(cmd *cobra.Command, _ []string) error {
+func (app *application) runToolchainListRemote(cmd *cobra.Command, _ []string) error {
 	ctx := cmd.Context()
 
-	channel, allChannels, err := parseListRemoteChannel(toolchainListRemoteChannel)
+	channel, allChannels, err := parseListRemoteChannel(app.toolchainListRemoteChannel)
 	if err != nil {
 		return err
 	}
@@ -76,10 +60,10 @@ func runToolchainListRemote(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 
-	if toolchainListRemoteAllPlatforms {
-		return runToolchainListRemoteAllPlatforms(ctx, cmd, settings, channel, allChannels)
+	if app.toolchainListRemoteAllPlatforms {
+		return app.runToolchainListRemoteAllPlatforms(ctx, cmd, settings, channel, allChannels)
 	}
-	return runToolchainListRemoteSingle(ctx, cmd, settings, channel, allChannels)
+	return app.runToolchainListRemoteSingle(ctx, cmd, settings, channel, allChannels)
 }
 
 func parseListRemoteChannel(raw string) (toolchain.Channel, bool, error) {
@@ -93,8 +77,8 @@ func parseListRemoteChannel(raw string) (toolchain.Channel, bool, error) {
 	return toolchain.UnknownChannel, false, errors.New(i18n.T("ListRemoteUnknownChannelFlag", i18n.MsgData{"Value": raw}))
 }
 
-func runToolchainListRemoteSingle(ctx context.Context, cmd *cobra.Command, settings *config.Settings, channel toolchain.Channel, allChannels bool) error {
-	tuple, err := resolveListRemoteTuple(settings)
+func (app *application) runToolchainListRemoteSingle(ctx context.Context, cmd *cobra.Command, settings *config.Settings, channel toolchain.Channel, allChannels bool) error {
+	tuple, err := app.resolveListRemoteTuple(settings)
 	if err != nil {
 		return err
 	}
@@ -113,13 +97,13 @@ func runToolchainListRemoteSingle(ctx context.Context, cmd *cobra.Command, setti
 		return err
 	}
 	if needLTS {
-		result.Channels = append(result.Channels, buildSourceChannelEntry(ctx, source, toolchain.LTS, tuple))
+		result.Channels = append(result.Channels, app.buildSourceChannelEntry(ctx, source, toolchain.LTS, tuple))
 	}
 	if needSTS {
-		result.Channels = append(result.Channels, buildSourceChannelEntry(ctx, source, toolchain.STS, tuple))
+		result.Channels = append(result.Channels, app.buildSourceChannelEntry(ctx, source, toolchain.STS, tuple))
 	}
 	if needNightly {
-		entry := buildSourceChannelEntry(ctx, source, toolchain.Nightly, tuple)
+		entry := app.buildSourceChannelEntry(ctx, source, toolchain.Nightly, tuple)
 		// When the user explicitly asks for only the nightly channel and it
 		// fails, propagate the error so CI gets a non-zero exit code.
 		if !allChannels && entry.Error != "" {
@@ -128,10 +112,10 @@ func runToolchainListRemoteSingle(ctx context.Context, cmd *cobra.Command, setti
 		result.Channels = append(result.Channels, entry)
 	}
 
-	return output.RenderTo(cmdOutput(cmd), result)
+	return app.output.RenderTo(cmdOutput(cmd), result)
 }
 
-func buildSourceChannelEntry(ctx context.Context, source *dist.Source, ch toolchain.Channel, tuple string) toolchainListRemoteEntry {
+func (app *application) buildSourceChannelEntry(ctx context.Context, source *dist.Source, ch toolchain.Channel, tuple string) toolchainListRemoteEntry {
 	entry := toolchainListRemoteEntry{
 		Channel:       ch.String(),
 		Versions:      []string{},
@@ -142,8 +126,8 @@ func buildSourceChannelEntry(ctx context.Context, source *dist.Source, ch toolch
 		entry.Error = err.Error()
 		return entry
 	}
-	if toolchainListRemoteLimit > 0 && len(versions) > toolchainListRemoteLimit {
-		versions = versions[:toolchainListRemoteLimit]
+	if app.toolchainListRemoteLimit > 0 && len(versions) > app.toolchainListRemoteLimit {
+		versions = versions[:app.toolchainListRemoteLimit]
 	}
 	entry.Latest = latest
 	entry.Versions = versions
@@ -154,15 +138,15 @@ func buildSourceChannelEntry(ctx context.Context, source *dist.Source, ch toolch
 // environment yields the current host tuple, otherwise it composes
 // <host>-<environment>. Validation (rejecting host tuples passed as
 // environments, etc.) is delegated to dist.CurrentTargetTuple.
-func resolveListRemoteTuple(settings *config.Settings) (string, error) {
-	target, err := sdktarget.Normalize(toolchainListRemoteTarget)
+func (app *application) resolveListRemoteTuple(settings *config.Settings) (string, error) {
+	target, err := sdktarget.Normalize(app.toolchainListRemoteTarget)
 	if err != nil {
 		return "", err
 	}
 	return dist.CurrentTargetTuple(settings.DefaultHost, target)
 }
 
-func runToolchainListRemoteAllPlatforms(ctx context.Context, cmd *cobra.Command, settings *config.Settings, channel toolchain.Channel, allChannels bool) error {
+func (app *application) runToolchainListRemoteAllPlatforms(ctx context.Context, cmd *cobra.Command, settings *config.Settings, channel toolchain.Channel, allChannels bool) error {
 	needLTS := allChannels || channel == toolchain.LTS
 	needSTS := allChannels || channel == toolchain.STS
 	needNightly := allChannels || channel == toolchain.Nightly
@@ -177,23 +161,23 @@ func runToolchainListRemoteAllPlatforms(ctx context.Context, cmd *cobra.Command,
 		return err
 	}
 	if needLTS {
-		result.Channels = append(result.Channels, buildSourceAllPlatformsEntry(ctx, source, toolchain.LTS))
+		result.Channels = append(result.Channels, app.buildSourceAllPlatformsEntry(ctx, source, toolchain.LTS))
 	}
 	if needSTS {
-		result.Channels = append(result.Channels, buildSourceAllPlatformsEntry(ctx, source, toolchain.STS))
+		result.Channels = append(result.Channels, app.buildSourceAllPlatformsEntry(ctx, source, toolchain.STS))
 	}
 	if needNightly {
-		entry := buildSourceAllPlatformsEntry(ctx, source, toolchain.Nightly)
+		entry := app.buildSourceAllPlatformsEntry(ctx, source, toolchain.Nightly)
 		if !allChannels && entry.Error != "" {
 			return errors.New(entry.Error)
 		}
 		result.Channels = append(result.Channels, entry)
 	}
 
-	return output.RenderTo(cmdOutput(cmd), result)
+	return app.output.RenderTo(cmdOutput(cmd), result)
 }
 
-func buildSourceAllPlatformsEntry(ctx context.Context, source *dist.Source, ch toolchain.Channel) toolchainListRemoteAllPlatformsEntry {
+func (app *application) buildSourceAllPlatformsEntry(ctx context.Context, source *dist.Source, ch toolchain.Channel) toolchainListRemoteAllPlatformsEntry {
 	entry := toolchainListRemoteAllPlatformsEntry{Channel: ch.String()}
 	latest, grouped, err := source.ChannelVersionsByTuple(ctx, ch)
 	if err != nil {
@@ -208,8 +192,8 @@ func buildSourceAllPlatformsEntry(ctx context.Context, source *dist.Source, ch t
 	sort.Strings(keys)
 	for _, key := range keys {
 		versions := grouped[key]
-		if toolchainListRemoteLimit > 0 && len(versions) > toolchainListRemoteLimit {
-			versions = versions[:toolchainListRemoteLimit]
+		if app.toolchainListRemoteLimit > 0 && len(versions) > app.toolchainListRemoteLimit {
+			versions = versions[:app.toolchainListRemoteLimit]
 		}
 		entry.Platforms = append(entry.Platforms, platformVersionsEntry{Target: key, Versions: versions})
 	}
@@ -317,11 +301,20 @@ func writeVersionLines(b *strings.Builder, versions []string, latest, indent str
 	}
 }
 
-func init() {
-	toolchainListRemoteCmd.Flags().StringVar(&toolchainListRemoteChannel, "channel", "all", "Channel to list (all|lts|sts|nightly)")
-	toolchainListRemoteCmd.Flags().StringVarP(&toolchainListRemoteTarget, "target", "t", "", "Cross-compilation target suffix (e.g. ohos)")
-	toolchainListRemoteCmd.Flags().BoolVar(&toolchainListRemoteAllPlatforms, "all-platforms", false, "List versions grouped by every target tuple")
-	toolchainListRemoteCmd.Flags().IntVar(&toolchainListRemoteLimit, "limit", 0, "Show at most N versions per channel/platform (0 = no limit)")
-	toolchainListRemoteCmd.MarkFlagsMutuallyExclusive("target", "all-platforms")
-	toolchainCmd.AddCommand(toolchainListRemoteCmd)
+func (app *application) initToolchainListRemoteCommands() {
+	app.toolchainListRemoteCmd = &cobra.Command{
+		Use:   "list-remote",
+		Short: i18n.T("ToolchainListRemoteShort", nil),
+		Long:  i18n.T("ToolchainListRemoteLong", nil),
+		Args:  cobra.NoArgs,
+		RunE:  app.runToolchainListRemote,
+	}
+
+	app.toolchainListRemoteCmd.Flags().StringVar(&app.toolchainListRemoteChannel, "channel", "all", "Channel to list (all|lts|sts|nightly)")
+	app.toolchainListRemoteCmd.Flags().StringVarP(&app.toolchainListRemoteTarget, "target", "t", "", "Cross-compilation target suffix (e.g. ohos)")
+	app.toolchainListRemoteCmd.Flags().BoolVar(&app.toolchainListRemoteAllPlatforms, "all-platforms", false, "List versions grouped by every target tuple")
+	app.toolchainListRemoteCmd.Flags().IntVar(&app.toolchainListRemoteLimit, "limit", 0, "Show at most N versions per channel/platform (0 = no limit)")
+	app.toolchainListRemoteCmd.MarkFlagsMutuallyExclusive("target", "all-platforms")
+	app.toolchainCmd.AddCommand(app.toolchainListRemoteCmd)
+
 }

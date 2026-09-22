@@ -25,15 +25,15 @@ func writeArchive(t *testing.T, body []byte) string {
 }
 
 // linkPath runs `toolchain link <name> <path>` against a local path.
-func linkPath(t *testing.T, name, path string) error {
+func (app *application) linkPath(t *testing.T, name, path string) error {
 	t.Helper()
-	return toolchainLinkCmd.RunE(toolchainLinkCmd, []string{name, path})
+	return app.toolchainLinkCmd.RunE(app.toolchainLinkCmd, []string{name, path})
 }
 
 func TestToolchainLinkZip_MaterializesOwnedToolchainAndKeepsSource(t *testing.T) {
+	app := newApplication("dev", "")
 	home := t.TempDir()
 	config.IsolateForTest(t, home)
-	resetLinkFlags(t)
 
 	outer := zipBytes(t, map[string][]byte{
 		"cangjie-sdk-" + hostSDKTarget() + "-1.0.0.zip":        sdkInnerArchive(t),
@@ -41,7 +41,7 @@ func TestToolchainLinkZip_MaterializesOwnedToolchainAndKeepsSource(t *testing.T)
 	})
 	src := writeArchive(t, outer)
 
-	require.NoError(t, linkPath(t, "my-sdk", src))
+	require.NoError(t, app.linkPath(t, "my-sdk", src))
 
 	// The toolchain is a real (owned) directory, not a symlink to the archive.
 	info, err := os.Lstat(filepath.Join(home, "toolchains", "my-sdk"))
@@ -59,16 +59,16 @@ func TestToolchainLinkZip_MaterializesOwnedToolchainAndKeepsSource(t *testing.T)
 }
 
 func TestToolchainLinkZip_DirectoryStillSymlinks(t *testing.T) {
+	app := newApplication("dev", "")
 	home := t.TempDir()
 	target := t.TempDir()
 	config.IsolateForTest(t, home)
-	resetLinkFlags(t)
 
 	cjcPath := filepath.Join(target, "bin", proxy.PlatformBinaryName("cjc"))
 	require.NoError(t, os.MkdirAll(filepath.Dir(cjcPath), 0o755))
 	require.NoError(t, os.WriteFile(cjcPath, []byte("stub"), 0o755))
 
-	require.NoError(t, linkPath(t, "local-sdk", target))
+	require.NoError(t, app.linkPath(t, "local-sdk", target))
 
 	// A directory is referenced in place (symlink/junction), not copied: a file
 	// added to the source afterwards is visible through the link. This holds for
@@ -78,34 +78,35 @@ func TestToolchainLinkZip_DirectoryStillSymlinks(t *testing.T) {
 }
 
 func TestToolchainLinkZip_SHA256Mismatch(t *testing.T) {
+	app := newApplication("dev", "")
 	home := t.TempDir()
 	config.IsolateForTest(t, home)
-	resetLinkFlags(t)
-	linkSHA256 = "0000000000000000000000000000000000000000000000000000000000000000"
+
+	app.linkSHA256 = "0000000000000000000000000000000000000000000000000000000000000000"
 
 	outer := zipBytes(t, map[string][]byte{
 		"cangjie-sdk-" + hostSDKTarget() + "-1.0.0.zip": sdkInnerArchive(t),
 	})
 	src := writeArchive(t, outer)
 
-	require.Error(t, linkPath(t, "my-sdk", src))
+	require.Error(t, app.linkPath(t, "my-sdk", src))
 	assert.NoDirExists(t, filepath.Join(home, "toolchains", "my-sdk"))
 	assert.FileExists(t, src, "a rejected archive must not be deleted")
 }
 
 func TestToolchainLinkZip_ForceReinstall(t *testing.T) {
+	app := newApplication("dev", "")
 	home := t.TempDir()
 	config.IsolateForTest(t, home)
-	resetLinkFlags(t)
 
 	outer := zipBytes(t, map[string][]byte{
 		"cangjie-sdk-" + hostSDKTarget() + "-1.0.0.zip": sdkInnerArchive(t),
 	})
 	src := writeArchive(t, outer)
 
-	require.NoError(t, linkPath(t, "my-sdk", src))
-	require.Error(t, linkPath(t, "my-sdk", src), "second link without --force must fail")
+	require.NoError(t, app.linkPath(t, "my-sdk", src))
+	require.Error(t, app.linkPath(t, "my-sdk", src), "second link without --force must fail")
 
-	linkForce = true
-	require.NoError(t, linkPath(t, "my-sdk", src), "second link with --force must succeed")
+	app.linkForce = true
+	require.NoError(t, app.linkPath(t, "my-sdk", src), "second link with --force must succeed")
 }

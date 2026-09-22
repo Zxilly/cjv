@@ -7,9 +7,7 @@ import (
 	"os"
 	"runtime"
 
-	"github.com/Zxilly/cjv/internal/cli/output"
 	"github.com/Zxilly/cjv/internal/cli/selfmgmt"
-	componentlib "github.com/Zxilly/cjv/internal/component"
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/env"
 	"github.com/Zxilly/cjv/internal/i18n"
@@ -20,46 +18,15 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var (
-	forceInstall      bool
-	installTargets    []string
-	installComponents []string
-
-	// ensurePathConfiguredFn is called during first install to add cjv's bin
-	// directory to the user's PATH. Tests override this to avoid writing to
-	// the real system PATH (e.g., the Windows registry).
-	ensurePathConfiguredFn = ensurePathConfigured
-	// componentInstallFunc is a test seam: when nil (production) the lifecycle
-	// default path installs components (resolving LTS / STS links from the
-	// manifest); tests set it to stub the installer without touching the network.
-	componentInstallFunc func(context.Context, componentlib.Roots, toolchain.ToolchainName, componentlib.Name, string, string, bool) error
-
-	installToolchainWithExtrasFn = InstallToolchainWithExtras
-)
-
-func lifecycleOptions() lifecycle.Options {
+func (app *application) lifecycleOptions() lifecycle.Options {
 	return lifecycle.Options{
-		IsJSON:               output.IsJSON,
-		EnsurePathConfigured: ensurePathConfiguredFn,
-		ComponentInstall:     componentInstallFunc,
+		IsJSON:               app.output.IsJSON,
+		EnsurePathConfigured: app.ensurePathConfiguredFn,
+		ComponentInstall:     app.componentInstallFunc,
 		EnsureManagedBinary:  selfupdate.EnsureManagedExecutable,
 		CreateProxyLinks:     proxy.CreateAllProxyLinks,
 		ValidateInstallation: validateInstallation,
 	}
-}
-
-func init() {
-	installCmd.Flags().BoolVar(&forceInstall, "force", false, i18n.T("InstallFlagForce", nil))
-	installCmd.Flags().StringSliceVarP(&installTargets, "target", "t", nil, i18n.T("InstallFlagTarget", nil))
-	installCmd.Flags().StringSliceVarP(&installComponents, "component", "c", nil, i18n.T("InstallFlagComponent", nil))
-	rootCmd.AddCommand(installCmd)
-}
-
-var installCmd = &cobra.Command{
-	Use:   "install <toolchain>",
-	Short: i18n.T("InstallCmdShort", nil),
-	Args:  cobra.ExactArgs(1),
-	RunE:  runInstall,
 }
 
 type installResult struct {
@@ -71,90 +38,76 @@ type installResult struct {
 
 func (r installResult) Text() string { return "" }
 
-func runInstall(cmd *cobra.Command, args []string) error {
+func (app *application) runInstall(cmd *cobra.Command, args []string) error {
 	selfmgmt.CheckSudoSafety()
 	toolchain.CleanupStagingDirs()
-	if err := InstallToolchainWithExtras(cmd.Context(), args[0], installTargets, installComponents, forceInstall); err != nil {
+	if err := app.InstallToolchainWithExtras(cmd.Context(), args[0], app.installTargets, app.installComponents, app.forceInstall); err != nil {
 		return err
 	}
-	if !output.IsJSON() {
+	if !app.output.IsJSON() {
 		return nil
 	}
-	return output.RenderTo(cmdOutput(cmd), installResult{
+	return app.output.RenderTo(cmdOutput(cmd), installResult{
 		Toolchain:  args[0],
-		Targets:    installTargets,
-		Components: installComponents,
-		Forced:     forceInstall,
+		Targets:    app.installTargets,
+		Components: app.installComponents,
+		Forced:     app.forceInstall,
 	})
 }
 
 // noteStep emits a progress/status line to stdout in text mode; in JSON
 // mode it is suppressed so stdout remains a single JSON document.
-func noteStep(s string) {
-	if output.IsJSON() {
+func (app *application) noteStep(s string) {
+	if app.output.IsJSON() {
 		return
 	}
 	fmt.Println(s)
 }
 
 // InstallToolchainWithOptions installs a toolchain with optional force re-install.
-func InstallToolchainWithOptions(ctx context.Context, input string, force bool) error {
-	return InstallToolchainWithExtras(ctx, input, nil, nil, force)
+func (app *application) InstallToolchainWithOptions(ctx context.Context, input string, force bool) error {
+	return app.InstallToolchainWithExtras(ctx, input, nil, nil, force)
 }
 
 // InstallToolchainWithTargets installs the host toolchain plus optional cross SDK target variants.
-func InstallToolchainWithTargets(ctx context.Context, input string, targets []string, force bool) error {
-	return InstallToolchainWithExtras(ctx, input, targets, nil, force)
+func (app *application) InstallToolchainWithTargets(ctx context.Context, input string, targets []string, force bool) error {
+	return app.InstallToolchainWithExtras(ctx, input, targets, nil, force)
 }
 
 // InstallToolchainWithExtras installs the host toolchain plus optional cross
 // SDK target variants and optional components.
-func InstallToolchainWithExtras(ctx context.Context, input string, targets, components []string, force bool) error {
-	return lifecycle.InstallToolchainWithExtras(ctx, input, targets, components, force, lifecycleOptions())
+func (app *application) InstallToolchainWithExtras(ctx context.Context, input string, targets, components []string, force bool) error {
+	return lifecycle.InstallToolchainWithExtras(ctx, input, targets, components, force, app.lifecycleOptions())
 }
 
-// manifestFetcher fetches the SDK manifest at most once per install operation.
-// The first call to get triggers the network fetch (and the FetchingManifest
-// status line); subsequent calls return the cached result, including any error.
-// The first caller's ctx is used for the actual fetch.
-type manifestFetcher struct {
-	inner *lifecycle.ManifestFetcher
+func (app *application) newManifestFetcher(url string) *lifecycle.ManifestFetcher {
+	return lifecycle.NewManifestFetcher(url, app.lifecycleOptions())
 }
 
-func newManifestFetcher(url string) *manifestFetcher {
-	return &manifestFetcher{inner: lifecycle.NewManifestFetcher(url, lifecycleOptions())}
-}
-
-func newManifestFetcherForSettings(settings *config.Settings) (*manifestFetcher, error) {
-	inner, err := lifecycle.NewManifestFetcherForSettings(settings, lifecycleOptions())
-	if err != nil {
-		return nil, err
-	}
-	return &manifestFetcher{inner: inner}, nil
+func (app *application) newManifestFetcherForSettings(settings *config.Settings) (*lifecycle.ManifestFetcher, error) {
+	return lifecycle.NewManifestFetcherForSettings(settings, app.lifecycleOptions())
 }
 
 // InstallComponentsForToolchain backs the proxy auto_install path: it
 // resolves tcInput to an already-installed toolchain and installs missing
 // components quietly.
-func InstallComponentsForToolchain(ctx context.Context, tcInput string, components []string) error {
-	return lifecycle.InstallComponentsForToolchain(ctx, tcInput, components, lifecycleOptions())
+func (app *application) InstallComponentsForToolchain(ctx context.Context, tcInput string, components []string) error {
+	return lifecycle.InstallComponentsForToolchain(ctx, tcInput, components, app.lifecycleOptions())
 }
 
 // installComponentsList expects resolvedName as "<channel>-<version>"
 // (the directory name under <CJV_HOME>/toolchains/). quiet suppresses the
 // per-component status lines; used by the proxy auto-install path.
-func installComponentsList(ctx context.Context, resolvedName string, components []string, force, quiet bool) error {
-	return lifecycle.InstallComponentsList(ctx, resolvedName, components, force, quiet, nil, lifecycleOptions())
+func (app *application) installComponentsList(ctx context.Context, resolvedName string, components []string, force, quiet bool) error {
+	return lifecycle.InstallComponentsList(ctx, resolvedName, components, force, quiet, nil, app.lifecycleOptions())
 }
 
-type resolvedToolchain = lifecycle.ResolvedToolchain
-
-func installResolved(ctx context.Context, rt resolvedToolchain, settings *config.Settings, sf *config.SettingsFile, force bool) (retErr error) {
-	return lifecycle.InstallResolved(ctx, rt, settings, sf, force, lifecycleOptions())
+func (app *application) installResolved(ctx context.Context, rt lifecycle.ResolvedToolchain, settings *config.Settings, sf *config.SettingsFile, force bool) (retErr error) {
+	return lifecycle.InstallResolved(ctx, rt, settings, sf, force, app.lifecycleOptions())
 }
 
-func installResolvedNoDefault(ctx context.Context, rt resolvedToolchain, settings *config.Settings, sf *config.SettingsFile, force bool) (retErr error) {
-	return lifecycle.InstallResolvedNoDefault(ctx, rt, settings, sf, force, lifecycleOptions())
+func (app *application) installResolvedNoDefault(ctx context.Context, rt lifecycle.ResolvedToolchain, settings *config.Settings, sf *config.SettingsFile, force bool) (retErr error) {
+	return lifecycle.InstallResolvedNoDefault(ctx, rt, settings, sf, force, app.lifecycleOptions())
 }
 
 // ensurePathConfigured adds the cjv bin directory to the user's PATH
@@ -200,8 +153,8 @@ func ensurePathConfigured() {
 	}
 }
 
-func resolveAndLocate(ctx context.Context, name toolchain.ToolchainName, settings *config.Settings, fetcher *manifestFetcher, tuple string) (resolvedToolchain, error) {
-	return lifecycle.ResolveAndLocatePlatform(ctx, name, settings, fetcher.inner, tuple)
+func resolveAndLocate(ctx context.Context, name toolchain.ToolchainName, settings *config.Settings, fetcher *lifecycle.ManifestFetcher, tuple string) (lifecycle.ResolvedToolchain, error) {
+	return lifecycle.ResolveAndLocatePlatform(ctx, name, settings, fetcher, tuple)
 }
 
 // validateInstallation checks that the installed SDK has essential binaries.
@@ -216,4 +169,21 @@ func validateInstallation(dir, tuple string) error {
 		return fmt.Errorf("installation validation failed: %w", err)
 	}
 	return nil
+}
+
+func (app *application) initInstallCommands() {
+	app.ensurePathConfiguredFn = ensurePathConfigured
+	app.installToolchainWithExtrasFn = app.InstallToolchainWithExtras
+	app.installCmd = &cobra.Command{
+		Use:   "install <toolchain>",
+		Short: i18n.T("InstallCmdShort", nil),
+		Args:  cobra.ExactArgs(1),
+		RunE:  app.runInstall,
+	}
+
+	app.installCmd.Flags().BoolVar(&app.forceInstall, "force", false, i18n.T("InstallFlagForce", nil))
+	app.installCmd.Flags().StringSliceVarP(&app.installTargets, "target", "t", nil, i18n.T("InstallFlagTarget", nil))
+	app.installCmd.Flags().StringSliceVarP(&app.installComponents, "component", "c", nil, i18n.T("InstallFlagComponent", nil))
+	app.rootCmd.AddCommand(app.installCmd)
+
 }

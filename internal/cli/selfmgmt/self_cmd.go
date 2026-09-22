@@ -25,8 +25,6 @@ func (r selfUninstallResult) Text() string {
 	return ""
 }
 
-var uninstallYes bool
-
 var (
 	ensureSelfManagedExecutable = selfupdate.EnsureManagedExecutable
 	removeSelfHomeDir           = removeHomeDir
@@ -34,7 +32,8 @@ var (
 )
 
 // NewSelfCommand creates the "self" command with its subcommands.
-func NewSelfCommand(ver, updURL string) *cobra.Command {
+func NewSelfCommand(ver, updURL string, renderer *output.Renderer) *cobra.Command {
+	var uninstallYes bool
 	selfCmd := &cobra.Command{
 		Use:   "self",
 		Short: i18n.T("SelfCmdShort", nil),
@@ -48,7 +47,7 @@ func NewSelfCommand(ver, updURL string) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return output.RenderTo(cmd.OutOrStdout(), result)
+			return renderer.RenderTo(cmd.OutOrStdout(), result)
 		},
 	}
 
@@ -57,7 +56,7 @@ func NewSelfCommand(ver, updURL string) *cobra.Command {
 		Short: i18n.T("SelfUninstallShort", nil),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// Interactive confirmation cannot be combined with JSON output.
-			if output.IsJSON() && !uninstallYes {
+			if renderer.IsJSON() && !uninstallYes {
 				return &cjverr.UnsupportedForJSONError{Command: "self uninstall (without --yes)"}
 			}
 			confirm := uninstallYes
@@ -90,7 +89,7 @@ func NewSelfCommand(ver, updURL string) *cobra.Command {
 			}
 			cleanupSelfPathEntries()
 
-			return output.RenderTo(cmd.OutOrStdout(), selfUninstallResult{Confirmed: true})
+			return renderer.RenderTo(cmd.OutOrStdout(), selfUninstallResult{Confirmed: true})
 		},
 	}
 

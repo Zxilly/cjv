@@ -4,23 +4,17 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"os"
 	"strconv"
 	"strings"
 
 	"github.com/Zxilly/cjv/internal/cjverr"
-	"github.com/Zxilly/cjv/internal/cli/output"
 	"github.com/Zxilly/cjv/internal/cli/selfmgmt"
 	"github.com/Zxilly/cjv/internal/cli/settings"
 	"github.com/Zxilly/cjv/internal/i18n"
 	"github.com/Zxilly/cjv/internal/toolchain"
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
-)
-
-var (
-	updateURL string
-	version   string
-	jsonFlag  bool
 )
 
 type rootResult struct {
@@ -49,43 +43,60 @@ func (r rootResult) Text() string {
 	return b.String()
 }
 
-var rootCmd = &cobra.Command{
-	Use:           "cjv",
-	Short:         i18n.T("RootCmdShort", nil),
-	Long:          i18n.T("RootCmdLong", nil),
-	SilenceUsage:  true,
-	SilenceErrors: true,
-	PersistentPreRun: func(cmd *cobra.Command, args []string) {
-		output.SetJSONMode(jsonFlag)
-	},
-	RunE: func(cmd *cobra.Command, args []string) error {
-		installed, err := toolchain.ListInstalled()
-		if err != nil {
-			return err
-		}
-		_, activeName, _, resolveErr := toolchain.ResolveActiveToolchain()
-		// Only ignore "no toolchain configured" — propagate real errors
-		if resolveErr != nil && !errors.As(resolveErr, new(*cjverr.NoToolchainConfiguredError)) {
-			slog.Warn("failed to resolve active toolchain", "error", resolveErr)
-		}
-		return output.RenderTo(cmdOutput(cmd), rootResult{Active: activeName, Installed: installed})
-	},
+// Execute runs a fresh command tree and renders its error once.
+func Execute(ver, updURL string) error {
+	return newApplication(ver, updURL).execute(os.Args[1:])
 }
 
-func Execute(ver, updURL string) error {
-	version = ver
-	updateURL = updURL
-	rootCmd.Version = ver
-	rootCmd.SetVersionTemplate(color.CyanString("cjv {{.Version}}") + "\n")
-	rootCmd.PersistentFlags().BoolVar(&jsonFlag, "json", false, i18n.T("RootFlagJSON", nil))
-
-	settings.RegisterCommands(rootCmd)
-	rootCmd.AddCommand(selfmgmt.NewSelfCommand(ver, updURL))
-	configureCobraHelp(rootCmd)
-
-	err := rootCmd.Execute()
+func (app *application) execute(args []string) error {
+	// Unknown commands fail during Cobra's lookup, before flag parsing. Honor
+	// leading output flags for those errors without interpreting child arguments.
+	for _, arg := range args {
+		matched, enabled, err := parseJSONModeFlag(arg)
+		if err != nil || !matched {
+			break
+		}
+		app.output.SetJSONMode(enabled)
+	}
+	app.rootCmd.SetArgs(args)
+	err := app.rootCmd.Execute()
 	if err != nil {
-		_ = output.RenderErrorTo(rootCmd.OutOrStdout(), rootCmd.ErrOrStderr(), err)
+		if app.output.IsJSON() {
+			_ = app.output.RenderErrorTo(app.rootCmd.OutOrStdout(), app.rootCmd.ErrOrStderr(), err)
+		} else if !errors.As(err, new(*cjverr.ExitCodeError)) {
+			_, _ = fmt.Fprintln(app.rootCmd.ErrOrStderr(), "cjv:", err)
+		}
 	}
 	return err
+}
+
+func (app *application) configureRoot() {
+	app.rootCmd.Version = app.version
+	app.rootCmd.SetVersionTemplate(color.CyanString("cjv {{.Version}}") + "\n")
+	app.rootCmd.PersistentFlags().BoolVar(&app.output.JSON, "json", false, i18n.T("RootFlagJSON", nil))
+	settings.RegisterCommands(app.rootCmd)
+	app.rootCmd.AddCommand(selfmgmt.NewSelfCommand(app.version, app.updateURL, app.output))
+	configureCobraHelp(app.rootCmd)
+}
+
+func (app *application) initRootCommands() {
+	app.rootCmd = &cobra.Command{
+		Use:           "cjv",
+		Short:         i18n.T("RootCmdShort", nil),
+		Long:          i18n.T("RootCmdLong", nil),
+		SilenceUsage:  true,
+		SilenceErrors: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			installed, err := toolchain.ListInstalled()
+			if err != nil {
+				return err
+			}
+			_, activeName, _, resolveErr := toolchain.ResolveActiveToolchain()
+			// Only ignore "no toolchain configured" — propagate real errors
+			if resolveErr != nil && !errors.As(resolveErr, new(*cjverr.NoToolchainConfiguredError)) {
+				slog.Warn("failed to resolve active toolchain", "error", resolveErr)
+			}
+			return app.output.RenderTo(cmdOutput(cmd), rootResult{Active: activeName, Installed: installed})
+		},
+	}
 }

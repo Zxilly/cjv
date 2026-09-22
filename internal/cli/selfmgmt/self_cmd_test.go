@@ -5,11 +5,13 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"runtime"
 	"testing"
 
+	"github.com/Zxilly/cjv/internal/cjverr"
 	"github.com/Zxilly/cjv/internal/cli/output"
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/proxy"
@@ -28,9 +30,7 @@ func TestSelfUpdateJSONReportsSkippedBuildWithoutLeakingText(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			config.IsolateForTest(t, t.TempDir())
 			t.Setenv(config.EnvNoPathSetup, "1")
-			previousJSON := output.IsJSON()
-			output.SetJSONMode(true)
-			t.Cleanup(func() { output.SetJSONMode(previousJSON) })
+			renderer := &output.Renderer{JSON: true}
 
 			// Capture process stdout as well as Cobra's writer: implementations
 			// that print around the renderer corrupt the actual CLI JSON stream.
@@ -43,7 +43,7 @@ func TestSelfUpdateJSONReportsSkippedBuildWithoutLeakingText(t *testing.T) {
 				_ = leaked.Close()
 			})
 			var stdout bytes.Buffer
-			cmd := NewSelfCommand(tc.version, tc.updateURL)
+			cmd := NewSelfCommand(tc.version, tc.updateURL, renderer)
 			cmd.SetOut(&stdout)
 			cmd.SetArgs([]string{"update"})
 			require.NoError(t, cmd.Execute())
@@ -67,7 +67,7 @@ func TestNewSelfCommandWiresSubcommandsAndUpdate(t *testing.T) {
 	home := t.TempDir()
 	config.IsolateForTest(t, home)
 
-	cmd := NewSelfCommand("dev", "")
+	cmd := NewSelfCommand("dev", "", &output.Renderer{})
 
 	assert.NotNil(t, cmd)
 	assert.NotNil(t, findSubcommand(cmd, "update"))
@@ -105,7 +105,6 @@ func TestSelfUninstallDoesNotCleanPathWhenRemoveHomeFails(t *testing.T) {
 	home := t.TempDir()
 	config.IsolateForTest(t, home)
 
-	oldYes := uninstallYes
 	oldEnsure := ensureSelfManagedExecutable
 	oldRemove := removeSelfHomeDir
 	oldCleanup := cleanupSelfPathEntries
@@ -120,17 +119,39 @@ func TestSelfUninstallDoesNotCleanPathWhenRemoveHomeFails(t *testing.T) {
 		cleanupCalled = true
 	}
 	t.Cleanup(func() {
-		uninstallYes = oldYes
 		ensureSelfManagedExecutable = oldEnsure
 		removeSelfHomeDir = oldRemove
 		cleanupSelfPathEntries = oldCleanup
 	})
 
-	cmd := NewSelfCommand("dev", "")
-	uninstallYes = true
-	uninstall := findSubcommand(cmd, "uninstall")
-	require.Error(t, uninstall.RunE(uninstall, nil))
+	cmd := NewSelfCommand("dev", "", &output.Renderer{})
+	cmd.SetOut(io.Discard)
+	cmd.SetErr(io.Discard)
+	cmd.SetArgs([]string{"uninstall", "--yes"})
+	require.Error(t, cmd.Execute())
 	assert.False(t, cleanupCalled)
+}
+
+func TestSelfCommandsKeepUninstallConfirmationPerInvocation(t *testing.T) {
+	config.IsolateForTest(t, t.TempDir())
+	oldEnsure := ensureSelfManagedExecutable
+	stopBeforeRemoval := errors.New("stop before removal")
+	ensureSelfManagedExecutable = func() (string, error) { return "", stopBeforeRemoval }
+	t.Cleanup(func() { ensureSelfManagedExecutable = oldEnsure })
+
+	first := NewSelfCommand("dev", "", &output.Renderer{JSON: true})
+	second := NewSelfCommand("dev", "", &output.Renderer{JSON: true})
+	for _, cmd := range []*cobra.Command{first, second} {
+		cmd.SetOut(io.Discard)
+		cmd.SetErr(io.Discard)
+		cmd.SilenceErrors = true
+		cmd.SilenceUsage = true
+	}
+	first.SetArgs([]string{"uninstall", "--yes"})
+	require.ErrorIs(t, first.Execute(), stopBeforeRemoval)
+	second.SetArgs([]string{"uninstall"})
+	var unsupported *cjverr.UnsupportedForJSONError
+	require.ErrorAs(t, second.Execute(), &unsupported)
 }
 
 func findSubcommand(cmd *cobra.Command, name string) *cobra.Command {

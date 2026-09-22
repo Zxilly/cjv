@@ -2,20 +2,11 @@ package cli
 
 import (
 	"github.com/Zxilly/cjv/internal/cjverr"
-	"github.com/Zxilly/cjv/internal/cli/output"
 	"github.com/Zxilly/cjv/internal/i18n"
 	"github.com/Zxilly/cjv/internal/proxy"
 	"github.com/Zxilly/cjv/internal/resolve"
 	"github.com/spf13/cobra"
 )
-
-var whichCmd = &cobra.Command{
-	Use:   "which [command]",
-	Short: i18n.T("WhichCmdShort", nil),
-	Long:  i18n.T("WhichCmdLong", nil),
-	Args:  cobra.MaximumNArgs(1),
-	RunE:  runWhich,
-}
 
 type whichResult struct {
 	Tool      string `json:"tool,omitempty"`
@@ -25,14 +16,14 @@ type whichResult struct {
 
 func (r whichResult) Text() string { return r.Path }
 
-func runWhich(cmd *cobra.Command, args []string) error {
+func (app *application) runWhich(cmd *cobra.Command, args []string) error {
 	active, err := resolve.Active(cmd.Context(), "")
 	if err != nil {
 		return err
 	}
 
 	if len(args) == 0 {
-		return output.RenderTo(cmdOutput(cmd), whichResult{Path: active.Dir, Toolchain: active.Name})
+		return app.output.RenderTo(cmdOutput(cmd), whichResult{Path: active.Dir, Toolchain: active.Name})
 	}
 
 	// Resolve through the same logic as `cjv run` so the two commands agree on
@@ -50,9 +41,18 @@ func runWhich(cmd *cobra.Command, args []string) error {
 		}
 		return &cjverr.UnknownToolError{Name: args[0]}
 	}
-	return output.RenderTo(cmdOutput(cmd), whichResult{Tool: args[0], Path: toolPath, Toolchain: active.Name})
+	return app.output.RenderTo(cmdOutput(cmd), whichResult{Tool: args[0], Path: toolPath, Toolchain: active.Name})
 }
 
-func init() {
-	rootCmd.AddCommand(whichCmd)
+func (app *application) initWhichCommands() {
+	app.whichCmd = &cobra.Command{
+		Use:   "which [command]",
+		Short: i18n.T("WhichCmdShort", nil),
+		Long:  i18n.T("WhichCmdLong", nil),
+		Args:  cobra.MaximumNArgs(1),
+		RunE:  app.runWhich,
+	}
+
+	app.rootCmd.AddCommand(app.whichCmd)
+
 }

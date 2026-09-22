@@ -310,6 +310,7 @@ func mockServerWithTargetSDKs(t *testing.T, channel toolchain.Channel, version s
 // These test the full pipeline: resolve -> download -> extract -> validate -> swap.
 
 func TestInstallToolchainWithOptions_InstallsLTS(t *testing.T) {
+	app := newApplication("dev", "")
 	home := t.TempDir()
 	config.IsolateForTest(t, home)
 	require.NoError(t, config.EnsureDirs())
@@ -320,7 +321,7 @@ func TestInstallToolchainWithOptions_InstallsLTS(t *testing.T) {
 	settings.ManifestURL = server.URL + "/sdk-versions.json"
 	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 
-	err := InstallToolchainWithOptions(context.Background(), "lts", false)
+	err := app.InstallToolchainWithOptions(context.Background(), "lts", false)
 	require.NoError(t, err)
 
 	installed, err := toolchain.ListInstalled()
@@ -329,6 +330,7 @@ func TestInstallToolchainWithOptions_InstallsLTS(t *testing.T) {
 }
 
 func TestInstallToolchainWithOptions_InstallsNightlyFromUnifiedDistServer(t *testing.T) {
+	app := newApplication("dev", "")
 	home := t.TempDir()
 	config.IsolateForTest(t, home)
 	require.NoError(t, config.EnsureDirs())
@@ -338,13 +340,14 @@ func TestInstallToolchainWithOptions_InstallsNightlyFromUnifiedDistServer(t *tes
 	settings.DistServer = server.URL + "/corp/cjv"
 	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 
-	require.NoError(t, InstallToolchainWithOptions(context.Background(), "nightly", false))
+	require.NoError(t, app.InstallToolchainWithOptions(context.Background(), "nightly", false))
 	installed, err := toolchain.ListInstalled()
 	require.NoError(t, err)
 	assert.Contains(t, installed, "nightly-1.2.0-alpha.20260822010101")
 }
 
 func TestInstallToolchainWithOptions_DefaultManifestInstallsNightly(t *testing.T) {
+	app := newApplication("dev", "")
 	home := t.TempDir()
 	config.IsolateForTest(t, home)
 	require.NoError(t, config.EnsureDirs())
@@ -354,13 +357,14 @@ func TestInstallToolchainWithOptions_DefaultManifestInstallsNightly(t *testing.T
 	settings.ManifestURL = server.URL + "/corp/cjv/versions.json"
 	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 
-	require.NoError(t, InstallToolchainWithOptions(context.Background(), "nightly", false))
+	require.NoError(t, app.InstallToolchainWithOptions(context.Background(), "nightly", false))
 	installed, err := toolchain.ListInstalled()
 	require.NoError(t, err)
 	assert.Contains(t, installed, "nightly-1.2.0-alpha.20260822010101")
 }
 
 func TestInstallToolchainWithExtras_InstallsNightlyComponentFromUnifiedDistServer(t *testing.T) {
+	app := newApplication("dev", "")
 	home := t.TempDir()
 	config.IsolateForTest(t, home)
 	require.NoError(t, config.EnsureDirs())
@@ -370,11 +374,12 @@ func TestInstallToolchainWithExtras_InstallsNightlyComponentFromUnifiedDistServe
 	settings.DistServer = server.URL + "/corp/cjv"
 	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 
-	require.NoError(t, InstallToolchainWithExtras(context.Background(), "nightly", nil, []string{"docs"}, false))
+	require.NoError(t, app.InstallToolchainWithExtras(context.Background(), "nightly", nil, []string{"docs"}, false))
 	assert.FileExists(t, filepath.Join(home, "docs", "nightly-1.2.0-alpha.20260822010101", "main", "index.html"))
 }
 
 func TestInstallToolchainWithTargets_InstallsHostAndTargets(t *testing.T) {
+	app := newApplication("dev", "")
 	home := t.TempDir()
 	config.IsolateForTest(t, home)
 	require.NoError(t, config.EnsureDirs())
@@ -384,7 +389,7 @@ func TestInstallToolchainWithTargets_InstallsHostAndTargets(t *testing.T) {
 	settings.ManifestURL = server.URL + "/sdk-versions.json"
 	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 
-	err := InstallToolchainWithTargets(context.Background(), "sts", []string{"ohos", "android"}, false)
+	err := app.InstallToolchainWithTargets(context.Background(), "sts", []string{"ohos", "android"}, false)
 	require.NoError(t, err)
 
 	hostKey, err := dist.CurrentHostTuple("")
@@ -427,6 +432,7 @@ func buildStdxZip(t *testing.T, topLevel string) []byte {
 }
 
 func TestInstallToolchainWithExtras_InstallsTargetStdx(t *testing.T) {
+	app := newApplication("dev", "")
 	home := t.TempDir()
 	config.IsolateForTest(t, home)
 	require.NoError(t, config.EnsureDirs())
@@ -487,7 +493,7 @@ func TestInstallToolchainWithExtras_InstallsTargetStdx(t *testing.T) {
 	settings.ManifestURL = server.URL + "/sdk-versions.json"
 	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 
-	require.NoError(t, InstallToolchainWithExtras(context.Background(), "sts", []string{"ohos"}, []string{"stdx"}, false))
+	require.NoError(t, app.InstallToolchainWithExtras(context.Background(), "sts", []string{"ohos"}, []string{"stdx"}, false))
 
 	targetName := "sts-" + version + "-" + ohosKey
 
@@ -508,6 +514,7 @@ func TestInstallToolchainWithExtras_InstallsTargetStdx(t *testing.T) {
 }
 
 func TestInstallToolchainWithTargets_PinsTargetToHostVersion(t *testing.T) {
+	app := newApplication("dev", "")
 	home := t.TempDir()
 	config.IsolateForTest(t, home)
 	require.NoError(t, config.EnsureDirs())
@@ -560,7 +567,7 @@ func TestInstallToolchainWithTargets_PinsTargetToHostVersion(t *testing.T) {
 	settings.ManifestURL = server.URL + "/sdk-versions.json"
 	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 
-	err = InstallToolchainWithTargets(context.Background(), "sts", []string{"ohos"}, false)
+	err = app.InstallToolchainWithTargets(context.Background(), "sts", []string{"ohos"}, false)
 	require.Error(t, err, "install must fail when the target SDK lacks the host's resolved version")
 
 	installed, err := toolchain.ListInstalled()
@@ -573,6 +580,7 @@ func TestInstallToolchainWithTargets_PinsTargetToHostVersion(t *testing.T) {
 }
 
 func TestInstallToolchainWithTargets_FetchesManifestOnce(t *testing.T) {
+	app := newApplication("dev", "")
 	home := t.TempDir()
 	config.IsolateForTest(t, home)
 	require.NoError(t, config.EnsureDirs())
@@ -641,11 +649,12 @@ func TestInstallToolchainWithTargets_FetchesManifestOnce(t *testing.T) {
 	settings.ManifestURL = server.URL + "/sdk-versions.json"
 	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 
-	require.NoError(t, InstallToolchainWithTargets(context.Background(), "sts", []string{"ohos", "android"}, false))
+	require.NoError(t, app.InstallToolchainWithTargets(context.Background(), "sts", []string{"ohos", "android"}, false))
 	assert.Equal(t, int32(1), manifestRequests.Load())
 }
 
 func TestInstallToolchainWithTargets_BareVersionResolvesChannel(t *testing.T) {
+	app := newApplication("dev", "")
 	home := t.TempDir()
 	config.IsolateForTest(t, home)
 	require.NoError(t, config.EnsureDirs())
@@ -655,7 +664,7 @@ func TestInstallToolchainWithTargets_BareVersionResolvesChannel(t *testing.T) {
 	settings.ManifestURL = server.URL + "/sdk-versions.json"
 	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 
-	require.NoError(t, InstallToolchainWithTargets(context.Background(), "2.0.0", []string{"ohos"}, false))
+	require.NoError(t, app.InstallToolchainWithTargets(context.Background(), "2.0.0", []string{"ohos"}, false))
 
 	ohosKey, err := dist.CurrentTargetTuple("", "ohos")
 	require.NoError(t, err)
@@ -666,6 +675,7 @@ func TestInstallToolchainWithTargets_BareVersionResolvesChannel(t *testing.T) {
 }
 
 func TestInstallToolchainWithTargets_ExplicitVariantDoesNotSetDefault(t *testing.T) {
+	app := newApplication("dev", "")
 	home := t.TempDir()
 	config.IsolateForTest(t, home)
 	require.NoError(t, config.EnsureDirs())
@@ -677,7 +687,7 @@ func TestInstallToolchainWithTargets_ExplicitVariantDoesNotSetDefault(t *testing
 
 	ohosKey, err := dist.CurrentTargetTuple("", "ohos")
 	require.NoError(t, err)
-	require.NoError(t, InstallToolchainWithTargets(context.Background(), "sts-2.0.0-"+ohosKey, nil, false))
+	require.NoError(t, app.InstallToolchainWithTargets(context.Background(), "sts-2.0.0-"+ohosKey, nil, false))
 
 	installed, err := toolchain.ListInstalled()
 	require.NoError(t, err)
@@ -690,6 +700,7 @@ func TestInstallToolchainWithTargets_ExplicitVariantDoesNotSetDefault(t *testing
 }
 
 func TestInstallToolchainWithTargets_RejectsVariantPlusTargets(t *testing.T) {
+	app := newApplication("dev", "")
 	home := t.TempDir()
 	config.IsolateForTest(t, home)
 	require.NoError(t, config.EnsureDirs())
@@ -699,12 +710,13 @@ func TestInstallToolchainWithTargets_RejectsVariantPlusTargets(t *testing.T) {
 
 	ohosKey, err := dist.CurrentTargetTuple("", "ohos")
 	require.NoError(t, err)
-	err = InstallToolchainWithTargets(context.Background(), "sts-2.0.0-"+ohosKey, []string{"android"}, false)
+	err = app.InstallToolchainWithTargets(context.Background(), "sts-2.0.0-"+ohosKey, []string{"android"}, false)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "cannot combine target variant")
 }
 
 func TestInstallToolchainWithOptions_AlreadyInstalled(t *testing.T) {
+	app := newApplication("dev", "")
 	home := t.TempDir()
 	config.IsolateForTest(t, home)
 	require.NoError(t, config.EnsureDirs())
@@ -715,14 +727,15 @@ func TestInstallToolchainWithOptions_AlreadyInstalled(t *testing.T) {
 	settings.ManifestURL = server.URL + "/sdk-versions.json"
 	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 
-	require.NoError(t, InstallToolchainWithOptions(context.Background(), "lts", false))
+	require.NoError(t, app.InstallToolchainWithOptions(context.Background(), "lts", false))
 
 	// Second install without force — prints "already installed" and returns nil
-	err := InstallToolchainWithOptions(context.Background(), "lts", false)
+	err := app.InstallToolchainWithOptions(context.Background(), "lts", false)
 	assert.NoError(t, err, "already-installed is an informational no-op, not an error")
 }
 
 func TestInstallToolchainWithOptions_ForceReinstall(t *testing.T) {
+	app := newApplication("dev", "")
 	home := t.TempDir()
 	config.IsolateForTest(t, home)
 	require.NoError(t, config.EnsureDirs())
@@ -733,13 +746,14 @@ func TestInstallToolchainWithOptions_ForceReinstall(t *testing.T) {
 	settings.ManifestURL = server.URL + "/sdk-versions.json"
 	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 
-	require.NoError(t, InstallToolchainWithOptions(context.Background(), "lts", false))
+	require.NoError(t, app.InstallToolchainWithOptions(context.Background(), "lts", false))
 
-	err := InstallToolchainWithOptions(context.Background(), "lts", true)
+	err := app.InstallToolchainWithOptions(context.Background(), "lts", true)
 	assert.NoError(t, err, "force install should succeed even when already installed")
 }
 
 func TestInstallToolchainWithOptions_SetsDefault(t *testing.T) {
+	app := newApplication("dev", "")
 	home := t.TempDir()
 	config.IsolateForTest(t, home)
 	require.NoError(t, config.EnsureDirs())
@@ -750,7 +764,7 @@ func TestInstallToolchainWithOptions_SetsDefault(t *testing.T) {
 	settings.ManifestURL = server.URL + "/sdk-versions.json"
 	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 
-	require.NoError(t, InstallToolchainWithOptions(context.Background(), "lts", false))
+	require.NoError(t, app.InstallToolchainWithOptions(context.Background(), "lts", false))
 
 	reloaded, err := config.LoadSettings(filepath.Join(home, ".cjv", "settings.toml"))
 	require.NoError(t, err)
@@ -759,6 +773,7 @@ func TestInstallToolchainWithOptions_SetsDefault(t *testing.T) {
 }
 
 func TestInstallToolchainWithOptions_BootstrapsManagedBinary(t *testing.T) {
+	app := newApplication("dev", "")
 	home := t.TempDir()
 	config.IsolateForTest(t, home)
 	require.NoError(t, config.EnsureDirs())
@@ -775,13 +790,14 @@ func TestInstallToolchainWithOptions_BootstrapsManagedBinary(t *testing.T) {
 	_, err = os.Stat(managedBinary)
 	require.Error(t, err)
 
-	err = InstallToolchainWithOptions(context.Background(), "lts", false)
+	err = app.InstallToolchainWithOptions(context.Background(), "lts", false)
 	require.NoError(t, err)
 
 	assert.FileExists(t, managedBinary, "first install should bootstrap the managed cjv binary")
 }
 
 func TestInstallToolchainWithOptions_FailsWhenEnvSetupMissing(t *testing.T) {
+	app := newApplication("dev", "")
 	home := t.TempDir()
 	config.IsolateForTest(t, home)
 	require.NoError(t, config.EnsureDirs())
@@ -793,7 +809,7 @@ func TestInstallToolchainWithOptions_FailsWhenEnvSetupMissing(t *testing.T) {
 	settings.ManifestURL = server.URL + "/sdk-versions.json"
 	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 
-	err := InstallToolchainWithOptions(context.Background(), "lts", false)
+	err := app.InstallToolchainWithOptions(context.Background(), "lts", false)
 	require.Error(t, err)
 }
 
@@ -827,6 +843,7 @@ func TestFetchManifest_HTTPError(t *testing.T) {
 // the manifest.
 
 func TestInstallToolchainWithOptions_BareVersion(t *testing.T) {
+	app := newApplication("dev", "")
 	home := t.TempDir()
 	config.IsolateForTest(t, home)
 	require.NoError(t, config.EnsureDirs())
@@ -837,7 +854,7 @@ func TestInstallToolchainWithOptions_BareVersion(t *testing.T) {
 	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 
 	// Install by bare version — system should discover channel from manifest
-	require.NoError(t, InstallToolchainWithOptions(context.Background(), "1.0.5", false))
+	require.NoError(t, app.InstallToolchainWithOptions(context.Background(), "1.0.5", false))
 
 	installed, _ := toolchain.ListInstalled()
 	assert.Contains(t, installed, "lts-1.0.5",
@@ -845,6 +862,7 @@ func TestInstallToolchainWithOptions_BareVersion(t *testing.T) {
 }
 
 func TestInstallToolchainWithOptions_BareVersionNotFound(t *testing.T) {
+	app := newApplication("dev", "")
 	home := t.TempDir()
 	config.IsolateForTest(t, home)
 	require.NoError(t, config.EnsureDirs())
@@ -854,15 +872,16 @@ func TestInstallToolchainWithOptions_BareVersionNotFound(t *testing.T) {
 	settings.ManifestURL = server.URL + "/sdk-versions.json"
 	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 
-	err := InstallToolchainWithOptions(context.Background(), "99.99.99", false)
+	err := app.InstallToolchainWithOptions(context.Background(), "99.99.99", false)
 	assert.Error(t, err, "non-existent version should fail")
 }
 
 func TestInstallToolchainWithOptions_InvalidName(t *testing.T) {
+	app := newApplication("dev", "")
 	home := t.TempDir()
 	config.IsolateForTest(t, home)
 
-	err := InstallToolchainWithOptions(context.Background(), "+invalid", false)
+	err := app.InstallToolchainWithOptions(context.Background(), "+invalid", false)
 	assert.Error(t, err, "invalid name starting with + should fail")
 }
 
@@ -870,6 +889,7 @@ func TestInstallToolchainWithOptions_InvalidName(t *testing.T) {
 // in resolveAndLocate (different channel lookup).
 
 func TestInstallToolchainWithOptions_STS(t *testing.T) {
+	app := newApplication("dev", "")
 	home := t.TempDir()
 	config.IsolateForTest(t, home)
 	require.NoError(t, config.EnsureDirs())
@@ -879,13 +899,14 @@ func TestInstallToolchainWithOptions_STS(t *testing.T) {
 	settings.ManifestURL = server.URL + "/sdk-versions.json"
 	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 
-	require.NoError(t, InstallToolchainWithOptions(context.Background(), "sts", false))
+	require.NoError(t, app.InstallToolchainWithOptions(context.Background(), "sts", false))
 
 	installed, _ := toolchain.ListInstalled()
 	assert.Contains(t, installed, "sts-2.0.0")
 }
 
 func TestInstallToolchainWithOptions_SpecificVersion(t *testing.T) {
+	app := newApplication("dev", "")
 	home := t.TempDir()
 	config.IsolateForTest(t, home)
 	require.NoError(t, config.EnsureDirs())
@@ -895,7 +916,7 @@ func TestInstallToolchainWithOptions_SpecificVersion(t *testing.T) {
 	settings.ManifestURL = server.URL + "/sdk-versions.json"
 	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 
-	require.NoError(t, InstallToolchainWithOptions(context.Background(), "lts-1.0.5", false))
+	require.NoError(t, app.InstallToolchainWithOptions(context.Background(), "lts-1.0.5", false))
 
 	installed, _ := toolchain.ListInstalled()
 	assert.Contains(t, installed, "lts-1.0.5")
@@ -904,6 +925,7 @@ func TestInstallToolchainWithOptions_SpecificVersion(t *testing.T) {
 // Full lifecycle: install -> check -> update -> uninstall
 
 func TestFullLifecycle(t *testing.T) {
+	app := newApplication("dev", "")
 	home := t.TempDir()
 	cwd := t.TempDir()
 	config.IsolateForTest(t, home)
@@ -917,16 +939,16 @@ func TestFullLifecycle(t *testing.T) {
 	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 
 	// Install
-	require.NoError(t, InstallToolchainWithOptions(context.Background(), "lts", false))
+	require.NoError(t, app.InstallToolchainWithOptions(context.Background(), "lts", false))
 	installed, _ := toolchain.ListInstalled()
 	require.NotEmpty(t, installed)
 
 	// Update (already up to date)
-	_, updateErr := updateAll(context.Background())
+	_, updateErr := app.updateAll(context.Background())
 	require.NoError(t, updateErr)
 
 	// Uninstall
-	require.NoError(t, runUninstall(nil, []string{installed[0]}))
+	require.NoError(t, app.runUninstall(nil, []string{installed[0]}))
 	remaining, _ := toolchain.ListInstalled()
 	assert.Empty(t, remaining)
 }
@@ -934,6 +956,7 @@ func TestFullLifecycle(t *testing.T) {
 // Test installing bare version "2.0.0" — should discover STS channel.
 
 func TestInstallToolchainWithOptions_BareVersionSTS(t *testing.T) {
+	app := newApplication("dev", "")
 	home := t.TempDir()
 	config.IsolateForTest(t, home)
 	require.NoError(t, config.EnsureDirs())
@@ -943,7 +966,7 @@ func TestInstallToolchainWithOptions_BareVersionSTS(t *testing.T) {
 	settings.ManifestURL = server.URL + "/sdk-versions.json"
 	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 
-	require.NoError(t, InstallToolchainWithOptions(context.Background(), "2.0.0", false))
+	require.NoError(t, app.InstallToolchainWithOptions(context.Background(), "2.0.0", false))
 
 	installed, _ := toolchain.ListInstalled()
 	assert.Contains(t, installed, "sts-2.0.0")
@@ -952,6 +975,7 @@ func TestInstallToolchainWithOptions_BareVersionSTS(t *testing.T) {
 // Test installing both channels in sequence.
 
 func TestInstallBothChannels(t *testing.T) {
+	app := newApplication("dev", "")
 	home := t.TempDir()
 	config.IsolateForTest(t, home)
 	require.NoError(t, config.EnsureDirs())
@@ -961,8 +985,8 @@ func TestInstallBothChannels(t *testing.T) {
 	settings.ManifestURL = server.URL + "/sdk-versions.json"
 	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 
-	require.NoError(t, InstallToolchainWithOptions(context.Background(), "lts", false))
-	require.NoError(t, InstallToolchainWithOptions(context.Background(), "sts", false))
+	require.NoError(t, app.InstallToolchainWithOptions(context.Background(), "lts", false))
+	require.NoError(t, app.InstallToolchainWithOptions(context.Background(), "sts", false))
 
 	installed, _ := toolchain.ListInstalled()
 	assert.Len(t, installed, 2)
@@ -1020,6 +1044,7 @@ func TestValidateInstallation_EmptyDir(t *testing.T) {
 // Tests for runInstall -- the cobra handler that parses --force flag.
 
 func TestRunInstall_WithoutForce(t *testing.T) {
+	app := newApplication("dev", "")
 	home := t.TempDir()
 	config.IsolateForTest(t, home)
 	require.NoError(t, config.EnsureDirs())
@@ -1031,23 +1056,25 @@ func TestRunInstall_WithoutForce(t *testing.T) {
 
 	cmd := &cobra.Command{}
 	cmd.Flags().BoolP("force", "f", false, "")
-	err := runInstall(cmd, []string{"lts"})
+	err := app.runInstall(cmd, []string{"lts"})
 	assert.NoError(t, err)
 }
 
 func TestRunInstall_InvalidName(t *testing.T) {
+	app := newApplication("dev", "")
 	home := t.TempDir()
 	config.IsolateForTest(t, home)
 
 	cmd := &cobra.Command{}
 	cmd.Flags().BoolP("force", "f", false, "")
-	err := runInstall(cmd, []string{""})
+	err := app.runInstall(cmd, []string{""})
 	assert.Error(t, err, "empty name should fail")
 }
 
 // Test for InstallToolchainWithOptions — the public API that installs a toolchain.
 
 func TestInstallToolchainWithOptions_Wrapper(t *testing.T) {
+	app := newApplication("dev", "")
 	home := t.TempDir()
 	config.IsolateForTest(t, home)
 	require.NoError(t, config.EnsureDirs())
@@ -1057,21 +1084,23 @@ func TestInstallToolchainWithOptions_Wrapper(t *testing.T) {
 	settings.ManifestURL = server.URL + "/sdk-versions.json"
 	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 
-	require.NoError(t, InstallToolchainWithOptions(context.Background(), "lts", false))
+	require.NoError(t, app.InstallToolchainWithOptions(context.Background(), "lts", false))
 
 	installed, _ := toolchain.ListInstalled()
 	assert.NotEmpty(t, installed)
 }
 
 func TestInstallToolchainWithExtrasRejectsCustomAndTargetVariantWithTargets(t *testing.T) {
+	app := newApplication("dev", "")
 	home := t.TempDir()
 	config.IsolateForTest(t, home)
 
-	err := InstallToolchainWithExtras(context.Background(), "local-sdk", nil, nil, false)
+	err := app.InstallToolchainWithExtras(context.Background(), "local-sdk", nil, nil, false)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "custom toolchain")
+	assert.Contains(t, err.Error(), "local-sdk")
+	assert.Contains(t, err.Error(), "cjv toolchain link")
 
-	err = InstallToolchainWithExtras(context.Background(), "lts-1.0.5-linux-x64-ohos", []string{"android"}, nil, false)
+	err = app.InstallToolchainWithExtras(context.Background(), "lts-1.0.5-linux-x64-ohos", []string{"android"}, nil, false)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "cannot combine")
 }
@@ -1082,11 +1111,13 @@ func TestEnsurePathConfiguredCanBeDisabledByEnv(t *testing.T) {
 }
 
 func TestInstallComponentsForToolchainNoComponentsIsNoop(t *testing.T) {
-	require.NoError(t, InstallComponentsForToolchain(context.Background(), "lts", nil))
+	app := newApplication("dev", "")
+	require.NoError(t, app.InstallComponentsForToolchain(context.Background(), "lts", nil))
 }
 
 func TestInstallComponentsForToolchainRejectsInvalidAndMissingToolchain(t *testing.T) {
-	err := InstallComponentsForToolchain(context.Background(), "+bad", []string{"docs"})
+	app := newApplication("dev", "")
+	err := app.InstallComponentsForToolchain(context.Background(), "+bad", []string{"docs"})
 	require.Error(t, err)
 
 	home := t.TempDir()
@@ -1094,29 +1125,28 @@ func TestInstallComponentsForToolchainRejectsInvalidAndMissingToolchain(t *testi
 	config.ResetDefaultSettingsFileCache()
 	t.Cleanup(config.ResetDefaultSettingsFileCache)
 
-	err = InstallComponentsForToolchain(context.Background(), "lts-1.0.5", []string{"docs"})
+	err = app.InstallComponentsForToolchain(context.Background(), "lts-1.0.5", []string{"docs"})
 	require.Error(t, err)
 }
 
 func TestInstallComponentsListInputValidationAndAlreadyInstalled(t *testing.T) {
-	err := installComponentsList(context.Background(), "+bad", []string{"docs"}, false, true)
+	app := newApplication("dev", "")
+	err := app.installComponentsList(context.Background(), "+bad", []string{"docs"}, false, true)
 	require.Error(t, err)
 
-	err = installComponentsList(context.Background(), "local-sdk", []string{"docs"}, false, true)
+	err = app.installComponentsList(context.Background(), "local-sdk", []string{"docs"}, false, true)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "docs")
 
 	tcName := "lts-1.0.5"
 	setupComponentCLITest(t, tcName)
-	err = installComponentsList(context.Background(), tcName, []string{"unknown"}, false, true)
+	err = app.installComponentsList(context.Background(), tcName, []string{"unknown"}, false, true)
 	require.Error(t, err)
 
-	oldInstall := componentInstallFunc
-	componentInstallFunc = func(ctx context.Context, roots componentlib.Roots, tc toolchain.ToolchainName, name componentlib.Name, tuple, downloadsDir string, force bool) error {
+	app.componentInstallFunc = func(ctx context.Context, roots componentlib.Roots, tc toolchain.ToolchainName, name componentlib.Name, tuple, downloadsDir string, force bool) error {
 		return &cjverr.ComponentAlreadyInstalledError{Toolchain: tc.String(), Component: string(name)}
 	}
-	t.Cleanup(func() { componentInstallFunc = oldInstall })
 
-	err = installComponentsList(context.Background(), tcName, []string{"docs"}, false, false)
+	err = app.installComponentsList(context.Background(), tcName, []string{"docs"}, false, false)
 	require.NoError(t, err)
 }

@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/Zxilly/cjv/internal/config"
-	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -23,8 +22,7 @@ func TestRunDefault_SetsDefault(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, config.SaveSettings(&settings, settingsPath))
 
-	cmd := &cobra.Command{}
-	err = runDefault(cmd, []string{"lts-1.0.5"})
+	err = executeSettings(t, "default", "lts-1.0.5")
 	require.NoError(t, err)
 
 	reloaded, _ := config.LoadSettings(settingsPath)
@@ -42,8 +40,7 @@ func TestRunDefault_RejectsTargetVariant(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, config.SaveSettings(&settings, settingsPath))
 
-	cmd := &cobra.Command{}
-	err = runDefault(cmd, []string{name})
+	err = executeSettings(t, "default", name)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "target variant")
 
@@ -62,8 +59,7 @@ func TestRunDefault_ClearsDefault(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, config.SaveSettings(&settings, settingsPath))
 
-	cmd := &cobra.Command{}
-	err = runDefault(cmd, []string{"none"})
+	err = executeSettings(t, "default", "none")
 	require.NoError(t, err)
 
 	reloaded, _ := config.LoadSettings(settingsPath)
@@ -80,8 +76,7 @@ func TestRunDefault_ShowsCurrentDefault(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, config.SaveSettings(&settings, settingsPath))
 
-	cmd := &cobra.Command{}
-	err = runDefault(cmd, nil)
+	err = executeSettings(t, "default")
 	assert.NoError(t, err)
 }
 
@@ -96,7 +91,7 @@ func TestShowDefault_WithDefaultSet(t *testing.T) {
 	require.NoError(t, config.SaveSettings(&settings, settingsPath))
 
 	// Should succeed without error
-	err = showDefault()
+	err = executeSettings(t, "default")
 	assert.NoError(t, err)
 }
 
@@ -111,7 +106,7 @@ func TestShowDefault_NoDefaultSet(t *testing.T) {
 	require.NoError(t, config.SaveSettings(&settings, settingsPath))
 
 	// Should succeed (prints "no default" message, not an error)
-	err = showDefault()
+	err = executeSettings(t, "default")
 	assert.NoError(t, err)
 }
 
@@ -120,6 +115,6 @@ func TestShowDefault_NoSettingsFile(t *testing.T) {
 	config.IsolateForTest(t, tmp)
 
 	// No settings file — LoadSettings returns defaults
-	err := showDefault()
+	err := executeSettings(t, "default")
 	assert.NoError(t, err)
 }

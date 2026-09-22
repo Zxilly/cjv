@@ -18,11 +18,11 @@ type fixture struct {
 func (f fixture) Text() string { return f.B }
 
 func TestRender_JSONMode_EmitsCompactJSON(t *testing.T) {
-	t.Cleanup(func() { SetJSONMode(false) })
-	SetJSONMode(true)
+	var renderer Renderer
+	renderer.SetJSONMode(true)
 
 	var buf bytes.Buffer
-	requireNoError(t, RenderTo(&buf, fixture{A: 1, B: "hello"}))
+	requireNoError(t, renderer.RenderTo(&buf, fixture{A: 1, B: "hello"}))
 	out := buf.String()
 
 	var got fixture
@@ -35,11 +35,11 @@ func TestRender_JSONMode_EmitsCompactJSON(t *testing.T) {
 }
 
 func TestRender_TextMode_CallsTextAndAppendsNewline(t *testing.T) {
-	t.Cleanup(func() { SetJSONMode(false) })
-	SetJSONMode(false)
+	var renderer Renderer
+	renderer.SetJSONMode(false)
 
 	var buf bytes.Buffer
-	requireNoError(t, RenderTo(&buf, fixture{B: "hello"}))
+	requireNoError(t, renderer.RenderTo(&buf, fixture{B: "hello"}))
 	out := buf.String()
 	if out != "hello\n" {
 		t.Fatalf("expected %q, got %q", "hello\n", out)
@@ -47,11 +47,11 @@ func TestRender_TextMode_CallsTextAndAppendsNewline(t *testing.T) {
 }
 
 func TestRender_TextMode_EmptyTextProducesNoOutput(t *testing.T) {
-	t.Cleanup(func() { SetJSONMode(false) })
-	SetJSONMode(false)
+	var renderer Renderer
+	renderer.SetJSONMode(false)
 
 	var buf bytes.Buffer
-	requireNoError(t, RenderTo(&buf, fixture{B: ""}))
+	requireNoError(t, renderer.RenderTo(&buf, fixture{B: ""}))
 	out := buf.String()
 	if out != "" {
 		t.Fatalf("expected empty, got %q", out)
@@ -59,8 +59,8 @@ func TestRender_TextMode_EmptyTextProducesNoOutput(t *testing.T) {
 }
 
 func TestRenderError_MapsCjverrTypesToCodes(t *testing.T) {
-	t.Cleanup(func() { SetJSONMode(false) })
-	SetJSONMode(true)
+	var renderer Renderer
+	renderer.SetJSONMode(true)
 
 	cases := []struct {
 		err      error
@@ -74,7 +74,7 @@ func TestRenderError_MapsCjverrTypesToCodes(t *testing.T) {
 
 	for _, tc := range cases {
 		var stdout, stderr bytes.Buffer
-		requireSameError(t, RenderErrorTo(&stdout, &stderr, tc.err), tc.err)
+		requireSameError(t, renderer.RenderErrorTo(&stdout, &stderr, tc.err), tc.err)
 		out := stdout.String()
 
 		var env struct {
@@ -96,12 +96,12 @@ func TestRenderError_MapsCjverrTypesToCodes(t *testing.T) {
 }
 
 func TestRenderError_ExitCodeErrorIsPassthrough(t *testing.T) {
-	t.Cleanup(func() { SetJSONMode(false) })
-	SetJSONMode(true)
+	var renderer Renderer
+	renderer.SetJSONMode(true)
 
 	var stdout, stderr bytes.Buffer
 	err := &cjverr.ExitCodeError{Code: 2}
-	requireSameError(t, RenderErrorTo(&stdout, &stderr, err), err)
+	requireSameError(t, renderer.RenderErrorTo(&stdout, &stderr, err), err)
 	out := stdout.String()
 	if out != "" {
 		t.Fatalf("ExitCodeError should not produce envelope output, got %q", out)
@@ -109,12 +109,12 @@ func TestRenderError_ExitCodeErrorIsPassthrough(t *testing.T) {
 }
 
 func TestRenderError_TextModeSilent(t *testing.T) {
-	t.Cleanup(func() { SetJSONMode(false) })
-	SetJSONMode(false)
+	var renderer Renderer
+	renderer.SetJSONMode(false)
 
 	var stdout, stderr bytes.Buffer
 	err := &cjverr.NoToolchainConfiguredError{}
-	requireSameError(t, RenderErrorTo(&stdout, &stderr, err), err)
+	requireSameError(t, renderer.RenderErrorTo(&stdout, &stderr, err), err)
 	out := stdout.String()
 	if out != "" {
 		t.Fatalf("text mode should not write to stdout, got %q", out)

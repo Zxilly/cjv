@@ -1,5 +1,4 @@
-// Package output renders command results either as human-readable text or as
-// machine-readable JSON, depending on whether the global --json flag is set.
+// Package output renders command results as text or JSON for one CLI execution.
 //
 // Commands implement the Result interface (a Text() method) and call Render
 // to write their result to stdout. In JSON mode, the result struct is marshaled
@@ -17,14 +16,16 @@ import (
 	"github.com/Zxilly/cjv/internal/cjverr"
 )
 
-// jsonMode is the global toggle. Set by root command's PersistentPreRun.
-var jsonMode bool
+// Renderer owns the output mode of one command invocation.
+type Renderer struct {
+	JSON bool
+}
 
-// SetJSONMode enables or disables JSON output globally.
-func SetJSONMode(on bool) { jsonMode = on }
+// SetJSONMode enables or disables JSON output for this invocation.
+func (r *Renderer) SetJSONMode(on bool) { r.JSON = on }
 
 // IsJSON reports whether JSON output mode is active.
-func IsJSON() bool { return jsonMode }
+func (r *Renderer) IsJSON() bool { return r.JSON }
 
 // Result is the contract between commands and the renderer.
 //
@@ -41,8 +42,8 @@ type JSONValuer interface {
 }
 
 // RenderTo writes r to w in the active output mode.
-func RenderTo(w io.Writer, r Result) error {
-	if jsonMode {
+func (renderer *Renderer) RenderTo(w io.Writer, r Result) error {
+	if renderer.JSON {
 		payload := any(r)
 		if jsonValuer, ok := r.(JSONValuer); ok {
 			payload = jsonValuer.JSONValue()
@@ -63,16 +64,16 @@ func RenderTo(w io.Writer, r Result) error {
 }
 
 // Render writes r to os.Stdout.
-func Render(r Result) error {
-	return RenderTo(os.Stdout, r)
+func (renderer *Renderer) Render(r Result) error {
+	return renderer.RenderTo(os.Stdout, r)
 }
 
 // RenderErrorTo writes a JSON error envelope when JSON mode is active.
 // In non-JSON mode it does nothing; the caller handles error
 // printing via its existing path. In both modes the original err is returned
 // so cobra propagates the exit code unchanged.
-func RenderErrorTo(stdout, stderr io.Writer, err error) error {
-	if err == nil || !jsonMode {
+func (renderer *Renderer) RenderErrorTo(stdout, stderr io.Writer, err error) error {
+	if err == nil || !renderer.JSON {
 		return err
 	}
 	// ExitCodeError is a transparent wrapper used to propagate child process
@@ -92,6 +93,6 @@ func RenderErrorTo(stdout, stderr io.Writer, err error) error {
 }
 
 // RenderError writes a JSON error envelope to os.Stdout.
-func RenderError(err error) error {
-	return RenderErrorTo(os.Stdout, os.Stderr, err)
+func (renderer *Renderer) RenderError(err error) error {
+	return renderer.RenderErrorTo(os.Stdout, os.Stderr, err)
 }

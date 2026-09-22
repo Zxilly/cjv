@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/Zxilly/cjv/internal/cjverr"
-	"github.com/Zxilly/cjv/internal/cli/output"
 	clisettings "github.com/Zxilly/cjv/internal/cli/settings"
 	componentlib "github.com/Zxilly/cjv/internal/component"
 	"github.com/Zxilly/cjv/internal/dist"
@@ -98,66 +97,6 @@ func (r componentLinkResult) Text() string {
 	}))
 }
 
-var (
-	componentToolchain         string
-	componentAddForce          bool
-	componentLinkForce         bool
-	componentListInstalledOnly bool
-	componentListQuiet         bool
-)
-
-// componentLinkFunc is the seam tests use to stub out component.Link.
-var componentLinkFunc = componentlib.Link
-
-var componentCmd = &cobra.Command{
-	Use:   "component",
-	Short: i18n.T("ComponentSubcmdShort", nil),
-	Args:  cobra.NoArgs,
-}
-
-var componentAddCmd = &cobra.Command{
-	Use:   "add <name>...",
-	Short: i18n.T("ComponentAddShort", nil),
-	Args:  cobra.MinimumNArgs(1),
-	RunE:  runComponentAdd,
-}
-
-var componentRemoveCmd = &cobra.Command{
-	Use:     "remove <name>...",
-	Aliases: []string{"uninstall", "rm", "delete", "del"},
-	Short:   i18n.T("ComponentRemoveShort", nil),
-	Args:    cobra.MinimumNArgs(1),
-	RunE:    runComponentRemove,
-}
-
-var componentListCmd = &cobra.Command{
-	Use:   "list",
-	Short: i18n.T("ComponentListShort", nil),
-	Args:  cobra.NoArgs,
-	RunE:  runComponentList,
-}
-
-var componentLinkCmd = &cobra.Command{
-	Use:   "link <name> <path>",
-	Short: i18n.T("ComponentLinkShort", nil),
-	Args:  cobra.ExactArgs(2),
-	RunE:  runComponentLink,
-}
-
-func init() {
-	componentCmd.PersistentFlags().StringVar(&componentToolchain, "toolchain", "", i18n.T("ComponentFlagToolchain", nil))
-	componentAddCmd.Flags().BoolVar(&componentAddForce, "force", false, i18n.T("InstallFlagForce", nil))
-	componentListCmd.Flags().BoolVar(&componentListInstalledOnly, "installed", false, i18n.T("ComponentFlagInstalled", nil))
-	componentListCmd.Flags().BoolVarP(&componentListQuiet, "quiet", "q", false, i18n.T("ComponentFlagQuiet", nil))
-	componentLinkCmd.Flags().BoolVar(&componentLinkForce, "force", false, i18n.T("ComponentLinkFlagForce", nil))
-
-	componentCmd.AddCommand(componentAddCmd)
-	componentCmd.AddCommand(componentRemoveCmd)
-	componentCmd.AddCommand(componentListCmd)
-	componentCmd.AddCommand(componentLinkCmd)
-	rootCmd.AddCommand(componentCmd)
-}
-
 // resolveToolchainArg falls back to the active toolchain when flagValue is empty.
 func resolveToolchainArg(flagValue string) (string, toolchain.ToolchainName, error) {
 	if flagValue != "" {
@@ -186,24 +125,24 @@ func resolveToolchainArg(flagValue string) (string, toolchain.ToolchainName, err
 	return dir, parsed, nil
 }
 
-func runComponentAdd(cmd *cobra.Command, args []string) error {
-	tcDir, tcName, err := resolveToolchainArg(componentToolchain)
+func (app *application) runComponentAdd(cmd *cobra.Command, args []string) error {
+	tcDir, tcName, err := resolveToolchainArg(app.componentToolchain)
 	if err != nil {
 		return err
 	}
 	if tcName.IsCustom() {
 		return &cjverr.ComponentRequiresHostError{Component: args[0]}
 	}
-	return installComponentsList(cmd.Context(), filepath.Base(tcDir), args, componentAddForce, false)
+	return app.installComponentsList(cmd.Context(), filepath.Base(tcDir), args, app.componentAddForce, false)
 }
 
-func runComponentRemove(cmd *cobra.Command, args []string) error {
+func (app *application) runComponentRemove(cmd *cobra.Command, args []string) error {
 	parsed, parseErrs := parseComponentRemoveArgs(args)
 	if len(parsed) == 0 {
 		return errors.Join(parseErrs...)
 	}
 
-	tcDir, tcName, err := resolveToolchainArg(componentToolchain)
+	tcDir, tcName, err := resolveToolchainArg(app.componentToolchain)
 	if err != nil {
 		return err
 	}
@@ -225,7 +164,7 @@ func runComponentRemove(cmd *cobra.Command, args []string) error {
 			})
 			continue
 		}
-		if !output.IsJSON() {
+		if !app.output.IsJSON() {
 			fmt.Println(i18n.T("RemovingComponent", i18n.MsgData{"Component": string(c)}))
 		}
 		if err := componentlib.Remove(roots, c); err != nil {
@@ -242,21 +181,21 @@ func runComponentRemove(cmd *cobra.Command, args []string) error {
 	// removal is visible to the caller. In JSON mode the root handler writes an
 	// error envelope to stdout on failure, so only render the result there when
 	// it succeeded to avoid emitting two JSON documents.
-	if joinErr == nil || !output.IsJSON() {
-		if renderErr := output.RenderTo(cmdOutput(cmd), result); renderErr != nil {
+	if joinErr == nil || !app.output.IsJSON() {
+		if renderErr := app.output.RenderTo(cmdOutput(cmd), result); renderErr != nil {
 			return errors.Join(joinErr, renderErr)
 		}
 	}
 	return joinErr
 }
 
-func runComponentLink(cmd *cobra.Command, args []string) error {
+func (app *application) runComponentLink(cmd *cobra.Command, args []string) error {
 	name, err := componentlib.ParseName(args[0])
 	if err != nil {
 		return err
 	}
 
-	tcDir, _, err := resolveToolchainArg(componentToolchain)
+	tcDir, _, err := resolveToolchainArg(app.componentToolchain)
 	if err != nil {
 		return err
 	}
@@ -267,24 +206,24 @@ func runComponentLink(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	if !output.IsJSON() {
+	if !app.output.IsJSON() {
 		fmt.Println(i18n.T("InstallingComponent", i18n.MsgData{"Component": string(name)}))
 	}
 
-	absPath, err := componentLinkFunc(roots, name, args[1], componentLinkForce)
+	absPath, err := app.componentLinkFunc(roots, name, args[1], app.componentLinkForce)
 	if err != nil {
 		return err
 	}
 
-	return output.RenderTo(cmdOutput(cmd), componentLinkResult{
+	return app.output.RenderTo(cmdOutput(cmd), componentLinkResult{
 		Toolchain: toolchainName,
 		Component: string(name),
 		Path:      absPath,
 	})
 }
 
-func runComponentList(cmd *cobra.Command, args []string) error {
-	tcDir, tcName, err := resolveToolchainArg(componentToolchain)
+func (app *application) runComponentList(cmd *cobra.Command, args []string) error {
+	tcDir, tcName, err := resolveToolchainArg(app.componentToolchain)
 	if err != nil {
 		return err
 	}
@@ -316,7 +255,7 @@ func runComponentList(cmd *cobra.Command, args []string) error {
 	for _, n := range installed {
 		result.Components = append(result.Components, componentEntry{Name: string(n), Installed: true})
 	}
-	if !componentListInstalledOnly {
+	if !app.componentListInstalledOnly {
 		for _, n := range available {
 			if slices.Contains(installed, n) {
 				continue
@@ -324,10 +263,10 @@ func runComponentList(cmd *cobra.Command, args []string) error {
 			result.Components = append(result.Components, componentEntry{Name: string(n), Installed: false})
 		}
 	}
-	return output.RenderTo(cmdOutput(cmd), componentListView{
+	return app.output.RenderTo(cmdOutput(cmd), componentListView{
 		componentListResult: result,
-		quiet:               componentListQuiet,
-		installedOnly:       componentListInstalledOnly,
+		quiet:               app.componentListQuiet,
+		installedOnly:       app.componentListInstalledOnly,
 	})
 }
 
@@ -357,4 +296,51 @@ func parseComponentRemoveArgs(args []string) ([]componentlib.Name, []error) {
 		}
 	}
 	return out, errs
+}
+
+func (app *application) initComponentCommands() {
+	app.componentLinkFunc = componentlib.Link
+	app.componentCmd = &cobra.Command{
+		Use:   "component",
+		Short: i18n.T("ComponentSubcmdShort", nil),
+		Args:  cobra.NoArgs,
+	}
+	app.componentAddCmd = &cobra.Command{
+		Use:   "add <name>...",
+		Short: i18n.T("ComponentAddShort", nil),
+		Args:  cobra.MinimumNArgs(1),
+		RunE:  app.runComponentAdd,
+	}
+	app.componentRemoveCmd = &cobra.Command{
+		Use:     "remove <name>...",
+		Aliases: []string{"uninstall", "rm", "delete", "del"},
+		Short:   i18n.T("ComponentRemoveShort", nil),
+		Args:    cobra.MinimumNArgs(1),
+		RunE:    app.runComponentRemove,
+	}
+	app.componentListCmd = &cobra.Command{
+		Use:   "list",
+		Short: i18n.T("ComponentListShort", nil),
+		Args:  cobra.NoArgs,
+		RunE:  app.runComponentList,
+	}
+	app.componentLinkCmd = &cobra.Command{
+		Use:   "link <name> <path>",
+		Short: i18n.T("ComponentLinkShort", nil),
+		Args:  cobra.ExactArgs(2),
+		RunE:  app.runComponentLink,
+	}
+
+	app.componentCmd.PersistentFlags().StringVar(&app.componentToolchain, "toolchain", "", i18n.T("ComponentFlagToolchain", nil))
+	app.componentAddCmd.Flags().BoolVar(&app.componentAddForce, "force", false, i18n.T("InstallFlagForce", nil))
+	app.componentListCmd.Flags().BoolVar(&app.componentListInstalledOnly, "installed", false, i18n.T("ComponentFlagInstalled", nil))
+	app.componentListCmd.Flags().BoolVarP(&app.componentListQuiet, "quiet", "q", false, i18n.T("ComponentFlagQuiet", nil))
+	app.componentLinkCmd.Flags().BoolVar(&app.componentLinkForce, "force", false, i18n.T("ComponentLinkFlagForce", nil))
+
+	app.componentCmd.AddCommand(app.componentAddCmd)
+	app.componentCmd.AddCommand(app.componentRemoveCmd)
+	app.componentCmd.AddCommand(app.componentListCmd)
+	app.componentCmd.AddCommand(app.componentLinkCmd)
+	app.rootCmd.AddCommand(app.componentCmd)
+
 }

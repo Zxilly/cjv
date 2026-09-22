@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 
 	"github.com/Zxilly/cjv/internal/cjverr"
-	"github.com/Zxilly/cjv/internal/cli/output"
 	componentlib "github.com/Zxilly/cjv/internal/component"
 	"github.com/Zxilly/cjv/internal/env"
 	"github.com/Zxilly/cjv/internal/i18n"
@@ -17,18 +16,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var runCmd = &cobra.Command{
-	Use:   "run [--install] <toolchain> <command> [args...]",
-	Short: i18n.T("RunCmdShort", nil),
-	// Use ArbitraryArgs because DisableFlagParsing treats all tokens
-	// (including --help, --install) as positional args, making MinimumNArgs
-	// reject valid inputs like "cjv run --help". Validation is done in runRun.
-	Args:               cobra.ArbitraryArgs,
-	RunE:               runRun,
-	DisableFlagParsing: true,
-}
-
-func runRun(cmd *cobra.Command, args []string) error {
+func (app *application) runRun(cmd *cobra.Command, args []string) error {
 	ctx := cmd.Context()
 
 	// Manual flag parsing since DisableFlagParsing is true.
@@ -36,7 +24,7 @@ func runRun(cmd *cobra.Command, args []string) error {
 	install := false
 flagLoop:
 	for len(args) > 0 {
-		matched, err := applyJSONModeFlag(args[0])
+		matched, err := app.applyJSONModeFlag(args[0])
 		if err != nil {
 			return err
 		}
@@ -57,7 +45,7 @@ flagLoop:
 			break flagLoop
 		}
 	}
-	if output.IsJSON() {
+	if app.output.IsJSON() {
 		return &cjverr.UnsupportedForJSONError{Command: "run"}
 	}
 
@@ -78,7 +66,7 @@ flagLoop:
 	tcDir, findErr := toolchain.FindInstalled(parsed)
 	if findErr != nil {
 		if install {
-			if installErr := InstallToolchainWithOptions(ctx, tcInput, false); installErr != nil {
+			if installErr := app.InstallToolchainWithOptions(ctx, tcInput, false); installErr != nil {
 				return installErr
 			}
 			tcDir, findErr = toolchain.FindInstalled(parsed)
@@ -137,6 +125,18 @@ func lookPathInEnv(command string, environ []string) (string, bool) {
 	return env.LookPathInEnv(command, environ)
 }
 
-func init() {
-	rootCmd.AddCommand(runCmd)
+func (app *application) initRunCommands() {
+	app.runCmd = &cobra.Command{
+		Use:   "run [--install] <toolchain> <command> [args...]",
+		Short: i18n.T("RunCmdShort", nil),
+		// Use ArbitraryArgs because DisableFlagParsing treats all tokens
+		// (including --help, --install) as positional args, making MinimumNArgs
+		// reject valid inputs like "cjv run --help". Validation is done in runRun.
+		Args:               cobra.ArbitraryArgs,
+		RunE:               app.runRun,
+		DisableFlagParsing: true,
+	}
+
+	app.rootCmd.AddCommand(app.runCmd)
+
 }

@@ -10,10 +10,8 @@ import (
 )
 
 // TestMain configures the test environment for the cli package.
-// NOTE: cli tests must NOT use t.Parallel() because cobra stores flag values
-// in package-level variables (e.g. forceInstall, noSelfUpdate, overrideSetPath)
-// that are mutated during command execution. Parallel test runs would race on
-// this shared state.
+// Tests isolate process environment and sometimes redirect os.Stdout, so they
+// remain sequential even though each invocation owns its command state.
 func TestMain(m *testing.M) {
 	os.Exit(runTests(m))
 }
@@ -31,7 +29,9 @@ func runTests(m *testing.M) int {
 	// developer's system. Each test uses a unique t.TempDir() as
 	// CJV_HOME, so without this override every test run would append
 	// a new temp-dir entry to the system PATH.
-	ensurePathConfiguredFn = func() {}
+	if err := os.Setenv(config.EnvNoPathSetup, "1"); err != nil {
+		panic(err)
+	}
 	config.ResetDefaultSettingsFileCache()
 	return m.Run()
 }

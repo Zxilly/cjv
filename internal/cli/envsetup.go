@@ -7,7 +7,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/Zxilly/cjv/internal/cli/output"
 	componentlib "github.com/Zxilly/cjv/internal/component"
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/env"
@@ -33,12 +32,12 @@ func parseJSONModeFlag(arg string) (bool, bool, error) {
 	return true, value, nil
 }
 
-func applyJSONModeFlag(arg string) (bool, error) {
+func (app *application) applyJSONModeFlag(arg string) (bool, error) {
 	matched, value, err := parseJSONModeFlag(arg)
 	if err != nil || !matched {
 		return matched, err
 	}
-	output.SetJSONMode(value)
+	app.output.SetJSONMode(value)
 	return true, nil
 }
 
@@ -50,14 +49,14 @@ func applyJSONModeFlag(arg string) (bool, error) {
 // A "--" terminator stops all interpretation: everything after it is returned
 // verbatim. This lets a literal command that begins with "+" be run via
 // `cjv exec -- +cmd` without it being mistaken for a toolchain override.
-func stripJSONModeFlagPrefix(args []string, allowPlusToolchain bool) (toolchain string, rest []string, err error) {
+func (app *application) stripJSONModeFlagPrefix(args []string, allowPlusToolchain bool) (toolchain string, rest []string, err error) {
 	for i := range args {
 		arg := args[i]
 		if arg == "--" {
 			rest = append(rest, args[i+1:]...)
 			return toolchain, rest, nil
 		}
-		matched, ferr := applyJSONModeFlag(arg)
+		matched, ferr := app.applyJSONModeFlag(arg)
 		if ferr != nil {
 			return "", nil, ferr
 		}
@@ -76,13 +75,13 @@ func stripJSONModeFlagPrefix(args []string, allowPlusToolchain bool) (toolchain 
 	return toolchain, rest, nil
 }
 
-func newEnvsetupCmd() *cobra.Command {
+func (app *application) newEnvsetupCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "envsetup [+toolchain] [--target=SUFFIX] [--shell=TYPE]",
 		Short: i18n.T("EnvsetupCmdShort", nil),
 		Long:  i18n.T("EnvsetupCmdLong", nil),
 		Args:  cobra.ArbitraryArgs,
-		RunE:  envsetupRun,
+		RunE:  app.envsetupRun,
 	}
 	// Unlike exec/run, envsetup does not forward arguments to a child process,
 	// so it lets cobra parse flags normally: --json is the global persistent
@@ -92,11 +91,11 @@ func newEnvsetupCmd() *cobra.Command {
 	return cmd
 }
 
-func envsetupRun(cmd *cobra.Command, args []string) error {
+func (app *application) envsetupRun(cmd *cobra.Command, args []string) error {
 	shellFlag, _ := cmd.Flags().GetString("shell")
 	targetFlag, _ := cmd.Flags().GetString("target")
-	if output.IsJSON() {
-		return envsetupRunJSON(cmd, args, targetFlag)
+	if app.output.IsJSON() {
+		return app.envsetupRunJSON(cmd, args, targetFlag)
 	}
 	return envsetupRunWithShell(cmd, args, shellFlag, targetFlag)
 }
@@ -251,7 +250,7 @@ func envsetupResultFromData(data envsetupData) envsetupJSONResult {
 	}
 }
 
-func envsetupRunJSON(cmd *cobra.Command, args []string, target string) error {
+func (app *application) envsetupRunJSON(cmd *cobra.Command, args []string, target string) error {
 	ctx := cmd.Context()
 	if ctx == nil {
 		ctx = context.Background()
@@ -262,7 +261,7 @@ func envsetupRunJSON(cmd *cobra.Command, args []string, target string) error {
 	if err != nil {
 		return err
 	}
-	return output.RenderTo(cmdOutput(cmd), envsetupResultFromData(data))
+	return app.output.RenderTo(cmdOutput(cmd), envsetupResultFromData(data))
 }
 
 func envsetupRunWithShell(cmd *cobra.Command, args []string, shellFlag, target string) error {
@@ -305,6 +304,8 @@ func envsetupRunWithShell(cmd *cobra.Command, args []string, shellFlag, target s
 	return nil
 }
 
-func init() {
-	rootCmd.AddCommand(newEnvsetupCmd())
+func (app *application) initEnvsetupCommands() {
+
+	app.rootCmd.AddCommand(app.newEnvsetupCmd())
+
 }

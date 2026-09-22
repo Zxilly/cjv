@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/Zxilly/cjv/internal/cjverr"
-	"github.com/Zxilly/cjv/internal/cli/output"
 	clisettings "github.com/Zxilly/cjv/internal/cli/settings"
 	"github.com/Zxilly/cjv/internal/dist"
 	"github.com/Zxilly/cjv/internal/i18n"
@@ -14,12 +13,6 @@ import (
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 )
-
-var checkCmd = &cobra.Command{
-	Use:   "check",
-	Short: i18n.T("CheckCmdShort", nil),
-	RunE:  runCheck,
-}
 
 type checkEntry struct {
 	Name            string `json:"name"`
@@ -68,14 +61,14 @@ func (r checkResult) Text() string {
 	return b.String()
 }
 
-func runCheck(cmd *cobra.Command, args []string) error {
+func (app *application) runCheck(cmd *cobra.Command, args []string) error {
 	ctx := cmd.Context()
 	installed, err := toolchain.ListInstalled()
 	if err != nil {
 		return err
 	}
 	if len(installed) == 0 {
-		return output.RenderTo(cmdOutput(cmd), checkResult{NoneInstalled: true, CjvVersion: version})
+		return app.output.RenderTo(cmdOutput(cmd), checkResult{NoneInstalled: true, CjvVersion: app.version})
 	}
 
 	_, settings, err := clisettings.LoadSettings()
@@ -93,7 +86,7 @@ func runCheck(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	result := checkResult{CjvVersion: version}
+	result := checkResult{CjvVersion: app.version}
 
 	for _, name := range installed {
 		parsed, err := toolchain.ParseToolchainName(name)
@@ -134,9 +127,16 @@ func runCheck(cmd *cobra.Command, args []string) error {
 		result.Toolchains = append(result.Toolchains, entry)
 	}
 
-	return output.RenderTo(cmdOutput(cmd), result)
+	return app.output.RenderTo(cmdOutput(cmd), result)
 }
 
-func init() {
-	rootCmd.AddCommand(checkCmd)
+func (app *application) initCheckCommands() {
+	app.checkCmd = &cobra.Command{
+		Use:   "check",
+		Short: i18n.T("CheckCmdShort", nil),
+		RunE:  app.runCheck,
+	}
+
+	app.rootCmd.AddCommand(app.checkCmd)
+
 }

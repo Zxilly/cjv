@@ -9,43 +9,12 @@ import (
 	"strings"
 
 	"github.com/Zxilly/cjv/internal/cjverr"
-	"github.com/Zxilly/cjv/internal/cli/output"
 	componentlib "github.com/Zxilly/cjv/internal/component"
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/i18n"
 	"github.com/Zxilly/cjv/internal/toolchain"
 	"github.com/spf13/cobra"
 )
-
-var showCmd = &cobra.Command{
-	Use:   "show",
-	Short: i18n.T("ShowCmdShort", nil),
-	RunE:  runShowDefault,
-}
-
-var showActiveCmd = &cobra.Command{
-	Use:   "active",
-	Short: i18n.T("ShowActiveShort", nil),
-	RunE:  runShowActive,
-}
-
-var showInstalledCmd = &cobra.Command{
-	Use:   "installed",
-	Short: i18n.T("ShowInstalledShort", nil),
-	RunE:  runShowInstalled,
-}
-
-var showHomeCmd = &cobra.Command{
-	Use:   "home",
-	Short: i18n.T("ShowHomeShort", nil),
-	RunE: func(cmd *cobra.Command, args []string) error {
-		home, src, err := config.ResolveHomeWithSource()
-		if err != nil {
-			return err
-		}
-		return output.RenderTo(cmdOutput(cmd), showHomeResult{Home: home, Source: src})
-	},
-}
 
 type showHomeResult struct {
 	Home   string            `json:"home"`
@@ -170,13 +139,13 @@ func gatherInstalled() (showInstalledResult, error) {
 	return showInstalledResult{Toolchains: entries}, nil
 }
 
-func runShowDefault(cmd *cobra.Command, args []string) error {
+func (app *application) runShowDefault(cmd *cobra.Command, args []string) error {
 	active, activeErr := gatherActive()
 	if activeErr != nil {
 		if _, ok := errors.AsType[*cjverr.NoToolchainConfiguredError](activeErr); ok {
 			// Surface the informative message on stderr for humans, but do
 			// not error out — the rest of the report is still useful.
-			if !output.IsJSON() {
+			if !app.output.IsJSON() {
 				fmt.Fprintln(os.Stderr, activeErr)
 			}
 			active = nil
@@ -198,32 +167,60 @@ func runShowDefault(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	return output.RenderTo(cmdOutput(cmd), showDefaultResult{
+	return app.output.RenderTo(cmdOutput(cmd), showDefaultResult{
 		Active:      active,
 		DefaultHost: defaultHost,
 		Installed:   installed,
 	})
 }
 
-func runShowActive(cmd *cobra.Command, args []string) error {
+func (app *application) runShowActive(cmd *cobra.Command, args []string) error {
 	active, err := gatherActive()
 	if err != nil {
 		return err
 	}
-	return output.RenderTo(cmdOutput(cmd), *active)
+	return app.output.RenderTo(cmdOutput(cmd), *active)
 }
 
-func runShowInstalled(cmd *cobra.Command, args []string) error {
+func (app *application) runShowInstalled(cmd *cobra.Command, args []string) error {
 	r, err := gatherInstalled()
 	if err != nil {
 		return err
 	}
-	return output.RenderTo(cmdOutput(cmd), r)
+	return app.output.RenderTo(cmdOutput(cmd), r)
 }
 
-func init() {
-	showCmd.AddCommand(showActiveCmd)
-	showCmd.AddCommand(showInstalledCmd)
-	showCmd.AddCommand(showHomeCmd)
-	rootCmd.AddCommand(showCmd)
+func (app *application) initShowCommands() {
+	app.showCmd = &cobra.Command{
+		Use:   "show",
+		Short: i18n.T("ShowCmdShort", nil),
+		RunE:  app.runShowDefault,
+	}
+	app.showActiveCmd = &cobra.Command{
+		Use:   "active",
+		Short: i18n.T("ShowActiveShort", nil),
+		RunE:  app.runShowActive,
+	}
+	app.showInstalledCmd = &cobra.Command{
+		Use:   "installed",
+		Short: i18n.T("ShowInstalledShort", nil),
+		RunE:  app.runShowInstalled,
+	}
+	app.showHomeCmd = &cobra.Command{
+		Use:   "home",
+		Short: i18n.T("ShowHomeShort", nil),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			home, src, err := config.ResolveHomeWithSource()
+			if err != nil {
+				return err
+			}
+			return app.output.RenderTo(cmdOutput(cmd), showHomeResult{Home: home, Source: src})
+		},
+	}
+
+	app.showCmd.AddCommand(app.showActiveCmd)
+	app.showCmd.AddCommand(app.showInstalledCmd)
+	app.showCmd.AddCommand(app.showHomeCmd)
+	app.rootCmd.AddCommand(app.showCmd)
+
 }

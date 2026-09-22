@@ -29,6 +29,7 @@ func TestFileURLEscapesSpecialCharacters(t *testing.T) {
 }
 
 func TestRunDocPathPrintsResolvedDoc(t *testing.T) {
+	app := newApplication("dev", "")
 	tcName := "lts-1.0.5"
 	tcDir := setupComponentCLITest(t, tcName)
 	roots, err := componentlib.RootsFor(tcName)
@@ -38,17 +39,11 @@ func TestRunDocPathPrintsResolvedDoc(t *testing.T) {
 	require.NoError(t, os.WriteFile(docFile, []byte("docs"), 0o644))
 	require.NoError(t, componentlib.WriteManifest(tcDir, componentlib.Docs, []string{"index.html"}))
 
-	oldDocPath := docPath
-	oldDocToolchain := docToolchain
-	docPath = true
-	docToolchain = tcName
-	t.Cleanup(func() {
-		docPath = oldDocPath
-		docToolchain = oldDocToolchain
-	})
+	app.docPath = true
+	app.docToolchain = tcName
 
 	stdout, err := captureStdout(t, func() error {
-		return runDoc(&cobra.Command{}, nil)
+		return app.runDoc(&cobra.Command{}, nil)
 	})
 
 	require.NoError(t, err)
@@ -56,6 +51,7 @@ func TestRunDocPathPrintsResolvedDoc(t *testing.T) {
 }
 
 func TestRunDocOpensEscapedFileURL(t *testing.T) {
+	app := newApplication("dev", "")
 	tcName := "lts-1.0.5"
 	tcDir := setupComponentCLITest(t, tcName)
 	roots, err := componentlib.RootsFor(tcName)
@@ -65,23 +61,15 @@ func TestRunDocOpensEscapedFileURL(t *testing.T) {
 	require.NoError(t, os.WriteFile(docFile, []byte("docs"), 0o644))
 	require.NoError(t, componentlib.WriteManifest(tcDir, componentlib.Docs, []string{"docs #1/index%.html"}))
 
-	oldDocPath := docPath
-	oldDocToolchain := docToolchain
-	oldOpenURL := openURLFunc
 	var opened string
-	docPath = false
-	docToolchain = tcName
-	openURLFunc = func(u string) error {
+	app.docPath = false
+	app.docToolchain = tcName
+	app.openURLFunc = func(u string) error {
 		opened = u
 		return nil
 	}
-	t.Cleanup(func() {
-		docPath = oldDocPath
-		docToolchain = oldDocToolchain
-		openURLFunc = oldOpenURL
-	})
 
-	err = runDoc(&cobra.Command{}, []string{"docs #1/index%"})
+	err = app.runDoc(&cobra.Command{}, []string{"docs #1/index%"})
 
 	require.NoError(t, err)
 	assert.Contains(t, opened, "%23")
