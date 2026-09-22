@@ -71,6 +71,14 @@ type componentRemoveResult struct {
 	Removed []componentRemovedEntry `json:"removed"`
 }
 
+type componentAddResult struct {
+	Toolchain  string              `json:"toolchain"`
+	Components []componentlib.Name `json:"components"`
+	Forced     bool                `json:"forced"`
+}
+
+func (r componentAddResult) Text() string { return "" }
+
 func (r componentRemoveResult) Text() string {
 	var b strings.Builder
 	for _, e := range r.Removed {
@@ -133,7 +141,18 @@ func (app *application) runComponentAdd(cmd *cobra.Command, args []string) error
 	if tcName.IsCustom() {
 		return &cjverr.ComponentRequiresHostError{Component: args[0]}
 	}
-	return app.installComponentsList(cmd.Context(), filepath.Base(tcDir), args, app.componentAddForce, false)
+	if err := app.installComponentsList(cmd.Context(), filepath.Base(tcDir), args, app.componentAddForce, false); err != nil {
+		return err
+	}
+	components, err := componentlib.NormalizeList(args)
+	if err != nil {
+		return err
+	}
+	return app.output.RenderTo(cmdOutput(cmd), componentAddResult{
+		Toolchain:  filepath.Base(tcDir),
+		Components: components,
+		Forced:     app.componentAddForce,
+	})
 }
 
 func (app *application) runComponentRemove(cmd *cobra.Command, args []string) error {

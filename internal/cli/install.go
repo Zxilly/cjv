@@ -15,12 +15,25 @@ import (
 	"github.com/Zxilly/cjv/internal/proxy"
 	"github.com/Zxilly/cjv/internal/selfupdate"
 	"github.com/Zxilly/cjv/internal/toolchain"
+	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 )
 
+// reportProgress owns presentation for installation and component operations.
+func (app *application) reportProgress(message string, data i18n.MsgData) {
+	if app.output.IsJSON() {
+		return
+	}
+	text := i18n.T(message, data)
+	if message == "ToolchainInstalled" || message == "ComponentInstalled" {
+		text = color.GreenString("%s", text)
+	}
+	_, _ = fmt.Fprintln(app.rootCmd.OutOrStdout(), text)
+}
+
 func (app *application) lifecycleOptions() lifecycle.Options {
 	return lifecycle.Options{
-		IsJSON:               app.output.IsJSON,
+		Report:               app.reportProgress,
 		EnsurePathConfigured: app.ensurePathConfiguredFn,
 		ComponentInstall:     app.componentInstallFunc,
 		EnsureManagedBinary:  selfupdate.EnsureManagedExecutable,

@@ -62,7 +62,6 @@ func TestInstallRestoresToolchainsAfterFinalizeFailure(t *testing.T) {
 				finalizeErr := errors.New("proxy refresh failed")
 				managedCalled, proxyCalled, pathCalled := false, false, false
 				opts := lifecycle.Options{
-					IsJSON: func() bool { return true },
 					EnsureManagedBinary: func() (string, error) {
 						managedCalled = true
 						return filepath.Join(home, "bin", "cjv"), nil
@@ -123,7 +122,6 @@ func TestInstallPreservesFinalizeAndRollbackErrors(t *testing.T) {
 	staging := dest + toolchain.StagingSuffix
 	finalizeErr := errors.New("proxy refresh failed")
 	err := lifecycle.InstallToolchainWithExtras(t.Context(), "lts", nil, nil, false, lifecycle.Options{
-		IsJSON: func() bool { return true },
 		CreateProxyLinks: func() error {
 			require.FileExists(t, compilerPath(dest))
 			// Simulate a conflicting filesystem entry appearing while the

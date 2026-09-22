@@ -3,7 +3,6 @@ package lifecycle
 import (
 	"context"
 	"errors"
-	"fmt"
 	"path/filepath"
 	"strings"
 
@@ -38,6 +37,9 @@ func InstallComponentsForToolchain(ctx context.Context, tcInput string, componen
 // InstallComponentsList expects resolvedName as "<channel>-<version>". The
 // configured manifest source resolves component artifacts for every channel.
 func InstallComponentsList(ctx context.Context, resolvedName string, components []string, force, quiet bool, fetcher *ManifestFetcher, opts Options) error {
+	if quiet {
+		opts.Report = nil
+	}
 	resolvedTC, err := toolchain.ParseToolchainName(resolvedName)
 	if err != nil {
 		return err
@@ -79,15 +81,13 @@ func InstallComponentsList(ctx context.Context, resolvedName string, components 
 			if err := opts.installComponent(ctx, roots, resolvedTC, c, tuple, downloadsDir, force, fetcher); err != nil {
 				var alreadyErr *cjverr.ComponentAlreadyInstalledError
 				if errors.As(err, &alreadyErr) {
-					if !quiet && !opts.json() {
-						fmt.Println(err)
-					}
+					opts.report("ComponentAlreadyInstalled", i18n.MsgData{"Toolchain": resolvedName, "Component": string(c)})
 					continue
 				}
 				return err
 			}
 			if !quiet {
-				opts.green("ComponentInstalled", i18n.MsgData{"Toolchain": resolvedName, "Component": string(c)})
+				opts.report("ComponentInstalled", i18n.MsgData{"Toolchain": resolvedName, "Component": string(c)})
 			}
 		}
 		return nil

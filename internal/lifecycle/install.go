@@ -10,14 +10,14 @@ import (
 	"github.com/Zxilly/cjv/internal/i18n"
 	sdktarget "github.com/Zxilly/cjv/internal/target"
 	"github.com/Zxilly/cjv/internal/toolchain"
-	"github.com/fatih/color"
 )
 
 // Options carries the small adapter surface the lifecycle module needs from
 // callers. The install implementation is shared by CLI commands and proxy
 // auto-install; presentation stays outside the core module.
 type Options struct {
-	IsJSON               func() bool
+	// Report receives progress messages; nil keeps library operations silent.
+	Report               func(string, i18n.MsgData)
 	EnsurePathConfigured func()
 	// ComponentInstall, when set, replaces the real component installer and
 	// gives orchestration tests a source-independent adapter.
@@ -27,19 +27,9 @@ type Options struct {
 	ValidateInstallation func(dir, tuple string) error
 }
 
-func (o Options) json() bool {
-	return o.IsJSON != nil && o.IsJSON()
-}
-
-func (o Options) note(s string) {
-	if !o.json() {
-		fmt.Println(s)
-	}
-}
-
-func (o Options) green(key string, data i18n.MsgData) {
-	if !o.json() {
-		color.Green(i18n.T(key, data))
+func (o Options) report(message string, data i18n.MsgData) {
+	if o.Report != nil {
+		o.Report(message, data)
 	}
 }
 
@@ -55,8 +45,12 @@ func (o Options) installComponent(ctx context.Context, roots component.Roots, tc
 	if o.ComponentInstall != nil {
 		return o.ComponentInstall(ctx, roots, tc, name, tuple, downloadsDir, force)
 	}
-	fetcher.Note()
-	return component.InstallFromSource(ctx, roots, tc, name, tuple, downloadsDir, force, fetcher.source)
+	if o.Report != nil {
+		fetcher.Note()
+	}
+	return component.InstallFromSource(ctx, roots, tc, name, tuple, downloadsDir, force, fetcher.source, func(stage string) {
+		o.report(stage, i18n.MsgData{"Toolchain": tc.String(), "Component": string(name)})
+	})
 }
 
 func (o Options) createProxyLinks() error {

@@ -6,7 +6,6 @@ import (
 
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/dist"
-	"github.com/Zxilly/cjv/internal/i18n"
 	sdktarget "github.com/Zxilly/cjv/internal/target"
 	"github.com/Zxilly/cjv/internal/toolchain"
 )
@@ -51,7 +50,7 @@ func (f *ManifestFetcher) Get(ctx context.Context) (*dist.Manifest, error) {
 
 // Note emits the operation-scoped manifest progress message once.
 func (f *ManifestFetcher) Note() {
-	f.noteOnce.Do(func() { f.opts.note(i18n.T("FetchingManifest", nil)) })
+	f.noteOnce.Do(func() { f.opts.report("FetchingManifest", nil) })
 }
 
 func ResolveAndLocate(ctx context.Context, name toolchain.ToolchainName, settings *config.Settings, fetcher *ManifestFetcher) (ResolvedToolchain, error) {
@@ -88,7 +87,7 @@ func ResolveAndLocatePlatform(ctx context.Context, name toolchain.ToolchainName,
 		resolved.Target = tuple
 	}
 	if release.Channel == toolchain.Nightly && release.Download.SHA256 == "" {
-		fetcher.opts.note(i18n.T("NightlyNoChecksum", nil))
+		fetcher.opts.report("NightlyNoChecksum", nil)
 	}
 	result := ResolvedToolchain{
 		Name:        resolved.String(),

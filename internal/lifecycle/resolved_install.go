@@ -10,7 +10,6 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/Zxilly/cjv/internal/cjverr"
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/dist"
 	"github.com/Zxilly/cjv/internal/fstx"
@@ -47,10 +46,7 @@ func installResolvedWithDefault(ctx context.Context, rt ResolvedToolchain, setti
 	isReinstall := false
 	if _, err := os.Stat(destDir); err == nil {
 		if !force {
-			if opts.json() {
-				return &cjverr.ToolchainAlreadyInstalledError{Name: resolvedName}
-			}
-			fmt.Println(i18n.T("ToolchainAlreadyInstalled", i18n.MsgData{"Name": resolvedName}))
+			opts.report("ToolchainAlreadyInstalled", i18n.MsgData{"Name": resolvedName})
 			return nil
 		}
 		isReinstall = true
@@ -88,7 +84,7 @@ func installResolvedWithDefault(ctx context.Context, rt ResolvedToolchain, setti
 		}
 	}()
 
-	opts.note(i18n.T("Extracting", nil))
+	opts.report("Extracting", nil)
 	if err := dist.InstallSDK(ctx, archivePath, stagingDir); err != nil {
 		return err
 	}
@@ -115,7 +111,7 @@ func installResolvedWithDefault(ctx context.Context, rt ResolvedToolchain, setti
 		return err
 	}
 
-	opts.green("ToolchainInstalled", i18n.MsgData{"Name": resolvedName})
+	opts.report("ToolchainInstalled", i18n.MsgData{"Name": resolvedName})
 	return nil
 }
 

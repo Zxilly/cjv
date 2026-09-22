@@ -33,7 +33,7 @@ func InstallToolchainFromURL(ctx context.Context, name, url, sha256 string, forc
 		// transport (TLS for https — a plain http URL is the user's risk) plus the
 		// archive-magic sniff in DownloadCachedWithName. The staged file is owned
 		// by cjv and cleaned up on success.
-		opts.note(i18n.T("LinkDownloadingURL", i18n.MsgData{"URL": url}))
+		opts.report("LinkDownloadingURL", i18n.MsgData{"URL": url})
 		archivePath, err := dist.DownloadCachedWithName(ctx, url, sha256, downloadsDir, name)
 		return archivePath, true, err
 	})
@@ -46,7 +46,7 @@ func InstallToolchainFromURL(ctx context.Context, name, url, sha256 string, forc
 // stays where the user put it. The default toolchain is not changed.
 func InstallToolchainFromZip(ctx context.Context, name, archivePath, sha256 string, force, noStdx bool, opts Options) error {
 	return installLinkedToolchain(ctx, name, force, noStdx, opts, func(_ context.Context, _ string) (string, bool, error) {
-		opts.note(i18n.T("LinkUsingArchive", i18n.MsgData{"Path": archivePath}))
+		opts.report("LinkUsingArchive", i18n.MsgData{"Path": archivePath})
 		if err := dist.VerifyArchive(archivePath, sha256); err != nil {
 			return "", false, err
 		}
@@ -125,7 +125,7 @@ func installLinkedToolchain(ctx context.Context, name string, force, noStdx bool
 		}
 	}()
 
-	opts.note(i18n.T("Extracting", nil))
+	opts.report("Extracting", nil)
 	switch {
 	case innerSDK != "":
 		if err := dist.InstallSDK(ctx, innerSDK, stagingDir); err != nil {
@@ -189,7 +189,7 @@ func installLinkedToolchain(ctx context.Context, name string, force, noStdx bool
 	// (matching `install -c stdx` half-failure semantics) but surface recovery
 	// guidance, since a plain retry would hit ToolchainAlreadyInstalledError.
 	if innerStdx != "" && !noStdx {
-		opts.note(i18n.T("LinkInstallingStdx", i18n.MsgData{"Name": name}))
+		opts.report("LinkInstallingStdx", i18n.MsgData{"Name": name})
 		roots, err := component.RootsFor(name)
 		if err != nil {
 			return err
@@ -208,7 +208,7 @@ func installLinkedToolchain(ctx context.Context, name string, force, noStdx bool
 		}
 	}
 
-	opts.green("ToolchainInstalled", i18n.MsgData{"Name": name})
+	opts.report("ToolchainInstalled", i18n.MsgData{"Name": name})
 	return nil
 }
 

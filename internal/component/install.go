@@ -9,7 +9,6 @@ import (
 
 	"github.com/Zxilly/cjv/internal/cjverr"
 	"github.com/Zxilly/cjv/internal/dist"
-	"github.com/Zxilly/cjv/internal/i18n"
 	"github.com/Zxilly/cjv/internal/toolchain"
 )
 
@@ -21,12 +20,12 @@ import (
 func Install(ctx context.Context, roots Roots, tc toolchain.ToolchainName, name Name, tuple, downloadsDir string, force bool, mf *dist.Manifest) (retErr error) {
 	return installWithResolver(ctx, roots, tc, name, tuple, downloadsDir, force, func(spec Spec) (dist.ComponentInfo, error) {
 		return ResolveAssetInfo(spec, tc, tuple, mf)
-	})
+	}, nil)
 }
 
 // InstallFromSource installs a component through the configured manifest
 // distribution source.
-func InstallFromSource(ctx context.Context, roots Roots, tc toolchain.ToolchainName, name Name, tuple, downloadsDir string, force bool, source *dist.Source) (retErr error) {
+func InstallFromSource(ctx context.Context, roots Roots, tc toolchain.ToolchainName, name Name, tuple, downloadsDir string, force bool, source *dist.Source, report func(string)) (retErr error) {
 	return installWithResolver(ctx, roots, tc, name, tuple, downloadsDir, force, func(spec Spec) (dist.ComponentInfo, error) {
 		platform := ""
 		if name == Stdx {
@@ -37,10 +36,10 @@ func InstallFromSource(ctx context.Context, roots Roots, tc toolchain.ToolchainN
 			}
 		}
 		return source.ResolveComponent(ctx, tc.Channel, tc.Version, string(name), platform)
-	})
+	}, report)
 }
 
-func installWithResolver(ctx context.Context, roots Roots, tc toolchain.ToolchainName, name Name, tuple, downloadsDir string, force bool, resolve func(Spec) (dist.ComponentInfo, error)) (retErr error) {
+func installWithResolver(ctx context.Context, roots Roots, tc toolchain.ToolchainName, name Name, tuple, downloadsDir string, force bool, resolve func(Spec) (dist.ComponentInfo, error), report func(string)) (retErr error) {
 	spec, err := SpecFor(name)
 	if err != nil {
 		return err
@@ -71,10 +70,9 @@ func installWithResolver(ctx context.Context, roots Roots, tc toolchain.Toolchai
 		return fmt.Errorf("invalid component asset URL: %s", asset.URL)
 	}
 
-	fmt.Println(i18n.T("FetchingComponent", i18n.MsgData{
-		"Component": string(name),
-		"Toolchain": filepath.Base(roots.TcDir),
-	}))
+	if report != nil {
+		report("FetchingComponent")
+	}
 	archivePath, err := dist.DownloadCached(ctx, asset.URL, asset.SHA256, downloadsDir)
 	if err != nil {
 		return err
@@ -86,7 +84,9 @@ func installWithResolver(ctx context.Context, roots Roots, tc toolchain.Toolchai
 		}
 	}()
 
-	fmt.Println(i18n.T("InstallingComponent", i18n.MsgData{"Component": string(name)}))
+	if report != nil {
+		report("InstallingComponent")
+	}
 
 	return stageAndInstall(ctx, roots, spec, name, archivePath, force, alreadyInstalled)
 }

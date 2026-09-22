@@ -16,7 +16,7 @@ import (
 )
 
 func quietLifecycleOptions() Options {
-	return Options{IsJSON: func() bool { return true }}
+	return Options{}
 }
 
 func TestResolveTargetToolchainUsesManifestNightlyVersion(t *testing.T) {
