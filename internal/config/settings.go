@@ -42,6 +42,10 @@ type Settings struct {
 	// GitCodeAPIKey preserves settings v1 files created by earlier cjv releases.
 	GitCodeAPIKey string            `toml:"gitcode_api_key,omitempty"`
 	Overrides     map[string]string `toml:"overrides,omitempty"`
+
+	// snapshot retains the user-defined fields and the effective values read
+	// by SettingsFile. It is immutable and shared by copies for safe rollback.
+	snapshot *settingsSnapshot
 }
 
 func DefaultSettings() Settings {
@@ -148,13 +152,36 @@ func migrateSettings(s *Settings) {
 
 // Prefer SettingsFile.Save when a cached SettingsFile is available.
 func SaveSettings(s *Settings, path string) error {
+	data, _, err := prepareSettingsValues(settingsToSave(s))
+	if err != nil {
+		return err
+	}
+	return writeSettingsData(data, path)
+}
+
+// prepareSettingsValues validates the exact encoded document and prepares the
+// cache before publication. No read or validation step may fail after the
+// atomic replacement succeeds: callers use a save error to decide to roll back.
+func prepareSettingsValues(values map[string]any) ([]byte, *Settings, error) {
+	var buf bytes.Buffer
+	enc := toml.NewEncoder(&buf)
+	if err := enc.Encode(values); err != nil {
+		return nil, nil, err
+	}
+	s, meta, err := decodeSettingsTOML(buf.Bytes())
+	if err != nil {
+		return nil, nil, fmt.Errorf("invalid settings document: %w", err)
+	}
+	if err := applyDecodedSettings(&s, meta); err != nil {
+		return nil, nil, err
+	}
+	applyFallback(&s, meta)
+	return buf.Bytes(), snapshotSettings(&s, meta), nil
+}
+
+func writeSettingsData(data []byte, path string) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
-	var buf bytes.Buffer
-	enc := toml.NewEncoder(&buf)
-	if err := enc.Encode(s); err != nil {
-		return err
-	}
-	return utils.WriteFileAtomic(path, buf.Bytes(), 0o644)
+	return utils.WriteFileAtomic(path, data, 0o644)
 }

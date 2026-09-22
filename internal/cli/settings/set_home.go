@@ -30,13 +30,7 @@ func newSetHomeCommand() *cobra.Command {
 			if display == "" {
 				display = "(unset)"
 			}
-			return updateSetting(cmd.OutOrStdout(), "home", display, func(s *config.Settings) bool {
-				if s.Home == stored {
-					return false
-				}
-				s.Home = stored
-				return true
-			})
+			return updateSetting(cmd.OutOrStdout(), "home", display, config.SettingsUpdate{Home: &stored})
 		},
 	}
 }

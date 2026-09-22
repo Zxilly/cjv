@@ -40,7 +40,7 @@ func (sf *SettingsFile) Load() (*Settings, error) {
 		return copySettings(sf.cached), nil
 	}
 
-	s, _, err := LoadSettingsWithFallback(sf.path)
+	s, err := loadSettingsSnapshot(sf.path)
 	if err != nil {
 		return nil, err
 	}
@@ -48,15 +48,49 @@ func (sf *SettingsFile) Load() (*Settings, error) {
 	return copySettings(s), nil
 }
 
-// Save writes settings to disk and updates the in-memory cache.
+// Save writes a snapshot and updates the cache. Loaded snapshots preserve the
+// original user-defined fields plus changed values, including on rollback.
+// Use Update when a value equal to an inherited value must become explicit.
 func (sf *SettingsFile) Save(s *Settings) error {
 	sf.mu.Lock()
 	defer sf.mu.Unlock()
 
-	if err := SaveSettings(s, sf.path); err != nil {
+	return sf.saveLocked(settingsToSave(s))
+}
+
+// Update persists explicit user choices without copying inherited settings to
+// the user file. It reports whether the persisted choices changed.
+func (sf *SettingsFile) Update(update SettingsUpdate) (bool, error) {
+	sf.mu.Lock()
+	defer sf.mu.Unlock()
+
+	if sf.cached == nil {
+		s, err := loadSettingsSnapshot(sf.path)
+		if err != nil {
+			return false, err
+		}
+		sf.cached = s
+	}
+	values := maps.Clone(sf.cached.snapshot.persisted)
+	update.apply(values)
+	if maps.EqualFunc(values, sf.cached.snapshot.persisted, settingsValueEqual) {
+		return false, nil
+	}
+	if err := sf.saveLocked(values); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+func (sf *SettingsFile) saveLocked(values map[string]any) error {
+	data, s, err := prepareSettingsValues(values)
+	if err != nil {
 		return err
 	}
-	sf.cached = copySettings(s)
+	if err := writeSettingsData(data, sf.path); err != nil {
+		return err
+	}
+	sf.cached = s
 	return nil
 }
 

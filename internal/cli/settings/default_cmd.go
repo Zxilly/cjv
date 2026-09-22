@@ -5,6 +5,7 @@ import (
 	"io"
 	"log/slog"
 
+	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/i18n"
 	"github.com/Zxilly/cjv/internal/toolchain"
 	"github.com/spf13/cobra"
@@ -27,14 +28,14 @@ func runDefault(cmd *cobra.Command, args []string) error {
 
 	name := args[0]
 
-	sf, settings, err := LoadSettings()
+	sf, err := config.DefaultSettingsFile()
 	if err != nil {
 		return err
 	}
 
 	if name == "none" {
-		settings.DefaultToolchain = ""
-		if err := sf.Save(settings); err != nil {
+		empty := ""
+		if _, err := sf.Update(config.SettingsUpdate{DefaultToolchain: &empty}); err != nil {
 			return err
 		}
 		_, err := fmt.Fprintln(cmd.OutOrStdout(), i18n.T("DefaultCleared", nil))
@@ -57,8 +58,7 @@ func runDefault(cmd *cobra.Command, args []string) error {
 		slog.Warn("toolchain is not installed", "name", normalizedName)
 	}
 
-	settings.DefaultToolchain = normalizedName
-	if err := sf.Save(settings); err != nil {
+	if _, err := sf.Update(config.SettingsUpdate{DefaultToolchain: &normalizedName}); err != nil {
 		return err
 	}
 

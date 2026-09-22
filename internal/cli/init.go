@@ -154,15 +154,8 @@ func activateInitHomePath(path string) error {
 	if err != nil {
 		return err
 	}
-	settings, err := sf.Load()
-	if err != nil {
+	if _, err := sf.Update(config.SettingsUpdate{Home: &path}); err != nil {
 		return err
-	}
-	if settings.Home != path {
-		settings.Home = path
-		if err := sf.Save(settings); err != nil {
-			return err
-		}
 	}
 	return os.Setenv(config.EnvHome, path)
 }

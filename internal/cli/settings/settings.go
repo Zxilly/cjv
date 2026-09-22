@@ -21,18 +21,19 @@ func LoadSettings() (*config.SettingsFile, *config.Settings, error) {
 	return sf, s, nil
 }
 
-// updateSetting loads settings, applies mutate, saves if changed, and prints confirmation.
-// mutate should return true if the setting was changed.
-func updateSetting(w io.Writer, key, displayValue string, mutate func(*config.Settings) bool) error {
-	sf, settings, err := LoadSettings()
+// updateSetting persists the user's explicit choice and prints confirmation
+// when it changes the user file, even if its effective value was inherited.
+func updateSetting(w io.Writer, key, displayValue string, update config.SettingsUpdate) error {
+	sf, err := config.DefaultSettingsFile()
 	if err != nil {
 		return err
 	}
-	if !mutate(settings) {
-		return nil
-	}
-	if err := sf.Save(settings); err != nil {
+	changed, err := sf.Update(update)
+	if err != nil {
 		return err
+	}
+	if !changed {
+		return nil
 	}
 	_, err = fmt.Fprintln(w, i18n.T("SettingUpdated", i18n.MsgData{
 		"Key":   key,

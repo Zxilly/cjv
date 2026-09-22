@@ -63,7 +63,7 @@ func newOverrideSetCommand() *cobra.Command {
 				}
 			}
 			settings.Overrides[dir] = tc
-			if err := sf.Save(settings); err != nil {
+			if _, err := sf.Update(config.SettingsUpdate{Overrides: settings.Overrides}); err != nil {
 				return err
 			}
 
@@ -111,7 +111,7 @@ func newOverrideUnsetCommand() *cobra.Command {
 				return errors.New(i18n.T("NoOverrideSet", i18n.MsgData{"Dir": dir}))
 			}
 
-			if err := sf.Save(settings); err != nil {
+			if _, err := sf.Update(config.SettingsUpdate{Overrides: settings.Overrides}); err != nil {
 				return err
 			}
 
@@ -150,7 +150,7 @@ func unsetNonexistentOverrides(w io.Writer, settings *config.Settings, sf *confi
 		_, err := fmt.Fprintln(w, i18n.T("NoNonexistentOverrides", nil))
 		return err
 	}
-	if err := sf.Save(settings); err != nil {
+	if _, err := sf.Update(config.SettingsUpdate{Overrides: settings.Overrides}); err != nil {
 		return err
 	}
 	_, err := fmt.Fprintln(w, i18n.TP("RemovedNonexistentOverrides", i18n.MsgData{"Count": strconv.Itoa(removed)}, removed))

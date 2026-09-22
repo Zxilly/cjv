@@ -5,6 +5,10 @@ import (
 	"path/filepath"
 	"sync"
 	"testing"
+
+	"github.com/BurntSushi/toml"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestSettingsFile_LoadCachesResult(t *testing.T) {
@@ -83,4 +87,107 @@ func TestSettingsFile_ConcurrentAccess(t *testing.T) {
 		})
 	}
 	wg.Wait()
+}
+
+func TestSettingsFileSavePreservesAndRestoresProvenance(t *testing.T) {
+	dir := t.TempDir()
+	fallback := filepath.Join(dir, "fallback.toml")
+	t.Setenv(EnvFallbackSettings, fallback)
+	require.NoError(t, os.WriteFile(fallback, []byte("default_toolchain = 'lts-1.0.5'\nauto_install = false\n"), 0o600))
+	sf := NewSettingsFile(filepath.Join(dir, "settings.toml"))
+	before, err := sf.Load()
+	require.NoError(t, err)
+
+	changed := copySettings(before)
+	changed.Overrides["project"] = "sts"
+	require.NoError(t, sf.Save(changed))
+	var stored map[string]any
+	_, err = toml.DecodeFile(sf.Path(), &stored)
+	require.NoError(t, err)
+	assert.NotContains(t, stored, "default_toolchain")
+	assert.NotContains(t, stored, "auto_install")
+	assert.Contains(t, stored, "overrides")
+
+	// Rollback restores field presence as well as the values seen before the
+	// operation, so a later administrator change is still inherited.
+	require.NoError(t, sf.Save(before))
+	require.NoError(t, os.WriteFile(fallback, []byte("default_toolchain = 'lts-1.0.6'\nauto_install = true\n"), 0o600))
+	sf.Invalidate()
+	restored, err := sf.Load()
+	require.NoError(t, err)
+	assert.Empty(t, restored.Overrides)
+	assert.Equal(t, "lts-1.0.6", restored.DefaultToolchain)
+	assert.True(t, restored.AutoInstall)
+}
+
+func TestSettingsFileUpdateTracksExplicitChoices(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv(EnvFallbackSettings, filepath.Join(dir, "missing-fallback.toml"))
+	t.Setenv(EnvDistServer, "https://temporary.example/cjv")
+	sf := NewSettingsFile(filepath.Join(dir, "settings.toml"))
+	autoInstall := true // Equal to the built-in default, but explicitly chosen.
+	changed, err := sf.Update(SettingsUpdate{AutoInstall: &autoInstall})
+	require.NoError(t, err)
+	assert.True(t, changed)
+	changed, err = sf.Update(SettingsUpdate{AutoInstall: &autoInstall})
+	require.NoError(t, err)
+	assert.False(t, changed)
+	loaded, err := sf.Load()
+	require.NoError(t, err)
+	assert.Equal(t, "https://temporary.example/cjv", loaded.ResolveDistServer())
+	var stored map[string]any
+	_, err = toml.DecodeFile(sf.Path(), &stored)
+	require.NoError(t, err)
+	assert.Equal(t, map[string]any{"version": int64(1), "auto_install": true}, stored)
+}
+
+func TestSettingsFileFailedUpdateKeepsCache(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv(EnvFallbackSettings, filepath.Join(dir, "missing-fallback.toml"))
+	sf := NewSettingsFile(filepath.Join(dir, "settings.toml"))
+	before, err := sf.Load()
+	require.NoError(t, err)
+	// A directory at the destination prevents the atomic file replacement.
+	require.NoError(t, os.Mkdir(sf.Path(), 0o700))
+	autoInstall := false
+	changed, err := sf.Update(SettingsUpdate{AutoInstall: &autoInstall})
+	require.Error(t, err)
+	assert.False(t, changed)
+	after, err := sf.Load()
+	require.NoError(t, err)
+	assert.Equal(t, before, after)
+}
+
+func TestSettingsFileRejectsInvalidDocumentBeforePublishing(t *testing.T) {
+	for _, operation := range []string{"save", "update"} {
+		t.Run(operation, func(t *testing.T) {
+			dir := t.TempDir()
+			t.Setenv(EnvFallbackSettings, filepath.Join(dir, "missing-fallback.toml"))
+			sf := NewSettingsFile(filepath.Join(dir, "settings.toml"))
+			initial := DefaultSettings()
+			initial.DefaultToolchain = "lts-1.0.5"
+			require.NoError(t, sf.Save(&initial))
+			before, err := os.ReadFile(sf.Path())
+			require.NoError(t, err)
+			// The TOML encoder permits these bytes, but a settings reader
+			// rejects the document. Failure must leave the old reference intact.
+			invalid := "sdk-\xff"
+			if operation == "save" {
+				settings, err := sf.Load()
+				require.NoError(t, err)
+				settings.DefaultToolchain = invalid
+				require.Error(t, sf.Save(settings))
+			} else {
+				changed, err := sf.Update(SettingsUpdate{DefaultToolchain: &invalid})
+				require.Error(t, err)
+				assert.False(t, changed)
+			}
+			after, err := os.ReadFile(sf.Path())
+			require.NoError(t, err)
+			assert.Equal(t, before, after)
+			cached, err := sf.Load()
+			require.NoError(t, err)
+			assert.Equal(t, initial.DefaultToolchain, cached.DefaultToolchain)
+		})
+	}
 }

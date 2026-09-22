@@ -28,7 +28,11 @@ func LoadSettingsWithFallback(userPath string) (*Settings, toml.MetaData, error)
 	if err != nil {
 		return nil, toml.MetaData{}, err
 	}
+	applyFallback(s, meta)
+	return s, meta, nil
+}
 
+func applyFallback(s *Settings, meta toml.MetaData) {
 	fbPath := DefaultFallbackPath()
 	fb, fbErr := loadFallbackSettings(fbPath)
 	if fbErr != nil {
@@ -37,11 +41,10 @@ func LoadSettingsWithFallback(userPath string) (*Settings, toml.MetaData, error)
 		} else {
 			slog.Warn("failed to load fallback settings", "path", fbPath, "error", fbErr)
 		}
-		return s, meta, nil
+		return
 	}
 
 	mergeFromFallback(s, fb, meta)
-	return s, meta, nil
 }
 
 // loadFallbackSettings loads settings from the fallback path.
