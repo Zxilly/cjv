@@ -3,7 +3,6 @@ package env
 import (
 	"os"
 	"path/filepath"
-	"runtime"
 )
 
 func libraryPathEntries(cfg *EnvConfig) []string {
@@ -39,12 +38,4 @@ func libraryPathKey(goos string) string {
 	default:
 		return "LD_LIBRARY_PATH"
 	}
-}
-
-func RuntimeLibraryPathKey() string {
-	return libraryPathKey(runtime.GOOS)
-}
-
-func ExistingLibraryPathEntries(cfg *EnvConfig) []string {
-	return libraryPathEntries(cfg)
 }

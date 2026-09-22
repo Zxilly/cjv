@@ -2,4 +2,4 @@
 
 package env
 
-func applyPlatformVars(_ *EnvConfig) {}
+func applyPlatformVars(_ map[string]string, _ []string) {}

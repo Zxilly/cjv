@@ -11,7 +11,6 @@ import (
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/env"
 	"github.com/Zxilly/cjv/internal/i18n"
-	"github.com/Zxilly/cjv/internal/resolve"
 	"github.com/spf13/cobra"
 )
 
@@ -101,11 +100,9 @@ func (app *application) envsetupRun(cmd *cobra.Command, args []string) error {
 }
 
 type envsetupData struct {
-	active resolve.ActiveToolchain
-	cfg    *env.EnvConfig
-	home   string
-	bin    string
-	source string
+	runtime env.Runtime
+	home    string
+	source  string
 }
 
 type envsetupJSONResult struct {
@@ -168,11 +165,9 @@ func loadEnvsetupData(ctx context.Context, tcOverride, target string) (envsetupD
 	}
 
 	return envsetupData{
-		active: rt.Active,
-		cfg:    rt.Cfg,
-		home:   home,
-		bin:    rt.CjvBinDir,
-		source: envsetupSource(tcOverride, rt.Active.Source),
+		runtime: rt,
+		home:    home,
+		source:  envsetupSource(tcOverride, rt.Active.Source),
 	}, nil
 }
 
@@ -194,21 +189,6 @@ func envsetupSource(tcOverride string, source config.OverrideSource) string {
 	}
 }
 
-func envsetupVarsForJSON(cfg *env.EnvConfig) map[string]string {
-	vars := make(map[string]string)
-	if cfg == nil {
-		return vars
-	}
-	libraryKey := env.RuntimeLibraryPathKey()
-	for k, v := range cfg.Vars {
-		if k == "" || k == config.EnvToolchain || k == config.EnvRecursionCount || k == libraryKey {
-			continue
-		}
-		vars[k] = v
-	}
-	return vars
-}
-
 // jsonStrings normalizes a slice for JSON output so an empty or nil input
 // serializes as [] rather than null, keeping the schema's array fields a
 // stable shape for typed consumers.
@@ -216,8 +196,9 @@ func jsonStrings(s []string) []string {
 	return append(make([]string, 0, len(s)), s...)
 }
 
-func envsetupResultFromData(data envsetupData) envsetupJSONResult {
-	libraryKey := env.RuntimeLibraryPathKey()
+func envsetupResultFromData(data envsetupData, baseEnv []string) envsetupJSONResult {
+	contributed := data.runtime.Contributions(baseEnv)
+	libraryKey := contributed.LibraryPathKey
 	var libraryKeyPtr *string
 	if libraryKey != "" {
 		libraryKeyPtr = &libraryKey
@@ -226,25 +207,25 @@ func envsetupResultFromData(data envsetupData) envsetupJSONResult {
 	return envsetupJSONResult{
 		SchemaVersion: 1,
 		Toolchain: envsetupToolchainJSON{
-			Name:       data.active.Name,
-			Root:       data.active.Dir,
+			Name:       data.runtime.Active.Name,
+			Root:       data.runtime.Active.Dir,
 			Source:     data.source,
-			Targets:    jsonStrings(data.active.Targets),
-			Components: jsonStrings(data.active.Components),
+			Targets:    jsonStrings(data.runtime.Active.Targets),
+			Components: jsonStrings(data.runtime.Active.Components),
 		},
 		CJV: envsetupCJVJSON{
 			Home: data.home,
-			Bin:  data.bin,
+			Bin:  data.runtime.CjvBinDir,
 		},
 		Env: envsetupEnvironmentJSON{
-			Vars: envsetupVarsForJSON(data.cfg),
+			Vars: contributed.Vars,
 			Path: envsetupPathJSON{
-				Prepend: jsonStrings(data.cfg.PathPrepend),
-				Append:  jsonStrings(data.cfg.PathAppend),
+				Prepend: jsonStrings(contributed.PathPrepend),
+				Append:  jsonStrings(contributed.PathAppend),
 			},
 			LibraryPath: envsetupLibraryPathJSON{
 				Key:     libraryKeyPtr,
-				Prepend: jsonStrings(env.ExistingLibraryPathEntries(data.cfg)),
+				Prepend: jsonStrings(contributed.LibraryPathPrepend),
 			},
 		},
 	}
@@ -261,7 +242,7 @@ func (app *application) envsetupRunJSON(cmd *cobra.Command, args []string, targe
 	if err != nil {
 		return err
 	}
-	return app.output.RenderTo(cmdOutput(cmd), envsetupResultFromData(data))
+	return app.output.RenderTo(cmdOutput(cmd), envsetupResultFromData(data, os.Environ()))
 }
 
 func envsetupRunWithShell(cmd *cobra.Command, args []string, shellFlag, target string) error {
@@ -292,14 +273,7 @@ func envsetupRunWithShell(cmd *cobra.Command, args []string, shellFlag, target s
 		return err
 	}
 
-	baseEnv := os.Environ()
-	runtimeEnv := env.BuildToolchainEnv(baseEnv, data.cfg)
-	diff := env.ComputeEnvDiff(baseEnv, runtimeEnv)
-	if len(diff) == 0 {
-		return nil
-	}
-
-	output := env.FormatEnvDiff(diff, shellType)
+	output := data.runtime.ShellScript(os.Environ(), shellType)
 	_, _ = fmt.Fprint(cmdOutput(cmd), output)
 	return nil
 }

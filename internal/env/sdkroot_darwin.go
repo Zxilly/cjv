@@ -3,7 +3,6 @@
 package env
 
 import (
-	"os"
 	"os/exec"
 	"strings"
 	"sync"
@@ -27,6 +26,7 @@ func queryDarwinSDKRoot() (string, error) {
 	return darwinSDKRootValue, darwinSDKRootErr
 }
 
-func applyPlatformVars(cfg *EnvConfig) {
-	applyDarwinSDKRoot(cfg, os.Getenv("SDKROOT"), queryDarwinSDKRoot)
+func applyPlatformVars(vars map[string]string, baseEnv []string) {
+	current, _ := LookupValue(baseEnv, "SDKROOT")
+	applyDarwinSDKRoot(vars, current, queryDarwinSDKRoot)
 }

@@ -110,6 +110,8 @@ func TestEnvsetupRunJSONOutputsIngredients(t *testing.T) {
 	home := t.TempDir()
 	config.IsolateForTest(t, home)
 	t.Setenv("CJV_TOOLCHAIN", "")
+	t.Setenv("LD_LIBRARY_PATH", "/inherited-library")
+	t.Setenv("DYLD_LIBRARY_PATH", "/inherited-library")
 	config.ResetDefaultSettingsFileCache()
 	config.ResetCachedUserHomeDir()
 
@@ -142,6 +144,9 @@ func TestEnvsetupRunJSONOutputsIngredients(t *testing.T) {
 	assert.Equal(t, tcDir, got.Env.Vars["CANGJIE_HOME"])
 	assert.NotContains(t, got.Env.Vars, "CJV_TOOLCHAIN")
 	assert.NotContains(t, got.Env.Vars, "CJV_RECURSION_COUNT")
+	assert.NotContains(t, got.Env.Vars, "LD_LIBRARY_PATH")
+	assert.NotContains(t, got.Env.Vars, "DYLD_LIBRARY_PATH")
+	assert.NotContains(t, raw, "/inherited-library")
 	assert.Contains(t, got.Env.Vars, componentlib.EnvStdxDynamic)
 	assert.Contains(t, got.Env.Path.Prepend, filepath.Join(tcDir, "bin"))
 	userHome, err := os.UserHomeDir()
@@ -155,6 +160,15 @@ func TestEnvsetupRunJSONOutputsIngredients(t *testing.T) {
 		require.NotNil(t, got.Env.LibraryPath.Key)
 		assert.True(t, *got.Env.LibraryPath.Key == "LD_LIBRARY_PATH" || *got.Env.LibraryPath.Key == "DYLD_LIBRARY_PATH")
 		assert.NotEmpty(t, got.Env.LibraryPath.Prepend)
+
+		// Shell output applies these same SDK ingredients to the inherited
+		// environment; the ingredient-only JSON must not capture that base.
+		shell, err := executeEnvsetup(t, "+lts-1.0.5", "--shell=bash")
+		require.NoError(t, err)
+		assert.Contains(t, shell, "/inherited-library")
+		for _, libraryDir := range got.Env.LibraryPath.Prepend {
+			assert.Contains(t, shell, libraryDir)
+		}
 	}
 }
 

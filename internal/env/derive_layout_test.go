@@ -112,7 +112,7 @@ func TestLibraryPathEntriesReturnsExistingLibraryPaths(t *testing.T) {
 func TestApplyDarwinSDKRootSetsMissingValue(t *testing.T) {
 	cfg := NewEnvConfig()
 
-	applyDarwinSDKRoot(cfg, "", func() (string, error) {
+	applyDarwinSDKRoot(cfg.Vars, "", func() (string, error) {
 		return "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk", nil
 	})
 
@@ -122,7 +122,7 @@ func TestApplyDarwinSDKRootSetsMissingValue(t *testing.T) {
 func TestApplyDarwinSDKRootPreservesExistingValue(t *testing.T) {
 	cfg := NewEnvConfig()
 
-	applyDarwinSDKRoot(cfg, "/custom/sdk", func() (string, error) {
+	applyDarwinSDKRoot(cfg.Vars, "/custom/sdk", func() (string, error) {
 		t.Fatal("lookup should not run when SDKROOT is already set")
 		return "", nil
 	})

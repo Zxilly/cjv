@@ -16,10 +16,20 @@ import (
 // carries the active toolchain plus the derived SDK environment and exposes
 // narrow views for proxy children, direct toolchain execution, and shell output.
 type Runtime struct {
-	Active          resolve.ActiveToolchain
-	Cfg             *EnvConfig
-	CjvBinDir       string
-	ToolchainBinDir string
+	Active    resolve.ActiveToolchain
+	CjvBinDir string
+	cfg       *EnvConfig
+}
+
+// Contributions describes the SDK changes without including inherited
+// variables or paths. Each view owns its maps and slices so callers cannot
+// change subsequent environments built from the Runtime.
+type Contributions struct {
+	Vars               map[string]string
+	PathPrepend        []string
+	PathAppend         []string
+	LibraryPathKey     string
+	LibraryPathPrepend []string
 }
 
 func ResolveRuntime(ctx context.Context, tcOverride string, componentEnv ComponentEnvProvider) (Runtime, error) {
@@ -49,25 +59,36 @@ func runtimeForActive(active resolve.ActiveToolchain, componentEnv ComponentEnvP
 		return Runtime{}, fmt.Errorf("failed to determine bin directory: %w", err)
 	}
 	return Runtime{
-		Active:          active,
-		Cfg:             cfg,
-		CjvBinDir:       binDir,
-		ToolchainBinDir: filepath.Join(active.Dir, "bin"),
+		Active:    active,
+		CjvBinDir: binDir,
+		cfg:       cfg,
 	}, nil
 }
 
 func (r Runtime) ProxyEnv(baseEnv []string, recursion int) []string {
 	return BuildProxyEnv(baseEnv, ProxyEnvContext{
-		Cfg:             r.Cfg,
+		Cfg:             r.cfg,
 		CjvBinDir:       r.CjvBinDir,
-		ToolchainBinDir: r.ToolchainBinDir,
+		ToolchainBinDir: filepath.Join(r.Active.Dir, "bin"),
 		Recursion:       recursion,
 		ToolchainName:   r.Active.Name,
 	})
 }
 
 func (r Runtime) ToolchainEnv(baseEnv []string) []string {
-	return BuildToolchainEnv(baseEnv, r.Cfg)
+	return BuildToolchainEnv(baseEnv, r.cfg)
+}
+
+// Contributions reports the SDK ingredients and platform defaults needed for
+// baseEnv. It does not include proxy-internal variables or merge inherited paths.
+func (r Runtime) Contributions(baseEnv []string) Contributions {
+	return environmentContributions(r.cfg, baseEnv)
+}
+
+// ShellScript formats only the changes needed to prepare baseEnv for direct
+// SDK use. Proxy selection and recursion state are left out of shell setup.
+func (r Runtime) ShellScript(baseEnv []string, shell ShellType) string {
+	return FormatEnvDiff(ComputeEnvDiff(baseEnv, r.ToolchainEnv(baseEnv)), shell)
 }
 
 // ToolBinaryResolver resolves a known SDK tool inside a toolchain directory.

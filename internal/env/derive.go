@@ -72,9 +72,7 @@ func hostBackendDirForArch(sdkDir, arch string) string {
 // without spawning a shell.
 func DeriveToolchainEnv(sdkDir string) *EnvConfig {
 	home, _ := os.UserHomeDir()
-	cfg := deriveToolchainEnvForHost(sdkDir, runtime.GOOS, runtime.GOARCH, home)
-	applyPlatformVars(cfg)
-	return cfg
+	return deriveToolchainEnvForHost(sdkDir, runtime.GOOS, runtime.GOARCH, home)
 }
 
 func deriveToolchainEnvForHost(sdkDir, goos, goarch, homeDir string) *EnvConfig {
