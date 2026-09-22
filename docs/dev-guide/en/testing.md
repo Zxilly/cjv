@@ -10,6 +10,14 @@ Unit tests live in the same package as the code under test, with file names endi
 
 Distribution-source regressions also use real `httptest.Server` instances. They cover `versions.json`, lazily loaded `nightly.json`, relative and absolute URLs, nightly SDK/component installation, SHA-256 sidecars, and migration from an aggregated manifest. Tests assert that LTS operations never request the nightly file.
 
+Regressions spanning several responsibilities live with the package that owns the production flow:
+
+- `cli`, `cli/settings`, and `cli/selfmgmt` construct independent commands and parse real arguments, checking that repeated invocations do not share JSON mode, directory flags, or uninstall confirmation.
+- `lifecycle` uses production installation entry points and real archives from a local test server. Failures injected during finalization verify restoration for first installs, reinstalls, and URL installs, preservation of settings, and propagation of rollback errors.
+- `component` verifies file and manifest restoration after failures in archive installation, local linking, and component batches. If restoration itself fails, the backup remains available for recovery.
+- `selfupdate` exercises `Update` for both builds, covering release discovery, no-op updates, checksum failures, and actual file replacement, while retaining tests that replace a running executable. `cli/selfmgmt` verifies truthful JSON for skipped updates without text leaking to stdout.
+- `process` starts real children to verify standard streams, environment, start errors, exit codes, and cancellation. Unix-specific tests also cover termination forwarding, timeout escalation, and avoiding duplicate forwarding of terminal interrupts.
+
 Run all unit tests locally:
 
 ```bash

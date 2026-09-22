@@ -10,6 +10,14 @@ CI 的全部 job 定义在 `.github/workflows/ci.yml`，smoke 单独在 `.github
 
 分发源回归测试也使用真实 `httptest.Server`，覆盖 `versions.json` 与按需加载的 `nightly.json`、相对与绝对 URL、nightly SDK/组件安装、SHA256 sidecar，以及旧聚合清单的迁移兼容。测试会断言 LTS 操作不会请求 nightly 文件。
 
+跨职责的回归放在拥有对应生产流程的包里，重点包括：
+
+- `cli`、`cli/settings`、`cli/selfmgmt`：每次构造独立命令，实际解析参数，验证重复执行时 JSON 模式、目录标志和卸载确认不会相互影响。
+- `lifecycle`：通过生产安装入口下载本地测试服务器的真实归档，在最终步骤注入失败，验证首次安装、重装和 URL 安装的文件恢复、设置保留与回滚错误传播。
+- `component`：验证归档安装、本地链接与组件批量修改失败后，文件和清单恢复；恢复本身失败时，备份仍可用于后续恢复。
+- `selfupdate`：通过 `Update` 验证两种构建的版本发现、无需更新、校验失败及实际文件替换，保留运行中二进制替换测试；`cli/selfmgmt` 检查跳过更新的真实 JSON 状态及 stdout 无文本混入。
+- `process`：启动真实子进程，验证标准流、环境、启动错误、退出码和取消；Unix 专有测试另验证终止信号转发、超时升级及不重复转发终端中断。
+
 本地跑全部单元测试：
 
 ```bash

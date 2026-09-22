@@ -29,7 +29,7 @@ The two variables `version` and `updateURL` are injected by the linker at build 
 - If the program name starts with `cjv-init` / `cjv-setup`, it is treated as an installer, rewriting `os.Args` to `cjv init` before continuing.
 - Otherwise it is an ordinary `cjv ...` invocation, handed to `cli.Execute(version, updateURL)`.
 
-Error handling is centralized here too: a `*cjverr.ExitCodeError` returned by the implementation layer is unwrapped into a process exit code, while all other errors are printed to stderr uniformly and 1 is returned (in JSON mode the envelope has already been written to stdout by `cli.Execute`, keeping stderr clean). The UTF-8 switch for the Windows console and the pause prompt for double-click runs are also handled at this `main` level, because they are process-level concerns that should not leak into business logic.
+For ordinary CLI invocations, `cli.Execute` renders each error once: text goes to stderr, while JSON envelopes go to stdout. `main` only unwraps `*cjverr.ExitCodeError` into a process exit code or returns 1 for other errors. The proxy path bypasses the CLI, so `main` still handles its errors. The Windows console UTF-8 switch and the pause prompt for double-click runs also remain in `main` as process-level concerns.
 
 ## Responsibilities of the `internal/` packages
 
@@ -37,19 +37,19 @@ Each directory under `internal/` is a package, divided by subsystem. They are li
 
 ### `cli`: command definitions
 
-`internal/cli` is the cobra command tree. `root.go` defines the root command `cjv` and the `Execute` entry point: it registers the global `--json` flag, hands the version number to cobra, attaches the subcommands, and then calls `rootCmd.Execute()`. Each subcommand has its own file, `install.go`, `uninstall.go`, `toolchain.go`, `run.go`, `exec.go`, `which.go`, `show.go`, `check.go`, `update.go`, `component.go` and so on, with file names that largely match the command names.
+`internal/cli` is the cobra command tree. Each `Execute` creates a fresh `application` that owns the invocation's commands, flag values, version and update URL, and `output.Renderer`. `root.go` registers the root-level `--json` flag and attaches subcommands without reusing a previous invocation's commands or output mode. Each subcommand has its own file, `install.go`, `uninstall.go`, `toolchain.go`, `run.go`, `exec.go`, `which.go`, `show.go`, `check.go`, `update.go`, `component.go` and so on, with file names that largely match the command names.
 
 `cli` does not implement business logic itself; what it does is parse arguments, call the lower-level packages, and hand the result to the rendering layer. A few subpackages take on the cross-cutting concerns:
 
-- `cli/output` renders command results. Each command defines a struct that implements the `Result` interface (a single `Text()` method), and `output` decides, based on the global `--json` flag, whether to call `Text()` to produce human-readable text or to marshal the struct directly to JSON. The JSON envelope for errors is also assembled here; it recognizes the `Coded` interface from `cjverr` to fill in the machine-readable error code.
-- `cli/settings` is the group of configuration subcommands behind `cjv settings` (`set`, `default`, `override`, and so on).
-- `cli/selfmgmt` is the group of self-management subcommands behind `cjv self` (update, uninstall), along with the privilege-escalation safety checks.
+- `cli/output.Renderer` holds the JSON mode for one invocation. Commands define structs implementing `Result` (a single `Text()` method), and the renderer emits text or JSON. It also builds JSON error envelopes, using `cjverr.Coded` to supply machine-readable error codes.
+- `cli/settings` constructs the `set`, `default`, and `override` commands afresh on every registration. Each command closure owns its directory paths and cleanup flags.
+- `cli/selfmgmt` constructs `cjv self` with the invocation's renderer and keeps uninstall confirmation local to the command. Explicit and automatic self-updates share `UpdateManaged`, which prepares the managed binary, updates it, and refreshes proxy links and env scripts. Callers decide how to render the result and whether failures are fatal.
 
 ### `lifecycle`: installation orchestration
 
 `internal/lifecycle` orchestrates download, extraction, verification, components, PATH configuration, and proxy links as one installation flow. It receives adapters such as `IsJSON`, `ComponentInstall`, `CreateProxyLinks`, and `ValidateInstallation` through `Options`, with dependencies directed from `cli` toward `lifecycle`. The same flow serves `cli install` and proxy auto-install.
 
-Files inside the package are split by responsibility: `install.go` owns orchestration, `source.go` turns channel requests into `ResolvedToolchain` values, `component_install.go` owns component batches and rollback, and `resolved_install.go` owns materialization, validation, and transactional replacement. Distribution-source selection stays local to `source.go`.
+Files inside the package are split by responsibility: `install.go` owns orchestration, `source.go` turns channel requests into `ResolvedToolchain` values, `component_install.go` orchestrates component batches with rollback delegated to `component.ApplyChanges`, and `resolved_install.go` owns materialization, validation, and transactional replacement. Distribution-source selection stays local to `source.go`. Toolchain replacement regressions call these production installation entry points to verify restoration after finalization fails and propagation of rollback errors.
 
 ### `resolve`: active toolchain resolution
 
@@ -60,6 +60,8 @@ Files inside the package are split by responsibility: `install.go` owns orchestr
 `internal/toolchain` manages the installed SDKs: it lists the installed toolchains (`ListInstalled`), resolves the active toolchain directory, and cleans up leftover staging and backup directories. It defines the directory-suffix conventions for staging (`.staging`), backups (`.old`), and transactions (`.fstx-`), as well as the parsing of toolchain names and version comparison.
 
 `internal/component` manages the add-on components of a toolchain: `stdx`, `docs`, `stdx-docs`. Each component is a separately downloaded archive, and its extracted files are recorded through a per-component manifest, so it can be uninstalled independently. `component` also defines where each component installs to (`InstallLocation`: some land inside the toolchain directory tree, while others are placed as pure data under `<CJV_HOME>/docs/<tc>/`) and which environment variables a component needs to inject.
+
+`ApplyChanges` owns backups, failure recovery, and cleanup for a component change or a batch of changes. Archive installation and local linking share the replacement flow. Backups include component files and manifests; a failed restore retains the backup and reports its location for recovery, so callers do not manage snapshot lifetimes themselves.
 
 ### `dist`: download and unpacking
 
@@ -75,7 +77,11 @@ Files inside the package are split by responsibility: `install.go` owns orchestr
 
 ### `proxy`: transparent proxy
 
-`internal/proxy` implements the transparent proxy: when the binary is invoked under a tool name such as `cjc` or `cjpm`, `Run` resolves the active toolchain (through `env.ResolveRuntime`), locates the real tool binary inside the toolchain directory (`toolPathMap` in `tools.go` maps tool names to relative paths), assembles the proxy environment, and then `exec`s that binary, passing the arguments straight through. It carries a recursion counter (`CJV_RECURSION_COUNT`) to prevent the proxy from calling itself indefinitely. `link.go` is responsible for creating these proxy links at install time (`CreateAllProxyLinks`).
+`internal/proxy` implements the transparent proxy: when the binary is invoked under a tool name such as `cjc` or `cjpm`, `Run` resolves the active toolchain (through `env.ResolveRuntime`), locates the real tool binary inside the toolchain directory (`toolPathMap` in `tools.go` maps tool names to relative paths), assembles the proxy environment, and passes arguments through. Unix replaces the current process with `syscall.Exec`; Windows starts and waits for a child through `process.Run`. A recursion counter (`CJV_RECURSION_COUNT`) prevents the proxy from calling itself indefinitely. `link.go` creates the proxy links at install time (`CreateAllProxyLinks`).
+
+### `process`: child process execution
+
+`internal/process.Run` accepts a configured `exec.Cmd` and owns starting, waiting, and termination-signal handling. Nonzero child exits become `cjverr.ExitCodeError`. `cjv run`, `cjv exec`, and the Windows proxy share it; callers still configure command lookup, arguments, environment, and standard streams. Unix SIGTERM forwarding and timeout escalation, along with keeping the parent alive while the child handles Ctrl+C on each platform, stay in this package.
 
 ### `config`: configuration and paths
 
@@ -83,7 +89,7 @@ Files inside the package are split by responsibility: `install.go` owns orchestr
 
 ### `selfupdate`: self-update
 
-`internal/selfupdate` implements `cjv self update`. Whether it goes through GitHub or GitCode is chosen at compile time by the `mirror` build tag (`update_default.go` / `update_mirror.go`). It also manages establishing the current binary as the managed executable, as well as replacing the running binary during an update (split by platform across `replace_windows.go` / `replace_other.go`).
+`internal/selfupdate` discovers, verifies, and installs cjv updates. Whether it uses GitHub or GitCode is selected at compile time by the `mirror` build tag (`update_default.go` / `update_mirror.go`). `Update` returns a status (`skipped`, `dev`, `up-to-date`, or `updated`) and version information for `cli/selfmgmt` to render, without printing its own results to stdout. It also establishes the current binary as the managed executable and replaces running binaries during updates, with platform-specific code in `replace_windows.go` / `replace_other.go`.
 
 ### Supporting packages
 
@@ -102,8 +108,8 @@ Tying the above together, here is roughly how `cjv install <toolchain>` runs.
 
 The process starts in `run` in `cmd/cjv/main.go`: `logging.Init` sets up logging, the program name is `cjv` rather than some tool name, so it takes the `cli.Execute` path. cobra routes the `install` subcommand to `runInstall` in `internal/cli/install.go`. `runInstall` collects the `--target`, `--component`, `--force` and other flags, assembles a `lifecycle.Options` (wiring in the implementations of `output`, `component`, `proxy`, `selfupdate`), and calls into `internal/lifecycle`.
 
-`lifecycle` first asks `dist.Source` to resolve the requested channel, version, platform, and component artifacts from the manifest. The shared download and extraction path then materializes a staging directory, after which `component`, `proxy`, and `fstx` complete component installation, proxy links, and transactional replacement. Every channel shares this installation path. Progress goes through `output`, and errors are translated into an exit code at `main`.
+`lifecycle` first asks `dist.Source` to resolve the requested channel, version, platform, and component artifacts from the manifest. The shared download and extraction path then materializes a staging directory, after which `component`, `proxy`, and `fstx` complete component installation, proxy links, and transactional replacement. Every channel shares this installation path. The CLI passes its output mode into installation options and renders the command result through the invocation's renderer. `cli.Execute` renders errors, and `main` translates them into exit codes.
 
-The proxy path is the other main line. When you run `cjc build`, what is actually invoked is the cjv link named `cjc`, and `main` recognizes the tool name and takes the `proxy.Run` path: `proxy`, through `env.ResolveRuntime`, has `resolve` determine the active toolchain, finds the real `cjc` inside the toolchain directory, assembles the run environment, and then `exec`s into it. This line does not touch `cli` and does not render any of cjv's own output; it purely passes the tool straight through.
+The proxy path is the other main line. When you run `cjc build`, what is actually invoked is the cjv link named `cjc`, and `main` recognizes the tool name and takes the `proxy.Run` path: `proxy`, through `env.ResolveRuntime`, has `resolve` determine the active toolchain, finds the real `cjc`, and assembles its environment before replacing the current process or running a child, depending on the platform. This path bypasses cobra while preserving the tool's standard streams and exit semantics.
 
 To dig into a particular area, start with `internal/cli/root.go` for commands, `internal/lifecycle/install.go` for orchestration, `internal/dist/source.go` for distribution selection, `internal/lifecycle/resolved_install.go` for materialization, and `internal/proxy/proxy.go` for proxying. See [Testing](testing.md) for test organization.

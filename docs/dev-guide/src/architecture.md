@@ -29,7 +29,7 @@ docs/           两本 mdBook（见“文档站”一章）
 - 程序名以 `cjv-init` / `cjv-setup` 开头，把它当安装器，改写 `os.Args` 为 `cjv init` 再继续。
 - 否则就是普通的 `cjv ...` 调用，交给 `cli.Execute(version, updateURL)`。
 
-错误处理也集中在这里：实现层返回的 `*cjverr.ExitCodeError` 被解包成进程退出码，其余错误统一打到 stderr 并返回 1（JSON 模式下信封已由 `cli.Execute` 写到 stdout，stderr 保持干净）。Windows 控制台的 UTF-8 切换、双击运行时的暂停提示也都在 `main` 这层处理，因为它们是进程级的关切，不该渗进业务逻辑。
+普通 CLI 调用的错误由 `cli.Execute` 输出一次：文本模式写 stderr，JSON 模式写 stdout 信封。`main` 只把 `*cjverr.ExitCodeError` 解包成进程退出码，其余错误返回 1；代理路径不经过 CLI，其错误仍由 `main` 处理。Windows 控制台的 UTF-8 切换、双击运行时的暂停提示也都在 `main` 这层处理，因为它们是进程级的关切。
 
 ## `internal/` 各包职责
 
@@ -37,19 +37,19 @@ docs/           两本 mdBook（见“文档站”一章）
 
 ### `cli`：命令定义
 
-`internal/cli` 是 cobra 命令树。`root.go` 定义根命令 `cjv` 和 `Execute` 入口：注册全局 `--json` 标志、把版本号塞给 cobra、挂上各子命令，然后 `rootCmd.Execute()`。每个子命令一个文件，`install.go`、`uninstall.go`、`toolchain.go`、`run.go`、`exec.go`、`which.go`、`show.go`、`check.go`、`update.go`、`component.go` 等，文件名基本能对上命令名。
+`internal/cli` 是 cobra 命令树。每次 `Execute` 都创建一个新的 `application`，由它持有本次调用的命令树、标志值、版本与更新地址、`output.Renderer`。`root.go` 注册根级 `--json` 标志并挂上各子命令，不复用上次调用的命令或输出模式。每个子命令一个文件，`install.go`、`uninstall.go`、`toolchain.go`、`run.go`、`exec.go`、`which.go`、`show.go`、`check.go`、`update.go`、`component.go` 等，文件名基本能对上命令名。
 
 `cli` 自己不实现业务逻辑，它做的是参数解析、调用下层包、把结果交给渲染层。几个子包分担横切关注点：
 
-- `cli/output` 渲染命令结果。命令各自定义一个实现 `Result` 接口（一个 `Text()` 方法）的结构体，`output` 根据全局 `--json` 决定是调 `Text()` 输出人读文本，还是把结构体直接 marshal 成 JSON。错误的 JSON 信封也在这里组装，它认得 `cjverr` 的 `Coded` 接口来填机器可读的错误码。
-- `cli/settings` 是 `cjv settings` 那组配置子命令（`set`、`default`、`override` 等）。
-- `cli/selfmgmt` 是 `cjv self` 那组自我管理子命令（更新、卸载），以及提权安全检查。
+- `cli/output` 的 `Renderer` 保存本次调用的 JSON 模式。命令各自定义实现 `Result` 接口（一个 `Text()` 方法）的结构体，由 renderer 输出文本或 JSON。错误的 JSON 信封也在这里组装，它认得 `cjverr` 的 `Coded` 接口来填机器可读的错误码。
+- `cli/settings` 构造 `set`、`default`、`override` 配置子命令。每次注册都创建新命令，目录路径和清理标志由各自的 closure 持有。
+- `cli/selfmgmt` 构造 `cjv self` 命令，接收本次调用的 renderer，并将卸载确认标志保存在命令内。显式与自动自更新共同调用 `UpdateManaged`，由它统一准备受管二进制、更新、刷新代理链接和 env 脚本；调用方决定输出方式和错误是否致命。
 
 ### `lifecycle`：安装编排
 
 `internal/lifecycle` 把下载、解压、校验、组件、PATH 和代理链接串成一条安装流程。它通过 `Options` 接收 `IsJSON`、`ComponentInstall`、`CreateProxyLinks`、`ValidateInstallation` 等 adapter，依赖方向从 `cli` 指向 `lifecycle`。同一流程服务 `cli install` 与代理自动安装。
 
-包内按职责分文件：`install.go` 负责安装编排，`source.go` 把通道请求交给分发源并产出 `ResolvedToolchain`，`component_install.go` 管组件批量安装与回滚，`resolved_install.go` 管下载后的落盘、校验和事务替换。分发源选择集中在 `source.go`。
+包内按职责分文件：`install.go` 负责安装编排，`source.go` 把通道请求交给分发源并产出 `ResolvedToolchain`，`component_install.go` 编排组件批量安装并交给 `component.ApplyChanges` 负责回滚，`resolved_install.go` 管下载后的落盘、校验和事务替换。分发源选择集中在 `source.go`。工具链替换的回归测试直接调用这些生产安装入口，验证最终步骤失败后的旧安装恢复和回滚错误传播。
 
 ### `resolve`：活动工具链解析
 
@@ -60,6 +60,8 @@ docs/           两本 mdBook（见“文档站”一章）
 `internal/toolchain` 管已安装的 SDK：列出已装工具链（`ListInstalled`）、解析活动工具链目录、清理 staging 与备份残留目录。它定义了 staging（`.staging`）、备份（`.old`）、事务（`.fstx-`）这些目录后缀约定，以及工具链名字的解析与版本比较。
 
 `internal/component` 管工具链的附加组件：`stdx`、`docs`、`stdx-docs`。每个组件是单独下载的归档，解压后的文件通过逐组件的清单（manifest）记录，从而能独立卸载。`component` 还定义了组件装到哪（`InstallLocation`：有的落进工具链目录树，有的作为纯数据放到 `<CJV_HOME>/docs/<tc>/`）以及组件要注入哪些环境变量。
+
+`ApplyChanges` 管理一次组件修改或一批修改的备份、失败恢复和清理；归档安装与本地链接共用替换流程。备份包含组件文件和清单，恢复失败时保留备份并在错误中返回位置，供后续恢复，调用方不再自行管理快照寿命。
 
 ### `dist`：下载与解包
 
@@ -75,7 +77,11 @@ docs/           两本 mdBook（见“文档站”一章）
 
 ### `proxy`：透明代理
 
-`internal/proxy` 实现透明代理：当二进制以 `cjc`、`cjpm` 等工具名被调用时，`Run` 解析活动工具链（经 `env.ResolveRuntime`）、在工具链目录里定位真正的工具二进制（`tools.go` 里 `toolPathMap` 是工具名到相对路径的映射）、组装代理环境、然后 `exec` 那个二进制把参数透传过去。它带一个递归计数器（`CJV_RECURSION_COUNT`），防止代理无限自调。`link.go` 负责在安装时建出这些代理链接（`CreateAllProxyLinks`）。
+`internal/proxy` 实现透明代理：当二进制以 `cjc`、`cjpm` 等工具名被调用时，`Run` 解析活动工具链（经 `env.ResolveRuntime`）、在工具链目录里定位真正的工具二进制（`tools.go` 里 `toolPathMap` 是工具名到相对路径的映射）、组装代理环境并透传参数。Unix 通过 `syscall.Exec` 替换当前进程，Windows 通过 `process.Run` 启动并等待子进程。它带一个递归计数器（`CJV_RECURSION_COUNT`），防止代理无限自调。`link.go` 负责在安装时建出这些代理链接（`CreateAllProxyLinks`）。
+
+### `process`：子进程执行
+
+`internal/process.Run` 接收调用方配置好的 `exec.Cmd`，统一启动、等待和终止信号处理，并将子进程非零退出转换为 `cjverr.ExitCodeError`。`cjv run`、`cjv exec` 与 Windows 代理共用它；命令查找、参数、环境和标准流仍由调用方配置。Unix 的 SIGTERM 转发及超时升级、各平台避免父进程先于子进程响应 Ctrl+C 退出的处理都留在此包内。
 
 ### `config`：配置与路径
 
@@ -83,7 +89,7 @@ docs/           两本 mdBook（见“文档站”一章）
 
 ### `selfupdate`：自我更新
 
-`internal/selfupdate` 实现 `cjv self update`。具体走 GitHub 还是 GitCode 由 `mirror` 构建标记在编译期选定（`update_default.go` / `update_mirror.go`）。它还管理把当前二进制确立为受管可执行文件、以及更新时替换正在运行的二进制（Windows 与其他平台分 `replace_windows.go` / `replace_other.go`）。
+`internal/selfupdate` 负责发现、校验和安装 cjv 更新。具体走 GitHub 还是 GitCode 由 `mirror` 构建标记在编译期选定（`update_default.go` / `update_mirror.go`）。`Update` 返回状态（`skipped`、`dev`、`up-to-date`、`updated`）及版本，供 `cli/selfmgmt` 渲染，不自行向 stdout 打印结果。它还管理把当前二进制确立为受管可执行文件、以及更新时替换正在运行的二进制（Windows 与其他平台分 `replace_windows.go` / `replace_other.go`）。
 
 ### 支撑包
 
@@ -102,8 +108,8 @@ docs/           两本 mdBook（见“文档站”一章）
 
 进程从 `cmd/cjv/main.go` 的 `run` 起步：`logging.Init` 配好日志，程序名是 `cjv` 不是某个工具名，于是走 `cli.Execute`。cobra 把 `install` 子命令路由到 `internal/cli/install.go` 的 `runInstall`。`runInstall` 收集 `--target`、`--component`、`--force` 等标志，组好 `lifecycle.Options`（把 `output`、`component`、`proxy`、`selfupdate` 的实现接进去），调进 `internal/lifecycle`。
 
-`lifecycle` 编排其余步骤：先让 `dist.Source` 从 manifest 解析通道、版本、平台和组件制品，再让通用下载与解包逻辑落到 staging 目录，最后由 `component`、`proxy` 与 `fstx` 完成组件、代理链接和事务替换。所有通道共用这条安装路径。一路上的进度和结果通过 `output` 渲染（受 `--json` 控制），错误最终在 `main` 翻译成退出码。
+`lifecycle` 编排其余步骤：先让 `dist.Source` 从 manifest 解析通道、版本、平台和组件制品，再让通用下载与解包逻辑落到 staging 目录，最后由 `component`、`proxy` 与 `fstx` 完成组件、代理链接和事务替换。所有通道共用这条安装路径。CLI 将当前输出模式传入安装选项，并用本次调用的 renderer 渲染命令结果；错误由 `cli.Execute` 输出，再由 `main` 翻译成退出码。
 
-代理路径是另一条主线。运行 `cjc build` 时，被调用的其实是名为 `cjc` 的 cjv 链接，`main` 认出工具名走 `proxy.Run`：`proxy` 经 `env.ResolveRuntime` 让 `resolve` 定出活动工具链、在工具链目录里找到真正的 `cjc`、组装好运行环境，然后 `exec` 过去。这条线不碰 `cli`，也不渲染 cjv 自己的输出，纯粹把工具透传出去。
+代理路径是另一条主线。运行 `cjc build` 时，被调用的其实是名为 `cjc` 的 cjv 链接，`main` 认出工具名走 `proxy.Run`：`proxy` 经 `env.ResolveRuntime` 让 `resolve` 定出活动工具链、在工具链目录里找到真正的 `cjc`、组装好运行环境，然后按平台替换当前进程或运行子进程。这条线绕过 cobra 命令树，保留工具的标准流和退出语义。
 
 想深入某一块，从这几处入手最快：命令定义看 `internal/cli/root.go`，安装编排看 `internal/lifecycle/install.go`，分发源看 `internal/dist/source.go`，落盘事务看 `internal/lifecycle/resolved_install.go`，代理看 `internal/proxy/proxy.go`。测试怎么组织见[测试](testing.md)。
