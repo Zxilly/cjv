@@ -4,11 +4,10 @@ package proxy
 
 import (
 	"context"
-	"errors"
 	"os"
 	"os/exec"
 
-	"github.com/Zxilly/cjv/internal/cjverr"
+	"github.com/Zxilly/cjv/internal/process"
 )
 
 // execTool runs the tool as a child process and propagates the exit code
@@ -20,18 +19,5 @@ func execTool(ctx context.Context, binary string, args []string, env []string) e
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
-	forwarder := NewTerminationForwarder()
-	defer forwarder.Stop()
-	if err := cmd.Start(); err != nil {
-		return err
-	}
-	forwarder.Attach(cmd.Process)
-
-	if err := cmd.Wait(); err != nil {
-		if exitErr, ok := errors.AsType[*exec.ExitError](err); ok {
-			return &cjverr.ExitCodeError{Code: exitErr.ExitCode()}
-		}
-		return err
-	}
-	return nil
+	return process.Run(cmd)
 }

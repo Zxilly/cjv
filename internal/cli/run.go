@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -12,6 +11,7 @@ import (
 	componentlib "github.com/Zxilly/cjv/internal/component"
 	"github.com/Zxilly/cjv/internal/env"
 	"github.com/Zxilly/cjv/internal/i18n"
+	"github.com/Zxilly/cjv/internal/process"
 	"github.com/Zxilly/cjv/internal/proxy"
 	"github.com/Zxilly/cjv/internal/toolchain"
 	"github.com/spf13/cobra"
@@ -117,21 +117,7 @@ flagLoop:
 	c.Stdout = os.Stdout
 	c.Stderr = os.Stderr
 
-	forwarder := proxy.NewTerminationForwarder()
-	defer forwarder.Stop()
-	if err := c.Start(); err != nil {
-		return err
-	}
-	forwarder.Attach(c.Process)
-
-	if err := c.Wait(); err != nil {
-		var exitErr *exec.ExitError
-		if errors.As(err, &exitErr) {
-			return &cjverr.ExitCodeError{Code: exitErr.ExitCode()}
-		}
-		return err
-	}
-	return nil
+	return process.Run(c)
 }
 
 // resolveToolchainToolPath resolves command to an absolute path within tcDir,

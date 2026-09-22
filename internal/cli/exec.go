@@ -2,7 +2,6 @@ package cli
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -12,7 +11,7 @@ import (
 	componentlib "github.com/Zxilly/cjv/internal/component"
 	"github.com/Zxilly/cjv/internal/env"
 	"github.com/Zxilly/cjv/internal/i18n"
-	"github.com/Zxilly/cjv/internal/proxy"
+	"github.com/Zxilly/cjv/internal/process"
 	"github.com/Zxilly/cjv/internal/toolchain"
 	"github.com/spf13/cobra"
 )
@@ -79,20 +78,7 @@ func execRun(cmd *cobra.Command, args []string) error {
 	c.Stdout = os.Stdout
 	c.Stderr = os.Stderr
 
-	forwarder := proxy.NewTerminationForwarder()
-	defer forwarder.Stop()
-	if err := c.Start(); err != nil {
-		return err
-	}
-	forwarder.Attach(c.Process)
-
-	if err := c.Wait(); err != nil {
-		if exitErr, ok := errors.AsType[*exec.ExitError](err); ok {
-			return &cjverr.ExitCodeError{Code: exitErr.ExitCode()}
-		}
-		return err
-	}
-	return nil
+	return process.Run(c)
 }
 
 func init() {
