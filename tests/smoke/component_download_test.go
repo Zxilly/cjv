@@ -29,8 +29,19 @@ func TestSmokeRealComponentDownloads_LTSSTS(t *testing.T) {
 
 	downloadsDir := t.TempDir()
 	for _, ch := range []toolchain.Channel{toolchain.LTS, toolchain.STS} {
-		version, err := mf.GetLatestVersion(ch)
+		versions, err := mf.ListVersions(ch, platformKey)
 		require.NoError(t, err)
+		// SDK releases can precede their optional component archives. Exercise
+		// the newest release with components, and still require every install
+		// below to succeed rather than silently skipping missing artifacts.
+		var version string
+		for _, candidate := range versions {
+			if mf.HasComponents(ch, candidate) {
+				version = candidate
+				break
+			}
+		}
+		require.NotEmpty(t, version, "%s has no release with components for %s", ch, platformKey)
 		tc := toolchain.ToolchainName{Channel: ch, Version: version}
 
 		for _, name := range component.KnownComponents() {
