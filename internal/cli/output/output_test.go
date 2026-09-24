@@ -131,6 +131,24 @@ func TestRenderError_TextModeWritesMessageToStderr(t *testing.T) {
 	}
 }
 
+func TestNote_TextModeOnly(t *testing.T) {
+	var renderer Renderer
+	var stderr bytes.Buffer
+
+	renderer.SetJSONMode(false)
+	renderer.Note(&stderr, "aside")
+	if got, want := stderr.String(), "aside\n"; got != want {
+		t.Fatalf("expected %q on stderr, got %q", want, got)
+	}
+
+	stderr.Reset()
+	renderer.SetJSONMode(true)
+	renderer.Note(&stderr, "aside")
+	if got := stderr.String(); got != "" {
+		t.Fatalf("JSON mode writes no aside, got %q", got)
+	}
+}
+
 func TestRenderOutcome_JSONModeLeavesErrorEnvelopeAlone(t *testing.T) {
 	var renderer Renderer
 	renderer.SetJSONMode(true)

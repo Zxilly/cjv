@@ -3,7 +3,6 @@ package cli
 import (
 	"errors"
 	"fmt"
-	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -145,9 +144,7 @@ func (app *application) runShowDefault(cmd *cobra.Command, args []string) error 
 		if _, ok := errors.AsType[*cjverr.NoToolchainConfiguredError](activeErr); ok {
 			// Surface the informative message on stderr for humans, but do
 			// not error out — the rest of the report is still useful.
-			if !app.output.IsJSON() {
-				fmt.Fprintln(os.Stderr, activeErr)
-			}
+			app.output.Note(cmd.ErrOrStderr(), activeErr.Error())
 			active = nil
 		} else {
 			return activeErr

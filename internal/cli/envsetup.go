@@ -262,7 +262,7 @@ func envsetupRunWithShell(cmd *cobra.Command, args []string, shellFlag, target s
 	} else {
 		st, detected := env.DetectShell()
 		if !detected {
-			fmt.Fprintln(os.Stderr, "cjv: could not detect shell type, defaulting to posix. Use --shell=TYPE to override (bash, fish, powershell, cmd)")
+			_, _ = fmt.Fprintln(cmd.ErrOrStderr(), "cjv: could not detect shell type, defaulting to posix. Use --shell=TYPE to override (bash, fish, powershell, cmd)")
 		}
 		shellType = st
 	}
