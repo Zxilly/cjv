@@ -17,8 +17,12 @@ import (
 // auto-install; presentation stays outside the core module.
 type Options struct {
 	// Report receives progress messages; nil keeps library operations silent.
-	Report               func(string, i18n.MsgData)
-	EnsurePathConfigured func()
+	Report func(string, i18n.MsgData)
+	// ConfigurePath adds CJV_HOME/bin to the user's PATH when the install
+	// publishes the first default toolchain. `cjv install` sets it; `cjv init`
+	// has already handled PATH itself, and proxy auto-install leaves PATH
+	// alone because cjv is evidently reachable.
+	ConfigurePath bool
 	// ComponentInstall, when set, replaces the real component installer and
 	// gives orchestration tests a source-independent adapter.
 	ComponentInstall func(context.Context, component.Roots, toolchain.ToolchainName, component.Name, string, string, bool) error
@@ -28,14 +32,6 @@ func (o Options) report(message string, data i18n.MsgData) {
 	if o.Report != nil {
 		o.Report(message, data)
 	}
-}
-
-func (o Options) ensurePathConfigured() {
-	if o.EnsurePathConfigured != nil {
-		o.EnsurePathConfigured()
-		return
-	}
-	EnsurePathConfigured()
 }
 
 func (o Options) installComponent(ctx context.Context, roots component.Roots, tc toolchain.ToolchainName, name component.Name, tuple, downloadsDir string, force bool, fetcher *ManifestFetcher) error {

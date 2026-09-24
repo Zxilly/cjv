@@ -28,7 +28,6 @@ type application struct {
 	docCmd                          *cobra.Command
 	docPath                         bool
 	docToolchain                    string
-	ensurePathConfiguredFn          func()
 	execCmd                         *cobra.Command
 	forceInstall                    bool
 	initCmd                         *cobra.Command

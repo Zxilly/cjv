@@ -7,12 +7,15 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 	"time"
 
+	componentlib "github.com/Zxilly/cjv/internal/component"
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/i18n"
 	"github.com/Zxilly/cjv/internal/sdktools"
+	"github.com/Zxilly/cjv/internal/toolchain"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/exp/teatest"
 	"github.com/spf13/cobra"
@@ -144,27 +147,49 @@ func TestRunInitContinuesWhenDefaultToolchainInstallFails(t *testing.T) {
 	assert.Equal(t, originalNoPathSetup, os.Getenv(config.EnvNoPathSetup))
 }
 
+// observeInitPathSetup points HOME at a temporary shell config so the test
+// can see the PATH block init writes. Windows configures PATH in the registry
+// instead, which reachable's guarded tests and the integration tests cover.
+func observeInitPathSetup(t *testing.T, cjvHome string) func() {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		return func() {}
+	}
+	userHome := t.TempDir()
+	rc := filepath.Join(userHome, ".bashrc")
+	require.NoError(t, os.WriteFile(rc, []byte("# existing\n"), 0o644))
+	t.Setenv("HOME", userHome)
+	t.Setenv(config.EnvNoPathSetup, "")
+	return func() {
+		t.Helper()
+		data, err := os.ReadFile(rc)
+		require.NoError(t, err)
+		assert.Equal(t, 1, strings.Count(string(data), "# cjv (managed by cjv, do not edit)"))
+		assert.Contains(t, string(data), filepath.Join(cjvHome, "bin"))
+	}
+}
+
 func TestRunInitCoversAlreadyInstalledAndModifyPathBranches(t *testing.T) {
 	app := newApplication("dev", "")
 	home := t.TempDir()
 	config.IsolateForTest(t, home)
 	config.ResetDefaultSettingsFileCache()
 
-	var pathConfigured bool
 	app.initYes = true
 	app.initDefaultToolchain = "none"
 	app.initNoModifyPath = false
-	app.ensurePathConfiguredFn = func() { pathConfigured = true }
+	assertPathConfigured := observeInitPathSetup(t, home)
 	t.Cleanup(func() {
 		config.ResetDefaultSettingsFileCache()
 	})
 
 	require.NoError(t, app.runInit(&cobra.Command{}, nil))
-	require.True(t, pathConfigured)
+	assertPathConfigured()
 
-	pathConfigured = false
+	// The second run takes the already-installed branch and leaves the
+	// single PATH block in place.
 	require.NoError(t, app.runInit(&cobra.Command{}, nil))
-	require.True(t, pathConfigured)
+	assertPathConfigured()
 
 	assert.NotEmpty(t, yesNoStr(true))
 	assert.NotEmpty(t, yesNoStr(false))
@@ -174,6 +199,14 @@ func TestRunInitPassesConfiguredComponentsToDefaultToolchainInstall(t *testing.T
 	app := newApplication("dev", "")
 	home := t.TempDir()
 	config.IsolateForTest(t, home)
+	t.Setenv(config.EnvDistServer, "")
+	t.Setenv(config.EnvNoPathSetup, "1")
+	server := validMockServer(t)
+	settings := config.DefaultSettings()
+	settings.ManifestURL = server.URL + "/sdk-versions.json"
+	settingsPath, err := config.SettingsPath()
+	require.NoError(t, err)
+	require.NoError(t, config.SaveSettings(&settings, settingsPath))
 	config.ResetDefaultSettingsFileCache()
 
 	app.initYes = true
@@ -181,11 +214,11 @@ func TestRunInitPassesConfiguredComponentsToDefaultToolchainInstall(t *testing.T
 	app.initNoModifyPath = true
 	app.initComponents = []string{"stdx", "docs"}
 
-	var gotInput string
+	var gotToolchain string
 	var gotComponents []string
-	app.installToolchainWithExtrasFn = func(ctx context.Context, input string, targets, components []string, force bool) error {
-		gotInput = input
-		gotComponents = append([]string(nil), components...)
+	app.componentInstallFunc = func(_ context.Context, _ componentlib.Roots, tc toolchain.ToolchainName, name componentlib.Name, _, _ string, _ bool) error {
+		gotToolchain = tc.String()
+		gotComponents = append(gotComponents, string(name))
 		return nil
 	}
 
@@ -193,10 +226,10 @@ func TestRunInitPassesConfiguredComponentsToDefaultToolchainInstall(t *testing.T
 		config.ResetDefaultSettingsFileCache()
 	})
 
-	err := app.runInit(&cobra.Command{}, nil)
+	require.NoError(t, app.runInit(&cobra.Command{}, nil))
 
-	require.NoError(t, err)
-	assert.Equal(t, "sts", gotInput)
+	assert.DirExists(t, filepath.Join(home, "toolchains", "sts-2.0.0"))
+	assert.Equal(t, "sts-2.0.0", gotToolchain)
 	assert.Equal(t, []string{"stdx", "docs"}, gotComponents)
 }
 

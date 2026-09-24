@@ -18,6 +18,7 @@ CI 的全部 job 定义在 `.github/workflows/ci.yml`，smoke 单独在 `.github
 - `lifecycle`：通过生产安装入口下载本地测试服务器的真实归档，验证首次安装、重装和 URL 安装的文件恢复。升级与卸载测试覆盖 SDK/stdx/docs 及设置引用、匹配新版本的组件、链接来源、已有替代版本的选择、失败后的撤回与恢复错误；同名重装后组件仍可正确卸载。更新测试位于 `update_test.go`，覆盖通道名、目标平台变体和明确版本三种更新方式、已是最新与跳过自定义工具链的结果、全量更新中单个失败不中断以及下载暂存区清理；`cli` 只测试 `update` 命令的参数处理、自更新决定和 JSON 渲染。
 - `component`：验证归档安装、本地链接与组件批量修改失败后，文件和清单恢复；恢复本身失败时，备份仍可用于后续恢复。
 - `fstx`：验证中断后的日志恢复和重复恢复、提交及准备发布状态、失败恢复后的备份保留，并检查异常日志和越界路径不会触发未授权的文件修改。
+- `reachable`：单元测试覆盖 PATH 策略与可达性操作：在类 Unix 系统把 `HOME` 指向临时目录，验证 `ConfigurePath` 对每个 shell 配置只写一次标记块、`CJV_NO_PATH_SETUP=1` 时不写、`RemovePath` 能撤销、`Ensure` 只在策略要求时配置 PATH；Windows 用 `testutil.SaveRegistryPath` 守护后对注册表做同样的验证，只在 CI 上运行。`Ensure` 本身的测试覆盖受管二进制的保留与强制覆盖、代理链接和按需写 env 脚本。`lifecycle` 另验证首次发布默认工具链时按 `Options.ConfigurePath` 配置 PATH、后续安装不再改动。
 - `selfupdate`：通过 `Update` 验证两种构建的版本发现、无需更新、校验失败及实际文件替换，保留运行中二进制替换测试；`cli/selfmgmt` 检查跳过更新的真实 JSON 状态及 stdout 无文本混入。
 - `process`：启动真实子进程，验证标准流、环境、启动错误、退出码和取消；Unix 专有测试另验证终止信号转发、超时升级及不重复转发终端中断。
 

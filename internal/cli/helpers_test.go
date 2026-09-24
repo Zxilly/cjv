@@ -18,7 +18,7 @@ func TestMain(m *testing.M) {
 
 func runTests(m *testing.M) int {
 	if os.Getenv("CI") == "true" {
-		// CI mode: let ensurePathConfigured run for real so the actual
+		// CI mode: let reachable.ConfigurePath run for real so the actual
 		// code path is exercised, but wrap the run in a platform-specific
 		// guard that saves and restores the system PATH afterward
 		// (saves and restores the system PATH after the test run).

@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log/slog"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -14,10 +13,10 @@ import (
 	"github.com/Zxilly/cjv/internal/cli/selfmgmt"
 	componentlib "github.com/Zxilly/cjv/internal/component"
 	"github.com/Zxilly/cjv/internal/config"
-	"github.com/Zxilly/cjv/internal/env"
 	"github.com/Zxilly/cjv/internal/i18n"
+	"github.com/Zxilly/cjv/internal/lifecycle"
+	"github.com/Zxilly/cjv/internal/reachable"
 	"github.com/Zxilly/cjv/internal/sdktools"
-	"github.com/Zxilly/cjv/internal/selfupdate"
 	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/glamour/styles"
 	glowutils "github.com/charmbracelet/glow/v2/utils"
@@ -268,7 +267,7 @@ func (app *application) runInit(cmd *cobra.Command, _ []string) error {
 	} else {
 		fmt.Println(i18n.T("InitShellConfigs", nil))
 		fmt.Println()
-		posix, fish := env.ShellConfigPaths()
+		posix, fish := reachable.ShellConfigPaths()
 		for _, rc := range posix {
 			fmt.Printf("    %s\n", rc)
 		}
@@ -418,26 +417,22 @@ func (app *application) installInit(ctx context.Context, initialHome string, opt
 	if err := config.EnsureDirs(); err != nil {
 		return err
 	}
-	if _, err := selfupdate.ForceUpdateManagedExecutable(); err != nil {
+	// A (re)installation always leaves the running cjv behind as the managed
+	// binary and refreshes the env scripts; PATH follows the user's choice.
+	if err := reachable.Ensure(reachable.Policy{
+		ForceManagedBinary: true,
+		EnvScripts:         true,
+		ConfigurePath:      opts.modifyPath,
+	}); err != nil {
 		return err
-	}
-	if err := sdktools.CreateAllProxyLinks(); err != nil {
-		return err
-	}
-	if opts.modifyPath {
-		app.ensurePathConfiguredFn()
-	}
-	if err := env.WriteEnvScripts(home, binDir); err != nil {
-		slog.Warn("failed to write env scripts", "error", err)
 	}
 
 	if opts.toolchain != "none" {
-		// Init has already handled PATH. Keep this policy in the invocation
-		// rather than overwriting the caller's process environment.
-		configurePath := app.ensurePathConfiguredFn
-		app.ensurePathConfiguredFn = func() {}
-		defer func() { app.ensurePathConfiguredFn = configurePath }()
-		if err := app.installToolchainWithExtrasFn(ctx, opts.toolchain, nil, opts.components, false); err != nil {
+		// Init has already handled PATH; the toolchain install must not touch
+		// it again. The policy travels with this invocation.
+		installOpts := app.lifecycleOptions()
+		installOpts.ConfigurePath = false
+		if err := lifecycle.InstallToolchainWithExtras(ctx, opts.toolchain, nil, opts.components, false, installOpts); err != nil {
 			fmt.Fprintf(os.Stderr, "\n%s\n", i18n.T("InitToolchainFailed", i18n.MsgData{
 				"Name": opts.toolchain,
 				"Err":  err.Error(),

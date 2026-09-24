@@ -2,13 +2,10 @@ package selfmgmt
 
 import (
 	"context"
-	"log/slog"
 
 	"github.com/Zxilly/cjv/internal/cjverr"
-	"github.com/Zxilly/cjv/internal/config"
-	"github.com/Zxilly/cjv/internal/env"
 	"github.com/Zxilly/cjv/internal/i18n"
-	"github.com/Zxilly/cjv/internal/sdktools"
+	"github.com/Zxilly/cjv/internal/reachable"
 	"github.com/Zxilly/cjv/internal/selfupdate"
 )
 
@@ -80,29 +77,12 @@ func UpdateManaged(ctx context.Context, updateURL, currentVersion string) (Updat
 		Status:          result.Status,
 		previousVersion: result.CurrentVersion,
 	}
-	if err := sdktools.CreateAllProxyLinks(); err != nil {
+	// The replaced binary must stay reachable: the proxy links point at it and
+	// the env scripts are refreshed. Refreshing never edits shell profiles or
+	// registry PATH entries, and a script failure only logs, so a successfully
+	// replaced binary is never reported as a failed update.
+	if err := reachable.Ensure(reachable.Policy{EnvScripts: true}); err != nil {
 		return outcome, &UpdateFinalizationError{Result: outcome, Err: err}
 	}
-	// Scripts are static and self-locating. Refreshing them is idempotent and
-	// never edits shell profiles or registry PATH entries. A convenience-script
-	// failure must not report a successfully replaced binary as a failed update.
-	if err := refreshEnvScripts(); err != nil {
-		slog.Warn("failed to refresh env scripts during self update", "error", err)
-	}
 	return outcome, nil
-}
-
-func refreshEnvScripts() error {
-	home, err := config.Home()
-	if err != nil {
-		return err
-	}
-	binDir, err := config.BinDir()
-	if err != nil {
-		return err
-	}
-	if err := config.EnsureDirs(); err != nil {
-		return err
-	}
-	return env.WriteEnvScripts(home, binDir)
 }

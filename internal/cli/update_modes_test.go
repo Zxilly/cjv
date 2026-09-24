@@ -16,7 +16,6 @@ func TestUpdateExistingLatestAcrossRenderModes(t *testing.T) {
 		t.Run(fmt.Sprint(jsonMode), func(t *testing.T) {
 			app := newApplication("dev", "")
 			app.output.SetJSONMode(jsonMode)
-			app.ensurePathConfiguredFn = func() { t.Fatal("unexpected PATH setup") }
 			home := t.TempDir()
 			config.IsolateForTest(t, home)
 			t.Setenv(config.EnvNoPathSetup, "1")

@@ -63,7 +63,7 @@ func TestInstallRestoresToolchainsAfterFinalizeFailure(t *testing.T) {
 				require.NoError(t, err)
 
 				finalizeErr := errors.New("proxy refresh failed")
-				finalizeCalled, pathCalled := false, false
+				finalizeCalled, publishCalled := false, false
 				lifecycle.SetAfterFinalizeHook(t, func() error {
 					finalizeCalled = true
 					// The real archive must have been downloaded, validated and
@@ -78,9 +78,13 @@ func TestInstallRestoresToolchainsAfterFinalizeFailure(t *testing.T) {
 					assert.FileExists(t, filepath.Join(home, "bin", sdktools.PlatformBinaryName("cjc")))
 					return finalizeErr
 				})
-				opts := lifecycle.Options{
-					EnsurePathConfigured: func() { pathCalled = true },
-				}
+				// PATH is configured only as part of publishing the default,
+				// which a failed finalization must never reach.
+				lifecycle.SetAfterPublishHook(t, func() error {
+					publishCalled = true
+					return nil
+				})
+				opts := lifecycle.Options{ConfigurePath: true}
 				if source == "url" {
 					err = lifecycle.InstallToolchainFromURL(t.Context(), name,
 						serverURL+"/download/cangjie-sdk-1.0.5.zip", "", reinstall, true, opts)
@@ -90,7 +94,7 @@ func TestInstallRestoresToolchainsAfterFinalizeFailure(t *testing.T) {
 
 				require.ErrorIs(t, err, finalizeErr)
 				assert.True(t, finalizeCalled)
-				assert.False(t, pathCalled)
+				assert.False(t, publishCalled)
 				if reinstall {
 					data, readErr := os.ReadFile(compiler)
 					require.NoError(t, readErr)
@@ -209,8 +213,11 @@ func TestFirstInstallDefaultSurvivesInterruptionAfterPublication(t *testing.T) {
 		config.IsolateForTest(t, os.Getenv(config.EnvHome))
 		// Stop after the real settings update and before the transaction can
 		// write its final marker or run deferred rollback/cleanup.
-		err := lifecycle.InstallToolchainWithExtras(t.Context(), "lts", nil, nil, false,
-			lifecycle.Options{EnsurePathConfigured: func() { os.Exit(71) }})
+		lifecycle.SetAfterPublishHook(t, func() error {
+			os.Exit(71)
+			return nil
+		})
+		err := lifecycle.InstallToolchainWithExtras(t.Context(), "lts", nil, nil, false, lifecycle.Options{})
 		t.Fatalf("expected interruption at default publication, got %v", err)
 	}
 
@@ -244,7 +251,11 @@ func TestFirstInstallSettingsWriteFailureRollsBackPreparedSDK(t *testing.T) {
 	before, err := os.ReadFile(sf.Path())
 	require.NoError(t, err)
 	backup := sf.Path() + ".test-backup"
-	pathConfigured := false
+	publishCalled := false
+	lifecycle.SetAfterPublishHook(t, func() error {
+		publishCalled = true
+		return nil
+	})
 	lifecycle.SetAfterFinalizeHook(t, func() error {
 		// Fail the actual atomic settings write after SDK placement and
 		// before any default reference can be published.
@@ -253,11 +264,9 @@ func TestFirstInstallSettingsWriteFailureRollsBackPreparedSDK(t *testing.T) {
 		require.NoError(t, os.WriteFile(filepath.Join(sf.Path(), "occupied"), []byte("block publication"), 0o644))
 		return nil
 	})
-	err = lifecycle.InstallToolchainWithExtras(t.Context(), "lts", nil, nil, false, lifecycle.Options{
-		EnsurePathConfigured: func() { pathConfigured = true },
-	})
+	err = lifecycle.InstallToolchainWithExtras(t.Context(), "lts", nil, nil, false, lifecycle.Options{ConfigurePath: true})
 	require.Error(t, err)
-	assert.False(t, pathConfigured)
+	assert.False(t, publishCalled)
 	assert.NoDirExists(t, filepath.Join(home, "toolchains", "lts-1.0.5"))
 	entries, err := os.ReadDir(filepath.Join(home, "toolchains"))
 	require.NoError(t, err)

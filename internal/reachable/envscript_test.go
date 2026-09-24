@@ -1,4 +1,4 @@
-package env
+package reachable
 
 import (
 	"os"
@@ -13,8 +13,8 @@ func TestWritePosixEnvScript(t *testing.T) {
 	path := filepath.Join(dir, "env")
 	binDir := "/home/testuser/.cjv/bin"
 
-	if err := WritePosixEnvScript(path, binDir); err != nil {
-		t.Fatalf("WritePosixEnvScript failed: %v", err)
+	if err := writePosixEnvScript(path, binDir); err != nil {
+		t.Fatalf("writePosixEnvScript failed: %v", err)
 	}
 
 	content, err := os.ReadFile(path)
@@ -39,8 +39,8 @@ func TestWritePosixEnvScriptEscapesBinDir(t *testing.T) {
 	path := filepath.Join(dir, "env")
 	binDir := `/tmp/cjv"; touch /tmp/pwn; echo "$HOME/bin`
 
-	if err := WritePosixEnvScript(path, binDir); err != nil {
-		t.Fatalf("WritePosixEnvScript failed: %v", err)
+	if err := writePosixEnvScript(path, binDir); err != nil {
+		t.Fatalf("writePosixEnvScript failed: %v", err)
 	}
 
 	content, err := os.ReadFile(path)
@@ -64,8 +64,8 @@ func TestWritePowerShellEnvScript(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "env.ps1")
 
-	if err := WritePowerShellEnvScript(path); err != nil {
-		t.Fatalf("WritePowerShellEnvScript failed: %v", err)
+	if err := writePowerShellEnvScript(path); err != nil {
+		t.Fatalf("writePowerShellEnvScript failed: %v", err)
 	}
 
 	content, err := os.ReadFile(path)
@@ -86,8 +86,8 @@ func TestWriteBatEnvScript(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "env.bat")
 
-	if err := WriteBatEnvScript(path); err != nil {
-		t.Fatalf("WriteBatEnvScript failed: %v", err)
+	if err := writeBatEnvScript(path); err != nil {
+		t.Fatalf("writeBatEnvScript failed: %v", err)
 	}
 
 	content, err := os.ReadFile(path)
@@ -108,8 +108,8 @@ func TestWriteBatEnvScriptChecksExactPathEntry(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "env.bat")
 
-	if err := WriteBatEnvScript(path); err != nil {
-		t.Fatalf("WriteBatEnvScript failed: %v", err)
+	if err := writeBatEnvScript(path); err != nil {
+		t.Fatalf("writeBatEnvScript failed: %v", err)
 	}
 
 	content, err := os.ReadFile(path)
@@ -140,12 +140,12 @@ func TestWindowsEnvScriptsAreSelfLocatingASCII(t *testing.T) {
 	dir := t.TempDir()
 
 	ps1 := filepath.Join(dir, "env.ps1")
-	if err := WritePowerShellEnvScript(ps1); err != nil {
-		t.Fatalf("WritePowerShellEnvScript failed: %v", err)
+	if err := writePowerShellEnvScript(ps1); err != nil {
+		t.Fatalf("writePowerShellEnvScript failed: %v", err)
 	}
 	bat := filepath.Join(dir, "env.bat")
-	if err := WriteBatEnvScript(bat); err != nil {
-		t.Fatalf("WriteBatEnvScript failed: %v", err)
+	if err := writeBatEnvScript(bat); err != nil {
+		t.Fatalf("writeBatEnvScript failed: %v", err)
 	}
 
 	cases := []struct {
@@ -177,8 +177,8 @@ func TestWriteEnvScripts(t *testing.T) {
 	dir := t.TempDir()
 	binDir := "/home/testuser/.cjv/bin"
 
-	if err := WriteEnvScripts(dir, binDir); err != nil {
-		t.Fatalf("WriteEnvScripts failed: %v", err)
+	if err := writeEnvScripts(dir, binDir); err != nil {
+		t.Fatalf("writeEnvScripts failed: %v", err)
 	}
 
 	var expected, unexpected []string

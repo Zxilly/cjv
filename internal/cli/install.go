@@ -3,13 +3,9 @@ package cli
 import (
 	"context"
 	"fmt"
-	"log/slog"
-	"os"
-	"runtime"
 
 	"github.com/Zxilly/cjv/internal/cli/selfmgmt"
 	"github.com/Zxilly/cjv/internal/config"
-	"github.com/Zxilly/cjv/internal/env"
 	"github.com/Zxilly/cjv/internal/i18n"
 	"github.com/Zxilly/cjv/internal/lifecycle"
 	"github.com/Zxilly/cjv/internal/toolchain"
@@ -31,9 +27,9 @@ func (app *application) reportProgress(message string, data i18n.MsgData) {
 
 func (app *application) lifecycleOptions() lifecycle.Options {
 	return lifecycle.Options{
-		Report:               app.reportProgress,
-		EnsurePathConfigured: app.ensurePathConfiguredFn,
-		ComponentInstall:     app.componentInstallFunc,
+		Report:           app.reportProgress,
+		ConfigurePath:    true,
+		ComponentInstall: app.componentInstallFunc,
 	}
 }
 
@@ -96,55 +92,11 @@ func (app *application) installComponentsList(ctx context.Context, resolvedName 
 	return lifecycle.InstallComponentsList(ctx, resolvedName, components, force, quiet, nil, app.lifecycleOptions())
 }
 
-// ensurePathConfigured adds the cjv bin directory to the user's PATH
-// on first install, so proxy commands are immediately available.
-//
-// Set CJV_NO_PATH_SETUP=1 to skip PATH modification (useful for CI
-// environments and integration tests).
-func ensurePathConfigured() {
-	if os.Getenv(config.EnvNoPathSetup) == "1" {
-		return
-	}
-
-	binDir, err := config.BinDir()
-	if err != nil {
-		return
-	}
-
-	var pathErr error
-
-	if runtime.GOOS == "windows" {
-		if err := env.AddPathToWindowsRegistry(binDir); err != nil {
-			slog.Warn("failed to add PATH to Windows registry", "error", err)
-			pathErr = err
-		}
-	} else {
-		posix, fish := env.ShellConfigPaths()
-		for _, rc := range posix {
-			if err := env.AddPathToShellConfig(rc, binDir); err != nil {
-				slog.Warn("failed to add PATH to shell config", "file", rc, "error", err)
-				pathErr = err
-			}
-		}
-		if fish != "" {
-			if err := env.AddPathToFishConfig(fish, binDir); err != nil {
-				slog.Warn("failed to add PATH to fish config", "file", fish, "error", err)
-				pathErr = err
-			}
-		}
-	}
-
-	if pathErr != nil {
-		fmt.Fprintf(os.Stderr, "\n%s\n", i18n.T("PathConfigWarning", i18n.MsgData{"BinDir": binDir}))
-	}
-}
-
 func resolveAndLocate(ctx context.Context, name toolchain.ToolchainName, settings *config.Settings, fetcher *lifecycle.ManifestFetcher, tuple string) (lifecycle.ResolvedToolchain, error) {
 	return lifecycle.ResolveAndLocatePlatform(ctx, name, settings, fetcher, tuple)
 }
 
 func (app *application) initInstallCommands() {
-	app.ensurePathConfiguredFn = ensurePathConfigured
 	app.installToolchainWithExtrasFn = app.InstallToolchainWithExtras
 	app.installCmd = &cobra.Command{
 		Use:   "install <toolchain>",
