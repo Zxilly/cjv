@@ -28,40 +28,53 @@ func IsPathUnder(base, candidate string) bool {
 	return rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) && !filepath.IsAbs(rel)
 }
 
-var (
-	createSymlink   = os.Symlink
-	createHardLink  = os.Link
-	copyFileForLink = CopyFile
-)
+// linkStrategy creates dst as one form of link to src.
+type linkStrategy func(src, dst string) error
+
+// symlinkStrategy uses a relative target when src and dst share a directory,
+// so the link remains valid if the parent directory is moved.
+func symlinkStrategy(src, dst string) error {
+	target := src
+	if filepath.Dir(src) == filepath.Dir(dst) {
+		target = filepath.Base(src)
+	}
+	return os.Symlink(target, dst)
+}
+
+func hardLinkStrategy(src, dst string) error {
+	return os.Link(src, dst)
+}
+
+func copyStrategy(src, dst string) error {
+	return CopyFile(src, dst, 0o755)
+}
 
 // CreateLink creates a link from src to dst with three-level fallback:
 // symlink -> hard link -> copy.
-// When src and dst are in the same directory, symlinks use a relative target
-// so the link remains valid if the parent directory is moved.
 //
 // The replacement is staged through a temporary path so a failed update does
 // not delete an existing destination.
 func CreateLink(src, dst string) error {
+	return createLinkWith([]linkStrategy{symlinkStrategy, hardLinkStrategy, copyStrategy}, src, dst)
+}
+
+// createLinkWith tries each strategy in order against a temporary path next
+// to dst and moves the first success into place. When every strategy fails,
+// the last error is returned and dst is left untouched.
+func createLinkWith(strategies []linkStrategy, src, dst string) error {
 	tmpPath, err := createReplacementPath(dst)
 	if err != nil {
 		return err
 	}
 	defer os.Remove(tmpPath) //nolint:errcheck // best-effort cleanup
 
-	symlinkTarget := src
-	if filepath.Dir(src) == filepath.Dir(dst) {
-		symlinkTarget = filepath.Base(src)
+	err = errors.New("fsops: no link strategy")
+	for _, create := range strategies {
+		if err = create(src, tmpPath); err == nil {
+			return RenameRetry(tmpPath, dst)
+		}
 	}
-	if err := createSymlink(symlinkTarget, tmpPath); err == nil {
-		return RenameRetry(tmpPath, dst)
-	}
-	if err := createHardLink(src, tmpPath); err == nil {
-		return RenameRetry(tmpPath, dst)
-	}
-	if err := copyFileForLink(src, tmpPath, 0o755); err != nil {
-		return err
-	}
-	return RenameRetry(tmpPath, dst)
+	return err
 }
 
 func createReplacementPath(dst string) (string, error) {
