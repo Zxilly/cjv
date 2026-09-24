@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/Zxilly/cjv/internal/config"
-	"github.com/Zxilly/cjv/internal/proxy"
+	"github.com/Zxilly/cjv/internal/sdktools"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -48,10 +48,10 @@ func TestToolchainLinkZip_MaterializesOwnedToolchainAndKeepsSource(t *testing.T)
 	require.NoError(t, err)
 	assert.True(t, info.IsDir())
 	assert.Zero(t, info.Mode()&os.ModeSymlink, "archive link must materialize a real directory")
-	assert.FileExists(t, filepath.Join(home, "toolchains", "my-sdk", "bin", proxy.PlatformBinaryName("cjc")))
+	assert.FileExists(t, filepath.Join(home, "toolchains", "my-sdk", "bin", sdktools.PlatformBinaryName("cjc")))
 
 	// Proxy links created and bundled stdx installed, just like the URL path.
-	assert.FileExists(t, filepath.Join(home, "bin", proxy.PlatformBinaryName("cjc")))
+	assert.FileExists(t, filepath.Join(home, "bin", sdktools.PlatformBinaryName("cjc")))
 	assert.DirExists(t, filepath.Join(home, "stdx", "my-sdk", "dynamic"))
 
 	// The user's source archive must be left untouched (never moved or deleted).
@@ -64,7 +64,7 @@ func TestToolchainLinkZip_DirectoryStillSymlinks(t *testing.T) {
 	target := t.TempDir()
 	config.IsolateForTest(t, home)
 
-	cjcPath := filepath.Join(target, "bin", proxy.PlatformBinaryName("cjc"))
+	cjcPath := filepath.Join(target, "bin", sdktools.PlatformBinaryName("cjc"))
 	require.NoError(t, os.MkdirAll(filepath.Dir(cjcPath), 0o755))
 	require.NoError(t, os.WriteFile(cjcPath, []byte("stub"), 0o755))
 

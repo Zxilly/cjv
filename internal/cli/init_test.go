@@ -12,7 +12,7 @@ import (
 
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/i18n"
-	"github.com/Zxilly/cjv/internal/proxy"
+	"github.com/Zxilly/cjv/internal/sdktools"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/exp/teatest"
 	"github.com/spf13/cobra"
@@ -36,15 +36,15 @@ func TestRunInitNonInteractiveNoToolchainWritesManagedFiles(t *testing.T) {
 	err := app.runInit(&cobra.Command{}, nil)
 
 	require.NoError(t, err)
-	assert.FileExists(t, filepath.Join(home, "bin", proxy.CjvBinaryName()))
+	assert.FileExists(t, filepath.Join(home, "bin", sdktools.CjvBinaryName()))
 	if runtime.GOOS == "windows" {
 		assert.FileExists(t, filepath.Join(home, "env.ps1"))
 		assert.FileExists(t, filepath.Join(home, "env.bat"))
 	} else {
 		assert.FileExists(t, filepath.Join(home, "env"))
 	}
-	for _, tool := range proxy.AllProxyTools() {
-		assert.FileExists(t, filepath.Join(home, "bin", proxy.PlatformBinaryName(tool)))
+	for _, tool := range sdktools.AllProxyTools() {
+		assert.FileExists(t, filepath.Join(home, "bin", sdktools.PlatformBinaryName(tool)))
 	}
 
 	settings, err := config.LoadSettings(filepath.Join(home, ".cjv", "settings.toml"))
@@ -94,8 +94,8 @@ func TestInstallInitRestoresHomeEnvironment(t *testing.T) {
 					assert.Equal(t, "keep this file", string(contents))
 				} else {
 					require.NoError(t, err)
-					assert.FileExists(t, filepath.Join(selectedHome, "bin", proxy.CjvBinaryName()))
-					assert.FileExists(t, filepath.Join(selectedHome, "bin", proxy.PlatformBinaryName("cjc")))
+					assert.FileExists(t, filepath.Join(selectedHome, "bin", sdktools.CjvBinaryName()))
+					assert.FileExists(t, filepath.Join(selectedHome, "bin", sdktools.PlatformBinaryName("cjc")))
 				}
 				after, isPresent := os.LookupEnv(config.EnvHome)
 				assert.Equal(t, wasPresent, isPresent, "preserve whether CJV_HOME existed")
@@ -140,7 +140,7 @@ func TestRunInitContinuesWhenDefaultToolchainInstallFails(t *testing.T) {
 	err := app.runInit(&cobra.Command{}, nil)
 
 	require.NoError(t, err)
-	assert.FileExists(t, filepath.Join(home, "bin", proxy.CjvBinaryName()))
+	assert.FileExists(t, filepath.Join(home, "bin", sdktools.CjvBinaryName()))
 	assert.Equal(t, originalNoPathSetup, os.Getenv(config.EnvNoPathSetup))
 }
 

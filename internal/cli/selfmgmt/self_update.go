@@ -8,7 +8,7 @@ import (
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/env"
 	"github.com/Zxilly/cjv/internal/i18n"
-	"github.com/Zxilly/cjv/internal/proxy"
+	"github.com/Zxilly/cjv/internal/sdktools"
 	"github.com/Zxilly/cjv/internal/selfupdate"
 )
 
@@ -80,7 +80,7 @@ func UpdateManaged(ctx context.Context, updateURL, currentVersion string) (Updat
 		Status:          result.Status,
 		previousVersion: result.CurrentVersion,
 	}
-	if err := proxy.CreateAllProxyLinks(); err != nil {
+	if err := sdktools.CreateAllProxyLinks(); err != nil {
 		return outcome, &UpdateFinalizationError{Result: outcome, Err: err}
 	}
 	// Scripts are static and self-locating. Refreshing them is idempotent and

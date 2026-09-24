@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/Zxilly/cjv/internal/config"
-	"github.com/Zxilly/cjv/internal/proxy"
+	"github.com/Zxilly/cjv/internal/sdktools"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -17,15 +17,15 @@ func TestToolchainLinkCommandCreatesCustomLinkAndProxyLinks(t *testing.T) {
 	target := t.TempDir()
 	config.IsolateForTest(t, home)
 
-	cjcPath := filepath.Join(target, "bin", proxy.PlatformBinaryName("cjc"))
+	cjcPath := filepath.Join(target, "bin", sdktools.PlatformBinaryName("cjc"))
 	require.NoError(t, os.MkdirAll(filepath.Dir(cjcPath), 0o755))
 	require.NoError(t, os.WriteFile(cjcPath, []byte("stub"), 0o755))
 
 	err := app.toolchainLinkCmd.RunE(app.toolchainLinkCmd, []string{"my-sdk", target})
 
 	require.NoError(t, err)
-	assert.FileExists(t, filepath.Join(home, "bin", proxy.CjvBinaryName()))
-	assert.FileExists(t, filepath.Join(home, "bin", proxy.PlatformBinaryName("cjc")))
+	assert.FileExists(t, filepath.Join(home, "bin", sdktools.CjvBinaryName()))
+	assert.FileExists(t, filepath.Join(home, "bin", sdktools.PlatformBinaryName("cjc")))
 	_, statErr := os.Lstat(filepath.Join(home, "toolchains", "my-sdk"))
 	assert.NoError(t, statErr)
 

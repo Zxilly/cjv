@@ -11,6 +11,8 @@ import (
 	"github.com/Zxilly/cjv/internal/component"
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/dist"
+	"github.com/Zxilly/cjv/internal/sdktools"
+	"github.com/Zxilly/cjv/internal/testutil"
 	"github.com/Zxilly/cjv/internal/toolchain"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -225,6 +227,34 @@ func TestActiveAutoInstallsMissingHostToolchain(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "lts-1.0.5", active.Name)
 	assert.Equal(t, "lts-1.0.5", gotInput)
+}
+
+// Proxy auto-install runs the same installation flow as `cjv install`: the
+// managed cjv binary and the proxy links are established, not just the SDK
+// directory, so the freshly installed toolchain is reachable through bin/.
+func TestActiveAutoInstallCreatesManagedBinaryAndProxyLinks(t *testing.T) {
+	home := t.TempDir()
+	config.IsolateForTest(t, home)
+	t.Setenv(config.EnvToolchain, "")
+	t.Setenv(config.EnvDistServer, "")
+	require.NoError(t, config.EnsureDirs())
+	server := testutil.MockDistServer(t)
+
+	settings := config.DefaultSettings()
+	settings.DefaultToolchain = "lts"
+	settings.AutoInstall = true
+	settings.ManifestURL = server.URL + "/sdk-versions.json"
+	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
+
+	active, err := Active(context.Background(), "")
+
+	require.NoError(t, err)
+	assert.Equal(t, "lts-1.0.5", active.Name)
+	assert.FileExists(t, filepath.Join(home, "bin", sdktools.CjvBinaryName()))
+	for _, tool := range sdktools.AllProxyTools() {
+		assert.FileExists(t, filepath.Join(home, "bin", sdktools.PlatformBinaryName(tool)),
+			"proxy link for %q should exist after auto-install", tool)
+	}
 }
 
 func TestActiveRunsToolchainRecoveryBeforeResolving(t *testing.T) {

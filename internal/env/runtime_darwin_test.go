@@ -15,7 +15,7 @@ func TestRuntimePreservesExplicitSDKRoot(t *testing.T) {
 	config.IsolateForTest(t, t.TempDir())
 	for _, constructionRoot := range []string{"/construction-sdk", ""} {
 		t.Setenv("SDKROOT", constructionRoot)
-		rt, err := env.RuntimeForToolchain(t.TempDir(), "lts-1.0.5", nil)
+		rt, err := env.RuntimeForToolchain(t.TempDir(), "lts-1.0.5")
 		require.NoError(t, err)
 		base := []string{"SDKROOT=/caller-sdk"}
 		for _, got := range [][]string{rt.ProxyEnv(base, 0), rt.ToolchainEnv(base)} {

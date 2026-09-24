@@ -12,7 +12,7 @@ import (
 
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/lifecycle"
-	"github.com/Zxilly/cjv/internal/proxy"
+	"github.com/Zxilly/cjv/internal/sdktools"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -71,7 +71,7 @@ func foreignOS() (string, []byte) {
 func sdkInnerArchive(t *testing.T) []byte {
 	t.Helper()
 	return zipBytes(t, map[string][]byte{
-		"cangjie/bin/" + proxy.PlatformBinaryName("cjc"): magicForOS(runtime.GOOS),
+		"cangjie/bin/" + sdktools.PlatformBinaryName("cjc"): magicForOS(runtime.GOOS),
 	})
 }
 
@@ -124,11 +124,11 @@ func TestToolchainLinkURL_SDKAndStdx(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, info.IsDir())
 	assert.Zero(t, info.Mode()&os.ModeSymlink, "URL toolchain must be a real directory, not a symlink")
-	assert.FileExists(t, filepath.Join(home, "toolchains", "my-sdk", "bin", proxy.PlatformBinaryName("cjc")))
+	assert.FileExists(t, filepath.Join(home, "toolchains", "my-sdk", "bin", sdktools.PlatformBinaryName("cjc")))
 
 	// Proxy links created.
-	assert.FileExists(t, filepath.Join(home, "bin", proxy.CjvBinaryName()))
-	assert.FileExists(t, filepath.Join(home, "bin", proxy.PlatformBinaryName("cjc")))
+	assert.FileExists(t, filepath.Join(home, "bin", sdktools.CjvBinaryName()))
+	assert.FileExists(t, filepath.Join(home, "bin", sdktools.PlatformBinaryName("cjc")))
 
 	// Bundled stdx installed and manifest written.
 	assert.DirExists(t, filepath.Join(home, "stdx", "my-sdk", "dynamic"))
@@ -146,7 +146,7 @@ func TestToolchainLinkURL_SDKOnly(t *testing.T) {
 	})
 	require.NoError(t, app.linkURL(t, "my-sdk", serveBytes(t, outer)))
 
-	assert.FileExists(t, filepath.Join(home, "toolchains", "my-sdk", "bin", proxy.PlatformBinaryName("cjc")))
+	assert.FileExists(t, filepath.Join(home, "toolchains", "my-sdk", "bin", sdktools.PlatformBinaryName("cjc")))
 	assert.NoDirExists(t, filepath.Join(home, "stdx", "my-sdk"))
 }
 
@@ -158,11 +158,11 @@ func TestToolchainLinkURL_BareArchiveFallback(t *testing.T) {
 	// URL points directly at a bare SDK archive (no inner cangjie-sdk-* wrapper):
 	// the served zip itself has the single top-level cangjie/ dir.
 	bare := zipBytes(t, map[string][]byte{
-		"cangjie/bin/" + proxy.PlatformBinaryName("cjc"): magicForOS(runtime.GOOS),
+		"cangjie/bin/" + sdktools.PlatformBinaryName("cjc"): magicForOS(runtime.GOOS),
 	})
 	require.NoError(t, app.linkURL(t, "bare", serveBytes(t, bare)))
 
-	assert.FileExists(t, filepath.Join(home, "toolchains", "bare", "bin", proxy.PlatformBinaryName("cjc")))
+	assert.FileExists(t, filepath.Join(home, "toolchains", "bare", "bin", sdktools.PlatformBinaryName("cjc")))
 	assert.NoDirExists(t, filepath.Join(home, "stdx", "bare"))
 }
 
@@ -179,7 +179,7 @@ func TestToolchainLinkURL_NoStdxFlag(t *testing.T) {
 	})
 	require.NoError(t, app.linkURL(t, "my-sdk", serveBytes(t, outer)))
 
-	assert.FileExists(t, filepath.Join(home, "toolchains", "my-sdk", "bin", proxy.PlatformBinaryName("cjc")))
+	assert.FileExists(t, filepath.Join(home, "toolchains", "my-sdk", "bin", sdktools.PlatformBinaryName("cjc")))
 	assert.NoDirExists(t, filepath.Join(home, "stdx", "my-sdk"), "--no-stdx must skip the bundled stdx")
 }
 
@@ -298,7 +298,7 @@ func TestToolchainLinkURL_StdxMissingDirsRollsBack(t *testing.T) {
 	require.Error(t, app.linkURL(t, "my-sdk", serveBytes(t, outer)))
 
 	// SDK is kept (committed before stdx), but the half-written stdx is rolled back.
-	assert.FileExists(t, filepath.Join(home, "toolchains", "my-sdk", "bin", proxy.PlatformBinaryName("cjc")))
+	assert.FileExists(t, filepath.Join(home, "toolchains", "my-sdk", "bin", sdktools.PlatformBinaryName("cjc")))
 	assert.NoDirExists(t, filepath.Join(home, "stdx", "my-sdk"))
 	assert.NoFileExists(t, filepath.Join(home, "toolchains", "my-sdk", ".cjv", "components", "manifest-stdx"))
 }
@@ -324,7 +324,7 @@ func TestToolchainLinkURL_ForceReinstallWithStdx(t *testing.T) {
 	})
 	require.NoError(t, app.linkURL(t, "my-sdk", serveBytes(t, second)))
 
-	assert.FileExists(t, filepath.Join(home, "toolchains", "my-sdk", "bin", proxy.PlatformBinaryName("cjc")))
+	assert.FileExists(t, filepath.Join(home, "toolchains", "my-sdk", "bin", sdktools.PlatformBinaryName("cjc")))
 	assert.FileExists(t, filepath.Join(home, "toolchains", "my-sdk", ".cjv", "components", "manifest-stdx"))
 	assert.FileExists(t, filepath.Join(home, "stdx", "my-sdk", "dynamic", "libnew"))
 	// The dropped library must not be left orphaned on the stdx search path.
@@ -338,7 +338,7 @@ func TestToolchainLinkURL_FlagOnLocalPathRejected(t *testing.T) {
 	target := t.TempDir()
 	config.IsolateForTest(t, home)
 
-	cjcPath := filepath.Join(target, "bin", proxy.PlatformBinaryName("cjc"))
+	cjcPath := filepath.Join(target, "bin", sdktools.PlatformBinaryName("cjc"))
 	require.NoError(t, os.MkdirAll(filepath.Dir(cjcPath), 0o755))
 	require.NoError(t, os.WriteFile(cjcPath, []byte("stub"), 0o755))
 

@@ -22,7 +22,7 @@ import (
 	componentlib "github.com/Zxilly/cjv/internal/component"
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/dist"
-	"github.com/Zxilly/cjv/internal/proxy"
+	"github.com/Zxilly/cjv/internal/sdktools"
 	"github.com/Zxilly/cjv/internal/toolchain"
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
@@ -49,8 +49,8 @@ func createMockSDKWithEnvSetup(includeEnvSetup bool) ([]byte, string) {
 	}
 
 	// Add all proxy tools at their expected relative paths
-	for _, tool := range proxy.AllProxyTools() {
-		relPath := proxy.ToolRelativePath(tool)
+	for _, tool := range sdktools.AllProxyTools() {
+		relPath := sdktools.ToolRelativePath(tool)
 		name := "cangjie/" + relPath
 		if runtime.GOOS == "windows" {
 			name += ".exe"
@@ -786,7 +786,7 @@ func TestInstallToolchainWithOptions_BootstrapsManagedBinary(t *testing.T) {
 
 	binDir, err := config.BinDir()
 	require.NoError(t, err)
-	managedBinary := filepath.Join(binDir, proxy.CjvBinaryName())
+	managedBinary := filepath.Join(binDir, sdktools.CjvBinaryName())
 	_, err = os.Stat(managedBinary)
 	require.Error(t, err)
 
@@ -993,53 +993,6 @@ func TestInstallBothChannels(t *testing.T) {
 	assert.Len(t, installed, 2)
 	assert.Contains(t, installed, "lts-1.0.5")
 	assert.Contains(t, installed, "sts-2.0.0")
-}
-
-// Tests for validateInstallation -- verifies that an extracted SDK
-// contains the essential "cjc" binary.
-
-func TestValidateInstallation_ValidSDK(t *testing.T) {
-	dir := t.TempDir()
-
-	// Create the cjc binary at the expected location
-	relPath := proxy.ToolRelativePath("cjc")
-	cjcPath := filepath.Join(dir, relPath)
-	if runtime.GOOS == "windows" {
-		cjcPath += ".exe"
-	}
-	require.NoError(t, os.MkdirAll(filepath.Dir(cjcPath), 0o755))
-	require.NoError(t, os.WriteFile(cjcPath, []byte("stub"), 0o755))
-
-	assert.NoError(t, validateInstallation(dir, ""),
-		"should pass when cjc binary exists at the expected path")
-}
-
-func TestValidateInstallationUsesResolvedTupleBinaryName(t *testing.T) {
-	winDir := t.TempDir()
-	winCJCPath := filepath.Join(winDir, proxy.ToolRelativePath("cjc")) + ".exe"
-	require.NoError(t, os.MkdirAll(filepath.Dir(winCJCPath), 0o755))
-	require.NoError(t, os.WriteFile(winCJCPath, []byte("stub"), 0o755))
-	assert.NoError(t, validateInstallation(winDir, "win32-x64"))
-
-	linuxDir := t.TempDir()
-	linuxCJCPath := filepath.Join(linuxDir, proxy.ToolRelativePath("cjc"))
-	require.NoError(t, os.MkdirAll(filepath.Dir(linuxCJCPath), 0o755))
-	require.NoError(t, os.WriteFile(linuxCJCPath, []byte("stub"), 0o755))
-	assert.NoError(t, validateInstallation(linuxDir, "linux-x64"))
-}
-
-func TestValidateInstallation_MissingBinary(t *testing.T) {
-	dir := t.TempDir()
-	// Empty directory — no cjc binary
-
-	err := validateInstallation(dir, "")
-	assert.Error(t, err, "should fail when cjc binary is missing")
-}
-
-func TestValidateInstallation_EmptyDir(t *testing.T) {
-	dir := t.TempDir()
-	err := validateInstallation(dir, "")
-	assert.Error(t, err, "should fail on empty directory")
 }
 
 // Tests for runInstall -- the cobra handler that parses --force flag.

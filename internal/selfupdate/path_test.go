@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/Zxilly/cjv/internal/config"
-	"github.com/Zxilly/cjv/internal/proxy"
+	"github.com/Zxilly/cjv/internal/sdktools"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -16,7 +16,7 @@ func TestManagedExecutablePathUsesManagedBinDir(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv(config.EnvHome, home)
 
-	managed := filepath.Join(home, "bin", proxy.CjvBinaryName())
+	managed := filepath.Join(home, "bin", sdktools.CjvBinaryName())
 	require.NoError(t, os.MkdirAll(filepath.Dir(managed), 0o755))
 	require.NoError(t, os.WriteFile(managed, []byte("stub"), 0o755))
 
@@ -46,7 +46,7 @@ func TestManagedExecutablePath_FindsBinary(t *testing.T) {
 	binDir := filepath.Join(home, "bin")
 	require.NoError(t, os.MkdirAll(binDir, 0o755))
 
-	binaryName := proxy.CjvBinaryName()
+	binaryName := sdktools.CjvBinaryName()
 	binaryPath := filepath.Join(binDir, binaryName)
 	require.NoError(t, os.WriteFile(binaryPath, []byte("stub"), 0o755))
 
@@ -74,7 +74,7 @@ func TestForceUpdateManagedExecutable(t *testing.T) {
 	got, err := ForceUpdateManagedExecutable()
 	require.NoError(t, err)
 
-	expected := filepath.Join(home, "bin", proxy.CjvBinaryName())
+	expected := filepath.Join(home, "bin", sdktools.CjvBinaryName())
 	assert.Equal(t, expected, got)
 
 	info, err := os.Stat(got)
@@ -99,7 +99,7 @@ func TestForceUpdateManagedExecutablePreservesExistingBinaryOnCopyFailure(t *tes
 	home := t.TempDir()
 	t.Setenv(config.EnvHome, home)
 
-	managed := filepath.Join(home, "bin", proxy.CjvBinaryName())
+	managed := filepath.Join(home, "bin", sdktools.CjvBinaryName())
 	require.NoError(t, os.MkdirAll(filepath.Dir(managed), 0o755))
 	require.NoError(t, os.WriteFile(managed, []byte("old-binary"), 0o755))
 
@@ -126,7 +126,7 @@ func TestEnsureManagedExecutableCopiesCurrentBinary(t *testing.T) {
 
 	got, err := EnsureManagedExecutable()
 	require.NoError(t, err)
-	assert.Equal(t, filepath.Join(home, "bin", proxy.CjvBinaryName()), got)
+	assert.Equal(t, filepath.Join(home, "bin", sdktools.CjvBinaryName()), got)
 	assert.FileExists(t, got)
 
 	gotAgain, err := EnsureManagedExecutable()

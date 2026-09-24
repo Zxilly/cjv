@@ -7,7 +7,6 @@ import (
 	"strconv"
 	"strings"
 
-	componentlib "github.com/Zxilly/cjv/internal/component"
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/env"
 	"github.com/Zxilly/cjv/internal/i18n"
@@ -151,9 +150,9 @@ func loadEnvsetupData(ctx context.Context, tcOverride, target string) (envsetupD
 	var rt env.Runtime
 	var err error
 	if target != "" {
-		rt, err = env.ResolveTargetRuntime(ctx, tcOverride, target, componentlib.ApplyEnv)
+		rt, err = env.ResolveTargetRuntime(ctx, tcOverride, target)
 	} else {
-		rt, err = env.ResolveRuntime(ctx, tcOverride, componentlib.ApplyEnv)
+		rt, err = env.ResolveRuntime(ctx, tcOverride)
 	}
 	if err != nil {
 		return envsetupData{}, err

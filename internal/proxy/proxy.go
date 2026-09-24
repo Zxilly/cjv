@@ -2,7 +2,6 @@ package proxy
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -12,9 +11,9 @@ import (
 	"strings"
 
 	"github.com/Zxilly/cjv/internal/cjverr"
-	"github.com/Zxilly/cjv/internal/component"
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/env"
+	"github.com/Zxilly/cjv/internal/sdktools"
 	"github.com/Zxilly/cjv/internal/toolchain"
 )
 
@@ -70,53 +69,6 @@ func GetRecursionCount() int {
 	return n
 }
 
-// ResolveToolBinary returns the full path to a tool binary within a toolchain directory.
-func ResolveToolBinary(toolchainDir, toolName string) (string, error) {
-	relPath := ToolRelativePath(toolName)
-	if relPath == "" {
-		return "", &cjverr.UnknownToolError{Name: toolName}
-	}
-	return PlatformBinaryName(filepath.Join(toolchainDir, relPath)), nil
-}
-
-func ResolveToolBinaryForTuple(toolchainDir, toolName, tuple string) (string, error) {
-	relPath := ToolRelativePath(toolName)
-	if relPath == "" {
-		return "", &cjverr.UnknownToolError{Name: toolName}
-	}
-	return PlatformBinaryNameForTuple(filepath.Join(toolchainDir, relPath), tuple)
-}
-
-// ResolveInstalledToolBinary returns the full path to a proxy tool and verifies
-// that the binary exists in the resolved toolchain.
-func ResolveInstalledToolBinary(toolchainDir, toolName string) (string, error) {
-	binary, err := ResolveToolBinary(toolchainDir, toolName)
-	if err != nil {
-		return "", err
-	}
-	if _, err := os.Stat(binary); err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return "", &cjverr.ToolNotInToolchainError{Tool: toolName, Path: binary}
-		}
-		return "", err
-	}
-	return binary, nil
-}
-
-func ResolveInstalledToolBinaryForTuple(toolchainDir, toolName, tuple string) (string, error) {
-	binary, err := ResolveToolBinaryForTuple(toolchainDir, toolName, tuple)
-	if err != nil {
-		return "", err
-	}
-	if _, err := os.Stat(binary); err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return "", &cjverr.ToolNotInToolchainError{Tool: toolName, Path: binary}
-		}
-		return "", err
-	}
-	return binary, nil
-}
-
 // Run is the top-level entry point for proxy mode, called when argv[0] is a known tool name.
 func Run(ctx context.Context, toolName string, args []string) error {
 	count := GetRecursionCount()
@@ -129,12 +81,12 @@ func Run(ctx context.Context, toolName string, args []string) error {
 		return err
 	}
 
-	rt, err := env.ResolveRuntime(ctx, tcOverride, component.ApplyEnv)
+	rt, err := env.ResolveRuntime(ctx, tcOverride)
 	if err != nil {
 		return err
 	}
 
-	binary, err := ResolveInstalledToolBinary(rt.Active.Dir, toolName)
+	binary, err := sdktools.ResolveInstalledToolBinary(rt.Active.Dir, toolName)
 	if err != nil {
 		return err
 	}

@@ -9,7 +9,7 @@ import (
 	"strings"
 
 	"github.com/Zxilly/cjv/internal/config"
-	"github.com/Zxilly/cjv/internal/proxy"
+	"github.com/Zxilly/cjv/internal/sdktools"
 	"github.com/Zxilly/cjv/internal/utils"
 )
 
@@ -25,7 +25,7 @@ func CleanupOldBinaries() {
 		return
 	}
 
-	base := proxy.CjvBinaryName()
+	base := sdktools.CjvBinaryName()
 	stem := strings.TrimSuffix(base, filepath.Ext(base))
 	entries, err := os.ReadDir(dir)
 	if err != nil {

@@ -1,4 +1,4 @@
-package proxy
+package sdktools
 
 import (
 	"path/filepath"

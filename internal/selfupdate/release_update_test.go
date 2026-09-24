@@ -18,7 +18,7 @@ import (
 	"testing"
 
 	"github.com/Zxilly/cjv/internal/config"
-	"github.com/Zxilly/cjv/internal/proxy"
+	"github.com/Zxilly/cjv/internal/sdktools"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -73,7 +73,7 @@ func TestInstallReleaseArtifact(t *testing.T) {
 	t.Setenv(config.EnvHome, home)
 	binDir := filepath.Join(home, "bin")
 	require.NoError(t, os.MkdirAll(binDir, 0o755))
-	managed := filepath.Join(binDir, proxy.CjvBinaryName())
+	managed := filepath.Join(binDir, sdktools.CjvBinaryName())
 	require.NoError(t, os.WriteFile(managed, []byte("old executable"), 0o755))
 
 	err := installReleaseArtifact(context.Background(), releaseArtifact{
@@ -94,7 +94,7 @@ func TestInstallReleaseArtifactReplacesRunningExecutable(t *testing.T) {
 	t.Setenv(config.EnvHome, home)
 	binDir := filepath.Join(home, "bin")
 	require.NoError(t, os.MkdirAll(binDir, 0o755))
-	managed := filepath.Join(binDir, proxy.CjvBinaryName())
+	managed := filepath.Join(binDir, sdktools.CjvBinaryName())
 	buildRunningExecutable(t, managed, "old")
 
 	newBinaryName := platformBinaryName("cjv-new", runtime.GOOS)
@@ -148,7 +148,7 @@ func TestInstallReleaseArtifactReplacesRunningExecutable(t *testing.T) {
 	require.NoError(t, err, string(output))
 	assert.Equal(t, "new", strings.TrimSpace(string(output)))
 
-	oldPath := filepath.Join(binDir, "."+proxy.CjvBinaryName()+".old")
+	oldPath := filepath.Join(binDir, "."+sdktools.CjvBinaryName()+".old")
 	if runtime.GOOS == "windows" {
 		assert.FileExists(t, oldPath)
 		assert.True(t, fileIsHidden(t, oldPath))
