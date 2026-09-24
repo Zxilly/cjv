@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 
 	"github.com/Zxilly/cjv/internal/cjverr"
-	"github.com/Zxilly/cjv/internal/utils"
+	"github.com/Zxilly/cjv/internal/fsops"
 )
 
 // Link points a component install root at a user-supplied local directory by
@@ -56,7 +56,7 @@ func Link(roots Roots, name Name, sourcePath string, force bool) (string, error)
 					return fmt.Errorf("remove existing %s: %w", linkPath, rerr)
 				}
 			}
-			if err := utils.SymlinkOrJunction(target, linkPath); err != nil {
+			if err := fsops.SymlinkOrJunction(target, linkPath); err != nil {
 				return fmt.Errorf("create link %s -> %s: %w", linkPath, target, err)
 			}
 		}

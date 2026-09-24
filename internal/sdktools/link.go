@@ -6,8 +6,8 @@ import (
 	"strings"
 
 	"github.com/Zxilly/cjv/internal/config"
+	"github.com/Zxilly/cjv/internal/fsops"
 	sdktarget "github.com/Zxilly/cjv/internal/target"
-	"github.com/Zxilly/cjv/internal/utils"
 )
 
 func CreateAllProxyLinks() error {
@@ -20,7 +20,7 @@ func CreateAllProxyLinks() error {
 
 	for _, tool := range AllProxyTools() {
 		dst := filepath.Join(binDir, PlatformBinaryName(tool))
-		if err := utils.CreateLink(cjvBinary, dst); err != nil {
+		if err := fsops.CreateLink(cjvBinary, dst); err != nil {
 			return err
 		}
 	}

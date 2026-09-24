@@ -6,7 +6,7 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/Zxilly/cjv/internal/utils"
+	"github.com/Zxilly/cjv/internal/fsops"
 )
 
 // posixDoubleQuote wraps value in double quotes, escaping the characters a
@@ -33,7 +33,7 @@ case ":${PATH}:" in
         ;;
 esac
 `, quotedBinDir, quotedBinDir)
-	return utils.WriteFileAtomic(path, []byte(content), 0o644)
+	return fsops.WriteFileAtomic(path, []byte(content), 0o644)
 }
 
 // writePowerShellEnvScript writes a PowerShell env script that prepends the cjv
@@ -53,7 +53,7 @@ if (-not ($env:PATH -split [IO.Path]::PathSeparator | Where-Object { $_ -eq $cjv
     $env:PATH = "$cjvBin$([IO.Path]::PathSeparator)$env:PATH"
 }
 `
-	return utils.WriteFileAtomic(path, []byte(content), 0o644)
+	return fsops.WriteFileAtomic(path, []byte(content), 0o644)
 }
 
 // writeBatEnvScript writes a CMD batch env script that prepends the cjv bin
@@ -76,7 +76,7 @@ if not defined cjvFound (
     set "PATH=%cjvBin%;%PATH%"
 )
 `
-	return utils.WriteFileAtomic(path, []byte(content), 0o644)
+	return fsops.WriteFileAtomic(path, []byte(content), 0o644)
 }
 
 // writeEnvScripts writes platform-appropriate env scripts to the given directory.

@@ -29,7 +29,7 @@ docs/           两本 mdBook（见“文档站”一章）
 - 程序名以 `cjv-init` / `cjv-setup` 开头，把它当安装器，改写 `os.Args` 为 `cjv init` 再继续。
 - 否则就是普通的 `cjv ...` 调用，交给 `cli.Execute(version, updateURL)`。
 
-普通 CLI 调用的错误由 `cli.Execute` 输出一次：文本模式写 stderr，JSON 模式写 stdout 信封。`main` 只把 `*cjverr.ExitCodeError` 解包成进程退出码，其余错误返回 1；代理路径不经过 CLI，其错误仍由 `main` 处理。Windows 控制台的 UTF-8 切换、双击运行时的暂停提示也都在 `main` 这层处理，因为它们是进程级的关切。
+普通 CLI 调用的错误由 `cli.Execute` 输出一次：文本模式写 stderr，JSON 模式写 stdout 信封。`main` 只把 `*cjverr.ExitCodeError` 解包成进程退出码，其余错误返回 1；代理路径不经过 CLI，其错误仍由 `main` 处理。Windows 控制台的 UTF-8 切换、双击运行时的暂停提示也都在 `main` 这层处理（`console_windows.go`），因为它们是进程级的关切；`main` 还把链接器注入的版本号交给 `dist.AppVersion`，供 HTTP 请求的 User-Agent 使用。
 
 ## `internal/` 各包职责
 
@@ -67,7 +67,7 @@ docs/           两本 mdBook（见“文档站”一章）
 
 ### `dist`：下载与解包
 
-`internal/dist` 负责分发源与网络制品。`source.go` 是统一入口：LTS/STS 按需缓存 `versions.json`，nightly 按需缓存同目录的 `nightly.json`。显式 `dist_server` 时两者位于分发根下。相对 URL 以 manifest 所在目录解析，绝对 URL 原样使用。组件制品也由它按通道、版本和 stdx 平台解析（`ResolveComponent`），`component.InstallFromSource` 是唯一的组件下载路径。`manifest.go` 解析并校验通道数据；`download.go` 做进度、重试和 SHA256 校验；`install.go` 解包归档；`nightly.go` 读取 nightly 资产的 SHA256 sidecar。host 与目标 tuple 的计算在 `target`（`CurrentHostTuple`、`CurrentTargetTuple`），`dist` 不再转发。
+`internal/dist` 负责分发源与网络制品。`source.go` 是统一入口：LTS/STS 按需缓存 `versions.json`，nightly 按需缓存同目录的 `nightly.json`。显式 `dist_server` 时两者位于分发根下。相对 URL 以 manifest 所在目录解析，绝对 URL 原样使用。组件制品也由它按通道、版本和 stdx 平台解析（`ResolveComponent`），`component.InstallFromSource` 是唯一的组件下载路径。`manifest.go` 解析并校验通道数据；`download.go` 做进度、重试和 SHA256 校验；`install.go` 解包归档，解出的树由 `fsops.MoveTree` 落到目标目录；`nightly.go` 持有共享 HTTP 客户端并读取 nightly 资产的 SHA256 sidecar。host 与目标 tuple 的计算在 `target`（`CurrentHostTuple`、`CurrentTargetTuple`），`dist` 不再转发。
 
 ### `target`：平台身份
 
@@ -83,11 +83,11 @@ docs/           两本 mdBook（见“文档站”一章）
 
 ### `sdktools`：SDK 工具布局
 
-`internal/sdktools` 描述 SDK 的工具布局：工具链带哪些工具、每个工具在工具链目录里的相对路径（`toolPathMap`）、cjv 二进制和各工具在各平台上的文件名（`CjvBinaryName`、`PlatformBinaryName`）、在 `CJV_HOME/bin` 下建出代理链接（`CreateAllProxyLinks`），以及按工具链目录和目标 tuple 定位已装工具二进制（`ResolveInstalledToolBinary`、`ResolveInstalledToolBinaryForTuple`）。它只依赖 `config`、`target`、`utils` 和 `cjverr`，位于 `lifecycle`、`env`、`selfupdate` 和 `proxy` 之下，让安装校验、代理链接、`cjv run`/`which` 的工具查找和受管二进制路径读的是同一份布局。
+`internal/sdktools` 描述 SDK 的工具布局：工具链带哪些工具、每个工具在工具链目录里的相对路径（`toolPathMap`）、cjv 二进制和各工具在各平台上的文件名（`CjvBinaryName`、`PlatformBinaryName`）、在 `CJV_HOME/bin` 下建出代理链接（`CreateAllProxyLinks`），以及按工具链目录和目标 tuple 定位已装工具二进制（`ResolveInstalledToolBinary`、`ResolveInstalledToolBinaryForTuple`）。它只依赖 `config`、`target`、`fsops` 和 `cjverr`，位于 `lifecycle`、`env`、`selfupdate` 和 `proxy` 之下，让安装校验、代理链接、`cjv run`/`which` 的工具查找和受管二进制路径读的是同一份布局。
 
 ### `reachable`：让 cjv 可达
 
-`internal/reachable` 负责让装好的 cjv 能从用户的 shell 里被调用。这件事由四步组成：`CJV_HOME/bin` 下的受管二进制、旁边的代理链接、`CJV_HOME` 下的 env 脚本，以及写进 shell 配置文件（`.profile`、`.bashrc`、`.zshrc`、`.zprofile`、fish）或 Windows 用户注册表的 PATH 项。所有安装路径通过一个 `Policy` 请求同一操作 `Ensure`：零值只建立缺失的受管二进制和代理链接，`ForceManagedBinary` 用当前可执行文件覆盖受管二进制，`EnvScripts` 重写 env 脚本，`ConfigurePath` 追加 PATH。`cjv init` 传 `{ForceManagedBinary, EnvScripts, ConfigurePath: 是否修改 PATH}`，`lifecycle` 落盘后传零值，`cjv toolchain link <目录>` 传零值，`cjv self update` 传 `{EnvScripts}`。PATH 策略集中在 `ConfigurePath`：`CJV_NO_PATH_SETUP=1` 跳过、按平台选 shell 配置或注册表、幂等、失败只记日志并在 stderr 给一次提示；`RemovePath` 是它的逆操作，供 `cjv self uninstall` 使用。`ShellConfigPaths` 列出会被修改的 shell 配置文件，`cjv init` 用它向用户展示。包只依赖 `config`、`i18n`、`sdktools`、`selfupdate` 和 `utils`，位于 `lifecycle` 与 `cli` 之下。
+`internal/reachable` 负责让装好的 cjv 能从用户的 shell 里被调用。这件事由四步组成：`CJV_HOME/bin` 下的受管二进制、旁边的代理链接、`CJV_HOME` 下的 env 脚本，以及写进 shell 配置文件（`.profile`、`.bashrc`、`.zshrc`、`.zprofile`、fish）或 Windows 用户注册表的 PATH 项。所有安装路径通过一个 `Policy` 请求同一操作 `Ensure`：零值只建立缺失的受管二进制和代理链接，`ForceManagedBinary` 用当前可执行文件覆盖受管二进制，`EnvScripts` 重写 env 脚本，`ConfigurePath` 追加 PATH。`cjv init` 传 `{ForceManagedBinary, EnvScripts, ConfigurePath: 是否修改 PATH}`，`lifecycle` 落盘后传零值，`cjv toolchain link <目录>` 传零值，`cjv self update` 传 `{EnvScripts}`。PATH 策略集中在 `ConfigurePath`：`CJV_NO_PATH_SETUP=1` 跳过、按平台选 shell 配置或注册表、幂等、失败只记日志并在 stderr 给一次提示；`RemovePath` 是它的逆操作，供 `cjv self uninstall` 使用。`ShellConfigPaths` 列出会被修改的 shell 配置文件，`cjv init` 用它向用户展示。包只依赖 `config`、`i18n`、`sdktools`、`selfupdate` 和 `fsops`，位于 `lifecycle` 与 `cli` 之下。
 
 ### `process`：子进程执行
 
@@ -110,7 +110,8 @@ docs/           两本 mdBook（见“文档站”一章）
 - `i18n` 国际化。消息存在 `locales/en.toml` 和 `locales/zh-CN.toml` 里并嵌进二进制，`i18n.T` 按消息 ID 取串。所有面向用户的文本都走它，错误信息也是。
 - `cjverr` 错误类型。定义带稳定机器码（`ErrorCode`）的结构化错误，`Error()` 方法通过 `i18n` 产出人读信息，`Coded` 接口让 `output` 能在 JSON 模式下输出错误码。`ExitCodeError` 携带进程退出码。
 - `fstx` 文件系统事务。落盘日志记录受管路径、备份和事务状态，读取时限制日志大小与路径范围；事务目录名、staging 树和工具链事务覆盖的 `toolchains/`、`stdx/`、`docs/` 条目都取自 `config` 的布局。`toolchain.RecoverHome` 在启动清理及安装、删除重试时先调用 `Recover` 恢复未完成操作；提交及准备发布的状态保留已就绪内容，再清理备份。恢复受阻时保留日志和备份并报告位置，后续可以重试，而不是依赖进程内的 undo 闭包。
-- `utils` 杂项工具：原子写、文件操作、Windows junction、重试、控制台 UTF-8、打开浏览器、版本号解析等，多数按平台分文件。
+- `fsops` 文件系统操作。所有改动 CJV_HOME 的包都经它落盘：`RemoveAllRetry`、`RenameRetry` 和给 `os.Root` 用的 `Retry` 吸收 Windows 上杀毒软件与索引器造成的瞬时锁；`WriteFileAtomic` 原子写文件；`SymlinkOrJunction` 在符号链接需要特权时退回目录 junction；`CreateLink` 按符号链接、硬链接、复制三级退化建代理链接；`IsPathUnder` 判断路径归属。树操作只有一份实现：`MoveTree` 把解压好的树逐项合并进目标目录——目录合并、文件与符号链接覆盖已有条目、重命名失败时跨卷复制、拒绝绝对或逃出源树的符号链接、返回放置的文件清单；`CopyTree` 原样备份和恢复组件根，符号链接保留原目标、目录模式在填满后再套用。`dist` 解包、`component` 的暂存与快照、`lifecycle` 的 staging、`fstx`、`selfupdate`、`reachable`、`toolchain`、`config` 都调用它。
+- `retry` 斐波那契退避的重试引擎 `retry.Do`：`fsops` 用它重试瞬时文件错误，`dist` 用它重试网络请求。
 - `logging` 用 `CJV_LOG` 环境变量配 `slog` 全局 logger（默认 `warn`）。
 - `testutil` 测试辅助：mock 下载服务器、Windows 注册表守卫。它带 `_test.go` 之外的源文件，供其他包的测试导入。
 

@@ -9,6 +9,7 @@ import (
 
 	"github.com/Zxilly/cjv/internal/cjverr"
 	"github.com/Zxilly/cjv/internal/dist"
+	"github.com/Zxilly/cjv/internal/fsops"
 	sdktarget "github.com/Zxilly/cjv/internal/target"
 	"github.com/Zxilly/cjv/internal/toolchain"
 )
@@ -129,30 +130,9 @@ func stageAndInstall(ctx context.Context, roots Roots, spec Spec, name Name, arc
 	}
 
 	return replaceComponent(roots, name, force && alreadyInstalled, paths, func() error {
-		return moveStagedFiles(stageDir, destDir, paths)
-	})
-}
-
-func moveStagedFiles(stageDir, destDir string, paths []string) error {
-	if err := os.MkdirAll(destDir, 0o755); err != nil {
+		_, err := fsops.MoveTree(stageDir, destDir)
 		return err
-	}
-	for _, rel := range paths {
-		src := filepath.Join(stageDir, filepath.FromSlash(rel))
-		dst := filepath.Join(destDir, filepath.FromSlash(rel))
-		if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
-			return err
-		}
-		if _, err := os.Lstat(dst); err == nil {
-			if err := os.RemoveAll(dst); err != nil {
-				return err
-			}
-		}
-		if err := os.Rename(src, dst); err != nil {
-			return err
-		}
-	}
-	return nil
+	})
 }
 
 // stdxPlatform maps the SDK tuple to the stdx archive platform token the

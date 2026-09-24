@@ -14,11 +14,16 @@ import (
 	"time"
 
 	"github.com/Zxilly/cjv/internal/config"
-	"github.com/Zxilly/cjv/internal/utils"
+	"github.com/Zxilly/cjv/internal/retry"
 )
 
 // MaxResponseSize limits HTTP metadata reads.
 const MaxResponseSize = 10 << 20 // 10 MB
+
+// AppVersion is the running cjv's version as reported in the User-Agent of
+// every request the shared client makes. main sets it from the
+// linker-injected version before the first request; "dev" is the fallback.
+var AppVersion = "dev"
 
 var (
 	httpClient     *http.Client
@@ -44,7 +49,7 @@ func newHTTPClient() *http.Client {
 		Timeout: timeout,
 		Transport: &uaTransport{
 			base: http.DefaultTransport,
-			ua:   "cjv/" + utils.Version(),
+			ua:   "cjv/" + AppVersion,
 		},
 	}
 }
@@ -82,7 +87,7 @@ var errChecksumSidecarMalformed = errors.New("nightly checksum sidecar is malfor
 // represents an upstream release that relies on TLS transport integrity.
 func FetchNightlySHA256(ctx context.Context, assetURL string) (string, error) {
 	var sha string
-	err := utils.RetryWithBackoff(getMaxDownloadRetries()+1,
+	err := retry.Do(getMaxDownloadRetries()+1,
 		func(e error) bool { return !errors.Is(e, errChecksumSidecarMalformed) },
 		func() error {
 			var fetchErr error

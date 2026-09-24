@@ -7,11 +7,9 @@ import (
 	"path/filepath"
 
 	"github.com/Zxilly/cjv/internal/config"
+	"github.com/Zxilly/cjv/internal/fsops"
 	"github.com/Zxilly/cjv/internal/sdktools"
-	"github.com/Zxilly/cjv/internal/utils"
 )
-
-var copyManagedExecutableFile = utils.CopyFile
 
 // ManagedExecutablePath returns the cjv binary managed under CJV_HOME/bin.
 // It is anchored to the installed bin directory rather than the currently
@@ -103,7 +101,7 @@ func copyCurrentExeTo(binDir, dst string) (string, error) {
 		return "", errors.Join(err, os.Remove(tmpPath))
 	}
 
-	if err := copyManagedExecutableFile(currentExe, tmpPath, mode); err != nil {
+	if err := fsops.CopyFile(currentExe, tmpPath, mode); err != nil {
 		return "", fmt.Errorf("failed to install managed cjv binary %s: %w", dst, err)
 	}
 	if err := os.Chmod(tmpPath, mode); err != nil {

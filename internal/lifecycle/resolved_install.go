@@ -11,12 +11,12 @@ import (
 	"github.com/Zxilly/cjv/internal/cjverr"
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/dist"
+	"github.com/Zxilly/cjv/internal/fsops"
 	"github.com/Zxilly/cjv/internal/fstx"
 	"github.com/Zxilly/cjv/internal/i18n"
 	"github.com/Zxilly/cjv/internal/reachable"
 	"github.com/Zxilly/cjv/internal/sdktools"
 	"github.com/Zxilly/cjv/internal/toolchain"
-	"github.com/Zxilly/cjv/internal/utils"
 )
 
 // ResolvedToolchain holds the result of toolchain resolution.
@@ -128,13 +128,13 @@ func placeToolchain(ctx context.Context, name string, force bool, tuple string, 
 	}
 
 	stagingDir := config.StagingDir(destDir)
-	if err := utils.RemoveAllRetry(stagingDir); err != nil {
+	if err := fsops.RemoveAllRetry(stagingDir); err != nil {
 		return fmt.Errorf("failed to clean staging directory: %w", err)
 	}
 	defer func() {
 		var recoveryErr *fstx.RecoveryError
 		if retErr != nil && !errors.As(retErr, &recoveryErr) {
-			_ = utils.RemoveAllRetry(stagingDir) //nolint:errcheck // best-effort
+			_ = fsops.RemoveAllRetry(stagingDir) //nolint:errcheck // best-effort
 		}
 	}()
 

@@ -1,6 +1,6 @@
 //go:build !windows
 
-package utils
+package env
 
 import (
 	"fmt"
@@ -8,8 +8,8 @@ import (
 	"strings"
 )
 
-// ProcessName returns the name of the process with the given PID.
-func ProcessName(pid int) (string, error) {
+// processName returns the name of the process with the given PID.
+func processName(pid int) (string, error) {
 	out, err := exec.Command("ps", "-p", fmt.Sprintf("%d", pid), "-o", "comm=").Output()
 	if err != nil {
 		return "", err

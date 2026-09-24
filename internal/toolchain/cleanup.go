@@ -8,8 +8,8 @@ import (
 	"strings"
 
 	"github.com/Zxilly/cjv/internal/config"
+	"github.com/Zxilly/cjv/internal/fsops"
 	"github.com/Zxilly/cjv/internal/fstx"
-	"github.com/Zxilly/cjv/internal/utils"
 )
 
 // RecoverHome is the single recovery entry point for CJV_HOME. It first
@@ -35,7 +35,7 @@ func RecoverHome() error {
 		name := e.Name()
 		fullPath := filepath.Join(tcDir, name)
 		if strings.HasSuffix(name, config.StagingSuffix) {
-			if err := utils.RemoveAllRetry(fullPath); err != nil {
+			if err := fsops.RemoveAllRetry(fullPath); err != nil {
 				slog.Warn("failed to clean up staging directory", "name", name, "error", err)
 			}
 		} else if originalName, ok := strings.CutSuffix(name, config.BackupSuffix); ok {
@@ -46,7 +46,7 @@ func RecoverHome() error {
 			}
 			originalPath := filepath.Join(tcDir, originalName)
 			if _, err := os.Lstat(originalPath); errors.Is(err, os.ErrNotExist) {
-				if err := utils.RenameRetry(fullPath, originalPath); err != nil {
+				if err := fsops.RenameRetry(fullPath, originalPath); err != nil {
 					slog.Warn("failed to restore legacy toolchain backup", "path", fullPath, "error", err)
 				}
 			} else {

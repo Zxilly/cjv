@@ -1,7 +1,6 @@
 package selfupdate
 
 import (
-	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -95,29 +94,28 @@ func TestForceUpdateManagedExecutable(t *testing.T) {
 	assert.NotEqual(t, int64(3), info2.Size(), "managed binary should not still be the 3-byte dummy")
 }
 
-func TestForceUpdateManagedExecutablePreservesExistingBinaryOnCopyFailure(t *testing.T) {
+// The managed path is replaced by renaming a fully copied temporary file over
+// it, so a failed replacement leaves whatever was there untouched and no
+// partial copy behind. A non-empty directory at the managed path makes the
+// rename fail on every platform.
+func TestForceUpdateManagedExecutablePreservesExistingEntryOnReplaceFailure(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv(config.EnvHome, home)
 
 	managed := filepath.Join(home, "bin", sdktools.CjvBinaryName())
-	require.NoError(t, os.MkdirAll(filepath.Dir(managed), 0o755))
-	require.NoError(t, os.WriteFile(managed, []byte("old-binary"), 0o755))
-
-	originalCopy := copyManagedExecutableFile
-	copyManagedExecutableFile = func(src, dst string, mode os.FileMode) error {
-		require.NoError(t, os.WriteFile(dst, []byte("partial"), mode))
-		return errors.New("copy failed")
-	}
-	t.Cleanup(func() {
-		copyManagedExecutableFile = originalCopy
-	})
+	require.NoError(t, os.MkdirAll(managed, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(managed, "keep"), []byte("old-binary"), 0o644))
 
 	_, err := ForceUpdateManagedExecutable()
 
 	require.Error(t, err)
-	data, err := os.ReadFile(managed)
+	data, err := os.ReadFile(filepath.Join(managed, "keep"))
 	require.NoError(t, err)
 	assert.Equal(t, []byte("old-binary"), data)
+
+	entries, err := os.ReadDir(filepath.Dir(managed))
+	require.NoError(t, err)
+	assert.Len(t, entries, 1, "no temporary copy may be left beside the managed path")
 }
 
 func TestEnsureManagedExecutableCopiesCurrentBinary(t *testing.T) {

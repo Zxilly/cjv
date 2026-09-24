@@ -371,15 +371,3 @@ func TestInstallRejectsUnknownAndUnsupportedComponents(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "lts-only")
 }
-
-func TestMoveStagedFilesErrorBranches(t *testing.T) {
-	parentFile := filepath.Join(t.TempDir(), "not-a-directory")
-	require.NoError(t, os.WriteFile(parentFile, []byte("file"), 0o644))
-	err := moveStagedFiles(t.TempDir(), filepath.Join(parentFile, "dest"), []string{"file.txt"})
-	require.Error(t, err)
-
-	stageDir := t.TempDir()
-	destDir := t.TempDir()
-	err = moveStagedFiles(stageDir, destDir, []string{"missing.txt"})
-	require.Error(t, err)
-}

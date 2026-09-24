@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/Zxilly/cjv/internal/utils"
+	"github.com/Zxilly/cjv/internal/fsops"
 )
 
 const (
@@ -39,7 +39,7 @@ func addBlockToShellConfig(configPath, block string) error {
 	}
 
 	perm := filePermOrDefault(configPath, 0o644)
-	return utils.WriteFileAtomic(configPath, []byte(str+block), perm)
+	return fsops.WriteFileAtomic(configPath, []byte(str+block), perm)
 }
 
 // addPathToShellConfig adds a PATH export block to a shell config file
@@ -117,5 +117,5 @@ func removePathFromShellConfig(configPath string) error {
 	}
 
 	perm := filePermOrDefault(configPath, 0o644)
-	return utils.WriteFileAtomic(configPath, []byte(str), perm)
+	return fsops.WriteFileAtomic(configPath, []byte(str), perm)
 }

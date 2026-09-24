@@ -15,10 +15,10 @@ import (
 	"github.com/Zxilly/cjv/internal/component"
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/dist"
+	"github.com/Zxilly/cjv/internal/fsops"
 	"github.com/Zxilly/cjv/internal/i18n"
 	"github.com/Zxilly/cjv/internal/sdktools"
 	"github.com/Zxilly/cjv/internal/toolchain"
-	"github.com/Zxilly/cjv/internal/utils"
 )
 
 // InstallToolchainFromURL downloads an SDK archive from url and materializes it
@@ -82,7 +82,7 @@ func LinkToolchainDir(name, dir string) error {
 	if err := os.MkdirAll(tcDir, 0o755); err != nil {
 		return err
 	}
-	if err := utils.SymlinkOrJunction(dir, linkPath); err != nil {
+	if err := fsops.SymlinkOrJunction(dir, linkPath); err != nil {
 		return fmt.Errorf("%s: %w", i18n.T("LinkCreateFailed", nil), err)
 	}
 	if err := finalizeInstalledToolchain(); err != nil {
@@ -139,8 +139,8 @@ func installLinkedToolchain(ctx context.Context, name string, force, noStdx bool
 				// than extracting again. Across volumes the rename fails, so fall back to
 				// moving the already-extracted tree entry-by-entry (copy) — not a second
 				// full decompression of the archive.
-				if err := utils.RenameRetry(bareSDKDir, stagingDir); err != nil {
-					if err := dist.MoveTreeContents(bareSDKDir, stagingDir); err != nil {
+				if err := fsops.RenameRetry(bareSDKDir, stagingDir); err != nil {
+					if _, err := fsops.MoveTree(bareSDKDir, stagingDir); err != nil {
 						return fmt.Errorf("failed to stage SDK: %w", err)
 					}
 				}
