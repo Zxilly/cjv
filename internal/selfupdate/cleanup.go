@@ -9,8 +9,8 @@ import (
 	"strings"
 
 	"github.com/Zxilly/cjv/internal/config"
-	"github.com/Zxilly/cjv/internal/proxy"
-	"github.com/Zxilly/cjv/internal/utils"
+	"github.com/Zxilly/cjv/internal/fsops"
+	"github.com/Zxilly/cjv/internal/sdktools"
 )
 
 // CleanupOldBinaries removes stale updater/uninstall leftovers from the managed
@@ -25,7 +25,7 @@ func CleanupOldBinaries() {
 		return
 	}
 
-	base := proxy.CjvBinaryName()
+	base := sdktools.CjvBinaryName()
 	stem := strings.TrimSuffix(base, filepath.Ext(base))
 	entries, err := os.ReadDir(dir)
 	if err != nil {
@@ -64,7 +64,7 @@ func CleanupOldBinaries() {
 	restored := ""
 	if !managedExists {
 		for _, oldPath := range oldPaths {
-			if err := utils.RenameRetry(oldPath, managedExe); err == nil {
+			if err := fsops.RenameRetry(oldPath, managedExe); err == nil {
 				restored = oldPath
 				managedExists = true
 				break

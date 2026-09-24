@@ -7,11 +7,9 @@ import (
 	"path/filepath"
 
 	"github.com/Zxilly/cjv/internal/config"
-	"github.com/Zxilly/cjv/internal/proxy"
-	"github.com/Zxilly/cjv/internal/utils"
+	"github.com/Zxilly/cjv/internal/fsops"
+	"github.com/Zxilly/cjv/internal/sdktools"
 )
-
-var copyManagedExecutableFile = utils.CopyFile
 
 // ManagedExecutablePath returns the cjv binary managed under CJV_HOME/bin.
 // It is anchored to the installed bin directory rather than the currently
@@ -22,7 +20,7 @@ func ManagedExecutablePath() (string, error) {
 		return "", err
 	}
 
-	managed := filepath.Join(binDir, proxy.CjvBinaryName())
+	managed := filepath.Join(binDir, sdktools.CjvBinaryName())
 	if _, err := os.Stat(managed); err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return "", fmt.Errorf("managed cjv binary not found at %s", managed)
@@ -41,7 +39,7 @@ func EnsureManagedExecutable() (string, error) {
 		return "", err
 	}
 
-	managed := filepath.Join(binDir, proxy.CjvBinaryName())
+	managed := filepath.Join(binDir, sdktools.CjvBinaryName())
 	if _, err := os.Stat(managed); err == nil {
 		return managed, nil
 	} else if !errors.Is(err, os.ErrNotExist) {
@@ -60,7 +58,7 @@ func ForceUpdateManagedExecutable() (string, error) {
 		return "", err
 	}
 
-	managed := filepath.Join(binDir, proxy.CjvBinaryName())
+	managed := filepath.Join(binDir, sdktools.CjvBinaryName())
 
 	// If managed binary already exists and is the same file we're running
 	// from, skip the copy to avoid overwriting ourselves.
@@ -103,7 +101,7 @@ func copyCurrentExeTo(binDir, dst string) (string, error) {
 		return "", errors.Join(err, os.Remove(tmpPath))
 	}
 
-	if err := copyManagedExecutableFile(currentExe, tmpPath, mode); err != nil {
+	if err := fsops.CopyFile(currentExe, tmpPath, mode); err != nil {
 		return "", fmt.Errorf("failed to install managed cjv binary %s: %w", dst, err)
 	}
 	if err := os.Chmod(tmpPath, mode); err != nil {

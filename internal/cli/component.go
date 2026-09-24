@@ -8,10 +8,13 @@ import (
 	"strings"
 
 	"github.com/Zxilly/cjv/internal/cjverr"
-	clisettings "github.com/Zxilly/cjv/internal/cli/settings"
+	"github.com/Zxilly/cjv/internal/cli/output"
 	componentlib "github.com/Zxilly/cjv/internal/component"
-	"github.com/Zxilly/cjv/internal/dist"
+	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/i18n"
+	"github.com/Zxilly/cjv/internal/lifecycle"
+	"github.com/Zxilly/cjv/internal/progress"
+	sdktarget "github.com/Zxilly/cjv/internal/target"
 	"github.com/Zxilly/cjv/internal/toolchain"
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
@@ -72,12 +75,11 @@ type componentRemoveResult struct {
 }
 
 type componentAddResult struct {
+	output.ProgressDriven
 	Toolchain  string              `json:"toolchain"`
 	Components []componentlib.Name `json:"components"`
 	Forced     bool                `json:"forced"`
 }
-
-func (r componentAddResult) Text() string { return "" }
 
 func (r componentRemoveResult) Text() string {
 	var b strings.Builder
@@ -141,7 +143,7 @@ func (app *application) runComponentAdd(cmd *cobra.Command, args []string) error
 	if tcName.IsCustom() {
 		return &cjverr.ComponentRequiresHostError{Component: args[0]}
 	}
-	if err := app.installComponentsList(cmd.Context(), filepath.Base(tcDir), args, app.componentAddForce, false); err != nil {
+	if err := lifecycle.InstallComponents(cmd.Context(), filepath.Base(tcDir), args, app.componentAddForce, app.lifecycleOptions()); err != nil {
 		return err
 	}
 	components, err := componentlib.NormalizeList(args)
@@ -175,6 +177,7 @@ func (app *application) runComponentRemove(cmd *cobra.Command, args []string) er
 	var removeErrs []error
 	removeErrs = append(removeErrs, parseErrs...)
 	result := componentRemoveResult{}
+	sink := app.progress()
 	for _, c := range parsed {
 		if !componentlib.IsInstalled(tcDir, c) {
 			removeErrs = append(removeErrs, &cjverr.ComponentNotInstalledError{
@@ -183,9 +186,7 @@ func (app *application) runComponentRemove(cmd *cobra.Command, args []string) er
 			})
 			continue
 		}
-		if !app.output.IsJSON() {
-			fmt.Println(i18n.T("RemovingComponent", i18n.MsgData{"Component": string(c)}))
-		}
+		sink.Report(progress.Event{Kind: progress.RemovingComponent, Component: string(c)})
 		if err := componentlib.Remove(roots, c); err != nil {
 			removeErrs = append(removeErrs, err)
 			continue
@@ -195,17 +196,9 @@ func (app *application) runComponentRemove(cmd *cobra.Command, args []string) er
 			Component: string(c),
 		})
 	}
-	joinErr := errors.Join(removeErrs...)
 	// Emit what was actually removed before surfacing any error so a partial
-	// removal is visible to the caller. In JSON mode the root handler writes an
-	// error envelope to stdout on failure, so only render the result there when
-	// it succeeded to avoid emitting two JSON documents.
-	if joinErr == nil || !app.output.IsJSON() {
-		if renderErr := app.output.RenderTo(cmdOutput(cmd), result); renderErr != nil {
-			return errors.Join(joinErr, renderErr)
-		}
-	}
-	return joinErr
+	// removal is visible to the caller.
+	return app.output.RenderOutcome(cmdOutput(cmd), result, errors.Join(removeErrs...))
 }
 
 func (app *application) runComponentLink(cmd *cobra.Command, args []string) error {
@@ -225,9 +218,7 @@ func (app *application) runComponentLink(cmd *cobra.Command, args []string) erro
 		return err
 	}
 
-	if !app.output.IsJSON() {
-		fmt.Println(i18n.T("InstallingComponent", i18n.MsgData{"Component": string(name)}))
-	}
+	app.progress().Report(progress.Event{Kind: progress.InstallingComponent, Component: string(name)})
 
 	absPath, err := app.componentLinkFunc(roots, name, args[1], app.componentLinkForce)
 	if err != nil {
@@ -256,11 +247,11 @@ func (app *application) runComponentList(cmd *cobra.Command, args []string) erro
 	if !tcName.IsCustom() {
 		tuple := tcName.Target
 		if tuple == "" {
-			_, settings, err := clisettings.LoadSettings()
+			_, settings, err := config.LoadDefaultSettings()
 			if err != nil {
 				return err
 			}
-			tuple, err = dist.CurrentHostTuple(settings.DefaultHost)
+			tuple, err = sdktarget.CurrentHostTuple(settings.DefaultHost)
 			if err != nil {
 				return err
 			}

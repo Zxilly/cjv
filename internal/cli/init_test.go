@@ -2,17 +2,18 @@ package cli
 
 import (
 	"bytes"
-	"context"
 	"io"
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/i18n"
-	"github.com/Zxilly/cjv/internal/proxy"
+	"github.com/Zxilly/cjv/internal/sdktools"
+	"github.com/Zxilly/cjv/internal/testutil"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/exp/teatest"
 	"github.com/spf13/cobra"
@@ -33,18 +34,26 @@ func TestRunInitNonInteractiveNoToolchainWritesManagedFiles(t *testing.T) {
 		config.ResetDefaultSettingsFileCache()
 	})
 
-	err := app.runInit(&cobra.Command{}, nil)
+	var stdout, stderr bytes.Buffer
+	cmd := &cobra.Command{}
+	cmd.SetOut(&stdout)
+	cmd.SetErr(&stderr)
+	err := app.runInit(cmd, nil)
 
 	require.NoError(t, err)
-	assert.FileExists(t, filepath.Join(home, "bin", proxy.CjvBinaryName()))
+	assert.Contains(t, stdout.String(), i18n.T("InitWelcome", nil), "the wizard writes to the command's out writer")
+	assert.Contains(t, stdout.String(), i18n.T("InitComplete", nil))
+	assert.Contains(t, stdout.String(), "cjv install <toolchain>")
+	assert.Empty(t, stderr.String())
+	assert.FileExists(t, filepath.Join(home, "bin", sdktools.CjvBinaryName()))
 	if runtime.GOOS == "windows" {
 		assert.FileExists(t, filepath.Join(home, "env.ps1"))
 		assert.FileExists(t, filepath.Join(home, "env.bat"))
 	} else {
 		assert.FileExists(t, filepath.Join(home, "env"))
 	}
-	for _, tool := range proxy.AllProxyTools() {
-		assert.FileExists(t, filepath.Join(home, "bin", proxy.PlatformBinaryName(tool)))
+	for _, tool := range sdktools.AllProxyTools() {
+		assert.FileExists(t, filepath.Join(home, "bin", sdktools.PlatformBinaryName(tool)))
 	}
 
 	settings, err := config.LoadSettings(filepath.Join(home, ".cjv", "settings.toml"))
@@ -81,11 +90,10 @@ func TestInstallInitRestoresHomeEnvironment(t *testing.T) {
 				}
 
 				app := newApplication("dev", "")
-				_, err = captureStdout(t, func() error {
-					return app.installInit(t.Context(), initialHome, initCustomizeOptions{
-						home:      selectedHome,
-						toolchain: "none",
-					})
+				var out bytes.Buffer
+				err = app.installInit(t.Context(), initConsole{out: &out, err: &out}, initialHome, initCustomizeOptions{
+					home:      selectedHome,
+					toolchain: "none",
 				})
 				if fail {
 					require.Error(t, err)
@@ -94,8 +102,8 @@ func TestInstallInitRestoresHomeEnvironment(t *testing.T) {
 					assert.Equal(t, "keep this file", string(contents))
 				} else {
 					require.NoError(t, err)
-					assert.FileExists(t, filepath.Join(selectedHome, "bin", proxy.CjvBinaryName()))
-					assert.FileExists(t, filepath.Join(selectedHome, "bin", proxy.PlatformBinaryName("cjc")))
+					assert.FileExists(t, filepath.Join(selectedHome, "bin", sdktools.CjvBinaryName()))
+					assert.FileExists(t, filepath.Join(selectedHome, "bin", sdktools.PlatformBinaryName("cjc")))
 				}
 				after, isPresent := os.LookupEnv(config.EnvHome)
 				assert.Equal(t, wasPresent, isPresent, "preserve whether CJV_HOME existed")
@@ -137,11 +145,38 @@ func TestRunInitContinuesWhenDefaultToolchainInstallFails(t *testing.T) {
 		config.ResetDefaultSettingsFileCache()
 	})
 
-	err := app.runInit(&cobra.Command{}, nil)
+	var stderr bytes.Buffer
+	cmd := &cobra.Command{}
+	cmd.SetOut(io.Discard)
+	cmd.SetErr(&stderr)
+	err := app.runInit(cmd, nil)
 
 	require.NoError(t, err)
-	assert.FileExists(t, filepath.Join(home, "bin", proxy.CjvBinaryName()))
+	assert.Contains(t, stderr.String(), "local-sdk", "the failed toolchain install is reported on the command's err writer")
+	assert.FileExists(t, filepath.Join(home, "bin", sdktools.CjvBinaryName()))
 	assert.Equal(t, originalNoPathSetup, os.Getenv(config.EnvNoPathSetup))
+}
+
+// observeInitPathSetup points HOME at a temporary shell config so the test
+// can see the PATH block init writes. Windows configures PATH in the registry
+// instead, which reachable's guarded tests and the integration tests cover.
+func observeInitPathSetup(t *testing.T, cjvHome string) func() {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		return func() {}
+	}
+	userHome := t.TempDir()
+	rc := filepath.Join(userHome, ".bashrc")
+	require.NoError(t, os.WriteFile(rc, []byte("# existing\n"), 0o644))
+	t.Setenv("HOME", userHome)
+	t.Setenv(config.EnvNoPathSetup, "")
+	return func() {
+		t.Helper()
+		data, err := os.ReadFile(rc)
+		require.NoError(t, err)
+		assert.Equal(t, 1, strings.Count(string(data), "# cjv (managed by cjv, do not edit)"))
+		assert.Contains(t, string(data), filepath.Join(cjvHome, "bin"))
+	}
 }
 
 func TestRunInitCoversAlreadyInstalledAndModifyPathBranches(t *testing.T) {
@@ -150,21 +185,21 @@ func TestRunInitCoversAlreadyInstalledAndModifyPathBranches(t *testing.T) {
 	config.IsolateForTest(t, home)
 	config.ResetDefaultSettingsFileCache()
 
-	var pathConfigured bool
 	app.initYes = true
 	app.initDefaultToolchain = "none"
 	app.initNoModifyPath = false
-	app.ensurePathConfiguredFn = func() { pathConfigured = true }
+	assertPathConfigured := observeInitPathSetup(t, home)
 	t.Cleanup(func() {
 		config.ResetDefaultSettingsFileCache()
 	})
 
 	require.NoError(t, app.runInit(&cobra.Command{}, nil))
-	require.True(t, pathConfigured)
+	assertPathConfigured()
 
-	pathConfigured = false
+	// The second run takes the already-installed branch and leaves the
+	// single PATH block in place.
 	require.NoError(t, app.runInit(&cobra.Command{}, nil))
-	require.True(t, pathConfigured)
+	assertPathConfigured()
 
 	assert.NotEmpty(t, yesNoStr(true))
 	assert.NotEmpty(t, yesNoStr(false))
@@ -174,34 +209,35 @@ func TestRunInitPassesConfiguredComponentsToDefaultToolchainInstall(t *testing.T
 	app := newApplication("dev", "")
 	home := t.TempDir()
 	config.IsolateForTest(t, home)
+	t.Setenv(config.EnvDistServer, "")
+	t.Setenv(config.EnvNoPathSetup, "1")
+	server := testutil.SplitNightlyMockServer(t)
+	settings := config.DefaultSettings()
+	settings.DistServer = server.URL + "/corp/cjv"
+	settingsPath, err := config.SettingsPath()
+	require.NoError(t, err)
+	require.NoError(t, config.SaveSettings(&settings, settingsPath))
 	config.ResetDefaultSettingsFileCache()
 
 	app.initYes = true
-	app.initDefaultToolchain = "sts"
+	app.initDefaultToolchain = "nightly"
 	app.initNoModifyPath = true
-	app.initComponents = []string{"stdx", "docs"}
-
-	var gotInput string
-	var gotComponents []string
-	app.installToolchainWithExtrasFn = func(ctx context.Context, input string, targets, components []string, force bool) error {
-		gotInput = input
-		gotComponents = append([]string(nil), components...)
-		return nil
-	}
+	app.initComponents = []string{"docs"}
 
 	t.Cleanup(func() {
 		config.ResetDefaultSettingsFileCache()
 	})
 
-	err := app.runInit(&cobra.Command{}, nil)
+	require.NoError(t, app.runInit(&cobra.Command{}, nil))
 
-	require.NoError(t, err)
-	assert.Equal(t, "sts", gotInput)
-	assert.Equal(t, []string{"stdx", "docs"}, gotComponents)
+	const name = "nightly-1.2.0-alpha.20260822010101"
+	assert.DirExists(t, filepath.Join(home, "toolchains", name))
+	assert.FileExists(t, filepath.Join(home, "docs", name, "main", "index.html"),
+		"the configured component is installed into the default toolchain")
 }
 
 func TestRenderInitMarkdown(t *testing.T) {
-	rendered, err := renderInitMarkdown("Use `cjv install lts` to install a toolchain.")
+	rendered, err := renderInitMarkdown("Use `cjv install lts` to install a toolchain.", false)
 
 	require.NoError(t, err)
 	assert.Contains(t, rendered, "cjv install lts")

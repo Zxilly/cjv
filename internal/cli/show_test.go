@@ -1,11 +1,14 @@
 package cli
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"testing"
 
+	"github.com/Zxilly/cjv/internal/cjverr"
 	"github.com/Zxilly/cjv/internal/config"
+	"github.com/Zxilly/cjv/internal/i18n"
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -71,9 +74,21 @@ func TestRunShowDefault_NoToolchains(t *testing.T) {
 	home := t.TempDir()
 	config.IsolateForTest(t, home)
 
+	var stdout, stderr bytes.Buffer
 	cmd := &cobra.Command{}
+	cmd.SetOut(&stdout)
+	cmd.SetErr(&stderr)
 	err := app.runShowDefault(cmd, nil)
 	assert.NoError(t, err)
+	assert.Contains(t, stderr.String(), (&cjverr.NoToolchainConfiguredError{}).Error(),
+		"the missing-default note reaches the command's err writer")
+	assert.Contains(t, stdout.String(), i18n.T("NoToolchainsInstalled", nil))
+
+	stdout.Reset()
+	stderr.Reset()
+	app.output.SetJSONMode(true)
+	require.NoError(t, app.runShowDefault(cmd, nil))
+	assert.Empty(t, stderr.String(), "JSON mode keeps the note off stderr")
 }
 
 func TestRunShowActive_WithActiveToolchain(t *testing.T) {

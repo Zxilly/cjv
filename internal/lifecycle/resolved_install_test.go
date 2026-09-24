@@ -3,6 +3,8 @@ package lifecycle_test
 import (
 	"errors"
 	"fmt"
+	"io"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -12,11 +14,45 @@ import (
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/fstx"
 	"github.com/Zxilly/cjv/internal/lifecycle"
+	"github.com/Zxilly/cjv/internal/sdktools"
 	"github.com/Zxilly/cjv/internal/testutil"
 	"github.com/Zxilly/cjv/internal/toolchain"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+// installVia runs the placement pipeline through the acquisition named by
+// source: "manifest" resolves lts from the mock server, "url" fetches the
+// same archive as a CI bundle, "zip" links it from a local copy. All three
+// share placeToolchain; only how the archive reaches staging differs.
+func installVia(t *testing.T, source, serverURL string, force bool, opts lifecycle.Options) error {
+	t.Helper()
+	url := serverURL + "/download/cangjie-sdk-1.0.5.zip"
+	switch source {
+	case "manifest":
+		return lifecycle.Install(t.Context(), lifecycle.InstallRequest{Toolchain: "lts", Force: force}, opts)
+	case "url":
+		return lifecycle.InstallToolchainFromURL(t.Context(), "custom-sdk", url, "", force, true, opts)
+	default:
+		archive := filepath.Join(t.TempDir(), "sdk.zip")
+		if _, err := os.Stat(archive); err != nil {
+			resp, err := http.Get(url) //nolint:noctx // test helper
+			require.NoError(t, err)
+			data, err := io.ReadAll(resp.Body)
+			require.NoError(t, err)
+			require.NoError(t, resp.Body.Close())
+			require.NoError(t, os.WriteFile(archive, data, 0o644))
+		}
+		return lifecycle.InstallToolchainFromZip(t.Context(), "custom-sdk", archive, "", force, true, opts)
+	}
+}
+
+func installedNameFor(source string) string {
+	if source == "manifest" {
+		return "lts-1.0.5"
+	}
+	return "custom-sdk"
+}
 
 func prepareInstallTest(t *testing.T) (string, *config.SettingsFile, string) {
 	t.Helper()
@@ -41,14 +77,11 @@ func compilerPath(dir string) string {
 }
 
 func TestInstallRestoresToolchainsAfterFinalizeFailure(t *testing.T) {
-	for _, source := range []string{"manifest", "url"} {
+	for _, source := range []string{"manifest", "url", "zip"} {
 		for _, reinstall := range []bool{false, true} {
 			t.Run(fmt.Sprintf("%s/reinstall=%t", source, reinstall), func(t *testing.T) {
 				home, sf, serverURL := prepareInstallTest(t)
-				name := "lts-1.0.5"
-				if source == "url" {
-					name = "custom-sdk"
-				}
+				name := installedNameFor(source)
 				tcRoot := filepath.Join(home, "toolchains")
 				dest := filepath.Join(tcRoot, name)
 				compiler := compilerPath(dest)
@@ -62,36 +95,33 @@ func TestInstallRestoresToolchainsAfterFinalizeFailure(t *testing.T) {
 				require.NoError(t, err)
 
 				finalizeErr := errors.New("proxy refresh failed")
-				managedCalled, proxyCalled, pathCalled := false, false, false
-				opts := lifecycle.Options{
-
-					EnsureManagedBinary: func() (string, error) {
-						managedCalled = true
-						return filepath.Join(home, "bin", "cjv"), nil
-					},
-					CreateProxyLinks: func() error {
-						proxyCalled = true
-						// The real archive must have been downloaded, validated and
-						// placed at its final path before finalization fails.
-						data, readErr := os.ReadFile(compiler)
-						require.NoError(t, readErr)
-						assert.Contains(t, string(data), "cjc 1.0.5")
-						assert.NoFileExists(t, oldMarker)
-						return finalizeErr
-					},
-					EnsurePathConfigured: func() { pathCalled = true },
-				}
-				if source == "url" {
-					err = lifecycle.InstallToolchainFromURL(t.Context(), name,
-						serverURL+"/download/cangjie-sdk-1.0.5.zip", "", reinstall, true, opts)
-				} else {
-					err = lifecycle.InstallToolchainWithExtras(t.Context(), "lts", nil, nil, reinstall, opts)
-				}
+				finalizeCalled, publishCalled := false, false
+				lifecycle.SetAfterFinalizeHook(t, func() error {
+					finalizeCalled = true
+					// The real archive must have been downloaded, validated and
+					// placed at its final path before finalization fails.
+					data, readErr := os.ReadFile(compiler)
+					require.NoError(t, readErr)
+					assert.Contains(t, string(data), "cjc 1.0.5")
+					assert.NoFileExists(t, oldMarker)
+					// Finalization itself has already established the managed
+					// binary and the proxy links by the time the hook runs.
+					assert.FileExists(t, filepath.Join(home, "bin", sdktools.CjvBinaryName()))
+					assert.FileExists(t, filepath.Join(home, "bin", sdktools.PlatformBinaryName("cjc")))
+					return finalizeErr
+				})
+				// PATH is configured only as part of publishing the default,
+				// which a failed finalization must never reach.
+				lifecycle.SetAfterPublishHook(t, func() error {
+					publishCalled = true
+					return nil
+				})
+				opts := lifecycle.Options{ConfigurePath: true}
+				err = installVia(t, source, serverURL, reinstall, opts)
 
 				require.ErrorIs(t, err, finalizeErr)
-				assert.True(t, managedCalled)
-				assert.True(t, proxyCalled)
-				assert.False(t, pathCalled)
+				assert.True(t, finalizeCalled)
+				assert.False(t, publishCalled)
 				if reinstall {
 					data, readErr := os.ReadFile(compiler)
 					require.NoError(t, readErr)
@@ -122,20 +152,18 @@ func TestInstallRestoresToolchainsAfterFinalizeFailure(t *testing.T) {
 func TestInstallPreservesFinalizeAndRollbackErrors(t *testing.T) {
 	home, _, _ := prepareInstallTest(t)
 	dest := filepath.Join(home, "toolchains", "lts-1.0.5")
-	staging := dest + toolchain.StagingSuffix
+	staging := config.StagingDir(dest)
 	finalizeErr := errors.New("proxy refresh failed")
-	err := lifecycle.InstallToolchainWithExtras(t.Context(), "lts", nil, nil, false, lifecycle.Options{
-
-		CreateProxyLinks: func() error {
-			require.FileExists(t, compilerPath(dest))
-			// Simulate a conflicting filesystem entry appearing while the
-			// finalization callback runs. The installed directory cannot be
-			// renamed back to staging, so rollback must report its own error.
-			require.NoError(t, os.MkdirAll(staging, 0o755))
-			require.NoError(t, os.WriteFile(filepath.Join(staging, "occupied"), []byte("occupied"), 0o644))
-			return finalizeErr
-		},
+	lifecycle.SetAfterFinalizeHook(t, func() error {
+		require.FileExists(t, compilerPath(dest))
+		// Simulate a conflicting filesystem entry appearing while the
+		// finalization callback runs. The installed directory cannot be
+		// renamed back to staging, so rollback must report its own error.
+		require.NoError(t, os.MkdirAll(staging, 0o755))
+		require.NoError(t, os.WriteFile(filepath.Join(staging, "occupied"), []byte("occupied"), 0o644))
+		return finalizeErr
 	})
+	err := lifecycle.Install(t.Context(), lifecycle.InstallRequest{Toolchain: "lts"}, lifecycle.Options{})
 
 	require.ErrorIs(t, err, finalizeErr)
 	assert.ErrorContains(t, err, "rollback after failed install also failed")
@@ -148,33 +176,28 @@ func TestInstallPreservesFinalizeAndRollbackErrors(t *testing.T) {
 }
 
 func TestForceInstallRetainsOldSDKUntilBlockedRecoveryCanFinish(t *testing.T) {
-	for _, source := range []string{"manifest", "url"} {
+	for _, source := range []string{"manifest", "url", "zip"} {
 		t.Run(source, func(t *testing.T) {
 			home, _, serverURL := prepareInstallTest(t)
-			name := "lts-1.0.5"
-			if source == "url" {
-				name = "custom-sdk"
-			}
+			name := installedNameFor(source)
 			tcRoot := filepath.Join(home, "toolchains")
 			dest := filepath.Join(tcRoot, name)
-			staging := dest + toolchain.StagingSuffix
+			staging := config.StagingDir(dest)
 			require.NoError(t, os.MkdirAll(filepath.Dir(compilerPath(dest)), 0o755))
 			require.NoError(t, os.WriteFile(compilerPath(dest), []byte("old compiler"), 0o755))
 			require.NoError(t, os.WriteFile(filepath.Join(dest, "old-sdk-only"), []byte("old SDK"), 0o644))
 			finalizeErr := errors.New("finalization failed while staging is occupied")
 			install := func(opts lifecycle.Options) error {
-				if source == "url" {
-					return lifecycle.InstallToolchainFromURL(t.Context(), name,
-						serverURL+"/download/cangjie-sdk-1.0.5.zip", "", true, true, opts)
-				}
-				return lifecycle.InstallToolchainWithExtras(t.Context(), "lts", nil, nil, true, opts)
+				return installVia(t, source, serverURL, true, opts)
 			}
-			err := install(lifecycle.Options{CreateProxyLinks: func() error {
+			lifecycle.SetAfterFinalizeHook(t, func() error {
 				require.NoError(t, os.MkdirAll(staging, 0o755))
 				require.NoError(t, os.WriteFile(filepath.Join(staging, "occupied"), []byte("obstruction"), 0o644))
 				return finalizeErr
-			}})
+			})
+			err := install(lifecycle.Options{})
 			require.ErrorIs(t, err, finalizeErr)
+			lifecycle.SetAfterFinalizeHook(t, nil)
 			var recoveryErr *fstx.RecoveryError
 			require.ErrorAs(t, err, &recoveryErr)
 			assert.ErrorContains(t, err, recoveryErr.Directory)
@@ -183,7 +206,7 @@ func TestForceInstallRetainsOldSDKUntilBlockedRecoveryCanFinish(t *testing.T) {
 
 			// Startup and another attempted force-install must keep the old
 			// SDK and the obstructing path until recovery is possible.
-			toolchain.CleanupStagingDirs()
+			require.ErrorAs(t, toolchain.RecoverHome(), &recoveryErr)
 			assert.FileExists(t, backup)
 			assert.FileExists(t, filepath.Join(staging, "occupied"))
 			err = install(lifecycle.Options{})
@@ -194,7 +217,7 @@ func TestForceInstallRetainsOldSDKUntilBlockedRecoveryCanFinish(t *testing.T) {
 			// sequence, restores the old SDK and cleans the discarded new SDK.
 			require.NoError(t, os.Remove(filepath.Join(staging, "occupied")))
 			require.NoError(t, os.Remove(staging))
-			toolchain.CleanupStagingDirs()
+			require.NoError(t, toolchain.RecoverHome())
 			data, err := os.ReadFile(compilerPath(dest))
 			require.NoError(t, err)
 			assert.Equal(t, "old compiler", string(data))
@@ -210,8 +233,11 @@ func TestFirstInstallDefaultSurvivesInterruptionAfterPublication(t *testing.T) {
 		config.IsolateForTest(t, os.Getenv(config.EnvHome))
 		// Stop after the real settings update and before the transaction can
 		// write its final marker or run deferred rollback/cleanup.
-		err := lifecycle.InstallToolchainWithExtras(t.Context(), "lts", nil, nil, false,
-			lifecycle.Options{EnsurePathConfigured: func() { os.Exit(71) }})
+		lifecycle.SetAfterPublishHook(t, func() error {
+			os.Exit(71)
+			return nil
+		})
+		err := lifecycle.Install(t.Context(), lifecycle.InstallRequest{Toolchain: "lts"}, lifecycle.Options{})
 		t.Fatalf("expected interruption at default publication, got %v", err)
 	}
 
@@ -232,7 +258,7 @@ func TestFirstInstallDefaultSurvivesInterruptionAfterPublication(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, journals, 1, "interruption must precede normal transaction cleanup")
 
-	toolchain.CleanupStagingDirs()
+	require.NoError(t, toolchain.RecoverHome())
 
 	assert.FileExists(t, compilerPath(dest), "startup must retain the SDK referenced by the published default")
 	journals, err = filepath.Glob(filepath.Join(home, "toolchains", ".fstx-*"))
@@ -245,20 +271,22 @@ func TestFirstInstallSettingsWriteFailureRollsBackPreparedSDK(t *testing.T) {
 	before, err := os.ReadFile(sf.Path())
 	require.NoError(t, err)
 	backup := sf.Path() + ".test-backup"
-	pathConfigured := false
-	err = lifecycle.InstallToolchainWithExtras(t.Context(), "lts", nil, nil, false, lifecycle.Options{
-		CreateProxyLinks: func() error {
-			// Fail the actual atomic settings write after SDK placement and
-			// before any default reference can be published.
-			require.NoError(t, os.Rename(sf.Path(), backup))
-			require.NoError(t, os.Mkdir(sf.Path(), 0o755))
-			require.NoError(t, os.WriteFile(filepath.Join(sf.Path(), "occupied"), []byte("block publication"), 0o644))
-			return nil
-		},
-		EnsurePathConfigured: func() { pathConfigured = true },
+	publishCalled := false
+	lifecycle.SetAfterPublishHook(t, func() error {
+		publishCalled = true
+		return nil
 	})
+	lifecycle.SetAfterFinalizeHook(t, func() error {
+		// Fail the actual atomic settings write after SDK placement and
+		// before any default reference can be published.
+		require.NoError(t, os.Rename(sf.Path(), backup))
+		require.NoError(t, os.Mkdir(sf.Path(), 0o755))
+		require.NoError(t, os.WriteFile(filepath.Join(sf.Path(), "occupied"), []byte("block publication"), 0o644))
+		return nil
+	})
+	err = lifecycle.Install(t.Context(), lifecycle.InstallRequest{Toolchain: "lts"}, lifecycle.Options{ConfigurePath: true})
 	require.Error(t, err)
-	assert.False(t, pathConfigured)
+	assert.False(t, publishCalled)
 	assert.NoDirExists(t, filepath.Join(home, "toolchains", "lts-1.0.5"))
 	entries, err := os.ReadDir(filepath.Join(home, "toolchains"))
 	require.NoError(t, err)

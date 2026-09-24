@@ -11,22 +11,6 @@ import (
 	goversion "github.com/hashicorp/go-version"
 )
 
-const (
-	// StagingSuffix marks in-progress installations.
-	StagingSuffix = ".staging"
-	// BackupSuffix marks backup directories from force-installs.
-	BackupSuffix = ".old"
-	// FstxTempPrefix marks transaction directories used while replacing toolchains.
-	FstxTempPrefix = ".fstx-"
-)
-
-// IsTempDir returns true if the directory name is a staging or backup artifact.
-func IsTempDir(name string) bool {
-	return strings.HasSuffix(name, StagingSuffix) ||
-		strings.HasSuffix(name, BackupSuffix) ||
-		strings.HasPrefix(name, FstxTempPrefix)
-}
-
 // compareSemVer compares two version strings (e.g. "1.0.5", "1.10.0").
 // Returns -1 if a < b, 0 if a == b, 1 if a > b.
 func compareSemVer(a, b string) int {
@@ -75,7 +59,7 @@ func FindInstalled(name ToolchainName) (string, error) {
 		for _, e := range entries {
 			if (e.IsDir() || e.Type()&os.ModeSymlink != 0) && strings.HasPrefix(e.Name(), prefix) {
 				// Skip staging and backup directories (same filter as ListInstalled)
-				if IsTempDir(e.Name()) {
+				if config.IsScratchName(e.Name()) {
 					continue
 				}
 				parsed, err := ParseToolchainName(e.Name())
@@ -111,11 +95,10 @@ func FindInstalled(name ToolchainName) (string, error) {
 // FindInstalledByName looks up a toolchain by its exact directory name
 // (e.g. a custom-linked toolchain like "my-sdk").
 func FindInstalledByName(name string) (string, error) {
-	tcDir, err := config.ToolchainsDir()
+	dir, err := config.ToolchainDirFor(name)
 	if err != nil {
 		return "", err
 	}
-	dir := filepath.Join(tcDir, name)
 	if _, err := os.Stat(dir); err != nil {
 		return "", err
 	}
@@ -141,7 +124,7 @@ func ListInstalled() ([]string, error) {
 		}
 		name := e.Name()
 		// Skip staging and backup directories
-		if IsTempDir(name) {
+		if config.IsScratchName(name) {
 			continue
 		}
 		names = append(names, name)

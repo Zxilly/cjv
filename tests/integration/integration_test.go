@@ -11,8 +11,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Zxilly/cjv/internal/fsops"
 	"github.com/Zxilly/cjv/internal/testutil"
-	"github.com/Zxilly/cjv/internal/utils"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -68,7 +68,7 @@ func writeManifestIntegrationSettings(t *testing.T, cjvHome string, manifestURL 
 
 func copyBinary(t *testing.T, src, dst string) {
 	t.Helper()
-	require.NoError(t, utils.CopyFile(src, dst, 0o755))
+	require.NoError(t, fsops.CopyFile(src, dst, 0o755))
 }
 
 func TestIntegrationToolchainList(t *testing.T) {

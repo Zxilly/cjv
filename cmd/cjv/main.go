@@ -10,9 +10,10 @@ import (
 
 	"github.com/Zxilly/cjv/internal/cjverr"
 	"github.com/Zxilly/cjv/internal/cli"
+	"github.com/Zxilly/cjv/internal/dist"
 	"github.com/Zxilly/cjv/internal/logging"
 	"github.com/Zxilly/cjv/internal/proxy"
-	"github.com/Zxilly/cjv/internal/utils"
+	"github.com/Zxilly/cjv/internal/sdktools"
 	"github.com/spf13/cobra"
 )
 
@@ -30,11 +31,11 @@ func main() {
 func run() int {
 	logging.Init()
 
-	utils.AppVersion = version
+	dist.AppVersion = version
 
 	toolName := proxy.ExtractToolName(os.Args[0])
 
-	if proxy.IsProxyTool(toolName) {
+	if sdktools.IsProxyTool(toolName) {
 		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 		defer stop()
 
@@ -53,7 +54,7 @@ func run() int {
 	// runs after it — the "press Enter" prompt still needs UTF-8 to display.
 	// Not done on the proxy path above: that only passes external tools through
 	// and must not change the shared console's code page out from under them.
-	restoreConsole := utils.EnableConsoleUTF8()
+	restoreConsole := enableConsoleUTF8()
 	defer restoreConsole()
 
 	if isInitInvocation(toolName) {
@@ -61,7 +62,7 @@ func run() int {
 		// cobra's mousetrap that would otherwise abort with a "use cmd.exe" notice.
 		cobra.MousetrapHelpText = ""
 		os.Args = append([]string{os.Args[0], "init"}, os.Args[1:]...)
-		defer utils.PauseIfStandaloneConsole()
+		defer pauseIfStandaloneConsole()
 	}
 
 	if err := cli.Execute(version, updateURL); err != nil {

@@ -11,16 +11,16 @@ import (
 	"testing"
 
 	"github.com/Zxilly/cjv/internal/config"
-	"github.com/Zxilly/cjv/internal/proxy"
+	"github.com/Zxilly/cjv/internal/sdktools"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func TestUpdateSkipsNetworkForUnsupportedOrDevBuilds(t *testing.T) {
-	result, err := Update(context.Background(), "", "1.0.0")
+	result, err := Update(context.Background(), "", "1.0.0", nil)
 	require.NoError(t, err)
 	assert.Equal(t, Result{CurrentVersion: "1.0.0", Version: "1.0.0", Status: StatusSkipped}, result)
-	result, err = Update(context.Background(), "https://example.invalid/owner/repo/releases", "dev")
+	result, err = Update(context.Background(), "https://example.invalid/owner/repo/releases", "dev", nil)
 	require.NoError(t, err)
 	assert.Equal(t, Result{CurrentVersion: "dev", Version: "dev", Status: StatusDevelopment}, result)
 }
@@ -41,7 +41,7 @@ func TestUpdateReportsInstalledRelease(t *testing.T) {
 			home := t.TempDir()
 			config.IsolateForTest(t, home)
 			t.Setenv(config.EnvMaxRetries, "0")
-			managed := filepath.Join(home, "bin", proxy.CjvBinaryName())
+			managed := filepath.Join(home, "bin", sdktools.CjvBinaryName())
 			require.NoError(t, os.MkdirAll(filepath.Dir(managed), 0o755))
 			require.NoError(t, os.WriteFile(managed, []byte("old executable"), 0o755))
 			archive := zipExecutable(t, platformBinaryName(updateTestBinaryName(), runtime.GOOS), []byte("new executable"))
@@ -50,7 +50,7 @@ func TestUpdateReportsInstalledRelease(t *testing.T) {
 				digest = strings.Repeat("0", 64)
 			}
 			updateURL := serveUpdateRelease(t, tc.tag, archive, digest)
-			result, err := Update(context.Background(), updateURL, "1.0.0")
+			result, err := Update(context.Background(), updateURL, "1.0.0", nil)
 			if tc.invalidChecksum {
 				require.Error(t, err)
 				assert.NotEqual(t, StatusUpdated, result.Status)

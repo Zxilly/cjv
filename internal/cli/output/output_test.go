@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/Zxilly/cjv/internal/cjverr"
+	"github.com/Zxilly/cjv/internal/progress"
 )
 
 type fixture struct {
@@ -108,16 +109,83 @@ func TestRenderError_ExitCodeErrorIsPassthrough(t *testing.T) {
 	}
 }
 
-func TestRenderError_TextModeSilent(t *testing.T) {
+func TestRenderError_TextModeWritesMessageToStderr(t *testing.T) {
 	var renderer Renderer
 	renderer.SetJSONMode(false)
 
 	var stdout, stderr bytes.Buffer
 	err := &cjverr.NoToolchainConfiguredError{}
 	requireSameError(t, renderer.RenderErrorTo(&stdout, &stderr, err), err)
-	out := stdout.String()
-	if out != "" {
+	if out := stdout.String(); out != "" {
 		t.Fatalf("text mode should not write to stdout, got %q", out)
+	}
+	if got, want := stderr.String(), "cjv: "+err.Error()+"\n"; got != want {
+		t.Fatalf("expected %q on stderr, got %q", want, got)
+	}
+
+	stderr.Reset()
+	exit := &cjverr.ExitCodeError{Code: 2}
+	requireSameError(t, renderer.RenderErrorTo(&stdout, &stderr, exit), exit)
+	if got := stderr.String(); got != "" {
+		t.Fatalf("ExitCodeError carries no message, got %q", got)
+	}
+}
+
+func TestNote_TextModeOnly(t *testing.T) {
+	var renderer Renderer
+	var stderr bytes.Buffer
+
+	renderer.SetJSONMode(false)
+	renderer.Note(&stderr, "aside")
+	if got, want := stderr.String(), "aside\n"; got != want {
+		t.Fatalf("expected %q on stderr, got %q", want, got)
+	}
+
+	stderr.Reset()
+	renderer.SetJSONMode(true)
+	renderer.Note(&stderr, "aside")
+	if got := stderr.String(); got != "" {
+		t.Fatalf("JSON mode writes no aside, got %q", got)
+	}
+}
+
+func TestRenderOutcome_JSONModeLeavesErrorEnvelopeAlone(t *testing.T) {
+	var renderer Renderer
+	renderer.SetJSONMode(true)
+	failure := errors.New("partial")
+
+	var buf bytes.Buffer
+	requireSameError(t, renderer.RenderOutcome(&buf, fixture{A: 1, B: "done"}, failure), failure)
+	if out := buf.String(); out != "" {
+		t.Fatalf("JSON mode must not emit a result next to the error envelope, got %q", out)
+	}
+	requireNoError(t, renderer.RenderOutcome(&buf, fixture{A: 1, B: "done"}, nil))
+	if !json.Valid(bytes.TrimSpace(buf.Bytes())) {
+		t.Fatalf("expected JSON result, got %q", buf.String())
+	}
+
+	renderer.SetJSONMode(false)
+	buf.Reset()
+	requireSameError(t, renderer.RenderOutcome(&buf, fixture{B: "done"}, failure), failure)
+	if out := buf.String(); out != "done\n" {
+		t.Fatalf("text mode shows what was achieved before the error, got %q", out)
+	}
+}
+
+func TestProgressAdapterFollowsMode(t *testing.T) {
+	var renderer Renderer
+	var out bytes.Buffer
+	renderer.SetJSONMode(true)
+	if sink := renderer.Progress(&out); sink != progress.Discard {
+		t.Fatalf("JSON mode must discard progress, got %T", sink)
+	}
+	renderer.SetJSONMode(false)
+	renderer.Progress(&out).Report(progress.Event{Kind: progress.FetchingManifest})
+	if out.Len() == 0 {
+		t.Fatal("text mode must render progress on the command writer")
+	}
+	if got := (ProgressDriven{}).Text(); got != "" {
+		t.Fatalf("progress-driven results render no text, got %q", got)
 	}
 }
 

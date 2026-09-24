@@ -82,7 +82,7 @@ func TestInstall_Stdx_StripsTopLevel(t *testing.T) {
 	downloads := t.TempDir()
 	mf := stdxComponentManifest(t, toolchain.LTS, "1.0.5", "linux-arm64", server.URL+"/stdx.zip")
 
-	require.NoError(t, Install(context.Background(), roots, tc, Stdx, "linux-arm64", downloads, false, mf))
+	require.NoError(t, InstallFromSource(context.Background(), roots, tc, Stdx, "linux-arm64", downloads, false, mf, nil))
 
 	assert.FileExists(t, filepath.Join(stdxDir, "dynamic", "libfoo.so"))
 	assert.FileExists(t, filepath.Join(stdxDir, "static", "libfoo.a"))
@@ -92,20 +92,20 @@ func TestInstall_Stdx_StripsTopLevel(t *testing.T) {
 	assert.ElementsMatch(t, []string{"dynamic/libfoo.so", "static/libfoo.a"}, manifest)
 
 	// Already installed → returns ComponentAlreadyInstalledError when force=false.
-	err = Install(context.Background(), roots, tc, Stdx, "linux-arm64", downloads, false, mf)
+	err = InstallFromSource(context.Background(), roots, tc, Stdx, "linux-arm64", downloads, false, mf, nil)
 	var already *cjverr.ComponentAlreadyInstalledError
 	assert.ErrorAs(t, err, &already)
 }
 
-// stdxComponentManifest builds a manifest whose stdx link for tuple's archive
-// platform points at url. tuple is resolved with the same mapping ResolveAssetURL
+// stdxComponentManifest serves a manifest whose stdx link for tuple's archive
+// platform points at url. tuple is resolved with the same mapping the install
 // uses, so callers pass the SDK tuple (e.g. "linux-arm64") and the manifest is
 // keyed by the matching stdx platform token (e.g. "linux-aarch64").
-func stdxComponentManifest(t *testing.T, channel toolchain.Channel, version, tuple, url string) *dist.Manifest {
+func stdxComponentManifest(t *testing.T, channel toolchain.Channel, version, tuple, url string) *dist.Source {
 	t.Helper()
 	platform, err := stdxPlatform(tuple)
 	require.NoError(t, err)
-	return manifestWithComponents(channel, version, dist.ComponentSet{
+	return sourceWithComponents(t, channel, version, dist.ComponentSet{
 		Stdx: map[string]dist.ComponentInfo{platform: {URL: url}},
 	})
 }
@@ -128,7 +128,7 @@ func TestInstall_ForceDownloadFailureKeepsExistingComponent(t *testing.T) {
 
 	tc := toolchain.ToolchainName{Channel: toolchain.LTS, Version: "1.0.5"}
 	mf := stdxComponentManifest(t, toolchain.LTS, "1.0.5", "linux-arm64", server.URL+"/x")
-	err := Install(context.Background(), roots, tc, Stdx, "linux-arm64", t.TempDir(), true, mf)
+	err := InstallFromSource(context.Background(), roots, tc, Stdx, "linux-arm64", t.TempDir(), true, mf, nil)
 
 	require.Error(t, err)
 	assert.True(t, IsInstalled(tcDir, Stdx))
@@ -151,11 +151,11 @@ func TestInstall_StdxDocs_WritesManifestAndFiles(t *testing.T) {
 	tcDir := t.TempDir()
 	roots := Roots{TcDir: tcDir, DocsDir: t.TempDir(), StdxDir: t.TempDir()}
 	tc := toolchain.ToolchainName{Channel: toolchain.LTS, Version: "1.0.5"}
-	mf := manifestWithComponents(toolchain.LTS, "1.0.5", dist.ComponentSet{
+	mf := sourceWithComponents(t, toolchain.LTS, "1.0.5", dist.ComponentSet{
 		StdxDocs: &dist.ComponentInfo{URL: server.URL + "/stdx-docs.tar.gz"},
 	})
 
-	require.NoError(t, Install(context.Background(), roots, tc, StdxDocs, "", t.TempDir(), false, mf))
+	require.NoError(t, InstallFromSource(context.Background(), roots, tc, StdxDocs, "", t.TempDir(), false, mf, nil))
 	assert.FileExists(t, filepath.Join(roots.DocsDir, "stdx", "libs_stdx", "index.html"))
 	assert.True(t, IsInstalled(tcDir, StdxDocs))
 }
@@ -178,11 +178,11 @@ func TestInstall_Docs_WritesManifestAndFiles(t *testing.T) {
 	tcDir := t.TempDir()
 	roots := Roots{TcDir: tcDir, DocsDir: t.TempDir(), StdxDir: t.TempDir()}
 	tc := toolchain.ToolchainName{Channel: toolchain.LTS, Version: "1.0.5"}
-	mf := manifestWithComponents(toolchain.LTS, "1.0.5", dist.ComponentSet{
+	mf := sourceWithComponents(t, toolchain.LTS, "1.0.5", dist.ComponentSet{
 		Docs: &dist.ComponentInfo{URL: server.URL + "/docs.tar.gz"},
 	})
 
-	require.NoError(t, Install(context.Background(), roots, tc, Docs, "", t.TempDir(), false, mf))
+	require.NoError(t, InstallFromSource(context.Background(), roots, tc, Docs, "", t.TempDir(), false, mf, nil))
 
 	assert.FileExists(t, filepath.Join(roots.DocsDir, "main", "index.html"))
 	assert.FileExists(t, filepath.Join(roots.DocsDir, "main", "libs", "std", "index.html"))
@@ -218,7 +218,7 @@ func TestInstall_Stdx_WindowsZip(t *testing.T) {
 	tc := toolchain.ToolchainName{Channel: toolchain.LTS, Version: "1.0.5"}
 	mf := stdxComponentManifest(t, toolchain.LTS, "1.0.5", "win32-x64", server.URL+"/stdx.zip")
 
-	require.NoError(t, Install(context.Background(), roots, tc, Stdx, "win32-x64", t.TempDir(), false, mf))
+	require.NoError(t, InstallFromSource(context.Background(), roots, tc, Stdx, "win32-x64", t.TempDir(), false, mf, nil))
 
 	assert.FileExists(t, filepath.Join(roots.StdxDir, "dynamic", "foo.dll"))
 	assert.FileExists(t, filepath.Join(roots.StdxDir, "static", "foo.lib"))
@@ -244,11 +244,11 @@ func TestInstall_DocsDoesNotRequestChecksumSidecar(t *testing.T) {
 	tcDir := t.TempDir()
 	roots := Roots{TcDir: tcDir, DocsDir: t.TempDir(), StdxDir: t.TempDir()}
 	tc := toolchain.ToolchainName{Channel: toolchain.LTS, Version: "1.0.5"}
-	mf := manifestWithComponents(toolchain.LTS, "1.0.5", dist.ComponentSet{
+	mf := sourceWithComponents(t, toolchain.LTS, "1.0.5", dist.ComponentSet{
 		Docs: &dist.ComponentInfo{URL: server.URL + "/docs.tar.gz"},
 	})
 
-	require.NoError(t, Install(context.Background(), roots, tc, Docs, "", t.TempDir(), false, mf))
+	require.NoError(t, InstallFromSource(context.Background(), roots, tc, Docs, "", t.TempDir(), false, mf, nil))
 	assert.Zero(t, shaRequests.Load())
 	assert.True(t, IsInstalled(tcDir, Docs))
 }
@@ -305,7 +305,7 @@ func TestInstall_AllComponentsWithMockArchives(t *testing.T) {
 
 	stdxPlat, err := stdxPlatform(tuple)
 	require.NoError(t, err)
-	mf := manifestWithComponents(toolchain.LTS, version, dist.ComponentSet{
+	mf := sourceWithComponents(t, toolchain.LTS, version, dist.ComponentSet{
 		Stdx:     map[string]dist.ComponentInfo{stdxPlat: {URL: server.URL + "/download/" + stdxArchiveName}},
 		Docs:     &dist.ComponentInfo{URL: server.URL + "/download/cangjie-docs-html-" + version + ".tar.gz"},
 		StdxDocs: &dist.ComponentInfo{URL: server.URL + "/download/cangjie-stdx-docs-html-" + version + ".1.tar.gz"},
@@ -341,7 +341,7 @@ func TestInstall_AllComponentsWithMockArchives(t *testing.T) {
 				pk = tuple
 			}
 
-			require.NoError(t, Install(context.Background(), roots, tc, name, pk, t.TempDir(), false, mf))
+			require.NoError(t, InstallFromSource(context.Background(), roots, tc, name, pk, t.TempDir(), false, mf, nil))
 			assert.True(t, IsInstalled(roots.TcDir, name))
 			assert.FileExists(t, filepath.Join(rootDirFor(name, roots), expectedFile[name]))
 
@@ -356,7 +356,7 @@ func TestInstallRejectsUnknownAndUnsupportedComponents(t *testing.T) {
 	roots := Roots{TcDir: t.TempDir(), DocsDir: t.TempDir(), StdxDir: t.TempDir()}
 	tc := toolchain.ToolchainName{Channel: toolchain.STS, Version: "2.0.0"}
 
-	require.Error(t, Install(context.Background(), roots, tc, Name("unknown"), "", t.TempDir(), false, nil))
+	require.Error(t, InstallFromSource(context.Background(), roots, tc, Name("unknown"), "", t.TempDir(), false, nil, nil))
 
 	ltsOnly := Name("lts-only")
 	specs[ltsOnly] = Spec{
@@ -367,19 +367,7 @@ func TestInstallRejectsUnknownAndUnsupportedComponents(t *testing.T) {
 	}
 	t.Cleanup(func() { delete(specs, ltsOnly) })
 
-	err := Install(context.Background(), roots, tc, ltsOnly, "", t.TempDir(), false, nil)
+	err := InstallFromSource(context.Background(), roots, tc, ltsOnly, "", t.TempDir(), false, nil, nil)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "lts-only")
-}
-
-func TestMoveStagedFilesErrorBranches(t *testing.T) {
-	parentFile := filepath.Join(t.TempDir(), "not-a-directory")
-	require.NoError(t, os.WriteFile(parentFile, []byte("file"), 0o644))
-	err := moveStagedFiles(t.TempDir(), filepath.Join(parentFile, "dest"), []string{"file.txt"})
-	require.Error(t, err)
-
-	stageDir := t.TempDir()
-	destDir := t.TempDir()
-	err = moveStagedFiles(stageDir, destDir, []string{"missing.txt"})
-	require.Error(t, err)
 }

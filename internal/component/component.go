@@ -58,8 +58,6 @@ func (s Spec) SupportsChannel(ch toolchain.Channel) bool {
 	return slices.Contains(s.SupportedChannels, ch)
 }
 
-func (s Spec) String() string { return string(s.Name) }
-
 var specs = map[Name]Spec{
 	Stdx: {
 		Name:              Stdx,
@@ -98,7 +96,7 @@ type Roots struct {
 }
 
 func RootsFor(tcName string) (Roots, error) {
-	tcDirRoot, err := config.ToolchainsDir()
+	tcDir, err := config.ToolchainDirFor(tcName)
 	if err != nil {
 		return Roots{}, err
 	}
@@ -111,7 +109,7 @@ func RootsFor(tcName string) (Roots, error) {
 		return Roots{}, err
 	}
 	return Roots{
-		TcDir:   filepath.Join(tcDirRoot, tcName),
+		TcDir:   tcDir,
 		DocsDir: docsDir,
 		StdxDir: stdxDir,
 	}, nil

@@ -6,79 +6,67 @@ import (
 
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/dist"
+	"github.com/Zxilly/cjv/internal/progress"
 	sdktarget "github.com/Zxilly/cjv/internal/target"
 	"github.com/Zxilly/cjv/internal/toolchain"
 )
 
-// ManifestFetcher owns one operation-scoped distribution source. Source
-// metadata is fetched at most once, while presentation remains in lifecycle.
-type ManifestFetcher struct {
-	source   *dist.Source
-	opts     Options
+// Distribution is what one operation resolves against: the user settings it
+// was opened from, the distribution source those settings select, and the
+// host tuple. `install`, `update`, `check`, `list-remote` and component
+// installs all open it the same way, so they agree on the manifest, the
+// dist_server root and the platform. Source metadata is fetched at most once
+// per Distribution, and the manifest progress note is emitted at most once.
+type Distribution struct {
+	File      *config.SettingsFile
+	Settings  *config.Settings
+	Source    *dist.Source
+	HostTuple string
+
+	progress progress.Sink
 	noteOnce sync.Once
 }
 
-func NewManifestFetcher(url string, opts Options) *ManifestFetcher {
-	settings := config.DefaultSettings()
-	settings.ManifestURL = url
-	source, _ := newDistributionSource(&settings)
-	return &ManifestFetcher{source: source, opts: opts}
-}
-
-// NewManifestFetcherForSettings builds the operation-scoped distribution
-// source, including the configured dist_server root.
-func NewManifestFetcherForSettings(settings *config.Settings, opts Options) (*ManifestFetcher, error) {
-	source, err := newDistributionSource(settings)
+// OpenDistribution loads the user settings and resolves the distribution
+// source and host tuple they select. opts carries the progress sink the
+// operation's manifest note and checksum warning go to.
+func OpenDistribution(opts Options) (*Distribution, error) {
+	sf, settings, err := config.LoadDefaultSettings()
 	if err != nil {
 		return nil, err
 	}
-	return &ManifestFetcher{source: source, opts: opts}, nil
-}
-
-func newDistributionSource(settings *config.Settings) (*dist.Source, error) {
-	return dist.NewSourceWithOptions(settings, dist.SourceOptions{
-		FetchNightlySHA256: func(ctx context.Context, assetURL string) (string, error) {
-			return FetchNightlySHA256(ctx, assetURL)
-		},
-	})
-}
-
-func (f *ManifestFetcher) Get(ctx context.Context) (*dist.Manifest, error) {
-	f.Note()
-	return f.source.Manifest(ctx)
-}
-
-// Note emits the operation-scoped manifest progress message once.
-func (f *ManifestFetcher) Note() {
-	f.noteOnce.Do(func() { f.opts.report("FetchingManifest", nil) })
-}
-
-func ResolveAndLocate(ctx context.Context, name toolchain.ToolchainName, settings *config.Settings, fetcher *ManifestFetcher) (ResolvedToolchain, error) {
-	return ResolveAndLocateWithTarget(ctx, name, settings, fetcher, "")
-}
-
-func ResolveAndLocateWithTarget(ctx context.Context, name toolchain.ToolchainName, settings *config.Settings, fetcher *ManifestFetcher, target string) (ResolvedToolchain, error) {
-	tuple := name.Target
-	if tuple == "" {
-		var err error
-		tuple, err = dist.CurrentTargetTuple(settings.DefaultHost, target)
-		if err != nil {
-			return ResolvedToolchain{}, err
-		}
+	source, err := dist.NewSource(settings)
+	if err != nil {
+		return nil, err
 	}
-	return ResolveAndLocatePlatform(ctx, name, settings, fetcher, tuple)
+	hostTuple, err := sdktarget.CurrentHostTuple(settings.DefaultHost)
+	if err != nil {
+		return nil, err
+	}
+	return &Distribution{File: sf, Settings: settings, Source: source, HostTuple: hostTuple, progress: opts.sink()}, nil
 }
 
-func ResolveAndLocatePlatform(ctx context.Context, name toolchain.ToolchainName, settings *config.Settings, fetcher *ManifestFetcher, tuple string) (ResolvedToolchain, error) {
+// TargetTuple composes the host tuple with a cross-compile environment such
+// as "ohos". An empty environment yields the host tuple; a full tuple passed
+// as environment is rejected.
+func (d *Distribution) TargetTuple(environment string) (string, error) {
+	return sdktarget.CurrentTargetTuple(d.Settings.DefaultHost, environment)
+}
+
+// note emits the operation-scoped manifest progress message once.
+func (d *Distribution) note() {
+	d.noteOnce.Do(func() { d.progress.Report(progress.Event{Kind: progress.FetchingManifest}) })
+}
+
+// Resolve turns a channel, version or channel-version request into the
+// concrete release the source publishes for tuple. An empty tuple means the
+// host; a target tuple yields a target variant name.
+func (d *Distribution) Resolve(ctx context.Context, name toolchain.ToolchainName, tuple string) (ResolvedToolchain, error) {
 	if tuple == "" {
-		var err error
-		tuple, err = dist.CurrentHostTuple(settings.DefaultHost)
-		if err != nil {
-			return ResolvedToolchain{}, err
-		}
+		tuple = d.HostTuple
 	}
-	fetcher.Note()
-	release, err := fetcher.source.ResolveToolchain(ctx, name.Channel, name.Version, tuple)
+	d.note()
+	release, err := d.Source.ResolveToolchain(ctx, name.Channel, name.Version, tuple)
 	if err != nil {
 		return ResolvedToolchain{}, err
 	}
@@ -87,17 +75,13 @@ func ResolveAndLocatePlatform(ctx context.Context, name toolchain.ToolchainName,
 		resolved.Target = tuple
 	}
 	if release.Channel == toolchain.Nightly && release.Download.SHA256 == "" {
-		fetcher.opts.report("NightlyNoChecksum", nil)
+		d.progress.Report(progress.Event{Kind: progress.NightlyNoChecksum})
 	}
-	result := ResolvedToolchain{
+	return ResolvedToolchain{
 		Name:        resolved.String(),
 		URL:         release.Download.URL,
 		SHA256:      release.Download.SHA256,
 		ArchiveName: release.Download.Name,
 		Tuple:       tuple,
-	}
-	return result, nil
+	}, nil
 }
-
-// FetchNightlySHA256 is a package-level seam for tests that resolve nightly toolchains.
-var FetchNightlySHA256 = dist.FetchNightlySHA256

@@ -15,9 +15,15 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/Zxilly/cjv/internal/progress"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+// sinkFunc adapts a function to progress.Sink for recording events.
+type sinkFunc func(progress.Event)
+
+func (f sinkFunc) Report(e progress.Event) { f(e) }
 
 func TestDownloadFile(t *testing.T) {
 	content := []byte("fake sdk archive content")
@@ -31,7 +37,7 @@ func TestDownloadFile(t *testing.T) {
 	tmp := t.TempDir()
 	dest := filepath.Join(tmp, "archive.zip")
 
-	err := DownloadFile(context.Background(), server.URL+"/test.zip", dest, hash)
+	err := DownloadFile(context.Background(), server.URL+"/test.zip", dest, hash, nil)
 	require.NoError(t, err)
 
 	data, err := os.ReadFile(dest)
@@ -48,7 +54,7 @@ func TestDownloadFileBadChecksum(t *testing.T) {
 	tmp := t.TempDir()
 	dest := filepath.Join(tmp, "archive.zip")
 
-	err := DownloadFile(context.Background(), server.URL+"/test.zip", dest, "0000000000000000000000000000000000000000000000000000000000000000")
+	err := DownloadFile(context.Background(), server.URL+"/test.zip", dest, "0000000000000000000000000000000000000000000000000000000000000000", nil)
 	assert.Error(t, err)
 }
 
@@ -62,7 +68,7 @@ func TestDownloadFileSkipChecksum(t *testing.T) {
 	dest := filepath.Join(tmp, "archive.tar.gz")
 
 	// Empty sha256 skips verification (nightly scenario)
-	err := DownloadFile(context.Background(), server.URL+"/test.tar.gz", dest, "")
+	err := DownloadFile(context.Background(), server.URL+"/test.tar.gz", dest, "", nil)
 	require.NoError(t, err)
 }
 
@@ -76,7 +82,7 @@ func TestDownloadFilePreservesExistingDestinationOnChecksumFailure(t *testing.T)
 	dest := filepath.Join(tmp, "archive.zip")
 	require.NoError(t, os.WriteFile(dest, []byte("verified cache"), 0o644))
 
-	err := DownloadFile(context.Background(), server.URL+"/test.zip", dest, "0000000000000000000000000000000000000000000000000000000000000000")
+	err := DownloadFile(context.Background(), server.URL+"/test.zip", dest, "0000000000000000000000000000000000000000000000000000000000000000", nil)
 	require.Error(t, err)
 
 	data, readErr := os.ReadFile(dest)
@@ -102,7 +108,7 @@ func TestDownloadFileRetriesTooManyRequests(t *testing.T) {
 	tmp := t.TempDir()
 	dest := filepath.Join(tmp, "archive.zip")
 
-	require.NoError(t, DownloadFile(context.Background(), server.URL+"/test.zip", dest, hash))
+	require.NoError(t, DownloadFile(context.Background(), server.URL+"/test.zip", dest, hash, nil))
 	assert.GreaterOrEqual(t, attempts.Load(), int32(2))
 }
 
@@ -115,14 +121,14 @@ func TestDownloadFilePermanentClientErrorDoesNotRetry(t *testing.T) {
 	}))
 	defer server.Close()
 
-	err := DownloadFile(context.Background(), server.URL+"/missing.zip", filepath.Join(t.TempDir(), "archive.zip"), "")
+	err := DownloadFile(context.Background(), server.URL+"/missing.zip", filepath.Join(t.TempDir(), "archive.zip"), "", nil)
 
 	require.Error(t, err)
 	assert.Equal(t, int32(1), attempts.Load())
 }
 
 func TestDownloadFileInvalidRequestURL(t *testing.T) {
-	err := DownloadFile(context.Background(), "http://[::1", filepath.Join(t.TempDir(), "archive.zip"), "")
+	err := DownloadFile(context.Background(), "http://[::1", filepath.Join(t.TempDir(), "archive.zip"), "", nil)
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "create request")
@@ -136,7 +142,7 @@ func TestDownloadCached_StagedHit(t *testing.T) {
 	cachedPath := filepath.Join(cacheDir, sha256Hex)
 	require.NoError(t, os.WriteFile(cachedPath, content, 0o644))
 
-	got, err := DownloadCached(context.Background(), "https://example.com/nonexistent", sha256Hex, cacheDir)
+	got, err := DownloadCached(context.Background(), "https://example.com/nonexistent", sha256Hex, cacheDir, nil)
 	require.NoError(t, err)
 	assert.Equal(t, cachedPath, got)
 
@@ -157,7 +163,7 @@ func TestDownloadCached_StagedMiss(t *testing.T) {
 
 	cacheDir := t.TempDir()
 
-	got, err := DownloadCached(context.Background(), server.URL+"/test.tar.gz", sha256Hex, cacheDir)
+	got, err := DownloadCached(context.Background(), server.URL+"/test.tar.gz", sha256Hex, cacheDir, nil)
 	require.NoError(t, err)
 	assert.Equal(t, filepath.Join(cacheDir, sha256Hex), got)
 
@@ -182,7 +188,7 @@ func TestDownloadCached_StagedHitChecksumMismatchRedownloads(t *testing.T) {
 	cachedPath := filepath.Join(cacheDir, sha256Hex)
 	require.NoError(t, os.WriteFile(cachedPath, []byte("corrupt cache"), 0o644))
 
-	got, err := DownloadCached(context.Background(), server.URL+"/test.tar.gz", sha256Hex, cacheDir)
+	got, err := DownloadCached(context.Background(), server.URL+"/test.tar.gz", sha256Hex, cacheDir, nil)
 	require.NoError(t, err)
 	assert.Equal(t, cachedPath, got)
 
@@ -196,7 +202,7 @@ func TestDownloadCachedCacheDirCreationError(t *testing.T) {
 	parentFile := filepath.Join(t.TempDir(), "not-a-directory")
 	require.NoError(t, os.WriteFile(parentFile, []byte("file"), 0o644))
 
-	_, err := DownloadCached(context.Background(), "https://example.invalid/archive.zip", "", filepath.Join(parentFile, "cache"))
+	_, err := DownloadCached(context.Background(), "https://example.invalid/archive.zip", "", filepath.Join(parentFile, "cache"), nil)
 
 	require.Error(t, err)
 }
@@ -212,7 +218,7 @@ func TestDownloadCached_NoChecksumUsesURLHash(t *testing.T) {
 	cacheDir := t.TempDir()
 	url := server.URL + "/nightly.tar.gz"
 
-	got, err := DownloadCached(context.Background(), url, "", cacheDir)
+	got, err := DownloadCached(context.Background(), url, "", cacheDir, nil)
 	require.NoError(t, err)
 
 	urlHash := sha256.Sum256([]byte(url))
@@ -249,7 +255,7 @@ func TestDownloadCachedNoChecksumRejectsInvalidArchive(t *testing.T) {
 	url := server.URL + "/nightly.tar.gz"
 	key := cacheKey(url, "")
 
-	_, err := DownloadCached(context.Background(), url, "", cacheDir)
+	_, err := DownloadCached(context.Background(), url, "", cacheDir, nil)
 
 	require.Error(t, err)
 	assert.NoFileExists(t, filepath.Join(cacheDir, key))
@@ -300,9 +306,20 @@ func TestDownloadOnce_ResumeWithRange(t *testing.T) {
 	partialPath := filepath.Join(tmpDir, "test.partial")
 	require.NoError(t, os.WriteFile(partialPath, first, 0o644))
 
-	// downloadOnce should resume and append the second half.
-	err := downloadOnce(context.Background(), server.URL+"/test.zip", partialPath, "test.zip", hash)
+	// downloadOnce should resume and append the second half, and report the
+	// transfer as starting at the resumed offset.
+	var events []progress.Event
+	err := downloadOnce(context.Background(), server.URL+"/test.zip", partialPath, "test.zip", hash, sinkFunc(func(e progress.Event) { events = append(events, e) }))
 	require.NoError(t, err)
+	require.NotEmpty(t, events)
+	assert.Equal(t, progress.Event{Kind: progress.DownloadStarted, Subject: "test.zip", Bytes: int64(len(first)), Total: int64(len(full))}, events[0])
+	var advanced int64
+	for _, e := range events[1 : len(events)-1] {
+		assert.Equal(t, progress.DownloadAdvanced, e.Kind)
+		advanced += e.Bytes
+	}
+	assert.Equal(t, int64(len(full)-len(first)), advanced)
+	assert.Equal(t, progress.Event{Kind: progress.DownloadFinished}, events[len(events)-1])
 
 	data, err := os.ReadFile(partialPath)
 	require.NoError(t, err)
@@ -323,7 +340,7 @@ func TestDownloadOnceRejectsWrongContentRange(t *testing.T) {
 	partialPath := filepath.Join(t.TempDir(), "test.partial")
 	require.NoError(t, os.WriteFile(partialPath, full[:2], 0o644))
 
-	err := downloadOnce(context.Background(), server.URL+"/test.tar.gz", partialPath, "test.tar.gz", "")
+	err := downloadOnce(context.Background(), server.URL+"/test.tar.gz", partialPath, "test.tar.gz", "", progress.Discard)
 
 	require.Error(t, err)
 	assert.NoFileExists(t, partialPath)
@@ -345,7 +362,7 @@ func TestDownloadOnce_ResumeServerReturns200(t *testing.T) {
 	// Write some garbage as partial.
 	require.NoError(t, os.WriteFile(partialPath, []byte("old"), 0o644))
 
-	err := downloadOnce(context.Background(), server.URL+"/test.zip", partialPath, "test.zip", hash)
+	err := downloadOnce(context.Background(), server.URL+"/test.zip", partialPath, "test.zip", hash, progress.Discard)
 	require.NoError(t, err)
 
 	data, err := os.ReadFile(partialPath)
@@ -363,7 +380,7 @@ func TestDownloadOnceRangeNotSatisfiableDropsPartial(t *testing.T) {
 	partialPath := filepath.Join(t.TempDir(), "archive.partial")
 	require.NoError(t, os.WriteFile(partialPath, []byte("stale"), 0o644))
 
-	err := downloadOnce(context.Background(), server.URL+"/archive.zip", partialPath, "archive.zip", "")
+	err := downloadOnce(context.Background(), server.URL+"/archive.zip", partialPath, "archive.zip", "", progress.Discard)
 
 	require.Error(t, err)
 	assert.NoFileExists(t, partialPath)
@@ -384,7 +401,7 @@ func TestDownloadFileReplacesExistingDestination(t *testing.T) {
 	dest := filepath.Join(tmp, "archive.zip")
 	require.NoError(t, os.WriteFile(dest, []byte("stale content"), 0o644))
 
-	require.NoError(t, DownloadFile(context.Background(), server.URL+"/test.zip", dest, hash))
+	require.NoError(t, DownloadFile(context.Background(), server.URL+"/test.zip", dest, hash, nil))
 
 	data, err := os.ReadFile(dest)
 	require.NoError(t, err)
@@ -498,7 +515,7 @@ func TestDownloadCachedNoChecksumValidatesStagedArchive(t *testing.T) {
 	staged := filepath.Join(cacheDir, key)
 	require.NoError(t, os.WriteFile(staged, []byte{0x50, 0x4B, 0x03, 0x04, 0x00}, 0o644))
 
-	got, err := DownloadCached(context.Background(), url, "", cacheDir)
+	got, err := DownloadCached(context.Background(), url, "", cacheDir, nil)
 	require.NoError(t, err)
 	assert.Equal(t, staged, got)
 
@@ -522,7 +539,7 @@ func TestDownloadCachedNoChecksumInvalidStagedRedownloads(t *testing.T) {
 	key := cacheKey(url, "")
 	require.NoError(t, os.WriteFile(filepath.Join(cacheDir, key), []byte("bad cache"), 0o644))
 
-	got, err := DownloadCached(context.Background(), url, "", cacheDir)
+	got, err := DownloadCached(context.Background(), url, "", cacheDir, nil)
 	require.NoError(t, err)
 
 	data, err := os.ReadFile(got)
@@ -547,7 +564,7 @@ func TestDownloadCachedNoChecksumRemovesLegacyPartialAndDownloadsFresh(t *testin
 	require.NoError(t, os.MkdirAll(cacheDir, 0o755))
 	require.NoError(t, os.WriteFile(filepath.Join(cacheDir, key+".partial"), []byte("stale partial"), 0o644))
 
-	got, err := DownloadCached(context.Background(), url, "", cacheDir)
+	got, err := DownloadCached(context.Background(), url, "", cacheDir, nil)
 	require.NoError(t, err)
 
 	data, err := os.ReadFile(got)

@@ -22,12 +22,11 @@ func TestRootsForUsesConfiguredHome(t *testing.T) {
 	assert.Equal(t, filepath.Join(home, "stdx", "lts-1.0.5"), roots.StdxDir)
 }
 
-func TestSpecStringAndInstallRoot(t *testing.T) {
+func TestSpecInstallRoot(t *testing.T) {
 	roots := Roots{DocsDir: "docs", StdxDir: "stdx"}
 	spec, err := SpecFor(Docs)
 	require.NoError(t, err)
 
-	assert.Equal(t, "docs", spec.String())
 	assert.Equal(t, filepath.Join("docs", "main"), spec.InstallRoot(roots))
 
 	stdx, err := SpecFor(Stdx)

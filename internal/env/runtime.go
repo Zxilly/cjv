@@ -10,6 +10,7 @@ import (
 
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/resolve"
+	"github.com/Zxilly/cjv/internal/sdktools"
 )
 
 // Runtime is the deep module for Cangjie runtime environment assembly. It
@@ -32,28 +33,28 @@ type Contributions struct {
 	LibraryPathPrepend []string
 }
 
-func ResolveRuntime(ctx context.Context, tcOverride string, componentEnv ComponentEnvProvider) (Runtime, error) {
+func ResolveRuntime(ctx context.Context, tcOverride string) (Runtime, error) {
 	active, err := resolve.Active(ctx, tcOverride)
 	if err != nil {
 		return Runtime{}, err
 	}
-	return runtimeForActive(active, componentEnv)
+	return runtimeForActive(active)
 }
 
-func ResolveTargetRuntime(ctx context.Context, tcOverride, target string, componentEnv ComponentEnvProvider) (Runtime, error) {
+func ResolveTargetRuntime(ctx context.Context, tcOverride, target string) (Runtime, error) {
 	active, err := resolve.ActiveTarget(ctx, tcOverride, target)
 	if err != nil {
 		return Runtime{}, err
 	}
-	return runtimeForActive(active, componentEnv)
+	return runtimeForActive(active)
 }
 
-func RuntimeForToolchain(dir, name string, componentEnv ComponentEnvProvider) (Runtime, error) {
-	return runtimeForActive(resolve.ActiveToolchain{Dir: dir, Name: name}, componentEnv)
+func RuntimeForToolchain(dir, name string) (Runtime, error) {
+	return runtimeForActive(resolve.ActiveToolchain{Dir: dir, Name: name})
 }
 
-func runtimeForActive(active resolve.ActiveToolchain, componentEnv ComponentEnvProvider) (Runtime, error) {
-	cfg := LoadToolchainEnv(active.Dir, componentEnv)
+func runtimeForActive(active resolve.ActiveToolchain) (Runtime, error) {
+	cfg := LoadToolchainEnv(active.Dir)
 	binDir, err := config.BinDir()
 	if err != nil {
 		return Runtime{}, fmt.Errorf("failed to determine bin directory: %w", err)
@@ -91,25 +92,14 @@ func (r Runtime) ShellScript(baseEnv []string, shell ShellType) string {
 	return FormatEnvDiff(ComputeEnvDiff(baseEnv, r.ToolchainEnv(baseEnv)), shell)
 }
 
-// ToolBinaryResolver resolves a known SDK tool inside a toolchain directory.
-type ToolBinaryResolver func(toolchainDir, command string) (string, error)
-
-// PlatformBinaryNamer applies platform executable naming, e.g. .exe on Windows.
-type PlatformBinaryNamer func(string) string
-
-// ResolveToolPath resolves command inside tcDir, first via the known-tool
-// resolver, then by scanning bin/ and tools/bin/. When false, the caller may
-// still resolve through PATH.
-func ResolveToolPath(tcDir, command string, known ToolBinaryResolver, platformBinary PlatformBinaryNamer) (string, bool) {
-	if known != nil {
-		if toolPath, err := known(tcDir, command); err == nil {
-			return toolPath, true
-		}
+// ResolveToolPath resolves command inside tcDir, first through the known SDK
+// tool layout, then by scanning bin/ and tools/bin/ for the platform binary
+// name. When false, the caller may still resolve through PATH.
+func ResolveToolPath(tcDir, command string) (string, bool) {
+	if toolPath, err := sdktools.ResolveInstalledToolBinary(tcDir, command); err == nil {
+		return toolPath, true
 	}
-	if platformBinary == nil {
-		platformBinary = func(name string) string { return name }
-	}
-	binaryName := platformBinary(command)
+	binaryName := sdktools.PlatformBinaryName(command)
 	for _, subDir := range []string{"bin", filepath.Join("tools", "bin")} {
 		candidate := filepath.Join(tcDir, subDir, binaryName)
 		if _, err := os.Stat(candidate); err == nil {

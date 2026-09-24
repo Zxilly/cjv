@@ -1,11 +1,8 @@
 package cli
 
 import (
-	"context"
-
 	"github.com/Zxilly/cjv/internal/cli/output"
 	componentlib "github.com/Zxilly/cjv/internal/component"
-	"github.com/Zxilly/cjv/internal/toolchain"
 	"github.com/spf13/cobra"
 )
 
@@ -16,7 +13,6 @@ type application struct {
 	componentAddCmd                 *cobra.Command
 	componentAddForce               bool
 	componentCmd                    *cobra.Command
-	componentInstallFunc            func(context.Context, componentlib.Roots, toolchain.ToolchainName, componentlib.Name, string, string, bool) error
 	componentLinkCmd                *cobra.Command
 	componentLinkForce              bool
 	componentLinkFunc               func(componentlib.Roots, componentlib.Name, string, bool) (string, error)
@@ -28,7 +24,6 @@ type application struct {
 	docCmd                          *cobra.Command
 	docPath                         bool
 	docToolchain                    string
-	ensurePathConfiguredFn          func()
 	execCmd                         *cobra.Command
 	forceInstall                    bool
 	initCmd                         *cobra.Command
@@ -39,7 +34,6 @@ type application struct {
 	installCmd                      *cobra.Command
 	installComponents               []string
 	installTargets                  []string
-	installToolchainWithExtrasFn    func(context.Context, string, []string, []string, bool) error
 	linkForce                       bool
 	linkNoStdx                      bool
 	linkSHA256                      string

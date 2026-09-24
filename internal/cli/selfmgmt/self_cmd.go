@@ -1,14 +1,11 @@
 package selfmgmt
 
 import (
-	"log/slog"
-	"runtime"
-
 	"github.com/Zxilly/cjv/internal/cjverr"
 	"github.com/Zxilly/cjv/internal/cli/output"
 	"github.com/Zxilly/cjv/internal/config"
-	"github.com/Zxilly/cjv/internal/env"
 	"github.com/Zxilly/cjv/internal/i18n"
+	"github.com/Zxilly/cjv/internal/reachable"
 	"github.com/Zxilly/cjv/internal/selfupdate"
 	"github.com/charmbracelet/huh"
 	"github.com/spf13/cobra"
@@ -28,7 +25,7 @@ func (r selfUninstallResult) Text() string {
 var (
 	ensureSelfManagedExecutable = selfupdate.EnsureManagedExecutable
 	removeSelfHomeDir           = removeHomeDir
-	cleanupSelfPathEntries      = cleanupPathEntries
+	cleanupSelfPathEntries      = reachable.RemovePath
 )
 
 // NewSelfCommand creates the "self" command with its subcommands.
@@ -43,7 +40,7 @@ func NewSelfCommand(ver, updURL string, renderer *output.Renderer) *cobra.Comman
 		Use:   "update",
 		Short: i18n.T("SelfUpdateShort", nil),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			result, err := UpdateManaged(cmd.Context(), updURL, ver)
+			result, err := UpdateManaged(cmd.Context(), updURL, ver, renderer.Progress(cmd.OutOrStdout()))
 			if err != nil {
 				return err
 			}
@@ -98,30 +95,4 @@ func NewSelfCommand(ver, updURL string, renderer *output.Renderer) *cobra.Comman
 	selfCmd.AddCommand(selfUninstallCmd)
 
 	return selfCmd
-}
-
-func cleanupPathEntries() {
-	// Remove PATH entries from shell configs (Unix)
-	if runtime.GOOS != "windows" {
-		posix, fish := env.ShellConfigPaths()
-		for _, rc := range posix {
-			if err := env.RemovePathFromShellConfig(rc); err != nil {
-				slog.Warn("failed to clean PATH from shell config", "path", rc, "error", err)
-			}
-		}
-		if fish != "" {
-			if err := env.RemovePathFromShellConfig(fish); err != nil {
-				slog.Warn("failed to clean PATH from shell config", "path", fish, "error", err)
-			}
-		}
-		return
-	}
-
-	// Windows: remove from registry
-	binDir, err := config.BinDir()
-	if err != nil {
-		slog.Warn("failed to determine bin directory", "error", err)
-	} else if err := env.RemovePathFromWindowsRegistry(binDir); err != nil {
-		slog.Warn("failed to clean PATH from registry", "error", err)
-	}
 }

@@ -49,18 +49,6 @@ func TestSnapshotRestoreRemovesPathsThatDidNotExist(t *testing.T) {
 	assert.False(t, IsInstalled(roots.TcDir, Stdx))
 }
 
-func TestCopyTreeCopiesSingleFile(t *testing.T) {
-	src := filepath.Join(t.TempDir(), "source.txt")
-	dst := filepath.Join(t.TempDir(), "nested", "copy.txt")
-	require.NoError(t, os.WriteFile(src, []byte("content"), 0o644))
-
-	require.NoError(t, copyTree(src, dst))
-
-	got, err := os.ReadFile(dst)
-	require.NoError(t, err)
-	assert.Equal(t, "content", string(got))
-}
-
 func TestTakeSnapshotRejectsUnknownComponent(t *testing.T) {
 	roots := Roots{TcDir: t.TempDir(), StdxDir: t.TempDir(), DocsDir: t.TempDir()}
 
@@ -73,34 +61,4 @@ func TestTakeSnapshotRejectsUnknownComponent(t *testing.T) {
 func TestSnapshotCleanupHandlesNilAndEmptySnapshot(t *testing.T) {
 	require.NoError(t, (*snapshot)(nil).cleanup())
 	require.NoError(t, (&snapshot{}).cleanup())
-}
-
-func TestCopyTreeCopiesDirectoryTree(t *testing.T) {
-	src := t.TempDir()
-	dst := filepath.Join(t.TempDir(), "dst")
-	require.NoError(t, os.MkdirAll(filepath.Join(src, "nested"), 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(src, "nested", "file.txt"), []byte("tree"), 0o644))
-
-	require.NoError(t, copyTree(src, dst))
-
-	got, err := os.ReadFile(filepath.Join(dst, "nested", "file.txt"))
-	require.NoError(t, err)
-	assert.Equal(t, "tree", string(got))
-}
-
-func TestCopyTreeCopiesSymlinkWhenSupported(t *testing.T) {
-	srcDir := t.TempDir()
-	target := filepath.Join(srcDir, "target.txt")
-	link := filepath.Join(srcDir, "link.txt")
-	require.NoError(t, os.WriteFile(target, []byte("target"), 0o644))
-	if err := os.Symlink("target.txt", link); err != nil {
-		t.Skipf("symlink creation requires privileges on this platform: %v", err)
-	}
-
-	dst := filepath.Join(t.TempDir(), "link-copy.txt")
-	require.NoError(t, copyTree(link, dst))
-
-	gotTarget, err := os.Readlink(dst)
-	require.NoError(t, err)
-	assert.Equal(t, "target.txt", gotTarget)
 }

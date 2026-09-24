@@ -9,23 +9,20 @@ import (
 
 	"github.com/Zxilly/cjv/internal/cjverr"
 	"github.com/Zxilly/cjv/internal/dist"
+	"github.com/Zxilly/cjv/internal/fsops"
+	"github.com/Zxilly/cjv/internal/progress"
+	sdktarget "github.com/Zxilly/cjv/internal/target"
 	"github.com/Zxilly/cjv/internal/toolchain"
 )
 
-// Install downloads and unpacks a component for the given toolchain.
-// tuple is required for stdx (a host tuple selects the host stdx, a target
-// tuple selects the matching cross-compile target stdx) and ignored for
-// docs / stdx-docs. mf supplies component URLs for every standard channel.
-// force=true reinstalls over an existing manifest.
-func Install(ctx context.Context, roots Roots, tc toolchain.ToolchainName, name Name, tuple, downloadsDir string, force bool, mf *dist.Manifest) (retErr error) {
-	return installWithResolver(ctx, roots, tc, name, tuple, downloadsDir, force, func(spec Spec) (dist.ComponentInfo, error) {
-		return ResolveAssetInfo(spec, tc, tuple, mf)
-	}, nil)
-}
-
-// InstallFromSource installs a component through the configured manifest
-// distribution source.
-func InstallFromSource(ctx context.Context, roots Roots, tc toolchain.ToolchainName, name Name, tuple, downloadsDir string, force bool, source *dist.Source, report func(string)) (retErr error) {
+// InstallFromSource downloads and unpacks a component for the given toolchain
+// through the configured distribution source. tuple is required for stdx (a
+// host tuple selects the host stdx, a target tuple selects the matching
+// cross-compile target stdx) and ignored for docs / stdx-docs. force=true
+// reinstalls over an existing manifest. sink receives the FetchingComponent
+// and InstallingComponent stages and the download progress; nil reports
+// nothing.
+func InstallFromSource(ctx context.Context, roots Roots, tc toolchain.ToolchainName, name Name, tuple, downloadsDir string, force bool, source *dist.Source, sink progress.Sink) (retErr error) {
 	return installWithResolver(ctx, roots, tc, name, tuple, downloadsDir, force, func(spec Spec) (dist.ComponentInfo, error) {
 		platform := ""
 		if name == Stdx {
@@ -36,10 +33,10 @@ func InstallFromSource(ctx context.Context, roots Roots, tc toolchain.ToolchainN
 			}
 		}
 		return source.ResolveComponent(ctx, tc.Channel, tc.Version, string(name), platform)
-	}, report)
+	}, progress.Or(sink))
 }
 
-func installWithResolver(ctx context.Context, roots Roots, tc toolchain.ToolchainName, name Name, tuple, downloadsDir string, force bool, resolve func(Spec) (dist.ComponentInfo, error), report func(string)) (retErr error) {
+func installWithResolver(ctx context.Context, roots Roots, tc toolchain.ToolchainName, name Name, tuple, downloadsDir string, force bool, resolve func(Spec) (dist.ComponentInfo, error), sink progress.Sink) (retErr error) {
 	spec, err := SpecFor(name)
 	if err != nil {
 		return err
@@ -70,10 +67,8 @@ func installWithResolver(ctx context.Context, roots Roots, tc toolchain.Toolchai
 		return fmt.Errorf("invalid component asset URL: %s", asset.URL)
 	}
 
-	if report != nil {
-		report("FetchingComponent")
-	}
-	archivePath, err := dist.DownloadCached(ctx, asset.URL, asset.SHA256, downloadsDir)
+	sink.Report(progress.Event{Kind: progress.FetchingComponent, Toolchain: tc.String(), Component: string(name)})
+	archivePath, err := dist.DownloadCached(ctx, asset.URL, asset.SHA256, downloadsDir, sink)
 	if err != nil {
 		return err
 	}
@@ -84,9 +79,7 @@ func installWithResolver(ctx context.Context, roots Roots, tc toolchain.Toolchai
 		}
 	}()
 
-	if report != nil {
-		report("InstallingComponent")
-	}
+	sink.Report(progress.Event{Kind: progress.InstallingComponent, Toolchain: tc.String(), Component: string(name)})
 
 	return stageAndInstall(ctx, roots, spec, name, archivePath, force, alreadyInstalled)
 }
@@ -135,28 +128,17 @@ func stageAndInstall(ctx context.Context, roots Roots, spec Spec, name Name, arc
 	}
 
 	return replaceComponent(roots, name, force && alreadyInstalled, paths, func() error {
-		return moveStagedFiles(stageDir, destDir, paths)
+		_, err := fsops.MoveTree(stageDir, destDir)
+		return err
 	})
 }
 
-func moveStagedFiles(stageDir, destDir string, paths []string) error {
-	if err := os.MkdirAll(destDir, 0o755); err != nil {
-		return err
+// stdxPlatform maps the SDK tuple to the stdx archive platform token the
+// manifest is keyed by (e.g. "linux-arm64" -> "linux-aarch64",
+// "linux-x64-ohos" -> "ohos-aarch64").
+func stdxPlatform(tuple string) (string, error) {
+	if tuple == "" {
+		return "", fmt.Errorf("stdx requires a host tuple")
 	}
-	for _, rel := range paths {
-		src := filepath.Join(stageDir, filepath.FromSlash(rel))
-		dst := filepath.Join(destDir, filepath.FromSlash(rel))
-		if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
-			return err
-		}
-		if _, err := os.Lstat(dst); err == nil {
-			if err := os.RemoveAll(dst); err != nil {
-				return err
-			}
-		}
-		if err := os.Rename(src, dst); err != nil {
-			return err
-		}
-	}
-	return nil
+	return sdktarget.StdxPlatformForTuple(tuple)
 }

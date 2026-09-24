@@ -10,12 +10,11 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/Zxilly/cjv/internal/utils"
+	"github.com/Zxilly/cjv/internal/config"
+	"github.com/Zxilly/cjv/internal/fsops"
 )
 
 const (
-	tempPrefix     = ".fstx-"
-	stagingSuffix  = ".staging"
 	stateActive    = "active"
 	stateRollback  = "rollback"
 	statePrepared  = "prepared"
@@ -60,8 +59,9 @@ func (e *RecoveryError) Error() string {
 
 func (e *RecoveryError) Unwrap() error { return e.Err }
 
-// NewTransaction records changes to prefix and prefix + ".staging". Existing
-// destinations are never overwritten; remove them transactionally first.
+// NewTransaction records changes to prefix and its staging tree
+// (config.StagingDir(prefix)). Existing destinations are never overwritten;
+// remove them transactionally first.
 func NewTransaction(prefix string) (*Transaction, error) {
 	abs, err := filepath.Abs(prefix)
 	if err != nil {
@@ -89,20 +89,20 @@ func NewToolchainTransaction(home, name string) (*Transaction, error) {
 func newTransaction(rootDir, target, scope string) (*Transaction, error) {
 	tempParent := rootDir
 	if scope == "toolchain" {
-		tempParent = filepath.Join(rootDir, "toolchains")
+		tempParent = filepath.Join(rootDir, config.ToolchainsSubdir)
 		root, err := os.OpenRoot(rootDir)
 		if err != nil {
 			return nil, err
 		}
 		defer root.Close() //nolint:errcheck
-		if err := checkParents(root, filepath.Join("toolchains", "entry")); err != nil {
+		if err := checkParents(root, filepath.Join(config.ToolchainsSubdir, "entry")); err != nil {
 			return nil, err
 		}
-		if err := root.MkdirAll("toolchains", 0o755); err != nil {
+		if err := root.MkdirAll(config.ToolchainsSubdir, 0o755); err != nil {
 			return nil, err
 		}
 	}
-	tmpDir, err := os.MkdirTemp(tempParent, tempPrefix+"*")
+	tmpDir, err := os.MkdirTemp(tempParent, config.TxTempPrefix+"*")
 	if err != nil {
 		return nil, fmt.Errorf("fstx: create temp dir: %w", err)
 	}
@@ -341,7 +341,7 @@ func rename(root *os.Root, from, to string) error {
 	if err := requireMissing(root, to); err != nil {
 		return &os.LinkError{Op: "rename", Old: filepath.Join(root.Name(), from), New: filepath.Join(root.Name(), to), Err: err}
 	}
-	if err := utils.RetryWithBackoff(10, utils.IsRetryableError, func() error { return root.Rename(from, to) }); err != nil {
+	if err := fsops.Retry(func() error { return root.Rename(from, to) }); err != nil {
 		return err
 	}
 	return syncDirs(root, filepath.Dir(from), filepath.Dir(to))
@@ -378,7 +378,7 @@ func (tx *Transaction) cleanup() error {
 			continue
 		}
 		path := filepath.Join(dir, entry.Name())
-		if err := utils.RetryWithBackoff(10, utils.IsRetryableError, func() error { return root.RemoveAll(path) }); err != nil {
+		if err := fsops.Retry(func() error { return root.RemoveAll(path) }); err != nil {
 			return err
 		}
 	}
@@ -394,7 +394,7 @@ func (tx *Transaction) cleanup() error {
 func (tx *Transaction) tempName() string {
 	name := filepath.Base(tx.tmpDir)
 	if tx.journal.Scope == "toolchain" {
-		return filepath.Join("toolchains", name)
+		return filepath.Join(config.ToolchainsSubdir, name)
 	}
 	return name
 }

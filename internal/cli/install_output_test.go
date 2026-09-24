@@ -8,8 +8,9 @@ import (
 	"testing"
 
 	"github.com/Zxilly/cjv/internal/config"
-	"github.com/Zxilly/cjv/internal/i18n"
 	"github.com/Zxilly/cjv/internal/lifecycle"
+	"github.com/Zxilly/cjv/internal/progress"
+	"github.com/Zxilly/cjv/internal/testutil"
 	"github.com/stretchr/testify/require"
 )
 
@@ -20,7 +21,7 @@ func setupComponentOutputTest(t *testing.T) (string, string) {
 	t.Setenv(config.EnvNoPathSetup, "1")
 	t.Setenv(config.EnvDistServer, "")
 	t.Setenv(config.EnvFallbackSettings, filepath.Join(home, "missing-fallback.toml"))
-	server := splitNightlyMockServer(t)
+	server := testutil.SplitNightlyMockServer(t)
 	settings := config.DefaultSettings()
 	settings.DistServer = server.URL + "/corp/cjv"
 	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
@@ -30,9 +31,7 @@ func setupComponentOutputTest(t *testing.T) (string, string) {
 func TestInstallWithComponentsEmitsSingleJSON(t *testing.T) {
 	home, name := setupComponentOutputTest(t)
 	app := newApplication("dev", "")
-	stdout, err := captureStdout(t, func() error {
-		return app.execute([]string{"--json", "install", "nightly", "--component", "docs"})
-	})
+	stdout, err := executeWithOutput(t, app, []string{"--json", "install", "nightly", "--component", "docs"})
 	require.NoError(t, err)
 	require.FileExists(t, filepath.Join(home, "docs", name, "main", "index.html"))
 	var result installResult
@@ -41,21 +40,21 @@ func TestInstallWithComponentsEmitsSingleJSON(t *testing.T) {
 
 	// Idempotent SDK installation has the same success semantics in JSON mode.
 	app = newApplication("dev", "")
-	stdout, err = captureStdout(t, func() error { return app.execute([]string{"--json", "install", "nightly"}) })
+	stdout, err = executeWithOutput(t, app, []string{"--json", "install", "nightly"})
 	require.NoError(t, err)
 	require.True(t, json.Valid([]byte(stdout)), stdout)
 }
 
 func TestComponentAddJSONIncludesResultOnInstallAndSkip(t *testing.T) {
 	home, name := setupComponentOutputTest(t)
-	require.NoError(t, lifecycle.InstallToolchainWithExtras(t.Context(), "nightly", nil, nil, false, lifecycle.Options{}))
+	require.NoError(t, lifecycle.Install(t.Context(), lifecycle.InstallRequest{Toolchain: "nightly"}, lifecycle.Options{}))
 	for _, force := range []bool{false, false, true} {
 		app := newApplication("dev", "")
 		args := []string{"--json", "component", "add", "docs", "--toolchain", name}
 		if force {
 			args = append(args, "--force")
 		}
-		stdout, err := captureStdout(t, func() error { return app.execute(args) })
+		stdout, err := executeWithOutput(t, app, args)
 		require.NoError(t, err)
 		var result componentAddResult
 		require.NoError(t, json.Unmarshal([]byte(stdout), &result), stdout)
@@ -66,24 +65,23 @@ func TestComponentAddJSONIncludesResultOnInstallAndSkip(t *testing.T) {
 		require.FileExists(t, filepath.Join(home, "docs", name, "main", "index.html"))
 	}
 	app := newApplication("dev", "")
-	stdout, err := captureStdout(t, func() error {
-		return app.execute([]string{"--json", "component", "add", "not-a-component", "--toolchain", name})
-	})
+	stdout, err := executeWithOutput(t, app, []string{"--json", "component", "add", "not-a-component", "--toolchain", name})
 	require.Error(t, err)
 	require.True(t, json.Valid([]byte(stdout)), stdout)
 }
 
-func TestComponentProgressUsesCommandWriterAndQuietInstaller(t *testing.T) {
+func TestComponentProgressUsesCommandWriter(t *testing.T) {
 	_, name := setupComponentOutputTest(t)
-	require.NoError(t, lifecycle.InstallToolchainWithExtras(t.Context(), "nightly", nil, nil, false, lifecycle.Options{}))
-	// Proxy auto-install remains silent even if a caller supplies a reporter.
+	require.NoError(t, lifecycle.Install(t.Context(), lifecycle.InstallRequest{Toolchain: "nightly"}, lifecycle.Options{}))
+	// The proxy component install reports to the sink it was given and
+	// writes nothing on its own.
+	recorder := &testutil.ProgressRecorder{}
 	stdout, err := captureStdout(t, func() error {
-		return lifecycle.InstallComponentsForToolchain(t.Context(), name, []string{"docs"}, lifecycle.Options{
-			Report: func(string, i18n.MsgData) { t.Fatal("quiet component install emitted progress") },
-		})
+		return lifecycle.InstallComponentsForToolchain(t.Context(), name, []string{"docs"}, lifecycle.Options{Progress: recorder})
 	})
 	require.NoError(t, err)
 	require.Empty(t, stdout)
+	require.Contains(t, recorder.Kinds, progress.ComponentInstalled)
 
 	app := newApplication("dev", "")
 	var commandOutput bytes.Buffer

@@ -7,16 +7,16 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
-	"runtime"
-	"strings"
 
+	"github.com/Zxilly/cjv/internal/cjverr"
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/dist"
+	"github.com/Zxilly/cjv/internal/fsops"
 	"github.com/Zxilly/cjv/internal/fstx"
-	"github.com/Zxilly/cjv/internal/i18n"
-	sdktarget "github.com/Zxilly/cjv/internal/target"
+	"github.com/Zxilly/cjv/internal/progress"
+	"github.com/Zxilly/cjv/internal/reachable"
+	"github.com/Zxilly/cjv/internal/sdktools"
 	"github.com/Zxilly/cjv/internal/toolchain"
-	"github.com/Zxilly/cjv/internal/utils"
 )
 
 // ResolvedToolchain holds the result of toolchain resolution.
@@ -28,98 +28,127 @@ type ResolvedToolchain struct {
 	Tuple       string
 }
 
-func InstallResolved(ctx context.Context, rt ResolvedToolchain, settings *config.Settings, sf *config.SettingsFile, force bool, opts Options) error {
-	return installResolvedWithDefault(ctx, rt, settings, sf, force, true, opts)
+// acquisition is how one SDK archive reaches the downloads area and how it
+// becomes the staged SDK tree. It is the only part of placing a toolchain
+// that differs between a manifest release, a CI bundle fetched from a URL
+// and a local archive; everything around it is placeToolchain.
+type acquisition struct {
+	// fetch returns the archive path and whether cjv owns that file, in which
+	// case it is removed once the toolchain is committed. A failed placement
+	// keeps it for the next retry.
+	fetch func(ctx context.Context, downloadsDir string) (archivePath string, owned bool, err error)
+	// extract materializes the SDK tree at stagingDir from archivePath.
+	extract func(ctx context.Context, archivePath, stagingDir string) error
 }
 
-func InstallResolvedNoDefault(ctx context.Context, rt ResolvedToolchain, settings *config.Settings, sf *config.SettingsFile, force bool, opts Options) error {
-	return installResolvedWithDefault(ctx, rt, settings, sf, force, false, opts)
-}
-
-func installResolvedWithDefault(ctx context.Context, rt ResolvedToolchain, settings *config.Settings, sf *config.SettingsFile, force bool, allowDefault bool, opts Options) (retErr error) {
+// installResolved places one manifest release. setDefault allows the first
+// host toolchain to become the default; target variants pass false. An
+// already installed release without force is reported and kept.
+func installResolved(ctx context.Context, d *Distribution, rt ResolvedToolchain, force, setDefault bool, opts Options) error {
 	resolvedName := rt.Name
+	acq := acquisition{
+		fetch: func(ctx context.Context, downloadsDir string) (string, bool, error) {
+			if u, err := url.Parse(rt.URL); err != nil || u.Path == "" {
+				return "", false, fmt.Errorf("invalid toolchain download URL: %s", rt.URL)
+			}
+			archivePath, err := dist.DownloadCachedWithName(ctx, rt.URL, rt.SHA256, downloadsDir, rt.ArchiveName, opts.sink())
+			return archivePath, true, err
+		},
+		extract: dist.InstallSDK,
+	}
+	var publishDefault func() error
+	if setDefault && (d.Settings.DefaultToolchain == "" || !defaultToolchainExists(d.Settings.DefaultToolchain)) {
+		publishDefault = func() error {
+			if _, err := d.File.Update(config.SettingsUpdate{DefaultToolchain: &resolvedName}); err != nil {
+				return err
+			}
+			d.Settings.DefaultToolchain = resolvedName
+			if opts.ConfigurePath {
+				reachable.ConfigurePath()
+			}
+			if afterPublishHook != nil {
+				return afterPublishHook()
+			}
+			return nil
+		}
+	}
+	err := placeToolchain(ctx, resolvedName, force, rt.Tuple, acq, publishDefault, opts)
+	var already *cjverr.ToolchainAlreadyInstalledError
+	if errors.As(err, &already) {
+		opts.emit(progress.Event{Kind: progress.ToolchainAlreadyInstalled, Toolchain: resolvedName})
+		return nil
+	}
+	return err
+}
+
+// placeToolchain materializes a toolchain under CJV_HOME/toolchains/<name>:
+// recover interrupted changes, refuse (or with force, replace) an installed
+// one, acquire the SDK into the staging tree beside the destination, validate
+// it for tuple ("" is the host), then swap it into place in one transaction
+// that also establishes the managed binary and proxy links and, when publish
+// is set, commits the settings change with it. A failed placement removes the
+// staging tree unless recovery is blocked, in which case every transaction
+// path is retained for a later startup.
+func placeToolchain(ctx context.Context, name string, force bool, tuple string, acq acquisition, publish func() error, opts Options) (retErr error) {
+	if err := config.EnsureDirs(); err != nil {
+		return err
+	}
 	tcDir, err := config.ToolchainsDir()
 	if err != nil {
 		return err
 	}
-	if err := fstx.Recover(tcDir); err != nil {
+	if err := toolchain.RecoverHome(); err != nil {
 		return err
 	}
-	destDir := filepath.Join(tcDir, resolvedName)
+	destDir := filepath.Join(tcDir, name)
 	isReinstall := false
 	if _, err := os.Stat(destDir); err == nil {
 		if !force {
-			opts.report("ToolchainAlreadyInstalled", i18n.MsgData{"Name": resolvedName})
-			return nil
+			return &cjverr.ToolchainAlreadyInstalledError{Name: name}
 		}
 		isReinstall = true
-	}
-
-	if err := config.EnsureDirs(); err != nil {
-		return err
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("failed to stat %s: %w", destDir, err)
 	}
 
 	downloadsDir, err := config.DownloadsDir()
 	if err != nil {
 		return err
 	}
-	if u, err := url.Parse(rt.URL); err != nil || u.Path == "" {
-		return fmt.Errorf("invalid toolchain download URL: %s", rt.URL)
-	}
-
-	archivePath, err := dist.DownloadCachedWithName(ctx, rt.URL, rt.SHA256, downloadsDir, rt.ArchiveName)
+	archivePath, owned, err := acq.fetch(ctx, downloadsDir)
 	if err != nil {
 		return err
 	}
-	defer func() {
-		if retErr == nil {
-			_ = dist.CleanupDownload(archivePath) //nolint:errcheck
-		}
-	}()
+	if owned {
+		defer func() {
+			if retErr == nil {
+				_ = dist.CleanupDownload(archivePath) //nolint:errcheck // best-effort
+			}
+		}()
+	}
 
-	stagingDir := destDir + toolchain.StagingSuffix
-	if err := utils.RemoveAllRetry(stagingDir); err != nil {
+	stagingDir := config.StagingDir(destDir)
+	if err := fsops.RemoveAllRetry(stagingDir); err != nil {
 		return fmt.Errorf("failed to clean staging directory: %w", err)
 	}
 	defer func() {
 		var recoveryErr *fstx.RecoveryError
 		if retErr != nil && !errors.As(retErr, &recoveryErr) {
-			_ = utils.RemoveAllRetry(stagingDir) //nolint:errcheck
+			_ = fsops.RemoveAllRetry(stagingDir) //nolint:errcheck // best-effort
 		}
 	}()
 
-	opts.report("Extracting", nil)
-	if err := dist.InstallSDK(ctx, archivePath, stagingDir); err != nil {
+	opts.emit(progress.Event{Kind: progress.Extracting})
+	if err := acq.extract(ctx, archivePath, stagingDir); err != nil {
 		return err
 	}
-	if err := opts.validateInstallation(stagingDir, rt.Tuple); err != nil {
+	if err := validateInstallation(stagingDir, tuple); err != nil {
 		return err
 	}
-	isFirstInstall := allowDefault && (settings.DefaultToolchain == "" || !defaultToolchainExists(settings.DefaultToolchain))
-	var publishDefault func() error
-	if isFirstInstall {
-		publishDefault = func() error {
-			if _, err := sf.Update(config.SettingsUpdate{DefaultToolchain: &resolvedName}); err != nil {
-				return err
-			}
-			settings.DefaultToolchain = resolvedName
-			opts.ensurePathConfigured()
-			return nil
-		}
-	}
-	if err := swapInstalledToolchain(stagingDir, destDir, isReinstall, func() error {
-		if err := opts.ensureManagedBinary(); err != nil {
-			return err
-		}
-		if err := opts.createProxyLinks(); err != nil {
-			return err
-		}
-		return nil
-	}, publishDefault); err != nil {
+	if err := swapInstalledToolchain(stagingDir, destDir, isReinstall, finalizeInstalledToolchain, publish); err != nil {
 		return err
 	}
-
-	opts.report("ToolchainInstalled", i18n.MsgData{"Name": resolvedName})
+	opts.emit(progress.Event{Kind: progress.ToolchainInstalled, Toolchain: name})
 	return nil
 }
 
@@ -132,20 +161,46 @@ func defaultToolchainExists(name string) bool {
 	return err == nil
 }
 
+// validateInstallation checks that the extracted SDK carries the compiler at
+// the place the proxy will look for it. tuple names the SDK's platform so a
+// cross-target SDK is checked against its own executable naming rather than
+// the running OS; empty means the host.
 func validateInstallation(dir, tuple string) error {
-	binary := filepath.Join(dir, "bin", "cjc")
-	if tuple != "" {
-		if id, err := sdktarget.ParseIdentity(tuple); err == nil && strings.HasPrefix(id.HostTuple(), "win32-") {
-			binary += ".exe"
-		}
-	} else if runtime.GOOS == "windows" {
-		binary += ".exe"
+	var err error
+	if tuple == "" {
+		_, err = sdktools.ResolveInstalledToolBinary(dir, "cjc")
+	} else {
+		_, err = sdktools.ResolveInstalledToolBinaryForTuple(dir, "cjc", tuple)
 	}
-	if _, err := os.Stat(binary); err != nil {
+	if err != nil {
 		return fmt.Errorf("installation validation failed: %w", err)
 	}
 	return nil
 }
+
+// finalizeInstalledToolchain runs once the new toolchain is in place and before
+// the transaction commits: the running cjv becomes the managed binary under
+// CJV_HOME/bin and every SDK tool gets its proxy link, so the toolchain is
+// reachable through the proxies whether it was installed by `cjv install` or
+// by proxy auto-install.
+func finalizeInstalledToolchain() error {
+	if err := reachable.Ensure(reachable.Policy{}); err != nil {
+		return err
+	}
+	if afterFinalizeHook != nil {
+		return afterFinalizeHook()
+	}
+	return nil
+}
+
+// afterFinalizeHook lets tests observe or fail the window between placing the
+// toolchain and committing the transaction. Production never sets it.
+var afterFinalizeHook func() error
+
+// afterPublishHook lets tests observe or interrupt the window between
+// publishing the first default toolchain and completing the transaction.
+// Production never sets it.
+var afterPublishHook func() error
 
 func swapInstalledToolchain(stagingDir, destDir string, isReinstall bool, afterSwap, publish func() error) (err error) {
 	if isReinstall {
@@ -187,10 +242,4 @@ func swapInstalledToolchain(stagingDir, destDir string, isReinstall bool, afterS
 	}
 	committed = true
 	return nil
-}
-
-// EnsurePathConfigured is the default lifecycle hook for first install. CLI
-// adapters inject the real shell/registry writer; proxy auto-install leaves
-// PATH alone because cjv is already reachable.
-func EnsurePathConfigured() {
 }

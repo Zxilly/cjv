@@ -30,7 +30,7 @@ type upgradeFixture struct {
 	oldName        string
 	newName        string
 	sf             *config.SettingsFile
-	fetcher        *lifecycle.ManifestFetcher
+	dist           *lifecycle.Distribution
 	resolved       lifecycle.ResolvedToolchain
 	oldRoots       component.Roots
 	newRoots       component.Roots
@@ -42,12 +42,15 @@ func newUpgradeFixture(t *testing.T, targetVariant, missingComponent bool) upgra
 	home := t.TempDir()
 	config.IsolateForTest(t, home)
 	t.Setenv(config.EnvDistServer, "")
-	tuple, err := dist.CurrentHostTuple("")
+	tuple, err := sdktarget.CurrentHostTuple("")
 	require.NoError(t, err)
 	oldName, newName := "lts-1.0.0", "lts-2.0.0"
 	if targetVariant {
-		tuple, err = sdktarget.BuildTuple(tuple, "ohos")
+		id, err := sdktarget.ParseIdentity(tuple)
 		require.NoError(t, err)
+		id, err = id.WithEnvironment("ohos")
+		require.NoError(t, err)
+		tuple = id.Tuple()
 		oldName += "-" + tuple
 		newName += "-" + tuple
 	}
@@ -102,7 +105,7 @@ func newUpgradeFixture(t *testing.T, targetVariant, missingComponent bool) upgra
 	sf, err := config.DefaultSettingsFile()
 	require.NoError(t, err)
 	require.NoError(t, sf.Save(&settings))
-	require.NoError(t, lifecycle.InstallToolchainWithExtras(t.Context(), oldName, nil, []string{"stdx", "docs", "stdx-docs"}, false, lifecycle.Options{}))
+	require.NoError(t, lifecycle.Install(t.Context(), lifecycle.InstallRequest{Toolchain: oldName, Components: []string{"stdx", "docs", "stdx-docs"}}, lifecycle.Options{}))
 	initialDefault := oldName
 	if targetVariant {
 		initialDefault = "local-sdk"
@@ -110,22 +113,20 @@ func newUpgradeFixture(t *testing.T, targetVariant, missingComponent bool) upgra
 	}
 	_, err = sf.Update(config.SettingsUpdate{DefaultToolchain: &initialDefault, Overrides: map[string]string{filepath.Join(home, "project"): initialDefault}})
 	require.NoError(t, err)
-	settingsPtr, err := sf.Load()
+	d, err := lifecycle.OpenDistribution(lifecycle.Options{})
 	require.NoError(t, err)
-	fetcher, err := lifecycle.NewManifestFetcherForSettings(settingsPtr, lifecycle.Options{})
-	require.NoError(t, err)
-	resolved, err := lifecycle.ResolveAndLocatePlatform(t.Context(), toolchain.ToolchainName{Channel: toolchain.LTS}, settingsPtr, fetcher, tuple)
+	resolved, err := d.Resolve(t.Context(), toolchain.ToolchainName{Channel: toolchain.LTS}, tuple)
 	require.NoError(t, err)
 	oldRoots, err := component.RootsFor(oldName)
 	require.NoError(t, err)
 	newRoots, err := component.RootsFor(newName)
 	require.NoError(t, err)
-	return upgradeFixture{home, oldName, newName, sf, fetcher, resolved, oldRoots, newRoots, initialDefault}
+	return upgradeFixture{home, oldName, newName, sf, d, resolved, oldRoots, newRoots, initialDefault}
 }
 
 func (f upgradeFixture) upgrade(t *testing.T, opts lifecycle.Options) (bool, error) {
 	t.Helper()
-	return lifecycle.UpgradeToolchain(t.Context(), f.oldName, f.resolved, f.sf, f.fetcher, opts)
+	return lifecycle.UpgradeToolchain(t.Context(), f.oldName, f.resolved, f.dist, opts)
 }
 
 func TestUpgradeMigratesComponentsAndRetiresAllOldRoots(t *testing.T) {
@@ -181,9 +182,7 @@ func TestUpgradePreservesLinkedSourceAndExistingReplacementChoices(t *testing.T)
 			oldSource := linkUpgradeStdx(t, f.oldRoots, "old user source")
 			selectedSource := oldSource
 			if existing {
-				settings, err := f.sf.Load()
-				require.NoError(t, err)
-				require.NoError(t, lifecycle.InstallResolvedNoDefault(t.Context(), f.resolved, settings, f.sf, false, lifecycle.Options{}))
+				require.NoError(t, lifecycle.Install(t.Context(), lifecycle.InstallRequest{Toolchain: f.newName}, lifecycle.Options{}))
 				selectedSource = linkUpgradeStdx(t, f.newRoots, "new user choice")
 			}
 			_, err := f.upgrade(t, lifecycle.Options{})
@@ -225,11 +224,9 @@ func TestUpgradeMissingComponentLeavesOldVersionUsable(t *testing.T) {
 
 func TestFailedUpgradePreservesExistingReplacementChoices(t *testing.T) {
 	f := newUpgradeFixture(t, false, true)
-	settings, err := f.sf.Load()
-	require.NoError(t, err)
-	require.NoError(t, lifecycle.InstallResolvedNoDefault(t.Context(), f.resolved, settings, f.sf, false, lifecycle.Options{}))
+	require.NoError(t, lifecycle.Install(t.Context(), lifecycle.InstallRequest{Toolchain: f.newName}, lifecycle.Options{}))
 	source := linkUpgradeStdx(t, f.newRoots, "existing destination choice")
-	_, err = f.upgrade(t, lifecycle.Options{})
+	_, err := f.upgrade(t, lifecycle.Options{})
 	require.Error(t, err)
 	assert.DirExists(t, f.oldRoots.TcDir)
 	assert.DirExists(t, f.newRoots.TcDir)
@@ -237,7 +234,7 @@ func TestFailedUpgradePreservesExistingReplacementChoices(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, []component.Intent{{Name: component.Stdx, Source: source}}, intents)
 	assert.FileExists(t, filepath.Join(source, "dynamic", "user.txt"))
-	settings, err = f.sf.Load()
+	settings, err := f.sf.Load()
 	require.NoError(t, err)
 	assert.Equal(t, f.oldName, settings.DefaultToolchain)
 }
@@ -247,10 +244,11 @@ func TestUpgradeReportsIncompleteReplacementCleanupFailure(t *testing.T) {
 		t.Skip("Windows working-directory handle prevents replacement cleanup")
 	}
 	f := newUpgradeFixture(t, false, true)
-	_, err := f.upgrade(t, lifecycle.Options{CreateProxyLinks: func() error {
+	lifecycle.SetAfterFinalizeHook(t, func() error {
 		t.Chdir(f.newRoots.TcDir)
 		return nil
-	}})
+	})
+	_, err := f.upgrade(t, lifecycle.Options{})
 	require.Error(t, err)
 	assert.ErrorContains(t, err, "remove incomplete replacement")
 	assert.ErrorContains(t, err, "stdx-docs")
@@ -267,13 +265,14 @@ func TestUpgradeSettingsFailureRestoresOldContent(t *testing.T) {
 	f := newUpgradeFixture(t, false, false)
 	before, err := os.ReadFile(f.sf.Path())
 	require.NoError(t, err)
-	_, err = f.upgrade(t, lifecycle.Options{CreateProxyLinks: func() error {
+	lifecycle.SetAfterFinalizeHook(t, func() error {
 		// Block the real settings write after materializing the replacement.
 		require.NoError(t, os.Rename(f.sf.Path(), f.sf.Path()+".saved"))
 		require.NoError(t, os.Mkdir(f.sf.Path(), 0o755))
 		require.NoError(t, os.WriteFile(filepath.Join(f.sf.Path(), "obstruction"), []byte("keep"), 0o644))
 		return nil
-	}})
+	})
+	_, err = f.upgrade(t, lifecycle.Options{})
 	require.Error(t, err)
 	for _, path := range []string{f.oldRoots.TcDir, f.oldRoots.StdxDir, f.oldRoots.DocsDir} {
 		assert.DirExists(t, path)
@@ -343,7 +342,7 @@ func TestRemoveFailureRestoresComponentRootsAndReferences(t *testing.T) {
 func TestForceReinstallKeepsExternalComponentsManaged(t *testing.T) {
 	f := newUpgradeFixture(t, false, false)
 	source := linkUpgradeStdx(t, f.oldRoots, "my libraries")
-	require.NoError(t, lifecycle.InstallToolchainWithExtras(t.Context(), f.oldName, nil, nil, true, lifecycle.Options{}))
+	require.NoError(t, lifecycle.Install(t.Context(), lifecycle.InstallRequest{Toolchain: f.oldName, Force: true}, lifecycle.Options{}))
 	intents, err := component.InstalledIntents(f.oldRoots)
 	require.NoError(t, err)
 	assert.Len(t, intents, 3)

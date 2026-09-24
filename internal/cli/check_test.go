@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/Zxilly/cjv/internal/config"
+	"github.com/Zxilly/cjv/internal/testutil"
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -34,11 +35,11 @@ func TestRunCheck_WithInstalledToolchain(t *testing.T) {
 	require.NoError(t, config.EnsureDirs())
 
 	// Install a toolchain first
-	server := validMockServer(t)
+	server := testutil.ValidMockServer(t)
 	settings := config.DefaultSettings()
 	settings.ManifestURL = server.URL + "/sdk-versions.json"
 	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
-	require.NoError(t, app.InstallToolchainWithOptions(context.Background(), "lts", false))
+	installTestToolchain(t, app, "lts")
 
 	// Run check — should compare against manifest
 	cmd := &cobra.Command{}
@@ -53,11 +54,11 @@ func TestRunCheck_NightlyUsesUnifiedDistServer(t *testing.T) {
 	config.IsolateForTest(t, home)
 	require.NoError(t, config.EnsureDirs())
 
-	server := splitNightlyMockServer(t)
+	server := testutil.SplitNightlyMockServer(t)
 	settings := config.DefaultSettings()
 	settings.DistServer = server.URL + "/corp/cjv"
 	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
-	require.NoError(t, app.InstallToolchainWithOptions(context.Background(), "nightly", false))
+	installTestToolchain(t, app, "nightly")
 
 	cmd := &cobra.Command{}
 	cmd.SetContext(context.Background())
@@ -82,13 +83,13 @@ func TestRunCheck_UpToDate(t *testing.T) {
 	config.IsolateForTest(t, home)
 	require.NoError(t, config.EnsureDirs())
 
-	server := validMockServer(t)
+	server := testutil.ValidMockServer(t)
 	settings := config.DefaultSettings()
 	settings.ManifestURL = server.URL + "/sdk-versions.json"
 	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 
-	require.NoError(t, app.InstallToolchainWithOptions(context.Background(), "lts", false))
-	require.NoError(t, app.InstallToolchainWithOptions(context.Background(), "sts", false))
+	installTestToolchain(t, app, "lts")
+	installTestToolchain(t, app, "sts")
 
 	cmd := &cobra.Command{}
 	cmd.SetContext(context.Background())
@@ -104,13 +105,13 @@ func TestRunCheck_MixedVersions(t *testing.T) {
 	config.IsolateForTest(t, home)
 	require.NoError(t, config.EnsureDirs())
 
-	server := validMockServer(t)
+	server := testutil.ValidMockServer(t)
 	settings := config.DefaultSettings()
 	settings.ManifestURL = server.URL + "/sdk-versions.json"
 	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 
 	// Install latest lts
-	require.NoError(t, app.InstallToolchainWithOptions(context.Background(), "lts", false))
+	installTestToolchain(t, app, "lts")
 	// Create an old sts
 	require.NoError(t, os.MkdirAll(filepath.Join(home, "toolchains", "sts-1.0.0"), 0o755))
 
@@ -133,7 +134,7 @@ func TestRunCheck_UpdateAvailable(t *testing.T) {
 	require.NoError(t, os.MkdirAll(filepath.Join(home, "toolchains", "lts-1.0.0"), 0o755))
 
 	// Mock server says latest LTS is 1.0.5
-	server := validMockServer(t)
+	server := testutil.ValidMockServer(t)
 	settings := config.DefaultSettings()
 	settings.ManifestURL = server.URL + "/sdk-versions.json"
 	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
@@ -154,7 +155,7 @@ func TestRunCheck_MultipleToolchains(t *testing.T) {
 	require.NoError(t, os.MkdirAll(filepath.Join(home, "toolchains", "lts-1.0.0"), 0o755))
 	require.NoError(t, os.MkdirAll(filepath.Join(home, "toolchains", "sts-1.0.0"), 0o755))
 
-	server := validMockServer(t)
+	server := testutil.ValidMockServer(t)
 	settings := config.DefaultSettings()
 	settings.ManifestURL = server.URL + "/sdk-versions.json"
 	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
@@ -175,7 +176,7 @@ func TestRunCheck_CustomToolchainSkipped(t *testing.T) {
 	require.NoError(t, os.MkdirAll(filepath.Join(home, "toolchains", "my-custom-sdk"), 0o755))
 	require.NoError(t, os.MkdirAll(filepath.Join(home, "toolchains", "lts-1.0.0"), 0o755))
 
-	server := validMockServer(t)
+	server := testutil.ValidMockServer(t)
 	settings := config.DefaultSettings()
 	settings.ManifestURL = server.URL + "/sdk-versions.json"
 	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))

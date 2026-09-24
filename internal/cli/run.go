@@ -7,9 +7,9 @@ import (
 	"path/filepath"
 
 	"github.com/Zxilly/cjv/internal/cjverr"
-	componentlib "github.com/Zxilly/cjv/internal/component"
 	"github.com/Zxilly/cjv/internal/env"
 	"github.com/Zxilly/cjv/internal/i18n"
+	"github.com/Zxilly/cjv/internal/lifecycle"
 	"github.com/Zxilly/cjv/internal/process"
 	"github.com/Zxilly/cjv/internal/proxy"
 	"github.com/Zxilly/cjv/internal/toolchain"
@@ -66,7 +66,7 @@ flagLoop:
 	tcDir, findErr := toolchain.FindInstalled(parsed)
 	if findErr != nil {
 		if install {
-			if installErr := app.InstallToolchainWithOptions(ctx, tcInput, false); installErr != nil {
+			if installErr := lifecycle.Install(ctx, lifecycle.InstallRequest{Toolchain: tcInput}, app.lifecycleOptions()); installErr != nil {
 				return installErr
 			}
 			tcDir, findErr = toolchain.FindInstalled(parsed)
@@ -80,7 +80,7 @@ flagLoop:
 
 	count := proxy.GetRecursionCount()
 
-	rt, err := env.RuntimeForToolchain(tcDir, filepath.Base(tcDir), componentlib.ApplyEnv)
+	rt, err := env.RuntimeForToolchain(tcDir, filepath.Base(tcDir))
 	if err != nil {
 		return err
 	}
@@ -113,16 +113,7 @@ flagLoop:
 // tools/bin/. The bool reports whether the tool was found inside the toolchain;
 // when false the returned path is the bare command name.
 func resolveToolchainToolPath(tcDir, command string) (string, bool) {
-	return env.ResolveToolPath(tcDir, command, proxy.ResolveInstalledToolBinary, proxy.PlatformBinaryName)
-}
-
-// lookPathInEnv resolves a bare command name against the PATH carried in
-// environ, honoring PATHEXT on Windows. exec.Command resolves a bare name via
-// exec.LookPath using the parent process PATH (os.Getenv), not c.Env, so this
-// lets `cjv run` honor the toolchain bin dirs prepended to the child env.
-// Returns the absolute path and true if found.
-func lookPathInEnv(command string, environ []string) (string, bool) {
-	return env.LookPathInEnv(command, environ)
+	return env.ResolveToolPath(tcDir, command)
 }
 
 func (app *application) initRunCommands() {

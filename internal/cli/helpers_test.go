@@ -1,13 +1,54 @@
 package cli
 
 import (
+	"bytes"
+	"context"
 	"io"
 	"os"
 	"testing"
 
 	"github.com/Zxilly/cjv/internal/config"
+	"github.com/Zxilly/cjv/internal/lifecycle"
+	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/require"
 )
+
+// runWithCommandOutput runs fn with a command whose output writer is a
+// buffer, and returns what the command wrote.
+func runWithCommandOutput(t *testing.T, fn func(cmd *cobra.Command) error) (string, error) {
+	t.Helper()
+	var out bytes.Buffer
+	cmd := &cobra.Command{}
+	cmd.SetOut(&out)
+	err := fn(cmd)
+	return out.String(), err
+}
+
+// executeWithOutput runs the application with args and returns what the
+// command tree wrote to its output writer, including JSON error envelopes.
+func executeWithOutput(t *testing.T, app *application, args []string) (string, error) {
+	t.Helper()
+	var out bytes.Buffer
+	app.rootCmd.SetOut(&out)
+	err := app.execute(args)
+	return out.String(), err
+}
+
+// runWithRootOutput runs the bare root command and returns its output.
+func runWithRootOutput(t *testing.T, app *application) (string, error) {
+	t.Helper()
+	var out bytes.Buffer
+	app.rootCmd.SetOut(&out)
+	err := app.rootCmd.RunE(app.rootCmd, nil)
+	return out.String(), err
+}
+
+// installTestToolchain installs name through the production entry with the
+// application's lifecycle adapters, as `cjv install <name>` would.
+func installTestToolchain(t *testing.T, app *application, name string) {
+	t.Helper()
+	require.NoError(t, lifecycle.Install(context.Background(), lifecycle.InstallRequest{Toolchain: name}, app.lifecycleOptions()))
+}
 
 // TestMain configures the test environment for the cli package.
 // Tests isolate process environment and sometimes redirect os.Stdout, so they
@@ -18,7 +59,7 @@ func TestMain(m *testing.M) {
 
 func runTests(m *testing.M) int {
 	if os.Getenv("CI") == "true" {
-		// CI mode: let ensurePathConfigured run for real so the actual
+		// CI mode: let reachable.ConfigurePath run for real so the actual
 		// code path is exercised, but wrap the run in a platform-specific
 		// guard that saves and restores the system PATH afterward
 		// (saves and restores the system PATH after the test run).

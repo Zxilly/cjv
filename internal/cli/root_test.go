@@ -107,9 +107,7 @@ func TestRootCommandRunListsInstalledAndMarksActive(t *testing.T) {
 	settings.DefaultToolchain = "lts-1.0.5"
 	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 
-	stdout, err := captureStdout(t, func() error {
-		return app.rootCmd.RunE(app.rootCmd, nil)
-	})
+	stdout, err := runWithRootOutput(t, app)
 
 	require.NoError(t, err)
 	assert.Contains(t, stdout, "lts-1.0.5")
@@ -122,9 +120,7 @@ func TestRootCommandRunWithNoToolchains(t *testing.T) {
 	home := t.TempDir()
 	config.IsolateForTest(t, home)
 
-	stdout, err := captureStdout(t, func() error {
-		return app.rootCmd.RunE(app.rootCmd, nil)
-	})
+	stdout, err := runWithRootOutput(t, app)
 
 	require.NoError(t, err)
 	assert.Contains(t, stdout, "cjv install lts")

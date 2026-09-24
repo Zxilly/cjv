@@ -9,6 +9,8 @@ import (
 	"net/url"
 	"runtime"
 	"strings"
+
+	"github.com/Zxilly/cjv/internal/progress"
 )
 
 type githubRelease struct {
@@ -19,7 +21,7 @@ type githubRelease struct {
 	} `json:"assets"`
 }
 
-func runUpdate(ctx context.Context, updateURL, currentVersion string) (Result, error) {
+func runUpdate(ctx context.Context, updateURL, currentVersion string, sink progress.Sink) (Result, error) {
 	slug := extractSlug(updateURL)
 	parts := strings.Split(slug, "/")
 	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
@@ -59,6 +61,7 @@ func runUpdate(ctx context.Context, updateURL, currentVersion string) (Result, e
 		BinaryName:  platformBinaryName("cjv", runtime.GOOS),
 		AssetURL:    assetURL,
 		ChecksumURL: checksumURL,
+		Progress:    sink,
 	}); err != nil {
 		return Result{}, fmt.Errorf("update failed: %w", err)
 	}

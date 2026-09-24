@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/Zxilly/cjv/internal/cjverr"
-	"github.com/Zxilly/cjv/internal/utils"
+	"github.com/Zxilly/cjv/internal/fsops"
 )
 
 // DocsRoot returns the absolute documentation root for the toolchain.
@@ -130,7 +130,7 @@ func ResolveDocPath(roots Roots, topic string) (string, error) {
 			filepath.Join(base, rel+".html"),
 			filepath.Join(base, rel, "index.html"),
 		} {
-			if utils.IsPathUnder(base, candidate) && fileExists(candidate) {
+			if fsops.IsPathUnder(base, candidate) && fileExists(candidate) {
 				return candidate, nil
 			}
 		}

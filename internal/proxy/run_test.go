@@ -14,8 +14,9 @@ import (
 	"testing"
 
 	"github.com/Zxilly/cjv/internal/config"
-	"github.com/Zxilly/cjv/internal/dist"
 	"github.com/Zxilly/cjv/internal/resolve"
+	"github.com/Zxilly/cjv/internal/sdktools"
+	sdktarget "github.com/Zxilly/cjv/internal/target"
 	"github.com/Zxilly/cjv/internal/toolchain"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -131,9 +132,9 @@ func TestRun_ReachesBinaryExecution(t *testing.T) {
 
 	// Create a toolchain with all proxy tools as stubs
 	tcDir := filepath.Join(home, "toolchains", "lts-1.0.5")
-	for _, tool := range AllProxyTools() {
-		relPath := ToolRelativePath(tool)
-		binPath := PlatformBinaryName(filepath.Join(tcDir, relPath))
+	for _, tool := range sdktools.AllProxyTools() {
+		relPath := sdktools.ToolRelativePath(tool)
+		binPath := sdktools.PlatformBinaryName(filepath.Join(tcDir, relPath))
 		require.NoError(t, os.MkdirAll(filepath.Dir(binPath), 0o755))
 		require.NoError(t, os.WriteFile(binPath, []byte("stub"), 0o755))
 	}
@@ -164,9 +165,9 @@ func proxyMockServer(t *testing.T) *httptest.Server {
 			t.Fatalf("zip write %s: %v", name, err)
 		}
 	}
-	for _, tool := range AllProxyTools() {
-		relPath := ToolRelativePath(tool)
-		name := PlatformBinaryName("cangjie/" + relPath)
+	for _, tool := range sdktools.AllProxyTools() {
+		relPath := sdktools.ToolRelativePath(tool)
+		name := sdktools.PlatformBinaryName("cangjie/" + relPath)
 		writeEntry(name, "stub-"+tool)
 	}
 	writeEntry("cangjie/envsetup.sh", "export CANGJIE_HOME=\"$PWD\"")
@@ -176,7 +177,7 @@ func proxyMockServer(t *testing.T) *httptest.Server {
 	sdkData := buf.Bytes()
 	hash := sha256.Sum256(sdkData)
 	sha := hex.EncodeToString(hash[:])
-	pk, _ := dist.CurrentHostTuple("")
+	pk, _ := sdktarget.CurrentHostTuple("")
 
 	var serverURL string
 	mux := http.NewServeMux()
@@ -238,7 +239,7 @@ func TestRun_ToolchainFileTargetsTriggerAutoInstall(t *testing.T) {
 	t.Chdir(cwd)
 
 	hostDir := filepath.Join(home, "toolchains", "sts-2.0.0")
-	cjcPath := PlatformBinaryName(filepath.Join(hostDir, ToolRelativePath("cjc")))
+	cjcPath := sdktools.PlatformBinaryName(filepath.Join(hostDir, sdktools.ToolRelativePath("cjc")))
 	require.NoError(t, os.MkdirAll(filepath.Dir(cjcPath), 0o755))
 	require.NoError(t, os.WriteFile(cjcPath, []byte("stub"), 0o755))
 	require.NoError(t, os.WriteFile(filepath.Join(cwd, config.ToolchainFileName), []byte(`[toolchain]
@@ -257,7 +258,7 @@ targets = ["ohos", "android"]
 		gotInput = input
 		gotTargets = append([]string(nil), targets...)
 		for _, target := range targets {
-			key, err := dist.CurrentTargetTuple(settings.DefaultHost, target)
+			key, err := sdktarget.CurrentTargetTuple(settings.DefaultHost, target)
 			require.NoError(t, err)
 			name := toolchain.ToolchainName{Channel: toolchain.STS, Version: "2.0.0", Target: key}.String()
 			require.NoError(t, os.MkdirAll(filepath.Join(home, "toolchains", name), 0o755))
@@ -281,7 +282,7 @@ func TestRun_ToolchainFileTargetsMissingWithoutAutoInstallErrors(t *testing.T) {
 	t.Chdir(cwd)
 
 	hostDir := filepath.Join(home, "toolchains", "sts-2.0.0")
-	cjcPath := PlatformBinaryName(filepath.Join(hostDir, ToolRelativePath("cjc")))
+	cjcPath := sdktools.PlatformBinaryName(filepath.Join(hostDir, sdktools.ToolRelativePath("cjc")))
 	require.NoError(t, os.MkdirAll(filepath.Dir(cjcPath), 0o755))
 	require.NoError(t, os.WriteFile(cjcPath, []byte("stub"), 0o755))
 	require.NoError(t, os.WriteFile(filepath.Join(cwd, config.ToolchainFileName), []byte(`[toolchain]

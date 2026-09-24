@@ -10,7 +10,10 @@ import (
 	"github.com/Zxilly/cjv/internal/cjverr"
 	"github.com/Zxilly/cjv/internal/component"
 	"github.com/Zxilly/cjv/internal/config"
-	"github.com/Zxilly/cjv/internal/dist"
+	"github.com/Zxilly/cjv/internal/progress"
+	"github.com/Zxilly/cjv/internal/sdktools"
+	sdktarget "github.com/Zxilly/cjv/internal/target"
+	"github.com/Zxilly/cjv/internal/testutil"
 	"github.com/Zxilly/cjv/internal/toolchain"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -64,7 +67,7 @@ func TestActiveRejectsTargetVariantAsActiveToolchain(t *testing.T) {
 	t.Setenv("CJV_TOOLCHAIN", "")
 	require.NoError(t, config.EnsureDirs())
 
-	key, err := dist.CurrentTargetTuple("", "ohos")
+	key, err := sdktarget.CurrentTargetTuple("", "ohos")
 	require.NoError(t, err)
 	name := toolchain.ToolchainName{
 		Channel: toolchain.STS,
@@ -94,7 +97,7 @@ func TestActiveTargetResolvesInstalledTargetSDK(t *testing.T) {
 	hostName := "sts-2.0.0"
 	require.NoError(t, os.MkdirAll(filepath.Join(home, "toolchains", hostName), 0o755))
 
-	tuple, err := dist.CurrentTargetTuple("", "ohos")
+	tuple, err := sdktarget.CurrentTargetTuple("", "ohos")
 	require.NoError(t, err)
 	targetName := toolchain.ToolchainName{Channel: toolchain.STS, Version: "2.0.0", Target: tuple}.String()
 	targetDir := filepath.Join(home, "toolchains", targetName)
@@ -154,7 +157,7 @@ components = ["docs"]
 	AutoInstallFunc = func(ctx context.Context, input string, targets []string) error {
 		gotInput = input
 		gotTargets = append([]string(nil), targets...)
-		key, err := dist.CurrentTargetTuple(settings.DefaultHost, "ohos")
+		key, err := sdktarget.CurrentTargetTuple(settings.DefaultHost, "ohos")
 		require.NoError(t, err)
 		targetName := toolchain.ToolchainName{Channel: toolchain.STS, Version: "2.0.0", Target: key}.String()
 		return os.MkdirAll(filepath.Join(home, "toolchains", targetName), 0o755)
@@ -195,7 +198,7 @@ func TestActiveReportsMissingComponentWhenAutoInstallDisabled(t *testing.T) {
 	settings.AutoInstall = false
 	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 
-	err := ensureComponents(context.Background(), tcName, filepath.Join(home, "toolchains", tcName), &settings, []string{"docs"})
+	err := ensureComponents(context.Background(), tcName, filepath.Join(home, "toolchains", tcName), &settings, []string{"docs"}, progress.Discard)
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "docs")
@@ -225,6 +228,34 @@ func TestActiveAutoInstallsMissingHostToolchain(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "lts-1.0.5", active.Name)
 	assert.Equal(t, "lts-1.0.5", gotInput)
+}
+
+// Proxy auto-install runs the same installation flow as `cjv install`: the
+// managed cjv binary and the proxy links are established, not just the SDK
+// directory, so the freshly installed toolchain is reachable through bin/.
+func TestActiveAutoInstallCreatesManagedBinaryAndProxyLinks(t *testing.T) {
+	home := t.TempDir()
+	config.IsolateForTest(t, home)
+	t.Setenv(config.EnvToolchain, "")
+	t.Setenv(config.EnvDistServer, "")
+	require.NoError(t, config.EnsureDirs())
+	server := testutil.MockDistServer(t)
+
+	settings := config.DefaultSettings()
+	settings.DefaultToolchain = "lts"
+	settings.AutoInstall = true
+	settings.ManifestURL = server.URL + "/sdk-versions.json"
+	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
+
+	active, err := Active(context.Background(), "")
+
+	require.NoError(t, err)
+	assert.Equal(t, "lts-1.0.5", active.Name)
+	assert.FileExists(t, filepath.Join(home, "bin", sdktools.CjvBinaryName()))
+	for _, tool := range sdktools.AllProxyTools() {
+		assert.FileExists(t, filepath.Join(home, "bin", sdktools.PlatformBinaryName(tool)),
+			"proxy link for %q should exist after auto-install", tool)
+	}
 }
 
 func TestActiveRunsToolchainRecoveryBeforeResolving(t *testing.T) {
@@ -283,7 +314,7 @@ func TestEnsureTargetsReportsMissingWhenAutoInstallDisabled(t *testing.T) {
 	settings := config.DefaultSettings()
 	settings.AutoInstall = false
 
-	err := ensureTargets(context.Background(), tcName, tcDir, &settings, []string{"ohos"})
+	err := ensureTargets(context.Background(), tcName, tcDir, &settings, []string{"ohos"}, progress.Discard)
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "ohos")
@@ -306,13 +337,13 @@ func TestEnsureTargetsAutoInstallFailureAndMissingResult(t *testing.T) {
 		return os.ErrPermission
 	}
 
-	err := ensureTargets(context.Background(), tcName, tcDir, &settings, []string{"ohos"})
+	err := ensureTargets(context.Background(), tcName, tcDir, &settings, []string{"ohos"}, progress.Discard)
 	require.Error(t, err)
 
 	AutoInstallFunc = func(ctx context.Context, input string, targets []string) error {
 		return nil
 	}
-	err = ensureTargets(context.Background(), tcName, tcDir, &settings, []string{"ohos"})
+	err = ensureTargets(context.Background(), tcName, tcDir, &settings, []string{"ohos"}, progress.Discard)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "ohos")
 }
@@ -321,7 +352,7 @@ func TestEnsureComponentsInvalidAndAutoInstallFailures(t *testing.T) {
 	tcDir := t.TempDir()
 	settings := config.DefaultSettings()
 
-	require.Error(t, ensureComponents(context.Background(), "lts-1.0.5", tcDir, &settings, []string{"unknown"}))
+	require.Error(t, ensureComponents(context.Background(), "lts-1.0.5", tcDir, &settings, []string{"unknown"}, progress.Discard))
 
 	settings.AutoInstall = true
 	oldComponents := AutoInstallComponentsFunc
@@ -330,14 +361,14 @@ func TestEnsureComponentsInvalidAndAutoInstallFailures(t *testing.T) {
 		return os.ErrPermission
 	}
 
-	err := ensureComponents(context.Background(), "lts-1.0.5", tcDir, &settings, []string{"docs"})
+	err := ensureComponents(context.Background(), "lts-1.0.5", tcDir, &settings, []string{"docs"}, progress.Discard)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "docs")
 
 	AutoInstallComponentsFunc = func(ctx context.Context, input string, components []string) error {
 		return nil
 	}
-	err = ensureComponents(context.Background(), "lts-1.0.5", tcDir, &settings, []string{"docs"})
+	err = ensureComponents(context.Background(), "lts-1.0.5", tcDir, &settings, []string{"docs"}, progress.Discard)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "docs")
 }

@@ -5,178 +5,121 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/Zxilly/cjv/internal/component"
-	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/i18n"
+	"github.com/Zxilly/cjv/internal/progress"
 	sdktarget "github.com/Zxilly/cjv/internal/target"
 	"github.com/Zxilly/cjv/internal/toolchain"
 )
 
-// Options carries the small adapter surface the lifecycle module needs from
-// callers. The install implementation is shared by CLI commands and proxy
-// auto-install; presentation stays outside the core module.
+// Options carries what an operation needs from its caller. The install
+// implementation is shared by CLI commands and proxy auto-install;
+// presentation stays outside the core module.
 type Options struct {
-	// Report receives progress messages; nil keeps library operations silent.
-	Report               func(string, i18n.MsgData)
-	EnsurePathConfigured func()
-	// ComponentInstall, when set, replaces the real component installer and
-	// gives orchestration tests a source-independent adapter.
-	ComponentInstall     func(context.Context, component.Roots, toolchain.ToolchainName, component.Name, string, string, bool) error
-	EnsureManagedBinary  func() (string, error)
-	CreateProxyLinks     func() error
-	ValidateInstallation func(dir, tuple string) error
+	// Progress receives every progress event of the operation, including the
+	// download transfers; nil keeps the operation silent. The caller picks
+	// the adapter: progress.Text for humans, progress.Discard for JSON mode.
+	Progress progress.Sink
+	// ConfigurePath adds CJV_HOME/bin to the user's PATH when the install
+	// publishes the first default toolchain. `cjv install` sets it; `cjv init`
+	// has already handled PATH itself, and proxy auto-install leaves PATH
+	// alone because cjv is evidently reachable.
+	ConfigurePath bool
 }
 
-func (o Options) report(message string, data i18n.MsgData) {
-	if o.Report != nil {
-		o.Report(message, data)
-	}
+// sink returns the progress adapter to emit to, never nil.
+func (o Options) sink() progress.Sink {
+	return progress.Or(o.Progress)
 }
 
-func (o Options) ensurePathConfigured() {
-	if o.EnsurePathConfigured != nil {
-		o.EnsurePathConfigured()
-		return
-	}
-	EnsurePathConfigured()
+func (o Options) emit(e progress.Event) {
+	o.sink().Report(e)
 }
 
-func (o Options) installComponent(ctx context.Context, roots component.Roots, tc toolchain.ToolchainName, name component.Name, tuple, downloadsDir string, force bool, fetcher *ManifestFetcher) error {
-	if o.ComponentInstall != nil {
-		return o.ComponentInstall(ctx, roots, tc, name, tuple, downloadsDir, force)
-	}
-	if o.Report != nil {
-		fetcher.Note()
-	}
-	return component.InstallFromSource(ctx, roots, tc, name, tuple, downloadsDir, force, fetcher.source, func(stage string) {
-		o.report(stage, i18n.MsgData{"Toolchain": tc.String(), "Component": string(name)})
-	})
+// InstallRequest names what an install brings into CJV_HOME.
+type InstallRequest struct {
+	// Toolchain is a channel ("lts"), a version ("1.0.5"), a channel-version
+	// ("lts-1.0.5") or a target variant name ("lts-1.0.5-linux-x64-ohos").
+	Toolchain string
+	// Targets are cross SDK environments ("ohos") installed as variants of
+	// the resolved host toolchain. They cannot be combined with a target
+	// variant Toolchain.
+	Targets []string
+	// Components are installed into every toolchain this request installs:
+	// the target variants when Targets is set, otherwise the host toolchain.
+	Components []string
+	// Force replaces an already installed toolchain instead of keeping it.
+	Force bool
 }
 
-func (o Options) createProxyLinks() error {
-	if o.CreateProxyLinks == nil {
-		return nil
-	}
-	return o.CreateProxyLinks()
-}
-
-func (o Options) ensureManagedBinary() error {
-	if o.EnsureManagedBinary == nil {
-		return nil
-	}
-	_, err := o.EnsureManagedBinary()
-	return err
-}
-
-func (o Options) validateInstallation(dir, tuple string) error {
-	if o.ValidateInstallation != nil {
-		return o.ValidateInstallation(dir, tuple)
-	}
-	return validateInstallation(dir, tuple)
-}
-
-// InstallToolchainWithOptions installs a toolchain with optional force re-install.
-func InstallToolchainWithOptions(ctx context.Context, input string, force bool, opts Options) error {
-	return InstallToolchainWithExtras(ctx, input, nil, nil, force, opts)
-}
-
-// InstallToolchainWithTargets installs the host toolchain plus optional cross SDK target variants.
-func InstallToolchainWithTargets(ctx context.Context, input string, targets []string, force bool, opts Options) error {
-	return InstallToolchainWithExtras(ctx, input, targets, nil, force, opts)
-}
-
-// InstallToolchainWithExtras installs the host toolchain plus optional cross
-// SDK target variants and optional components.
-func InstallToolchainWithExtras(ctx context.Context, input string, targets, components []string, force bool, opts Options) error {
+// Install resolves the request against the configured distribution source
+// and places the host toolchain, its target variants and their components.
+// The first host toolchain installed becomes the default; target variants
+// never do. An already installed toolchain is reported and kept unless Force
+// is set.
+func Install(ctx context.Context, req InstallRequest, opts Options) error {
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	name, err := toolchain.ParseToolchainName(input)
+	name, err := toolchain.ParseToolchainName(req.Toolchain)
 	if err != nil {
 		return err
 	}
 	if name.IsCustom() {
-		return errors.New(i18n.T("InstallCustomToolchain", i18n.MsgData{"Name": input}))
+		return errors.New(i18n.T("InstallCustomToolchain", i18n.MsgData{"Name": req.Toolchain}))
 	}
-
-	sf, settings, err := LoadSettings()
+	targets, err := sdktarget.NormalizeList(req.Targets)
 	if err != nil {
 		return err
 	}
+	if name.Target != "" && len(targets) > 0 {
+		return fmt.Errorf("cannot combine target variant toolchain name %q with --target; pass the host toolchain name and --target instead", req.Toolchain)
+	}
 
-	normalizedTargets, err := sdktarget.NormalizeList(targets)
+	d, err := OpenDistribution(opts)
 	if err != nil {
 		return err
 	}
-	if name.Target != "" && len(normalizedTargets) > 0 {
-		return fmt.Errorf("cannot combine target variant toolchain name %q with --target; pass the host toolchain name and --target instead", input)
-	}
-
-	fetcher, err := NewManifestFetcherForSettings(settings, opts)
+	resolved, err := d.Resolve(ctx, name, name.Target)
 	if err != nil {
 		return err
 	}
-	resolved, err := ResolveAndLocate(ctx, name, settings, fetcher)
+	if err := installResolved(ctx, d, resolved, req.Force, name.Target == "", opts); err != nil {
+		return err
+	}
+
+	// Target variants are pinned to the host's resolved version so
+	// `envsetup --target` never sees a version skew.
+	hostResolved, err := toolchain.ParseToolchainName(resolved.Name)
 	if err != nil {
 		return err
 	}
-
-	if name.Target != "" {
-		if err := InstallResolvedNoDefault(ctx, resolved, settings, sf, force, opts); err != nil {
-			return err
-		}
-	} else if err := InstallResolved(ctx, resolved, settings, sf, force, opts); err != nil {
-		return err
+	targetBase := toolchain.ToolchainName{Channel: hostResolved.Channel, Version: hostResolved.Version}
+	installed := []string{resolved.Name}
+	if len(targets) > 0 {
+		installed = nil
 	}
-
-	targetBase := name
-	if len(normalizedTargets) > 0 {
-		hostResolved, err := toolchain.ParseToolchainName(resolved.Name)
+	for _, target := range targets {
+		tuple, err := d.TargetTuple(target)
 		if err != nil {
 			return err
 		}
-		targetBase = toolchain.ToolchainName{Channel: hostResolved.Channel, Version: hostResolved.Version}
-	}
-
-	var targetNames []string
-	for _, target := range normalizedTargets {
-		resolvedTarget, err := resolveTargetToolchain(ctx, targetBase, settings, fetcher, target)
+		resolvedTarget, err := d.Resolve(ctx, targetBase, tuple)
 		if err != nil {
 			return err
 		}
-		if err := InstallResolvedNoDefault(ctx, resolvedTarget, settings, sf, force, opts); err != nil {
+		if err := installResolved(ctx, d, resolvedTarget, req.Force, false, opts); err != nil {
 			return err
 		}
-		targetNames = append(targetNames, resolvedTarget.Name)
+		installed = append(installed, resolvedTarget.Name)
 	}
 
-	if len(components) > 0 {
-		if len(normalizedTargets) > 0 {
-			for _, targetName := range targetNames {
-				if err := InstallComponentsList(ctx, targetName, components, force, false, fetcher, opts); err != nil {
-					return err
-				}
-			}
-		} else if err := InstallComponentsList(ctx, resolved.Name, components, force, false, fetcher, opts); err != nil {
+	if len(req.Components) == 0 {
+		return nil
+	}
+	for _, tcName := range installed {
+		if err := installComponents(ctx, d, tcName, req.Components, req.Force, opts); err != nil {
 			return err
 		}
 	}
 	return nil
-}
-
-func resolveTargetToolchain(ctx context.Context, base toolchain.ToolchainName, settings *config.Settings, fetcher *ManifestFetcher, target string) (ResolvedToolchain, error) {
-	return ResolveAndLocateWithTarget(ctx, base, settings, fetcher, target)
-}
-
-// LoadSettings loads the cached user settings file used by lifecycle operations.
-func LoadSettings() (*config.SettingsFile, *config.Settings, error) {
-	sf, err := config.DefaultSettingsFile()
-	if err != nil {
-		return nil, nil, err
-	}
-	settings, err := sf.Load()
-	if err != nil {
-		return nil, nil, err
-	}
-	return sf, settings, nil
 }

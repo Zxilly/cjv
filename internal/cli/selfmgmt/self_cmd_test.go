@@ -14,7 +14,7 @@ import (
 	"github.com/Zxilly/cjv/internal/cjverr"
 	"github.com/Zxilly/cjv/internal/cli/output"
 	"github.com/Zxilly/cjv/internal/config"
-	"github.com/Zxilly/cjv/internal/proxy"
+	"github.com/Zxilly/cjv/internal/sdktools"
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -75,8 +75,8 @@ func TestNewSelfCommandWiresSubcommandsAndUpdate(t *testing.T) {
 
 	update := findSubcommand(cmd, "update")
 	require.NoError(t, update.RunE(update, nil))
-	assert.FileExists(t, filepath.Join(home, "bin", proxy.CjvBinaryName()))
-	assert.FileExists(t, filepath.Join(home, "bin", proxy.PlatformBinaryName("cjc")))
+	assert.FileExists(t, filepath.Join(home, "bin", sdktools.CjvBinaryName()))
+	assert.FileExists(t, filepath.Join(home, "bin", sdktools.PlatformBinaryName("cjc")))
 }
 
 func TestUpdateManagedRegeneratesEnvScripts(t *testing.T) {
@@ -90,7 +90,7 @@ func TestUpdateManagedRegeneratesEnvScripts(t *testing.T) {
 	for _, name := range scripts {
 		require.NoError(t, os.WriteFile(filepath.Join(home, name), []byte("outdated script"), 0o644))
 	}
-	result, err := UpdateManaged(context.Background(), "", "dev")
+	result, err := UpdateManaged(context.Background(), "", "dev", nil)
 	require.NoError(t, err)
 	assert.False(t, result.Updated)
 	for _, name := range scripts {
@@ -109,7 +109,7 @@ func TestSelfUninstallDoesNotCleanPathWhenRemoveHomeFails(t *testing.T) {
 	oldRemove := removeSelfHomeDir
 	oldCleanup := cleanupSelfPathEntries
 	ensureSelfManagedExecutable = func() (string, error) {
-		return filepath.Join(home, "bin", proxy.CjvBinaryName()), nil
+		return filepath.Join(home, "bin", sdktools.CjvBinaryName()), nil
 	}
 	removeSelfHomeDir = func(home, managedExe string) error {
 		return errors.New("remove failed")

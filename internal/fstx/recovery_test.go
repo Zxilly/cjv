@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/Zxilly/cjv/internal/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -25,7 +26,7 @@ func TestRecoverInterruptedSwap(t *testing.T) {
 		t.Run(interruptedAfter, func(t *testing.T) {
 			root := t.TempDir()
 			dest := filepath.Join(root, "sdk")
-			stage := dest + stagingSuffix
+			stage := config.StagingDir(dest)
 			writeMarker(t, dest, "old")
 			writeMarker(t, stage, "new")
 			tx, err := NewTransaction(dest)
@@ -66,7 +67,7 @@ func TestRecoverInterruptedSwap(t *testing.T) {
 func TestRollbackCanRetryWithoutRepeatingCompletedChanges(t *testing.T) {
 	root := t.TempDir()
 	dest := filepath.Join(root, "sdk")
-	stage := dest + stagingSuffix
+	stage := config.StagingDir(dest)
 	writeMarker(t, dest, "old")
 	writeMarker(t, stage, "new")
 	tx, err := NewTransaction(dest)
@@ -233,7 +234,7 @@ func TestCommitAfterMarkerPublicationDoesNotReportRollback(t *testing.T) {
 func TestCommitWithPreservesPublicationWhenFinalMarkerCannotBeWritten(t *testing.T) {
 	root := t.TempDir()
 	dest := filepath.Join(root, "sdk")
-	stage := dest + stagingSuffix
+	stage := config.StagingDir(dest)
 	writeMarker(t, dest, "old")
 	writeMarker(t, stage, "new")
 	tx, err := NewTransaction(dest)
@@ -256,7 +257,7 @@ func TestCommitWithPreservesPublicationWhenFinalMarkerCannotBeWritten(t *testing
 func TestCommitWithPublicationFailureAllowsRollback(t *testing.T) {
 	root := t.TempDir()
 	dest := filepath.Join(root, "sdk")
-	stage := dest + stagingSuffix
+	stage := config.StagingDir(dest)
 	writeMarker(t, dest, "old")
 	writeMarker(t, stage, "new")
 	tx, err := NewTransaction(dest)

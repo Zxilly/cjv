@@ -1,283 +1,24 @@
 package cli
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/Zxilly/cjv/internal/config"
-	"github.com/Zxilly/cjv/internal/dist"
-	"github.com/Zxilly/cjv/internal/toolchain"
+	"github.com/Zxilly/cjv/internal/lifecycle"
+	"github.com/Zxilly/cjv/internal/testutil"
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-// Tests for update-related functions.
-
-func TestUpdateAll_NoToolchains(t *testing.T) {
-	app := newApplication("dev", "")
-	home := t.TempDir()
-	config.IsolateForTest(t, home)
-
-	_, err := app.updateAll(context.Background())
-	assert.NoError(t, err, "no toolchains should be a no-op")
-}
-
-func TestUpdateAll_WithInstalledToolchain(t *testing.T) {
-	app := newApplication("dev", "")
-	home := t.TempDir()
-	config.IsolateForTest(t, home)
-	require.NoError(t, config.EnsureDirs())
-
-	// Install first
-	server := validMockServer(t)
-	settings := config.DefaultSettings()
-	settings.ManifestURL = server.URL + "/sdk-versions.json"
-	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
-	require.NoError(t, app.InstallToolchainWithOptions(context.Background(), "lts", false))
-
-	// Update all — should check for updates (already latest)
-	_, err := app.updateAll(context.Background())
-	assert.NoError(t, err)
-}
-
-func TestReinstallChannel_AlreadyUpToDate(t *testing.T) {
-	app := newApplication("dev", "")
-	home := t.TempDir()
-	config.IsolateForTest(t, home)
-	require.NoError(t, config.EnsureDirs())
-
-	server := validMockServer(t)
-	settings := config.DefaultSettings()
-	settings.ManifestURL = server.URL + "/sdk-versions.json"
-	settingsPath := filepath.Join(home, ".cjv", "settings.toml")
-	require.NoError(t, config.SaveSettings(&settings, settingsPath))
-	require.NoError(t, app.InstallToolchainWithOptions(context.Background(), "lts", false))
-
-	// Reload settings after install
-	settings2, _ := config.LoadSettings(settingsPath)
-
-	// Reinstall same channel — should print "already up to date"
-	sf := config.NewSettingsFile(settingsPath)
-	_, _, err := app.reinstallChannel(context.Background(), toolchain.LTS, "lts-1.0.5", settings2, sf, app.newManifestFetcher(settings2.ManifestURL))
-	assert.NoError(t, err)
-}
-
-func TestUpdateSingle_ChannelName(t *testing.T) {
-	app := newApplication("dev", "")
-	home := t.TempDir()
-	config.IsolateForTest(t, home)
-	require.NoError(t, config.EnsureDirs())
-
-	server := validMockServer(t)
-	settings := config.DefaultSettings()
-	settings.ManifestURL = server.URL + "/sdk-versions.json"
-	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
-	require.NoError(t, app.InstallToolchainWithOptions(context.Background(), "lts", false))
-
-	// Update by channel name
-	_, err := app.updateSingle(context.Background(), "lts")
-	assert.NoError(t, err)
-}
-
-func TestUpdateSingle_NightlyUsesUnifiedDistServer(t *testing.T) {
-	app := newApplication("dev", "")
-	home := t.TempDir()
-	config.IsolateForTest(t, home)
-	require.NoError(t, config.EnsureDirs())
-
-	oldName := "nightly-1.1.0-alpha.20260821010101"
-	require.NoError(t, os.MkdirAll(filepath.Join(home, "toolchains", oldName), 0o755))
-	server := splitNightlyMockServer(t)
-	settings := config.DefaultSettings()
-	settings.DistServer = server.URL + "/corp/cjv"
-	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
-
-	updates, err := app.updateSingle(context.Background(), "nightly")
-	require.NoError(t, err)
-	require.Len(t, updates, 1)
-	assert.Equal(t, oldName, updates[0].From)
-	assert.Equal(t, "nightly-1.2.0-alpha.20260822010101", updates[0].To)
-}
-
-func TestUpdateSingle_TargetVariantUpdatesVariant(t *testing.T) {
-	app := newApplication("dev", "")
-	home := t.TempDir()
-	config.IsolateForTest(t, home)
-	require.NoError(t, config.EnsureDirs())
-
-	targetKey, err := dist.CurrentTargetTuple("", "ohos")
-	require.NoError(t, err)
-	oldName := "sts-1.0.0-" + targetKey
-	oldDir := filepath.Join(home, "toolchains", oldName)
-	require.NoError(t, os.MkdirAll(oldDir, 0o755))
-
-	server := mockServerWithTargetSDKs(t, toolchain.STS, "2.0.0", "ohos")
-	settings := config.DefaultSettings()
-	settings.ManifestURL = server.URL + "/sdk-versions.json"
-	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
-
-	_, err = app.updateSingle(context.Background(), oldName)
-	require.NoError(t, err)
-
-	installed, err := toolchain.ListInstalled()
-	require.NoError(t, err)
-	assert.Contains(t, installed, "sts-2.0.0-"+targetKey)
-	assert.NotContains(t, installed, oldName)
-}
-
-func TestFindInstalledForChannel_Nightly(t *testing.T) {
-	home := t.TempDir()
-	config.IsolateForTest(t, home)
-
-	tcDir := filepath.Join(home, "toolchains")
-	require.NoError(t, os.MkdirAll(filepath.Join(tcDir, "nightly-20260301"), 0o755))
-
-	name, err := findInstalledForChannel(toolchain.Nightly)
-	require.NoError(t, err)
-	assert.Equal(t, "nightly-20260301", name)
-}
-
-func TestRunUpdate_WithSpecificName(t *testing.T) {
-	app := newApplication("dev", "")
-	home := t.TempDir()
-	config.IsolateForTest(t, home)
-	require.NoError(t, config.EnsureDirs())
-
-	server := validMockServer(t)
-	settings := config.DefaultSettings()
-	settings.ManifestURL = server.URL + "/sdk-versions.json"
-	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
-	require.NoError(t, app.InstallToolchainWithOptions(context.Background(), "lts", false))
-
-	cmd := &cobra.Command{}
-	cmd.SetContext(context.Background())
-	err := app.runUpdate(cmd, []string{"lts"})
-	assert.NoError(t, err)
-}
-
-func TestReinstallChannel_UpgradesToNewerVersion(t *testing.T) {
-	app := newApplication("dev", "")
-	home := t.TempDir()
-	config.IsolateForTest(t, home)
-	require.NoError(t, config.EnsureDirs())
-
-	// Fake an old installed version (just a directory)
-	oldDir := filepath.Join(home, "toolchains", "lts-1.0.0")
-	require.NoError(t, os.MkdirAll(oldDir, 0o755))
-
-	// Mock server says latest is 1.0.5
-	server := validMockServer(t)
-	settings := config.DefaultSettings()
-	settings.ManifestURL = server.URL + "/sdk-versions.json"
-	settings.DefaultToolchain = "lts-1.0.0"
-	settingsPath := filepath.Join(home, ".cjv", "settings.toml")
-	require.NoError(t, config.SaveSettings(&settings, settingsPath))
-
-	// Reinstall should upgrade from 1.0.0 to 1.0.5
-	sf := config.NewSettingsFile(settingsPath)
-	_, _, err := app.reinstallChannel(context.Background(), toolchain.LTS, "lts-1.0.0", &settings, sf, app.newManifestFetcher(settings.ManifestURL))
-	require.NoError(t, err)
-
-	// New version should be installed
-	installed, _ := toolchain.ListInstalled()
-	assert.Contains(t, installed, "lts-1.0.5")
-
-	// Old version should be removed
-	_, statErr := os.Stat(oldDir)
-	assert.True(t, os.IsNotExist(statErr), "old version directory should be removed")
-}
-
-func TestReinstallChannelForPlatform_UpdatesTargetVariant(t *testing.T) {
-	app := newApplication("dev", "")
-	home := t.TempDir()
-	config.IsolateForTest(t, home)
-	require.NoError(t, config.EnsureDirs())
-
-	targetKey, err := dist.CurrentTargetTuple("", "ohos")
-	require.NoError(t, err)
-	oldName := "sts-1.0.0-" + targetKey
-	require.NoError(t, os.MkdirAll(filepath.Join(home, "toolchains", oldName), 0o755))
-
-	server := mockServerWithTargetSDKs(t, toolchain.STS, "2.0.0", "ohos")
-	settings := config.DefaultSettings()
-	settings.ManifestURL = server.URL + "/sdk-versions.json"
-	settingsPath := filepath.Join(home, ".cjv", "settings.toml")
-	require.NoError(t, config.SaveSettings(&settings, settingsPath))
-
-	sf := config.NewSettingsFile(settingsPath)
-	_, _, err = app.reinstallChannelForPlatform(context.Background(), reinstallRequest{
-		Channel:      toolchain.STS,
-		CurrentName:  oldName,
-		Settings:     &settings,
-		SettingsFile: sf,
-		Fetcher:      app.newManifestFetcher(settings.ManifestURL),
-		Target:       targetKey,
-	})
-	require.NoError(t, err)
-
-	installed, err := toolchain.ListInstalled()
-	require.NoError(t, err)
-	assert.Contains(t, installed, "sts-2.0.0-"+targetKey)
-	assert.NotContains(t, installed, "sts-2.0.0")
-	assert.NotContains(t, installed, oldName)
-}
-
-func TestReinstallChannel_UpdatesDefaultToolchain(t *testing.T) {
-	app := newApplication("dev", "")
-	home := t.TempDir()
-	config.IsolateForTest(t, home)
-	require.NoError(t, config.EnsureDirs())
-
-	require.NoError(t, os.MkdirAll(filepath.Join(home, "toolchains", "lts-1.0.0"), 0o755))
-
-	server := validMockServer(t)
-	settings := config.DefaultSettings()
-	settings.ManifestURL = server.URL + "/sdk-versions.json"
-	settings.DefaultToolchain = "lts-1.0.0"
-	settingsPath := filepath.Join(home, ".cjv", "settings.toml")
-	require.NoError(t, config.SaveSettings(&settings, settingsPath))
-
-	sf2 := config.NewSettingsFile(settingsPath)
-	_, _, err := app.reinstallChannel(context.Background(), toolchain.LTS, "lts-1.0.0", &settings, sf2, app.newManifestFetcher(settings.ManifestURL))
-	require.NoError(t, err)
-
-	// Default should be updated to new version
-	reloaded, _ := config.LoadSettings(filepath.Join(home, ".cjv", "settings.toml"))
-	assert.Equal(t, "lts-1.0.5", reloaded.DefaultToolchain,
-		"default should be updated from old version to new version")
-}
-
-func TestReinstallChannel_UpdatesOverrides(t *testing.T) {
-	app := newApplication("dev", "")
-	home := t.TempDir()
-	config.IsolateForTest(t, home)
-	require.NoError(t, config.EnsureDirs())
-
-	require.NoError(t, os.MkdirAll(filepath.Join(home, "toolchains", "lts-1.0.0"), 0o755))
-
-	server := validMockServer(t)
-	settings := config.DefaultSettings()
-	settings.ManifestURL = server.URL + "/sdk-versions.json"
-	settings.Overrides["C:\\project-a"] = "lts-1.0.0"
-	settings.Overrides["C:\\project-b"] = "sts-2.0.0" // different channel, keep
-	settingsPath := filepath.Join(home, ".cjv", "settings.toml")
-	require.NoError(t, config.SaveSettings(&settings, settingsPath))
-
-	sf3 := config.NewSettingsFile(settingsPath)
-	_, _, err := app.reinstallChannel(context.Background(), toolchain.LTS, "lts-1.0.0", &settings, sf3, app.newManifestFetcher(settings.ManifestURL))
-	require.NoError(t, err)
-
-	reloaded, _ := config.LoadSettings(filepath.Join(home, ".cjv", "settings.toml"))
-	assert.Equal(t, "lts-1.0.5", reloaded.Overrides["C:\\project-a"],
-		"override should be updated to new version")
-	assert.Equal(t, "sts-2.0.0", reloaded.Overrides["C:\\project-b"],
-		"unrelated override should be preserved")
-}
-
-// Tests for runUpdate -- cobra handler for update command.
+// Tests for runUpdate, the cobra handler for the update command: argument
+// handling, the self-update decision and result rendering. Update semantics
+// live with lifecycle.UpdateInstalled / UpdateAll.
 
 func TestRunUpdate_NoArgs(t *testing.T) {
 	app := newApplication("dev", "")
@@ -295,11 +36,11 @@ func TestRunUpdate_WithToolchain(t *testing.T) {
 	config.IsolateForTest(t, home)
 	require.NoError(t, config.EnsureDirs())
 
-	server := validMockServer(t)
+	server := testutil.ValidMockServer(t)
 	settings := config.DefaultSettings()
 	settings.ManifestURL = server.URL + "/sdk-versions.json"
 	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
-	require.NoError(t, app.InstallToolchainWithOptions(context.Background(), "lts", false))
+	installTestToolchain(t, app, "lts")
 
 	cmd := &cobra.Command{}
 	err := app.runUpdate(cmd, nil)
@@ -323,123 +64,86 @@ func TestRunUpdateRunsSelfCheckWhenSettingsAvailable(t *testing.T) {
 	require.NoError(t, app.runUpdate(cmd, nil))
 }
 
+func TestRunUpdate_WithSpecificName(t *testing.T) {
+	app := newApplication("dev", "")
+	home := t.TempDir()
+	config.IsolateForTest(t, home)
+	require.NoError(t, config.EnsureDirs())
+
+	server := testutil.ValidMockServer(t)
+	settings := config.DefaultSettings()
+	settings.ManifestURL = server.URL + "/sdk-versions.json"
+	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
+	installTestToolchain(t, app, "lts")
+
+	cmd := &cobra.Command{}
+	cmd.SetContext(context.Background())
+	err := app.runUpdate(cmd, []string{"lts"})
+	assert.NoError(t, err)
+}
+
 func TestRunUpdate_SingleToolchain(t *testing.T) {
 	app := newApplication("dev", "")
 	home := t.TempDir()
 	config.IsolateForTest(t, home)
 	require.NoError(t, config.EnsureDirs())
 
-	server := validMockServer(t)
+	server := testutil.ValidMockServer(t)
 	settings := config.DefaultSettings()
 	settings.ManifestURL = server.URL + "/sdk-versions.json"
 	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
-	require.NoError(t, app.InstallToolchainWithOptions(context.Background(), "lts", false))
+	installTestToolchain(t, app, "lts")
 
 	cmd := &cobra.Command{}
 	err := app.runUpdate(cmd, []string{"lts-1.0.5"})
 	assert.NoError(t, err)
 }
 
-// Test updateSingle — updates a single named toolchain.
-
-func TestUpdateSingle_ExistingToolchain(t *testing.T) {
+func TestRunUpdateRejectsInvalidAndUnknownNames(t *testing.T) {
 	app := newApplication("dev", "")
 	home := t.TempDir()
 	config.IsolateForTest(t, home)
-	require.NoError(t, config.EnsureDirs())
 
-	// Install a toolchain first
-	server := validMockServer(t)
+	cmd := &cobra.Command{}
+	require.Error(t, app.runUpdate(cmd, []string{"+bad"}))
+	require.Error(t, app.runUpdate(cmd, []string{"local-sdk"}))
+	require.Error(t, app.runUpdate(cmd, []string{"nonexistent-99.99"}))
+}
+
+func TestRunUpdateRendersJSONResult(t *testing.T) {
+	app := newApplication("dev", "")
+	app.output.SetJSONMode(true)
+	app.noSelfUpdate = true
+	home := t.TempDir()
+	config.IsolateForTest(t, home)
+	require.NoError(t, config.EnsureDirs())
+	require.NoError(t, os.MkdirAll(filepath.Join(home, "toolchains", "lts-1.0.0"), 0o755))
+	server := testutil.ValidMockServer(t)
 	settings := config.DefaultSettings()
 	settings.ManifestURL = server.URL + "/sdk-versions.json"
 	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
-	require.NoError(t, app.InstallToolchainWithOptions(context.Background(), "lts", false))
 
-	// Update the installed toolchain
-	_, err := app.updateSingle(context.Background(), "lts-1.0.5")
-	assert.NoError(t, err)
+	var out bytes.Buffer
+	cmd := &cobra.Command{}
+	cmd.SetOut(&out)
+	require.NoError(t, app.runUpdate(cmd, nil))
+
+	var result struct {
+		Updates       []updateEntry `json:"updates"`
+		NoneInstalled bool          `json:"none_installed"`
+	}
+	require.NoError(t, json.Unmarshal(out.Bytes(), &result), out.String())
+	assert.Equal(t, []updateEntry{{From: "lts-1.0.0", To: "lts-1.0.5"}}, result.Updates)
+	assert.False(t, result.NoneInstalled)
 }
 
-func TestUpdateSingle_UnknownToolchain(t *testing.T) {
-	app := newApplication("dev", "")
-	home := t.TempDir()
-	config.IsolateForTest(t, home)
-
-	_, err := app.updateSingle(context.Background(), "nonexistent-99.99")
-	assert.Error(t, err)
-}
-
-func TestUpdateSingleRejectsInvalidCustomMissingChannelAndMissingVariant(t *testing.T) {
-	app := newApplication("dev", "")
-	_, err := app.updateSingle(context.Background(), "+bad")
-	require.Error(t, err)
-	_, err = app.updateSingle(context.Background(), "local-sdk")
-	require.Error(t, err)
-
-	home := t.TempDir()
-	config.IsolateForTest(t, home)
-	require.NoError(t, config.EnsureDirs())
-	settings := config.DefaultSettings()
-	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
-
-	_, err = app.updateSingle(context.Background(), "lts")
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "lts")
-
-	targetKey, err := dist.CurrentTargetTuple("", "ohos")
-	require.NoError(t, err)
-	_, err = app.updateSingle(context.Background(), "sts-2.0.0-"+targetKey)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), targetKey)
-}
-
-// Tests for findInstalledForChannel -- used by the update command to
-// find which version of a channel is currently installed.
-
-func TestFindInstalledForChannel_FindsLatest(t *testing.T) {
-	home := t.TempDir()
-	config.IsolateForTest(t, home)
-
-	tcDir := filepath.Join(home, "toolchains")
-	require.NoError(t, os.MkdirAll(filepath.Join(tcDir, "lts-1.0.0"), 0o755))
-	require.NoError(t, os.MkdirAll(filepath.Join(tcDir, "lts-1.0.5"), 0o755))
-	require.NoError(t, os.MkdirAll(filepath.Join(tcDir, "sts-2.0.0"), 0o755))
-
-	name, err := findInstalledForChannel(toolchain.LTS)
-	require.NoError(t, err)
-	assert.Equal(t, "lts-1.0.5", name,
-		"should return the latest semver version for the channel")
-}
-
-func TestFindInstalledForChannel_IgnoresTargetVariants(t *testing.T) {
-	home := t.TempDir()
-	config.IsolateForTest(t, home)
-
-	targetKey, err := dist.CurrentTargetTuple("", "ohos")
-	require.NoError(t, err)
-	require.NoError(t, os.MkdirAll(filepath.Join(home, "toolchains", "lts-1.0.5-"+targetKey), 0o755))
-
-	name, err := findInstalledForChannel(toolchain.LTS)
-	require.NoError(t, err)
-	assert.Empty(t, name)
-}
-
-func TestFindInstalledForChannel_ChannelNotInstalled(t *testing.T) {
-	home := t.TempDir()
-	config.IsolateForTest(t, home)
-
-	require.NoError(t, os.MkdirAll(filepath.Join(home, "toolchains", "lts-1.0.5"), 0o755))
-
-	name, err := findInstalledForChannel(toolchain.STS)
-	require.NoError(t, err)
-	assert.Empty(t, name, "should return empty string when channel has no installs")
-}
-
-func TestFindInstalledForChannel_NoToolchainsDir(t *testing.T) {
-	home := t.TempDir()
-	config.IsolateForTest(t, home)
-
-	name, err := findInstalledForChannel(toolchain.LTS)
-	require.NoError(t, err)
-	assert.Empty(t, name)
+func TestUpdateEntriesKeepsAppliedOutcomesOnly(t *testing.T) {
+	entries := updateEntries([]lifecycle.UpdateOutcome{
+		{Name: "local-sdk", Status: lifecycle.UpdateSkipped},
+		{Name: "lts-1.0.5", Replacement: "lts-1.0.5", Status: lifecycle.UpdateUpToDate},
+		{Name: "sts-1.0.0", Replacement: "sts-2.0.0", Status: lifecycle.UpdateApplied},
+		{Name: "nightly-1", Status: lifecycle.UpdateFailed},
+	})
+	assert.Equal(t, []updateEntry{{From: "sts-1.0.0", To: "sts-2.0.0"}}, entries)
+	assert.Nil(t, updateEntries(nil))
 }
