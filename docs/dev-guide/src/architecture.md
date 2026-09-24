@@ -49,9 +49,9 @@ docs/           两本 mdBook（见“文档站”一章）
 
 `internal/lifecycle` 把下载、解压、校验、组件、PATH 和代理链接串成一条安装流程。它通过 `Options` 接收 `Report`、`ComponentInstall`、`CreateProxyLinks`、`ValidateInstallation` 等 adapter，依赖方向从 `cli` 指向 `lifecycle`。`Report` 只报告进度，未设置时保持静默；输出格式由 CLI 决定。同一流程服务 `cli install` 与代理自动安装，已有 SDK 的重复安装在文本与 JSON 模式下都成功，`component add` 的 JSON 结果也由 CLI 统一渲染。
 
-包内按职责分文件：`install.go` 负责安装编排，`source.go` 把通道请求交给分发源并产出 `ResolvedToolchain`，`component_install.go` 编排组件批量安装并交给 `component.ApplyChanges` 负责回滚，`resolved_install.go` 管下载后的落盘、校验和事务替换。分发源选择集中在 `source.go`。工具链替换的回归测试直接调用这些生产安装入口，验证最终步骤失败后的旧安装恢复和回滚错误传播。
+包内按职责分文件：`install.go` 负责安装编排，`source.go` 把通道请求交给分发源并产出 `ResolvedToolchain`，`component_install.go` 编排组件批量安装并交给 `component.ApplyChanges` 负责回滚，`resolved_install.go` 管下载后的落盘、校验和事务替换，`update.go` 编排更新流程，`upgrade.go` 是它替换单个工具链的步骤，`downloads_purge.go` 在全量更新结束后清空下载暂存区。分发源选择集中在 `source.go`。工具链替换的回归测试直接调用这些生产安装入口，验证最终步骤失败后的旧安装恢复和回滚错误传播。
 
-`UpgradeToolchain` 与 `RemoveToolchain` 统一处理 SDK、外置的 stdx/docs 内容及默认工具链、目录 override 引用。升级会为下载组件获取新版本对应的制品，为链接组件保留原始来源；替代工具链已存在时保留其组件选择，只补齐缺少的组件。失败时撤回本次新建且未被引用的替代安装，恢复受阻时保留仍需使用的内容并报告错误。同名强制重装保留已有组件清单和外置内容。URL 安装中的附带 stdx 仍在 SDK 安装后处理，可能出现 SDK 成功、stdx 失败的部分成功。
+`UpdateInstalled` 与 `UpdateAll` 是更新入口：`UpdateInstalled` 接收一个已解析的工具链名，通道名更新该通道最新的已安装宿主版本，目标平台变体名更新该变体，明确版本缺失时安装、已存在时不动；`UpdateAll` 遍历所有已安装工具链，跳过自定义和链接的，逐个失败不中断，最后清空下载暂存区。两者都在包内查找已安装版本、加载设置、构建分发源并解析通道头，再交给包内的升级步骤，结果以 `UpdateOutcome`（已更新、已是最新、已跳过、固定版本、失败）返回，由 CLI 渲染为文本或 JSON。升级步骤与 `RemoveToolchain` 统一处理 SDK、外置的 stdx/docs 内容及默认工具链、目录 override 引用。升级会为下载组件获取新版本对应的制品，为链接组件保留原始来源；替代工具链已存在时保留其组件选择，只补齐缺少的组件。失败时撤回本次新建且未被引用的替代安装，恢复受阻时保留仍需使用的内容并报告错误。同名强制重装保留已有组件清单和外置内容。URL 安装中的附带 stdx 仍在 SDK 安装后处理，可能出现 SDK 成功、stdx 失败的部分成功。
 
 ### `resolve`：活动工具链解析
 

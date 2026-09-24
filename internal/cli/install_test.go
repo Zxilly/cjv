@@ -944,8 +944,9 @@ func TestFullLifecycle(t *testing.T) {
 	require.NotEmpty(t, installed)
 
 	// Update (already up to date)
-	_, updateErr := app.updateAll(context.Background())
-	require.NoError(t, updateErr)
+	updateCmd := &cobra.Command{}
+	updateCmd.SetContext(context.Background())
+	require.NoError(t, app.runUpdate(updateCmd, nil))
 
 	// Uninstall
 	require.NoError(t, app.runUninstall(nil, []string{installed[0]}))

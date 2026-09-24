@@ -87,10 +87,6 @@ func (app *application) newManifestFetcher(url string) *lifecycle.ManifestFetche
 	return lifecycle.NewManifestFetcher(url, app.lifecycleOptions())
 }
 
-func (app *application) newManifestFetcherForSettings(settings *config.Settings) (*lifecycle.ManifestFetcher, error) {
-	return lifecycle.NewManifestFetcherForSettings(settings, app.lifecycleOptions())
-}
-
 // InstallComponentsForToolchain backs the proxy auto_install path: it
 // resolves tcInput to an already-installed toolchain and installs missing
 // components quietly.
