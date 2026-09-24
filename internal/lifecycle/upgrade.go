@@ -14,10 +14,11 @@ import (
 	"github.com/Zxilly/cjv/internal/toolchain"
 )
 
-// UpgradeToolchain installs a replacement and the old toolchain's component
+// upgradeToolchain installs a replacement and the old toolchain's component
 // choices before moving references and retiring the old content. An existing
 // replacement keeps its own component choices; only missing ones are added.
-func UpgradeToolchain(ctx context.Context, currentName string, resolved ResolvedToolchain, sf *config.SettingsFile, fetcher *ManifestFetcher, opts Options) (updated bool, retErr error) {
+// UpdateInstalled and UpdateAll resolve the replacement and run this step.
+func upgradeToolchain(ctx context.Context, currentName string, resolved ResolvedToolchain, sf *config.SettingsFile, fetcher *ManifestFetcher, opts Options) (updated bool, retErr error) {
 	if _, err := toolchain.ParseToolchainName(currentName); err != nil {
 		return false, err
 	}
