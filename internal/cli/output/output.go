@@ -63,6 +63,15 @@ func (renderer *Renderer) Progress(out io.Writer) progress.Sink {
 	return progress.NewText(out, os.Stderr)
 }
 
+// Note writes a human-facing aside to stderr in text mode. JSON consumers
+// read the document on stdout and get no aside, so JSON mode writes nothing.
+func (renderer *Renderer) Note(stderr io.Writer, msg string) {
+	if renderer.JSON {
+		return
+	}
+	_, _ = fmt.Fprintln(stderr, msg)
+}
+
 // RenderTo writes r to w in the active output mode.
 func (renderer *Renderer) RenderTo(w io.Writer, r Result) error {
 	if renderer.JSON {

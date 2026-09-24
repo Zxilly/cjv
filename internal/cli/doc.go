@@ -3,7 +3,6 @@ package cli
 import (
 	"fmt"
 	"net/url"
-	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
@@ -58,10 +57,10 @@ func (app *application) runDoc(cmd *cobra.Command, args []string) error {
 	// before a launch that immediately fails (e.g. headless/SSH session)
 	// produces contradictory "opening" + "failed" messages.
 	if err := app.openURLFunc(fileURL(docFile)); err != nil {
-		fmt.Fprintln(os.Stderr, i18n.T("OpeningDocsBrowserFailed", i18n.MsgData{"Path": docFile}))
+		app.output.Note(cmd.ErrOrStderr(), i18n.T("OpeningDocsBrowserFailed", i18n.MsgData{"Path": docFile}))
 		return err
 	}
-	fmt.Fprintln(os.Stderr, i18n.T("OpeningDocs", nil))
+	app.output.Note(cmd.ErrOrStderr(), i18n.T("OpeningDocs", nil))
 	return app.output.RenderTo(cmdOutput(cmd), docResult{Toolchain: tcName, Topic: topic, Path: docFile, Opened: true})
 }
 

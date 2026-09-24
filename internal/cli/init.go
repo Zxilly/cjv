@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -65,9 +66,42 @@ func initComponentOptions() []huh.Option[string] {
 	return options
 }
 
-func renderInitMarkdown(markdown string) (string, error) {
+// initConsole is where the init wizard talks to the user: the command's out
+// and err writers, so tests capture the dialogue in a buffer while a real
+// invocation still reaches the terminal.
+type initConsole struct {
+	out io.Writer
+	err io.Writer
+}
+
+func newInitConsole(cmd *cobra.Command) initConsole {
+	return initConsole{out: cmd.OutOrStdout(), err: cmd.ErrOrStderr()}
+}
+
+func (c initConsole) println(a ...any) {
+	_, _ = fmt.Fprintln(c.out, a...)
+}
+
+func (c initConsole) printf(format string, a ...any) {
+	_, _ = fmt.Fprintf(c.out, format, a...)
+}
+
+// markdown writes rendered markdown, or the raw text when rendering fails.
+func (c initConsole) markdown(markdown string) {
+	rendered, err := renderInitMarkdown(markdown, writerIsTerminal(c.out))
+	if err != nil {
+		c.println(markdown)
+		return
+	}
+	_, _ = io.WriteString(c.out, rendered)
+	if !strings.HasSuffix(rendered, "\n") {
+		c.println()
+	}
+}
+
+func renderInitMarkdown(markdown string, terminal bool) (string, error) {
 	style := styles.AutoStyle
-	if !initStdoutIsTerminal() {
+	if !terminal {
 		style = styles.NoTTYStyle
 	}
 	r, err := glamour.NewTermRenderer(
@@ -82,20 +116,14 @@ func renderInitMarkdown(markdown string) (string, error) {
 	return r.Render(markdown)
 }
 
-func printInitMarkdown(markdown string) {
-	rendered, err := renderInitMarkdown(markdown)
-	if err != nil {
-		fmt.Println(markdown)
-		return
+// writerIsTerminal reports whether w is an interactive terminal. A writer
+// that is not a file (a test buffer) is never one.
+func writerIsTerminal(w io.Writer) bool {
+	f, ok := w.(*os.File)
+	if !ok {
+		return false
 	}
-	fmt.Print(rendered)
-	if !strings.HasSuffix(rendered, "\n") {
-		fmt.Println()
-	}
-}
-
-func initStdoutIsTerminal() bool {
-	fd := os.Stdout.Fd()
+	fd := f.Fd()
 	return isatty.IsTerminal(fd) || isatty.IsCygwinTerminal(fd)
 }
 
@@ -229,6 +257,7 @@ func (app *application) runInit(cmd *cobra.Command, _ []string) error {
 		return &cjverr.UnsupportedForJSONError{Command: "init"}
 	}
 	selfmgmt.CheckSudoSafety()
+	con := newInitConsole(cmd)
 
 	home, err := config.Home()
 	if err != nil {
@@ -245,39 +274,39 @@ func (app *application) runInit(cmd *cobra.Command, _ []string) error {
 	components := append([]string(nil), app.initComponents...)
 	modifyPath := !app.initNoModifyPath
 
-	fmt.Println()
-	color.Cyan(i18n.T("InitWelcome", nil))
-	fmt.Println()
-	printInitMarkdown(i18n.T("InitDescription", nil))
+	con.println()
+	_, _ = color.New(color.FgCyan).Fprintln(con.out, i18n.T("InitWelcome", nil))
+	con.println()
+	con.markdown(i18n.T("InitDescription", nil))
 
-	fmt.Println(i18n.T("InitDataDir", nil))
-	fmt.Println()
-	fmt.Printf("    %s\n", home)
-	fmt.Println()
-	printInitMarkdown(i18n.T("InitDataDirEnvHint", nil))
+	con.println(i18n.T("InitDataDir", nil))
+	con.println()
+	con.printf("    %s\n", home)
+	con.println()
+	con.markdown(i18n.T("InitDataDirEnvHint", nil))
 
-	printInitMarkdown(i18n.T("InitCommandsAvailable", nil))
-	fmt.Printf("    %s\n", binDir)
-	fmt.Println()
+	con.markdown(i18n.T("InitCommandsAvailable", nil))
+	con.printf("    %s\n", binDir)
+	con.println()
 
 	if !modifyPath {
-		fmt.Println(i18n.T("InitPathNeedManual", nil))
+		con.println(i18n.T("InitPathNeedManual", nil))
 	} else if runtime.GOOS == "windows" {
-		fmt.Println(i18n.T("InitRegistryPath", nil))
+		con.println(i18n.T("InitRegistryPath", nil))
 	} else {
-		fmt.Println(i18n.T("InitShellConfigs", nil))
-		fmt.Println()
+		con.println(i18n.T("InitShellConfigs", nil))
+		con.println()
 		posix, fish := reachable.ShellConfigPaths()
 		for _, rc := range posix {
-			fmt.Printf("    %s\n", rc)
+			con.printf("    %s\n", rc)
 		}
 		if fish != "" {
-			fmt.Printf("    %s\n", fish)
+			con.printf("    %s\n", fish)
 		}
 	}
-	fmt.Println()
+	con.println()
 
-	printInitMarkdown(i18n.T("InitUninstallHint", nil))
+	con.markdown(i18n.T("InitUninstallHint", nil))
 
 	// The interactive menu relies on huh forms reading from a terminal. When
 	// stdin is not a TTY (the documented `curl ... | sh` / `irm ... | iex`
@@ -286,22 +315,22 @@ func (app *application) runInit(cmd *cobra.Command, _ []string) error {
 	// failing with an opaque form error.
 	interactive := !app.initYes && initStdinIsTerminal()
 	if !app.initYes && !interactive {
-		fmt.Println()
-		fmt.Println(i18n.T("InitNonInteractive", nil))
+		con.println()
+		con.println(i18n.T("InitNonInteractive", nil))
 	}
 
 	if interactive {
 		customized := false
 	menuLoop:
 		for {
-			fmt.Println()
-			fmt.Println(i18n.T("InitCurrentOptions", nil))
-			fmt.Println()
-			fmt.Printf("   %s %s\n", i18n.T("InitOptInstallPath", nil), home)
-			fmt.Printf("   %s %s\n", i18n.T("InitOptToolchain", nil), toolchain)
-			fmt.Printf("   %s %s\n", i18n.T("InitOptComponents", nil), initComponentsStr(components))
-			fmt.Printf("   %s %s\n", i18n.T("InitOptModifyPath", nil), yesNoStr(modifyPath))
-			fmt.Println()
+			con.println()
+			con.println(i18n.T("InitCurrentOptions", nil))
+			con.println()
+			con.printf("   %s %s\n", i18n.T("InitOptInstallPath", nil), home)
+			con.printf("   %s %s\n", i18n.T("InitOptToolchain", nil), toolchain)
+			con.printf("   %s %s\n", i18n.T("InitOptComponents", nil), initComponentsStr(components))
+			con.printf("   %s %s\n", i18n.T("InitOptModifyPath", nil), yesNoStr(modifyPath))
+			con.println()
 
 			proceedLabel := i18n.T("InitProceedStandard", nil)
 			if customized {
@@ -352,7 +381,7 @@ func (app *application) runInit(cmd *cobra.Command, _ []string) error {
 
 	managedPath := filepath.Join(binDir, sdktools.CjvBinaryName())
 	if _, err := os.Stat(managedPath); err == nil {
-		fmt.Println(i18n.T("InitAlreadyInstalled", i18n.MsgData{"Path": managedPath}))
+		con.println(i18n.T("InitAlreadyInstalled", i18n.MsgData{"Path": managedPath}))
 
 		if interactive {
 			confirm := false
@@ -368,7 +397,7 @@ func (app *application) runInit(cmd *cobra.Command, _ []string) error {
 		}
 	}
 
-	return app.installInit(cmd.Context(), initialHome, initCustomizeOptions{
+	return app.installInit(cmd.Context(), con, initialHome, initCustomizeOptions{
 		home:       home,
 		toolchain:  toolchain,
 		components: components,
@@ -378,7 +407,7 @@ func (app *application) runInit(cmd *cobra.Command, _ []string) error {
 
 // installInit applies the selected options after the interactive menu and
 // reinstall confirmation. It is shared by interactive and unattended init.
-func (app *application) installInit(ctx context.Context, initialHome string, opts initCustomizeOptions) (retErr error) {
+func (app *application) installInit(ctx context.Context, con initConsole, initialHome string, opts initCustomizeOptions) (retErr error) {
 	home := opts.home
 	binDir := filepath.Join(home, "bin")
 	if home != initialHome {
@@ -433,36 +462,36 @@ func (app *application) installInit(ctx context.Context, initialHome string, opt
 		installOpts := app.lifecycleOptions()
 		installOpts.ConfigurePath = false
 		if err := lifecycle.Install(ctx, lifecycle.InstallRequest{Toolchain: opts.toolchain, Components: opts.components}, installOpts); err != nil {
-			fmt.Fprintf(os.Stderr, "\n%s\n", i18n.T("InitToolchainFailed", i18n.MsgData{
+			_, _ = fmt.Fprintf(con.err, "\n%s\n", i18n.T("InitToolchainFailed", i18n.MsgData{
 				"Name": opts.toolchain,
 				"Err":  err.Error(),
 			}))
 		}
 	}
 
-	fmt.Println()
-	color.Green(i18n.T("InitComplete", nil))
-	fmt.Println()
-	printInitMarkdown(i18n.T("InitSourceHint", nil))
-	printInitMarkdown(i18n.T("InitSourceHintRun", nil))
+	con.println()
+	_, _ = color.New(color.FgGreen).Fprintln(con.out, i18n.T("InitComplete", nil))
+	con.println()
+	con.markdown(i18n.T("InitSourceHint", nil))
+	con.markdown(i18n.T("InitSourceHintRun", nil))
 	if runtime.GOOS != "windows" {
 		envPath := filepath.Join(home, "env")
-		fmt.Printf("    source \"%s\"\n", envPath)
+		con.printf("    source \"%s\"\n", envPath)
 	} else {
 		ps1Path := filepath.Join(home, "env.ps1")
 		batPath := filepath.Join(home, "env.bat")
-		fmt.Printf("    PowerShell: . \"%s\"\n", ps1Path)
-		fmt.Printf("    CMD:        \"%s\"\n", batPath)
+		con.printf("    PowerShell: . \"%s\"\n", ps1Path)
+		con.printf("    CMD:        \"%s\"\n", batPath)
 	}
-	fmt.Println()
+	con.println()
 
 	if opts.toolchain == "none" {
-		printInitMarkdown(i18n.T("InitInstallHint", nil))
-		fmt.Println("    cjv install <toolchain>")
-		fmt.Println()
+		con.markdown(i18n.T("InitInstallHint", nil))
+		con.println("    cjv install <toolchain>")
+		con.println()
 	}
 	if !opts.modifyPath {
-		fmt.Println(i18n.T("InitNoModifyPath", i18n.MsgData{"BinDir": binDir}))
+		con.println(i18n.T("InitNoModifyPath", i18n.MsgData{"BinDir": binDir}))
 	}
 
 	return nil

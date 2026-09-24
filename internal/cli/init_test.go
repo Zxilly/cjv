@@ -34,9 +34,17 @@ func TestRunInitNonInteractiveNoToolchainWritesManagedFiles(t *testing.T) {
 		config.ResetDefaultSettingsFileCache()
 	})
 
-	err := app.runInit(&cobra.Command{}, nil)
+	var stdout, stderr bytes.Buffer
+	cmd := &cobra.Command{}
+	cmd.SetOut(&stdout)
+	cmd.SetErr(&stderr)
+	err := app.runInit(cmd, nil)
 
 	require.NoError(t, err)
+	assert.Contains(t, stdout.String(), i18n.T("InitWelcome", nil), "the wizard writes to the command's out writer")
+	assert.Contains(t, stdout.String(), i18n.T("InitComplete", nil))
+	assert.Contains(t, stdout.String(), "cjv install <toolchain>")
+	assert.Empty(t, stderr.String())
 	assert.FileExists(t, filepath.Join(home, "bin", sdktools.CjvBinaryName()))
 	if runtime.GOOS == "windows" {
 		assert.FileExists(t, filepath.Join(home, "env.ps1"))
@@ -82,11 +90,10 @@ func TestInstallInitRestoresHomeEnvironment(t *testing.T) {
 				}
 
 				app := newApplication("dev", "")
-				_, err = captureStdout(t, func() error {
-					return app.installInit(t.Context(), initialHome, initCustomizeOptions{
-						home:      selectedHome,
-						toolchain: "none",
-					})
+				var out bytes.Buffer
+				err = app.installInit(t.Context(), initConsole{out: &out, err: &out}, initialHome, initCustomizeOptions{
+					home:      selectedHome,
+					toolchain: "none",
 				})
 				if fail {
 					require.Error(t, err)
@@ -138,9 +145,14 @@ func TestRunInitContinuesWhenDefaultToolchainInstallFails(t *testing.T) {
 		config.ResetDefaultSettingsFileCache()
 	})
 
-	err := app.runInit(&cobra.Command{}, nil)
+	var stderr bytes.Buffer
+	cmd := &cobra.Command{}
+	cmd.SetOut(io.Discard)
+	cmd.SetErr(&stderr)
+	err := app.runInit(cmd, nil)
 
 	require.NoError(t, err)
+	assert.Contains(t, stderr.String(), "local-sdk", "the failed toolchain install is reported on the command's err writer")
 	assert.FileExists(t, filepath.Join(home, "bin", sdktools.CjvBinaryName()))
 	assert.Equal(t, originalNoPathSetup, os.Getenv(config.EnvNoPathSetup))
 }
@@ -225,7 +237,7 @@ func TestRunInitPassesConfiguredComponentsToDefaultToolchainInstall(t *testing.T
 }
 
 func TestRenderInitMarkdown(t *testing.T) {
-	rendered, err := renderInitMarkdown("Use `cjv install lts` to install a toolchain.")
+	rendered, err := renderInitMarkdown("Use `cjv install lts` to install a toolchain.", false)
 
 	require.NoError(t, err)
 	assert.Contains(t, rendered, "cjv install lts")
