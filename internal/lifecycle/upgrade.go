@@ -10,7 +10,7 @@ import (
 	"github.com/Zxilly/cjv/internal/cjverr"
 	"github.com/Zxilly/cjv/internal/component"
 	"github.com/Zxilly/cjv/internal/config"
-	"github.com/Zxilly/cjv/internal/i18n"
+	"github.com/Zxilly/cjv/internal/progress"
 	"github.com/Zxilly/cjv/internal/toolchain"
 )
 
@@ -40,7 +40,7 @@ func upgradeToolchain(ctx context.Context, currentName string, resolved Resolved
 		return false, err
 	}
 	if currentName == resolved.Name {
-		opts.report("AlreadyUpToDate", i18n.MsgData{"Version": currentName})
+		opts.emit(progress.Event{Kind: progress.AlreadyUpToDate, Toolchain: currentName})
 		return false, nil
 	}
 	intents, err := component.InstalledIntents(oldRoots)
@@ -63,7 +63,7 @@ func upgradeToolchain(ctx context.Context, currentName string, resolved Resolved
 		return false, existsErr
 	}
 	newlyInstalled := errors.Is(existsErr, os.ErrNotExist)
-	opts.report("UpdateFound", i18n.MsgData{"Current": currentName, "Latest": resolved.Name})
+	opts.emit(progress.Event{Kind: progress.UpdateFound, Toolchain: currentName, Replacement: resolved.Name})
 	// Keep the old default until the replacement and all desired components
 	// are ready. Remove a newly created replacement on failure so resolving a
 	// channel cannot select the incomplete higher version on the next attempt.

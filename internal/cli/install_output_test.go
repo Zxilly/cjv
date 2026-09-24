@@ -8,8 +8,8 @@ import (
 	"testing"
 
 	"github.com/Zxilly/cjv/internal/config"
-	"github.com/Zxilly/cjv/internal/i18n"
 	"github.com/Zxilly/cjv/internal/lifecycle"
+	"github.com/Zxilly/cjv/internal/progress"
 	"github.com/Zxilly/cjv/internal/testutil"
 	"github.com/stretchr/testify/require"
 )
@@ -74,17 +74,18 @@ func TestComponentAddJSONIncludesResultOnInstallAndSkip(t *testing.T) {
 	require.True(t, json.Valid([]byte(stdout)), stdout)
 }
 
-func TestComponentProgressUsesCommandWriterAndQuietInstaller(t *testing.T) {
+func TestComponentProgressUsesCommandWriter(t *testing.T) {
 	_, name := setupComponentOutputTest(t)
 	require.NoError(t, lifecycle.Install(t.Context(), lifecycle.InstallRequest{Toolchain: "nightly"}, lifecycle.Options{}))
-	// Proxy auto-install remains silent even if a caller supplies a reporter.
+	// The proxy component install reports to the sink it was given and
+	// writes nothing on its own.
+	recorder := &testutil.ProgressRecorder{}
 	stdout, err := captureStdout(t, func() error {
-		return lifecycle.InstallComponentsForToolchain(t.Context(), name, []string{"docs"}, lifecycle.Options{
-			Report: func(string, i18n.MsgData) { t.Fatal("quiet component install emitted progress") },
-		})
+		return lifecycle.InstallComponentsForToolchain(t.Context(), name, []string{"docs"}, lifecycle.Options{Progress: recorder})
 	})
 	require.NoError(t, err)
 	require.Empty(t, stdout)
+	require.Contains(t, recorder.Kinds, progress.ComponentInstalled)
 
 	app := newApplication("dev", "")
 	var commandOutput bytes.Buffer

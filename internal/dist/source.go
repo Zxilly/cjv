@@ -29,7 +29,6 @@ type Source struct {
 	manifestURL string
 	nightlyURL  string
 	root        *url.URL
-	fetchSHA256 func(context.Context, string) (string, error)
 
 	once     sync.Once
 	manifest *Manifest
@@ -38,12 +37,6 @@ type Source struct {
 	nightlyOnce     sync.Once
 	nightlyManifest *Manifest
 	nightlyErr      error
-}
-
-// SourceOptions supplies the external checksum-sidecar operation used by
-// nightly SDK entries whose manifest checksum is empty.
-type SourceOptions struct {
-	FetchNightlySHA256 func(context.Context, string) (string, error)
 }
 
 // ManifestFetchError reports an HTTP response from a manifest endpoint.
@@ -56,19 +49,12 @@ func (e *ManifestFetchError) Error() string {
 	return fmt.Sprintf("failed to fetch manifest: HTTP %d", e.StatusCode)
 }
 
-// NewSource resolves the active distribution source from settings.
+// NewSource resolves the active distribution source from settings. A nightly
+// release whose manifest entry carries no checksum is completed from its
+// sha256 sidecar next to the asset.
 func NewSource(settings *config.Settings) (*Source, error) {
-	return NewSourceWithOptions(settings, SourceOptions{})
-}
-
-// NewSourceWithOptions resolves the source with an explicit nightly checksum
-// operation. Lifecycle uses this as a test seam.
-func NewSourceWithOptions(settings *config.Settings, opts SourceOptions) (*Source, error) {
 	if settings == nil {
 		return nil, fmt.Errorf("distribution source requires settings")
-	}
-	if opts.FetchNightlySHA256 == nil {
-		opts.FetchNightlySHA256 = FetchNightlySHA256
 	}
 	rootValue := settings.ResolveDistServer()
 	if rootValue == "" {
@@ -80,7 +66,6 @@ func NewSourceWithOptions(settings *config.Settings, opts SourceOptions) (*Sourc
 			manifestURL: settings.ManifestURL,
 			nightlyURL:  root.JoinPath(nightlyManifestName).String(),
 			root:        root,
-			fetchSHA256: opts.FetchNightlySHA256,
 		}, nil
 	}
 
@@ -93,7 +78,6 @@ func NewSourceWithOptions(settings *config.Settings, opts SourceOptions) (*Sourc
 		manifestURL: manifestURL,
 		nightlyURL:  root.JoinPath(nightlyManifestName).String(),
 		root:        root,
-		fetchSHA256: opts.FetchNightlySHA256,
 	}, nil
 }
 
@@ -180,7 +164,7 @@ func (s *Source) ResolveToolchain(ctx context.Context, channel toolchain.Channel
 	}
 	download := *info
 	if channel == toolchain.Nightly && download.SHA256 == "" {
-		download.SHA256, err = s.fetchSHA256(ctx, download.URL)
+		download.SHA256, err = FetchNightlySHA256(ctx, download.URL)
 		if err != nil {
 			return ToolchainRelease{}, err
 		}

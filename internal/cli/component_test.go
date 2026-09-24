@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -9,7 +8,7 @@ import (
 
 	componentlib "github.com/Zxilly/cjv/internal/component"
 	"github.com/Zxilly/cjv/internal/config"
-	"github.com/Zxilly/cjv/internal/toolchain"
+	"github.com/Zxilly/cjv/internal/lifecycle"
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -101,22 +100,21 @@ func TestRunComponentListQuietShowsInstalledThenAvailable(t *testing.T) {
 }
 
 func TestRunComponentAddInstallsForResolvedToolchain(t *testing.T) {
+	home, tcName := setupComponentOutputTest(t)
+	require.NoError(t, lifecycle.Install(t.Context(), lifecycle.InstallRequest{Toolchain: "nightly"}, lifecycle.Options{}))
+	tcDir := filepath.Join(home, "toolchains", tcName)
+	// A manifest without files marks docs installed; only --force replaces it
+	// with the real component from the distribution source.
+	require.NoError(t, componentlib.WriteManifest(tcDir, componentlib.Docs, nil))
+	docsIndex := filepath.Join(home, "docs", tcName, "main", "index.html")
+
 	app := newApplication("dev", "")
-	tcName := "lts-1.0.5"
-	tcDir := setupComponentCLITest(t, tcName)
+	require.NoError(t, app.execute([]string{"component", "add", "docs", "--toolchain", tcName}))
+	assert.NoFileExists(t, docsIndex, "an installed component is kept without --force")
 
-	app.componentToolchain = tcName
-	app.componentAddForce = true
-	var gotForce bool
-	app.componentInstallFunc = func(ctx context.Context, roots componentlib.Roots, tc toolchain.ToolchainName, name componentlib.Name, tuple, downloadsDir string, force bool) error {
-		gotForce = force
-		return componentlib.WriteManifest(roots.TcDir, name, []string{"index.html"})
-	}
-
-	err := app.runComponentAdd(&cobra.Command{}, []string{"docs"})
-
-	require.NoError(t, err)
-	assert.True(t, gotForce)
+	app = newApplication("dev", "")
+	require.NoError(t, app.execute([]string{"component", "add", "docs", "--toolchain", tcName, "--force"}))
+	assert.FileExists(t, docsIndex)
 	assert.True(t, componentlib.IsInstalled(tcDir, componentlib.Docs))
 }
 

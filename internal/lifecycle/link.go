@@ -17,6 +17,7 @@ import (
 	"github.com/Zxilly/cjv/internal/dist"
 	"github.com/Zxilly/cjv/internal/fsops"
 	"github.com/Zxilly/cjv/internal/i18n"
+	"github.com/Zxilly/cjv/internal/progress"
 	"github.com/Zxilly/cjv/internal/sdktools"
 	"github.com/Zxilly/cjv/internal/toolchain"
 )
@@ -34,8 +35,8 @@ func InstallToolchainFromURL(ctx context.Context, name, url, sha256 string, forc
 		// transport (TLS for https — a plain http URL is the user's risk) plus the
 		// archive-magic sniff in DownloadCachedWithName. The staged file is owned
 		// by cjv and cleaned up on success.
-		opts.report("LinkDownloadingURL", i18n.MsgData{"URL": url})
-		archivePath, err := dist.DownloadCachedWithName(ctx, url, sha256, downloadsDir, name)
+		opts.emit(progress.Event{Kind: progress.LinkDownloadingURL, Subject: url})
+		archivePath, err := dist.DownloadCachedWithName(ctx, url, sha256, downloadsDir, name, opts.sink())
 		return archivePath, true, err
 	})
 }
@@ -47,7 +48,7 @@ func InstallToolchainFromURL(ctx context.Context, name, url, sha256 string, forc
 // stays where the user put it. The default toolchain is not changed.
 func InstallToolchainFromZip(ctx context.Context, name, archivePath, sha256 string, force, noStdx bool, opts Options) error {
 	return installLinkedToolchain(ctx, name, force, noStdx, opts, func(_ context.Context, _ string) (string, bool, error) {
-		opts.report("LinkUsingArchive", i18n.MsgData{"Path": archivePath})
+		opts.emit(progress.Event{Kind: progress.LinkUsingArchive, Subject: archivePath})
 		if err := dist.VerifyArchive(archivePath, sha256); err != nil {
 			return "", false, err
 		}
@@ -172,7 +173,7 @@ func installLinkedToolchain(ctx context.Context, name string, force, noStdx bool
 	if innerStdx == "" || noStdx {
 		return nil
 	}
-	opts.report("LinkInstallingStdx", i18n.MsgData{"Name": name})
+	opts.emit(progress.Event{Kind: progress.LinkInstallingStdx, Toolchain: name})
 	roots, err := component.RootsFor(name)
 	if err != nil {
 		return err

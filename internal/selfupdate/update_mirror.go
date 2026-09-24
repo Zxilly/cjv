@@ -10,11 +10,13 @@ import (
 	"runtime"
 	"strings"
 	"time"
+
+	"github.com/Zxilly/cjv/internal/progress"
 )
 
 const mirrorBinaryName = "cjv-mirror"
 
-func runUpdate(ctx context.Context, updateURL, currentVersion string) (Result, error) {
+func runUpdate(ctx context.Context, updateURL, currentVersion string, sink progress.Sink) (Result, error) {
 	base, err := gitCodeReleasesBase(updateURL)
 	if err != nil {
 		return Result{}, err
@@ -37,6 +39,7 @@ func runUpdate(ctx context.Context, updateURL, currentVersion string) (Result, e
 		BinaryName:  platformBinaryName(mirrorBinaryName, runtime.GOOS),
 		AssetURL:    base + "/download/" + tag + "/" + assetName,
 		ChecksumURL: base + "/download/" + tag + "/checksums.txt",
+		Progress:    sink,
 	}); err != nil {
 		return Result{}, fmt.Errorf("update failed: %w", err)
 	}

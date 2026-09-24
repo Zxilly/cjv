@@ -13,7 +13,7 @@ import (
 	"github.com/Zxilly/cjv/internal/dist"
 	"github.com/Zxilly/cjv/internal/fsops"
 	"github.com/Zxilly/cjv/internal/fstx"
-	"github.com/Zxilly/cjv/internal/i18n"
+	"github.com/Zxilly/cjv/internal/progress"
 	"github.com/Zxilly/cjv/internal/reachable"
 	"github.com/Zxilly/cjv/internal/sdktools"
 	"github.com/Zxilly/cjv/internal/toolchain"
@@ -51,7 +51,7 @@ func installResolved(ctx context.Context, d *Distribution, rt ResolvedToolchain,
 			if u, err := url.Parse(rt.URL); err != nil || u.Path == "" {
 				return "", false, fmt.Errorf("invalid toolchain download URL: %s", rt.URL)
 			}
-			archivePath, err := dist.DownloadCachedWithName(ctx, rt.URL, rt.SHA256, downloadsDir, rt.ArchiveName)
+			archivePath, err := dist.DownloadCachedWithName(ctx, rt.URL, rt.SHA256, downloadsDir, rt.ArchiveName, opts.sink())
 			return archivePath, true, err
 		},
 		extract: dist.InstallSDK,
@@ -75,7 +75,7 @@ func installResolved(ctx context.Context, d *Distribution, rt ResolvedToolchain,
 	err := placeToolchain(ctx, resolvedName, force, rt.Tuple, acq, publishDefault, opts)
 	var already *cjverr.ToolchainAlreadyInstalledError
 	if errors.As(err, &already) {
-		opts.report("ToolchainAlreadyInstalled", i18n.MsgData{"Name": resolvedName})
+		opts.emit(progress.Event{Kind: progress.ToolchainAlreadyInstalled, Toolchain: resolvedName})
 		return nil
 	}
 	return err
@@ -138,7 +138,7 @@ func placeToolchain(ctx context.Context, name string, force bool, tuple string, 
 		}
 	}()
 
-	opts.report("Extracting", nil)
+	opts.emit(progress.Event{Kind: progress.Extracting})
 	if err := acq.extract(ctx, archivePath, stagingDir); err != nil {
 		return err
 	}
@@ -148,7 +148,7 @@ func placeToolchain(ctx context.Context, name string, force bool, tuple string, 
 	if err := swapInstalledToolchain(stagingDir, destDir, isReinstall, finalizeInstalledToolchain, publish); err != nil {
 		return err
 	}
-	opts.report("ToolchainInstalled", i18n.MsgData{"Name": name})
+	opts.emit(progress.Event{Kind: progress.ToolchainInstalled, Toolchain: name})
 	return nil
 }
 

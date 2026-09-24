@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strings"
 
 	"github.com/Zxilly/cjv/internal/cli/selfmgmt"
 	"github.com/Zxilly/cjv/internal/config"
@@ -22,9 +23,30 @@ type updateResult struct {
 	Updates       []updateEntry          `json:"updates"`
 	NoneInstalled bool                   `json:"none_installed,omitempty"`
 	SelfUpdate    *selfmgmt.UpdateResult `json:"self_update,omitempty"`
+
+	// Text mode: the toolchain updates were already reported as progress;
+	// what remains is the empty-home hint and the self-update outcome, either
+	// the applied update's own text or the current version after a check.
+	selfUpdateText string
+	checkedVersion string
 }
 
-func (r updateResult) Text() string { return "" }
+func (r updateResult) Text() string {
+	if r.NoneInstalled {
+		return i18n.T("NoToolchainsInstalled", nil)
+	}
+	var b strings.Builder
+	if r.selfUpdateText != "" {
+		b.WriteString(r.selfUpdateText)
+		if !strings.HasSuffix(r.selfUpdateText, "\n") {
+			b.WriteByte('\n')
+		}
+	}
+	if r.checkedVersion != "" {
+		fmt.Fprintf(&b, "\n  cjv %s\n", r.checkedVersion)
+	}
+	return b.String()
+}
 
 func updateEntries(outcomes []lifecycle.UpdateOutcome) []updateEntry {
 	var entries []updateEntry
@@ -54,72 +76,43 @@ func (app *application) runUpdate(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			return err
 		}
-		if !app.output.IsJSON() {
-			return nil
-		}
 		return app.output.RenderTo(cmdOutput(cmd), updateResult{Updates: updateEntries([]lifecycle.UpdateOutcome{outcome})})
 	}
 
 	report, err := lifecycle.UpdateAll(ctx, app.lifecycleOptions())
-	if report.NoneInstalled && !app.output.IsJSON() {
-		fmt.Println(i18n.T("NoToolchainsInstalled", nil))
-	}
-
+	result := updateResult{Updates: updateEntries(report.Outcomes), NoneInstalled: report.NoneInstalled}
 	// The self-update decision runs regardless of UpdateAll errors: it may
 	// have partially succeeded, and the original error is returned at the end.
-	var selfUpdate *selfmgmt.UpdateResult
 	if !report.NoneInstalled {
-		var renderErr error
-		selfUpdate, renderErr = app.autoSelfUpdate(ctx, cmd)
-		if renderErr != nil {
-			return renderErr
-		}
+		app.autoSelfUpdate(ctx, &result)
 	}
-
-	if err != nil {
-		return err
-	}
-	if !app.output.IsJSON() {
-		return nil
-	}
-	return app.output.RenderTo(cmdOutput(cmd), updateResult{
-		Updates:       updateEntries(report.Outcomes),
-		NoneInstalled: report.NoneInstalled,
-		SelfUpdate:    selfUpdate,
-	})
+	return app.output.RenderOutcome(cmdOutput(cmd), result, err)
 }
 
-// autoSelfUpdate applies the auto_self_update setting after a full update.
-// The result is returned for the JSON envelope; in text mode an applied
-// self-update is rendered here and a check prints the current version.
-func (app *application) autoSelfUpdate(ctx context.Context, cmd *cobra.Command) (*selfmgmt.UpdateResult, error) {
+// autoSelfUpdate applies the auto_self_update setting after a full update and
+// records the outcome on result: the applied update for the JSON payload and
+// its text, or the current version after a check.
+func (app *application) autoSelfUpdate(ctx context.Context, result *updateResult) {
 	_, settings, err := config.LoadDefaultSettings()
 	if err != nil || app.noSelfUpdate || settings.AutoSelfUpdate == config.AutoSelfUpdateDisable {
-		return nil, nil
+		return
 	}
 	switch settings.AutoSelfUpdate {
 	case config.AutoSelfUpdateEnable:
-		var selfUpdate *selfmgmt.UpdateResult
-		selfResult, selfErr := selfmgmt.UpdateManaged(ctx, app.updateURL, app.version)
+		selfResult, selfErr := selfmgmt.UpdateManaged(ctx, app.updateURL, app.version, app.progress())
 		if selfResult.Status != "" {
-			selfUpdate = &selfResult
+			result.SelfUpdate = &selfResult
 		}
 		if selfErr != nil {
 			slog.Warn("self-update failed", "error", selfErr)
-		} else if !app.output.IsJSON() {
-			if renderErr := app.output.RenderTo(cmdOutput(cmd), selfResult); renderErr != nil {
-				return selfUpdate, renderErr
-			}
+			return
 		}
-		return selfUpdate, nil
+		result.selfUpdateText = selfResult.Text()
 	default:
 		if settings.AutoSelfUpdate != config.AutoSelfUpdateCheck {
 			slog.Warn("unknown auto_self_update value, treating as check", "value", settings.AutoSelfUpdate)
 		}
-		if !app.output.IsJSON() {
-			fmt.Printf("\n  cjv %s\n", app.version)
-		}
-		return nil, nil
+		result.checkedVersion = app.version
 	}
 }
 

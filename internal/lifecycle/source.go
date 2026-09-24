@@ -6,6 +6,7 @@ import (
 
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/dist"
+	"github.com/Zxilly/cjv/internal/progress"
 	sdktarget "github.com/Zxilly/cjv/internal/target"
 	"github.com/Zxilly/cjv/internal/toolchain"
 )
@@ -22,13 +23,13 @@ type Distribution struct {
 	Source    *dist.Source
 	HostTuple string
 
-	opts     Options
+	progress progress.Sink
 	noteOnce sync.Once
 }
 
 // OpenDistribution loads the user settings and resolves the distribution
-// source and host tuple they select. opts carries the progress reporter for
-// the operation's manifest note.
+// source and host tuple they select. opts carries the progress sink the
+// operation's manifest note and checksum warning go to.
 func OpenDistribution(opts Options) (*Distribution, error) {
 	sf, settings, err := config.LoadDefaultSettings()
 	if err != nil {
@@ -42,7 +43,7 @@ func OpenDistribution(opts Options) (*Distribution, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Distribution{File: sf, Settings: settings, Source: source, HostTuple: hostTuple, opts: opts}, nil
+	return &Distribution{File: sf, Settings: settings, Source: source, HostTuple: hostTuple, progress: opts.sink()}, nil
 }
 
 // TargetTuple composes the host tuple with a cross-compile environment such
@@ -54,7 +55,7 @@ func (d *Distribution) TargetTuple(environment string) (string, error) {
 
 // note emits the operation-scoped manifest progress message once.
 func (d *Distribution) note() {
-	d.noteOnce.Do(func() { d.opts.report("FetchingManifest", nil) })
+	d.noteOnce.Do(func() { d.progress.Report(progress.Event{Kind: progress.FetchingManifest}) })
 }
 
 // Resolve turns a channel, version or channel-version request into the
@@ -74,7 +75,7 @@ func (d *Distribution) Resolve(ctx context.Context, name toolchain.ToolchainName
 		resolved.Target = tuple
 	}
 	if release.Channel == toolchain.Nightly && release.Download.SHA256 == "" {
-		d.opts.report("NightlyNoChecksum", nil)
+		d.progress.Report(progress.Event{Kind: progress.NightlyNoChecksum})
 	}
 	return ResolvedToolchain{
 		Name:        resolved.String(),

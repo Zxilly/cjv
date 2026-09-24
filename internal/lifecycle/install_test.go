@@ -18,8 +18,8 @@ import (
 	"github.com/Zxilly/cjv/internal/component"
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/dist"
-	"github.com/Zxilly/cjv/internal/i18n"
 	"github.com/Zxilly/cjv/internal/lifecycle"
+	"github.com/Zxilly/cjv/internal/progress"
 	"github.com/Zxilly/cjv/internal/sdktools"
 	sdktarget "github.com/Zxilly/cjv/internal/target"
 	"github.com/Zxilly/cjv/internal/testutil"
@@ -142,12 +142,12 @@ func TestInstall_AlreadyInstalledAndForce(t *testing.T) {
 	installHome(t, testutil.ValidMockServer(t).URL+"/sdk-versions.json")
 	require.NoError(t, install(t, lifecycle.InstallRequest{Toolchain: "lts"}))
 
-	var reported []string
-	opts := lifecycle.Options{Report: func(message string, _ i18n.MsgData) { reported = append(reported, message) }}
-	// Second install without force prints "already installed" and returns nil.
+	recorder := &testutil.ProgressRecorder{}
+	opts := lifecycle.Options{Progress: recorder}
+	// Second install without force reports "already installed" and returns nil.
 	assert.NoError(t, lifecycle.Install(context.Background(), lifecycle.InstallRequest{Toolchain: "lts"}, opts),
 		"already-installed is an informational no-op, not an error")
-	assert.Equal(t, []string{"FetchingManifest", "ToolchainAlreadyInstalled"}, reported)
+	assert.Equal(t, []progress.Kind{progress.FetchingManifest, progress.ToolchainAlreadyInstalled}, recorder.Kinds)
 
 	assert.NoError(t, install(t, lifecycle.InstallRequest{Toolchain: "lts", Force: true}),
 		"force install should succeed even when already installed")

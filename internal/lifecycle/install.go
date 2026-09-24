@@ -5,44 +5,34 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/Zxilly/cjv/internal/component"
 	"github.com/Zxilly/cjv/internal/i18n"
+	"github.com/Zxilly/cjv/internal/progress"
 	sdktarget "github.com/Zxilly/cjv/internal/target"
 	"github.com/Zxilly/cjv/internal/toolchain"
 )
 
-// Options carries the small adapter surface the lifecycle module needs from
-// callers. The install implementation is shared by CLI commands and proxy
-// auto-install; presentation stays outside the core module.
+// Options carries what an operation needs from its caller. The install
+// implementation is shared by CLI commands and proxy auto-install;
+// presentation stays outside the core module.
 type Options struct {
-	// Report receives progress messages; nil keeps library operations silent.
-	Report func(string, i18n.MsgData)
+	// Progress receives every progress event of the operation, including the
+	// download transfers; nil keeps the operation silent. The caller picks
+	// the adapter: progress.Text for humans, progress.Discard for JSON mode.
+	Progress progress.Sink
 	// ConfigurePath adds CJV_HOME/bin to the user's PATH when the install
 	// publishes the first default toolchain. `cjv install` sets it; `cjv init`
 	// has already handled PATH itself, and proxy auto-install leaves PATH
 	// alone because cjv is evidently reachable.
 	ConfigurePath bool
-	// ComponentInstall, when set, replaces the real component installer and
-	// gives orchestration tests a source-independent adapter.
-	ComponentInstall func(context.Context, component.Roots, toolchain.ToolchainName, component.Name, string, string, bool) error
 }
 
-func (o Options) report(message string, data i18n.MsgData) {
-	if o.Report != nil {
-		o.Report(message, data)
-	}
+// sink returns the progress adapter to emit to, never nil.
+func (o Options) sink() progress.Sink {
+	return progress.Or(o.Progress)
 }
 
-func (o Options) installComponent(ctx context.Context, d *Distribution, roots component.Roots, tc toolchain.ToolchainName, name component.Name, tuple, downloadsDir string, force bool) error {
-	if o.ComponentInstall != nil {
-		return o.ComponentInstall(ctx, roots, tc, name, tuple, downloadsDir, force)
-	}
-	if o.Report != nil {
-		d.note()
-	}
-	return component.InstallFromSource(ctx, roots, tc, name, tuple, downloadsDir, force, d.Source, func(stage string) {
-		o.report(stage, i18n.MsgData{"Toolchain": tc.String(), "Component": string(name)})
-	})
+func (o Options) emit(e progress.Event) {
+	o.sink().Report(e)
 }
 
 // InstallRequest names what an install brings into CJV_HOME.

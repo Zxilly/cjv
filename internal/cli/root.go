@@ -60,14 +60,7 @@ func (app *application) execute(args []string) error {
 	}
 	app.rootCmd.SetArgs(args)
 	err := app.rootCmd.Execute()
-	if err != nil {
-		if app.output.IsJSON() {
-			_ = app.output.RenderErrorTo(app.rootCmd.OutOrStdout(), app.rootCmd.ErrOrStderr(), err)
-		} else if !errors.As(err, new(*cjverr.ExitCodeError)) {
-			_, _ = fmt.Fprintln(app.rootCmd.ErrOrStderr(), "cjv:", err)
-		}
-	}
-	return err
+	return app.output.RenderErrorTo(app.rootCmd.OutOrStdout(), app.rootCmd.ErrOrStderr(), err)
 }
 
 func (app *application) configureRoot() {

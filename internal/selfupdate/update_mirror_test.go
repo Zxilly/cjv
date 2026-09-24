@@ -19,7 +19,7 @@ func TestUpdateGitCodeReturnsFetchError(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	_, err := Update(ctx, "https://gitcode.com/Zxilly/cjv/releases", "1.0.0")
+	_, err := Update(ctx, "https://gitcode.com/Zxilly/cjv/releases", "1.0.0", nil)
 
 	require.Error(t, err)
 }

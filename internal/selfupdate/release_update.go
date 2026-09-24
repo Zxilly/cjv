@@ -12,6 +12,8 @@ import (
 
 	"github.com/Zxilly/cjv/internal/dist"
 	goversion "github.com/hashicorp/go-version"
+
+	"github.com/Zxilly/cjv/internal/progress"
 )
 
 type releaseArtifact struct {
@@ -19,6 +21,8 @@ type releaseArtifact struct {
 	BinaryName  string
 	AssetURL    string
 	ChecksumURL string
+	// Progress receives the asset download progress; nil reports nothing.
+	Progress progress.Sink
 }
 
 func newerReleaseVersion(currentVersion, tag string) (string, bool, error) {
@@ -106,7 +110,7 @@ func installReleaseArtifact(ctx context.Context, artifact releaseArtifact) error
 	defer os.RemoveAll(tmpDir) //nolint:errcheck // best-effort cleanup
 
 	archivePath := filepath.Join(tmpDir, filepath.Base(artifact.AssetName))
-	if err := dist.DownloadFile(ctx, artifact.AssetURL, archivePath, expected); err != nil {
+	if err := dist.DownloadFile(ctx, artifact.AssetURL, archivePath, expected, artifact.Progress); err != nil {
 		return fmt.Errorf("download release asset: %w", err)
 	}
 	extractDir := filepath.Join(tmpDir, "extract")

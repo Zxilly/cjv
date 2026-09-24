@@ -10,6 +10,7 @@ import (
 	"github.com/Zxilly/cjv/internal/cjverr"
 	"github.com/Zxilly/cjv/internal/component"
 	"github.com/Zxilly/cjv/internal/config"
+	"github.com/Zxilly/cjv/internal/progress"
 	"github.com/Zxilly/cjv/internal/sdktools"
 	sdktarget "github.com/Zxilly/cjv/internal/target"
 	"github.com/Zxilly/cjv/internal/testutil"
@@ -197,7 +198,7 @@ func TestActiveReportsMissingComponentWhenAutoInstallDisabled(t *testing.T) {
 	settings.AutoInstall = false
 	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 
-	err := ensureComponents(context.Background(), tcName, filepath.Join(home, "toolchains", tcName), &settings, []string{"docs"})
+	err := ensureComponents(context.Background(), tcName, filepath.Join(home, "toolchains", tcName), &settings, []string{"docs"}, progress.Discard)
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "docs")
@@ -313,7 +314,7 @@ func TestEnsureTargetsReportsMissingWhenAutoInstallDisabled(t *testing.T) {
 	settings := config.DefaultSettings()
 	settings.AutoInstall = false
 
-	err := ensureTargets(context.Background(), tcName, tcDir, &settings, []string{"ohos"})
+	err := ensureTargets(context.Background(), tcName, tcDir, &settings, []string{"ohos"}, progress.Discard)
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "ohos")
@@ -336,13 +337,13 @@ func TestEnsureTargetsAutoInstallFailureAndMissingResult(t *testing.T) {
 		return os.ErrPermission
 	}
 
-	err := ensureTargets(context.Background(), tcName, tcDir, &settings, []string{"ohos"})
+	err := ensureTargets(context.Background(), tcName, tcDir, &settings, []string{"ohos"}, progress.Discard)
 	require.Error(t, err)
 
 	AutoInstallFunc = func(ctx context.Context, input string, targets []string) error {
 		return nil
 	}
-	err = ensureTargets(context.Background(), tcName, tcDir, &settings, []string{"ohos"})
+	err = ensureTargets(context.Background(), tcName, tcDir, &settings, []string{"ohos"}, progress.Discard)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "ohos")
 }
@@ -351,7 +352,7 @@ func TestEnsureComponentsInvalidAndAutoInstallFailures(t *testing.T) {
 	tcDir := t.TempDir()
 	settings := config.DefaultSettings()
 
-	require.Error(t, ensureComponents(context.Background(), "lts-1.0.5", tcDir, &settings, []string{"unknown"}))
+	require.Error(t, ensureComponents(context.Background(), "lts-1.0.5", tcDir, &settings, []string{"unknown"}, progress.Discard))
 
 	settings.AutoInstall = true
 	oldComponents := AutoInstallComponentsFunc
@@ -360,14 +361,14 @@ func TestEnsureComponentsInvalidAndAutoInstallFailures(t *testing.T) {
 		return os.ErrPermission
 	}
 
-	err := ensureComponents(context.Background(), "lts-1.0.5", tcDir, &settings, []string{"docs"})
+	err := ensureComponents(context.Background(), "lts-1.0.5", tcDir, &settings, []string{"docs"}, progress.Discard)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "docs")
 
 	AutoInstallComponentsFunc = func(ctx context.Context, input string, components []string) error {
 		return nil
 	}
-	err = ensureComponents(context.Background(), "lts-1.0.5", tcDir, &settings, []string{"docs"})
+	err = ensureComponents(context.Background(), "lts-1.0.5", tcDir, &settings, []string{"docs"}, progress.Discard)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "docs")
 }

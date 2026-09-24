@@ -7,20 +7,22 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
+	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 
-	"github.com/Zxilly/cjv/internal/cjverr"
 	"github.com/Zxilly/cjv/internal/component"
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/dist"
-	"github.com/Zxilly/cjv/internal/i18n"
-	"github.com/Zxilly/cjv/internal/toolchain"
+	"github.com/Zxilly/cjv/internal/progress"
+	sdktarget "github.com/Zxilly/cjv/internal/target"
+	"github.com/Zxilly/cjv/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -41,12 +43,76 @@ func installedToolchainHome(t *testing.T, tcName string) string {
 	return tcDir
 }
 
-// fakeComponentInstall replaces the real component installer with install,
-// which sees the roots, component, tuple and force flag the batch resolved.
-func fakeComponentInstall(install func(roots component.Roots, name component.Name, tuple string, force bool) error) Options {
-	return Options{ComponentInstall: func(_ context.Context, roots component.Roots, _ toolchain.ToolchainName, name component.Name, tuple, _ string, force bool) error {
-		return install(roots, name, tuple, force)
-	}}
+// componentServer serves an LTS 1.0.5 manifest whose component set is
+// built from archives: docs and stdx-docs from docsFiles, the stdx of every
+// platform in stdxPlatforms from stdxFiles. The archive served for a path in
+// broken is invalid instead. Settings are saved so OpenDistribution reads the
+// server, and the paths requested are returned for assertions.
+func componentServer(t *testing.T, docsFiles, stdxFiles map[string]string, stdxPlatforms []string, broken ...string) func() []string {
+	t.Helper()
+	docsData, docsSHA := testutil.MockTarGz(t, docsFiles)
+	stdxData, stdxSHA := testutil.MockTarGz(t, stdxFiles)
+	mux := http.NewServeMux()
+	server := httptest.NewServer(mux)
+	t.Cleanup(server.Close)
+
+	set := dist.ComponentSet{
+		Docs:     &dist.ComponentInfo{URL: server.URL + "/docs.tar.gz", SHA256: docsSHA},
+		StdxDocs: &dist.ComponentInfo{URL: server.URL + "/stdx-docs.tar.gz", SHA256: docsSHA},
+		Stdx:     map[string]dist.ComponentInfo{},
+	}
+	for _, platform := range stdxPlatforms {
+		set.Stdx[platform] = dist.ComponentInfo{URL: server.URL + "/stdx/" + platform + ".tar.gz", SHA256: stdxSHA}
+	}
+	var manifest dist.Manifest
+	channel := dist.ChannelInfo{
+		Latest: "1.0.5",
+		Versions: map[string]map[string]dist.DownloadInfo{"1.0.5": {
+			"linux-x64": {Name: "sdk.zip", URL: server.URL + "/sdk.zip", SHA256: docsSHA},
+		}},
+	}
+	manifest.Channels.LTS = channel
+	manifest.Channels.STS = channel
+	manifest.Channels.LTS.Components = map[string]dist.ComponentSet{"1.0.5": set}
+
+	var mu sync.Mutex
+	var requested []string
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		requested = append(requested, r.URL.Path)
+		mu.Unlock()
+		switch {
+		case r.URL.Path == "/versions.json":
+			assert.NoError(t, json.NewEncoder(w).Encode(manifest))
+		case slices.Contains(broken, r.URL.Path):
+			_, _ = w.Write([]byte("invalid archive"))
+		case strings.HasPrefix(r.URL.Path, "/stdx/"):
+			_, _ = w.Write(stdxData)
+		default:
+			_, _ = w.Write(docsData)
+		}
+	})
+
+	settings := config.DefaultSettings()
+	settings.ManifestURL = server.URL + "/versions.json"
+	sf, err := config.DefaultSettingsFile()
+	require.NoError(t, err)
+	require.NoError(t, sf.Save(&settings))
+	return func() []string {
+		mu.Lock()
+		defer mu.Unlock()
+		return append([]string(nil), requested...)
+	}
+}
+
+// hostStdxPlatform is the stdx archive platform token of the test host.
+func hostStdxPlatform(t *testing.T) string {
+	t.Helper()
+	tuple, err := sdktarget.CurrentHostTuple("")
+	require.NoError(t, err)
+	platform, err := sdktarget.StdxPlatformForTuple(tuple)
+	require.NoError(t, err)
+	return platform
 }
 
 func TestInstallComponentsInputValidationAndAlreadyInstalled(t *testing.T) {
@@ -60,32 +126,28 @@ func TestInstallComponentsInputValidationAndAlreadyInstalled(t *testing.T) {
 
 	require.Error(t, InstallComponents(context.Background(), tcName, []string{"unknown"}, false, quietLifecycleOptions()))
 
-	var reported []string
-	opts := fakeComponentInstall(func(roots component.Roots, name component.Name, _ string, _ bool) error {
-		return &cjverr.ComponentAlreadyInstalledError{Toolchain: filepath.Base(roots.TcDir), Component: string(name)}
-	})
-	opts.Report = func(message string, _ i18n.MsgData) { reported = append(reported, message) }
-	require.NoError(t, InstallComponents(context.Background(), tcName, []string{"docs"}, false, opts))
-	assert.Equal(t, []string{"ComponentAlreadyInstalled"}, reported)
-	assert.False(t, component.IsInstalled(tcDir, component.Docs))
+	// An installed component is kept and reported without touching the
+	// source: nothing is fetched and the manifest stays as it was.
+	require.NoError(t, component.WriteManifest(tcDir, component.Docs, []string{"index.html"}))
+	recorder := &testutil.ProgressRecorder{}
+	require.NoError(t, InstallComponents(context.Background(), tcName, []string{"docs"}, false, Options{Progress: recorder}))
+	assert.Equal(t, []progress.Kind{progress.FetchingManifest, progress.ComponentAlreadyInstalled}, recorder.Kinds)
+	assert.True(t, component.IsInstalled(tcDir, component.Docs))
 }
 
 func TestInstallComponentsRollsBackPreviousComponentOnLaterFailure(t *testing.T) {
 	tcName := "lts-1.0.5"
 	tcDir := installedToolchainHome(t, tcName)
-	opts := fakeComponentInstall(func(roots component.Roots, name component.Name, _ string, _ bool) error {
-		if name == component.Docs {
-			return errors.New("docs failed")
-		}
-		require.NoError(t, os.MkdirAll(filepath.Join(roots.StdxDir, "dynamic"), 0o755))
-		require.NoError(t, os.WriteFile(filepath.Join(roots.StdxDir, "dynamic", "libfoo.so"), []byte("x"), 0o644))
-		return component.WriteManifest(roots.TcDir, name, []string{"dynamic/libfoo.so"})
-	})
+	requested := componentServer(t,
+		map[string]string{"index.html": "docs"},
+		map[string]string{"top/dynamic/libfoo.so": "x"},
+		[]string{hostStdxPlatform(t)},
+		"/docs.tar.gz")
 
-	err := InstallComponents(context.Background(), tcName, []string{"stdx", "docs"}, false, opts)
+	err := InstallComponents(context.Background(), tcName, []string{"stdx", "docs"}, false, quietLifecycleOptions())
 
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "docs failed")
+	assert.Contains(t, requested(), "/docs.tar.gz", "docs failed only after stdx was installed")
 	assert.False(t, component.IsInstalled(tcDir, component.Stdx))
 	stdxDir, dirErr := config.StdxDirFor(tcName)
 	require.NoError(t, dirErr)
@@ -95,35 +157,37 @@ func TestInstallComponentsRollsBackPreviousComponentOnLaterFailure(t *testing.T)
 func TestInstallComponentsUsesTargetTupleForTargetVariant(t *testing.T) {
 	const targetName = "lts-1.0.5-linux-x64-ohos"
 	installedToolchainHome(t, targetName)
-	var gotTuple, gotTcDir string
-	opts := fakeComponentInstall(func(roots component.Roots, _ component.Name, tuple string, _ bool) error {
-		gotTuple, gotTcDir = tuple, roots.TcDir
-		return nil
-	})
+	requested := componentServer(t,
+		map[string]string{"index.html": "docs"},
+		map[string]string{"top/dynamic/libfoo.so": "x"},
+		[]string{hostStdxPlatform(t), "ohos-aarch64"})
 
-	require.NoError(t, InstallComponents(context.Background(), targetName, []string{"stdx"}, false, opts))
+	require.NoError(t, InstallComponents(context.Background(), targetName, []string{"stdx"}, false, quietLifecycleOptions()))
 
 	// The target tuple encoded in the resolved name drives the stdx download,
 	// not the host tuple.
-	assert.Equal(t, "linux-x64-ohos", gotTuple)
+	assert.Contains(t, requested(), "/stdx/ohos-aarch64.tar.gz")
 	// Roots (and thus the manifest + StdxDir) are keyed by the full target name.
-	assert.Equal(t, targetName, filepath.Base(gotTcDir))
+	stdxDir, err := config.StdxDirFor(targetName)
+	require.NoError(t, err)
+	assert.FileExists(t, filepath.Join(stdxDir, "dynamic", "libfoo.so"))
 }
 
-func TestInstallComponentsForToolchainUsesInstalledToolchainQuietly(t *testing.T) {
+func TestInstallComponentsForToolchainResolvesInstalledToolchain(t *testing.T) {
 	tcName := "lts-1.0.5"
 	tcDir := installedToolchainHome(t, tcName)
-	opts := fakeComponentInstall(func(roots component.Roots, name component.Name, _ string, _ bool) error {
-		return component.WriteManifest(roots.TcDir, name, []string{"index.html"})
-	})
-	opts.Report = func(string, i18n.MsgData) { t.Fatal("quiet component install emitted progress") }
+	componentServer(t, map[string]string{"index.html": "docs"}, map[string]string{"top/dynamic/libfoo.so": "x"}, nil)
 
-	require.NoError(t, InstallComponentsForToolchain(context.Background(), "lts", []string{"docs"}, opts))
+	// The channel name resolves to the installed version, and progress goes
+	// to whatever sink the caller supplied.
+	recorder := &testutil.ProgressRecorder{}
+	require.NoError(t, InstallComponentsForToolchain(context.Background(), "lts", []string{"docs"}, Options{Progress: recorder}))
 	assert.True(t, component.IsInstalled(tcDir, component.Docs))
+	assert.Contains(t, recorder.Kinds, progress.ComponentInstalled)
 
-	require.NoError(t, InstallComponentsForToolchain(context.Background(), "lts", nil, opts), "no components is a no-op")
-	require.Error(t, InstallComponentsForToolchain(context.Background(), "+bad", []string{"docs"}, opts))
-	require.Error(t, InstallComponentsForToolchain(context.Background(), "sts-2.0.0", []string{"docs"}, opts), "missing toolchain")
+	require.NoError(t, InstallComponentsForToolchain(context.Background(), "lts", nil, quietLifecycleOptions()), "no components is a no-op")
+	require.Error(t, InstallComponentsForToolchain(context.Background(), "+bad", []string{"docs"}, quietLifecycleOptions()))
+	require.Error(t, InstallComponentsForToolchain(context.Background(), "sts-2.0.0", []string{"docs"}, quietLifecycleOptions()), "missing toolchain")
 }
 
 func TestInstallComponentsRestoresBatchAfterLaterArchiveFailure(t *testing.T) {
