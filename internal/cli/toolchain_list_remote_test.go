@@ -13,6 +13,8 @@ import (
 
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/dist"
+	sdktarget "github.com/Zxilly/cjv/internal/target"
+	"github.com/Zxilly/cjv/internal/testutil"
 	"github.com/Zxilly/cjv/internal/toolchain"
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
@@ -32,9 +34,9 @@ func listRemoteMockServer(t *testing.T) *httptest.Server {
 	mkInfo := func(name string) dist.DownloadInfo {
 		return dist.DownloadInfo{Name: name + ".zip", SHA256: sha, URL: "https://example.invalid/" + name + ".zip"}
 	}
-	hostKey, err := dist.CurrentHostTuple("")
+	hostKey, err := sdktarget.CurrentHostTuple("")
 	require.NoError(t, err)
-	hostOhos, err := dist.CurrentTargetTuple("", "ohos")
+	hostOhos, err := sdktarget.CurrentTargetTuple("", "ohos")
 	require.NoError(t, err)
 
 	platformsForVersion := func(includeOhos bool) map[string]dist.DownloadInfo {
@@ -119,7 +121,7 @@ func TestRunToolchainListRemote_DefaultCurrentHost(t *testing.T) {
 
 	require.NoError(t, app.runToolchainListRemote(cmd, nil))
 
-	hostKey, err := dist.CurrentHostTuple("")
+	hostKey, err := sdktarget.CurrentHostTuple("")
 	require.NoError(t, err)
 
 	var got toolchainListRemoteResult
@@ -143,7 +145,7 @@ func TestRunToolchainListRemote_TargetComposesPlatformKey(t *testing.T) {
 
 	require.NoError(t, app.runToolchainListRemote(cmd, nil))
 
-	expected, err := dist.CurrentTargetTuple("", "ohos")
+	expected, err := sdktarget.CurrentTargetTuple("", "ohos")
 	require.NoError(t, err)
 
 	var got toolchainListRemoteResult
@@ -259,7 +261,7 @@ func TestRunToolchainListRemote_NightlyUsesDistServerManifest(t *testing.T) {
 	config.IsolateForTest(t, home)
 	require.NoError(t, config.EnsureDirs())
 
-	server := splitNightlyMockServer(t)
+	server := testutil.SplitNightlyMockServer(t)
 	settings := config.DefaultSettings()
 	settings.DistServer = server.URL + "/corp/cjv"
 	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
@@ -278,7 +280,7 @@ func TestRunToolchainListRemote_NightlyUsesDistServerManifest(t *testing.T) {
 	app.output.SetJSONMode(false)
 	textCmd, textBuf := newListRemoteCmd()
 	require.NoError(t, app.runToolchainListRemote(textCmd, nil))
-	host, err := dist.CurrentHostTuple("")
+	host, err := sdktarget.CurrentHostTuple("")
 	require.NoError(t, err)
 	assert.Contains(t, textBuf.String(), host)
 }
@@ -288,7 +290,7 @@ func TestRunToolchainListRemote_AllPlatformsNightlyDistServerText(t *testing.T) 
 	home := t.TempDir()
 	config.IsolateForTest(t, home)
 	require.NoError(t, config.EnsureDirs())
-	server := splitNightlyMockServer(t)
+	server := testutil.SplitNightlyMockServer(t)
 	settings := config.DefaultSettings()
 	settings.DistServer = server.URL + "/corp/cjv"
 	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
@@ -298,7 +300,7 @@ func TestRunToolchainListRemote_AllPlatformsNightlyDistServerText(t *testing.T) 
 	cmd, buf := newListRemoteCmd()
 	require.NoError(t, app.runToolchainListRemote(cmd, nil))
 
-	host, err := dist.CurrentHostTuple("")
+	host, err := sdktarget.CurrentHostTuple("")
 	require.NoError(t, err)
 	assert.Contains(t, buf.String(), host)
 	assert.Contains(t, buf.String(), "1.2.0-alpha.20260822010101")
@@ -325,9 +327,9 @@ func TestRunToolchainListRemote_AllPlatforms(t *testing.T) {
 	assert.Equal(t, "1.0.5", lts.Latest)
 
 	// Lexical sort places the bare host tuple before its environment-suffixed variants.
-	hostTuple, err := dist.CurrentHostTuple("")
+	hostTuple, err := sdktarget.CurrentHostTuple("")
 	require.NoError(t, err)
-	hostOhos, err := dist.CurrentTargetTuple("", "ohos")
+	hostOhos, err := sdktarget.CurrentTargetTuple("", "ohos")
 	require.NoError(t, err)
 
 	tuples := make([]string, 0, len(lts.Platforms))
@@ -380,7 +382,7 @@ func TestRunToolchainListRemote_TextRendering_SinglePlatform(t *testing.T) {
 	require.NoError(t, app.runToolchainListRemote(cmd, nil))
 
 	got := buf.String()
-	hostKey, err := dist.CurrentHostTuple("")
+	hostKey, err := sdktarget.CurrentHostTuple("")
 	require.NoError(t, err)
 	assert.Contains(t, got, "lts")
 	assert.Contains(t, got, "1.0.5")
@@ -398,9 +400,9 @@ func TestRunToolchainListRemote_TextRendering_AllPlatforms(t *testing.T) {
 	require.NoError(t, app.runToolchainListRemote(cmd, nil))
 
 	got := buf.String()
-	hostKey, err := dist.CurrentHostTuple("")
+	hostKey, err := sdktarget.CurrentHostTuple("")
 	require.NoError(t, err)
-	hostOhos, err := dist.CurrentTargetTuple("", "ohos")
+	hostOhos, err := sdktarget.CurrentTargetTuple("", "ohos")
 	require.NoError(t, err)
 
 	assert.Contains(t, got, "lts")

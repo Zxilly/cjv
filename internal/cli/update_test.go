@@ -10,6 +10,7 @@ import (
 
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/lifecycle"
+	"github.com/Zxilly/cjv/internal/testutil"
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -35,11 +36,11 @@ func TestRunUpdate_WithToolchain(t *testing.T) {
 	config.IsolateForTest(t, home)
 	require.NoError(t, config.EnsureDirs())
 
-	server := validMockServer(t)
+	server := testutil.ValidMockServer(t)
 	settings := config.DefaultSettings()
 	settings.ManifestURL = server.URL + "/sdk-versions.json"
 	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
-	require.NoError(t, app.InstallToolchainWithOptions(context.Background(), "lts", false))
+	installTestToolchain(t, app, "lts")
 
 	cmd := &cobra.Command{}
 	err := app.runUpdate(cmd, nil)
@@ -69,11 +70,11 @@ func TestRunUpdate_WithSpecificName(t *testing.T) {
 	config.IsolateForTest(t, home)
 	require.NoError(t, config.EnsureDirs())
 
-	server := validMockServer(t)
+	server := testutil.ValidMockServer(t)
 	settings := config.DefaultSettings()
 	settings.ManifestURL = server.URL + "/sdk-versions.json"
 	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
-	require.NoError(t, app.InstallToolchainWithOptions(context.Background(), "lts", false))
+	installTestToolchain(t, app, "lts")
 
 	cmd := &cobra.Command{}
 	cmd.SetContext(context.Background())
@@ -87,11 +88,11 @@ func TestRunUpdate_SingleToolchain(t *testing.T) {
 	config.IsolateForTest(t, home)
 	require.NoError(t, config.EnsureDirs())
 
-	server := validMockServer(t)
+	server := testutil.ValidMockServer(t)
 	settings := config.DefaultSettings()
 	settings.ManifestURL = server.URL + "/sdk-versions.json"
 	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
-	require.NoError(t, app.InstallToolchainWithOptions(context.Background(), "lts", false))
+	installTestToolchain(t, app, "lts")
 
 	cmd := &cobra.Command{}
 	err := app.runUpdate(cmd, []string{"lts-1.0.5"})
@@ -117,7 +118,7 @@ func TestRunUpdateRendersJSONResult(t *testing.T) {
 	config.IsolateForTest(t, home)
 	require.NoError(t, config.EnsureDirs())
 	require.NoError(t, os.MkdirAll(filepath.Join(home, "toolchains", "lts-1.0.0"), 0o755))
-	server := validMockServer(t)
+	server := testutil.ValidMockServer(t)
 	settings := config.DefaultSettings()
 	settings.ManifestURL = server.URL + "/sdk-versions.json"
 	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))

@@ -7,8 +7,9 @@ import (
 	"testing"
 
 	"github.com/Zxilly/cjv/internal/config"
-	"github.com/Zxilly/cjv/internal/dist"
 	"github.com/Zxilly/cjv/internal/resolve"
+	sdktarget "github.com/Zxilly/cjv/internal/target"
+	"github.com/Zxilly/cjv/internal/testutil"
 	"github.com/Zxilly/cjv/internal/toolchain"
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
@@ -27,11 +28,11 @@ func TestRunWhich_FindsTool(t *testing.T) {
 	t.Chdir(cwd)
 
 	// Install a toolchain
-	server := validMockServer(t)
+	server := testutil.ValidMockServer(t)
 	settings := config.DefaultSettings()
 	settings.ManifestURL = server.URL + "/sdk-versions.json"
 	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
-	require.NoError(t, app.InstallToolchainWithOptions(context.Background(), "lts", false))
+	installTestToolchain(t, app, "lts")
 
 	cmd := &cobra.Command{}
 	err := app.runWhich(cmd, []string{"cjc"})
@@ -86,7 +87,7 @@ targets = ["ohos"]
 	resolve.AutoInstallFunc = func(ctx context.Context, input string, targets []string) error {
 		gotInput = input
 		gotTargets = append([]string(nil), targets...)
-		key, err := dist.CurrentTargetTuple(settings.DefaultHost, "ohos")
+		key, err := sdktarget.CurrentTargetTuple(settings.DefaultHost, "ohos")
 		require.NoError(t, err)
 		name := toolchain.ToolchainName{Channel: toolchain.STS, Version: "2.0.0", Target: key}.String()
 		require.NoError(t, os.MkdirAll(filepath.Join(home, "toolchains", name), 0o755))

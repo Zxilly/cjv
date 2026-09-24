@@ -1,13 +1,22 @@
 package cli
 
 import (
+	"context"
 	"io"
 	"os"
 	"testing"
 
 	"github.com/Zxilly/cjv/internal/config"
+	"github.com/Zxilly/cjv/internal/lifecycle"
 	"github.com/stretchr/testify/require"
 )
+
+// installTestToolchain installs name through the production entry with the
+// application's lifecycle adapters, as `cjv install <name>` would.
+func installTestToolchain(t *testing.T, app *application, name string) {
+	t.Helper()
+	require.NoError(t, lifecycle.Install(context.Background(), lifecycle.InstallRequest{Toolchain: name}, app.lifecycleOptions()))
+}
 
 // TestMain configures the test environment for the cli package.
 // Tests isolate process environment and sometimes redirect os.Stdout, so they

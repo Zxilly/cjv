@@ -9,22 +9,16 @@ import (
 
 	"github.com/Zxilly/cjv/internal/cjverr"
 	"github.com/Zxilly/cjv/internal/dist"
+	sdktarget "github.com/Zxilly/cjv/internal/target"
 	"github.com/Zxilly/cjv/internal/toolchain"
 )
 
-// Install downloads and unpacks a component for the given toolchain.
-// tuple is required for stdx (a host tuple selects the host stdx, a target
-// tuple selects the matching cross-compile target stdx) and ignored for
-// docs / stdx-docs. mf supplies component URLs for every standard channel.
-// force=true reinstalls over an existing manifest.
-func Install(ctx context.Context, roots Roots, tc toolchain.ToolchainName, name Name, tuple, downloadsDir string, force bool, mf *dist.Manifest) (retErr error) {
-	return installWithResolver(ctx, roots, tc, name, tuple, downloadsDir, force, func(spec Spec) (dist.ComponentInfo, error) {
-		return ResolveAssetInfo(spec, tc, tuple, mf)
-	}, nil)
-}
-
-// InstallFromSource installs a component through the configured manifest
-// distribution source.
+// InstallFromSource downloads and unpacks a component for the given toolchain
+// through the configured distribution source. tuple is required for stdx (a
+// host tuple selects the host stdx, a target tuple selects the matching
+// cross-compile target stdx) and ignored for docs / stdx-docs. force=true
+// reinstalls over an existing manifest. report, when set, receives the
+// "FetchingComponent" and "InstallingComponent" stages.
 func InstallFromSource(ctx context.Context, roots Roots, tc toolchain.ToolchainName, name Name, tuple, downloadsDir string, force bool, source *dist.Source, report func(string)) (retErr error) {
 	return installWithResolver(ctx, roots, tc, name, tuple, downloadsDir, force, func(spec Spec) (dist.ComponentInfo, error) {
 		platform := ""
@@ -159,4 +153,14 @@ func moveStagedFiles(stageDir, destDir string, paths []string) error {
 		}
 	}
 	return nil
+}
+
+// stdxPlatform maps the SDK tuple to the stdx archive platform token the
+// manifest is keyed by (e.g. "linux-arm64" -> "linux-aarch64",
+// "linux-x64-ohos" -> "ohos-aarch64").
+func stdxPlatform(tuple string) (string, error) {
+	if tuple == "" {
+		return "", fmt.Errorf("stdx requires a host tuple")
+	}
+	return sdktarget.StdxPlatformForTuple(tuple)
 }

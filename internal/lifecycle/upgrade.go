@@ -18,7 +18,7 @@ import (
 // choices before moving references and retiring the old content. An existing
 // replacement keeps its own component choices; only missing ones are added.
 // UpdateInstalled and UpdateAll resolve the replacement and run this step.
-func upgradeToolchain(ctx context.Context, currentName string, resolved ResolvedToolchain, sf *config.SettingsFile, fetcher *ManifestFetcher, opts Options) (updated bool, retErr error) {
+func upgradeToolchain(ctx context.Context, currentName string, resolved ResolvedToolchain, d *Distribution, opts Options) (updated bool, retErr error) {
 	if _, err := toolchain.ParseToolchainName(currentName); err != nil {
 		return false, err
 	}
@@ -47,6 +47,9 @@ func upgradeToolchain(ctx context.Context, currentName string, resolved Resolved
 	if err != nil {
 		return false, err
 	}
+	// Reload: a previous upgrade in the same operation may have moved the
+	// default and overrides.
+	sf := d.File
 	settings, err := sf.Load()
 	if err != nil {
 		return false, err
@@ -64,7 +67,7 @@ func upgradeToolchain(ctx context.Context, currentName string, resolved Resolved
 	// Keep the old default until the replacement and all desired components
 	// are ready. Remove a newly created replacement on failure so resolving a
 	// channel cannot select the incomplete higher version on the next attempt.
-	if err := InstallResolvedNoDefault(ctx, resolved, settings, sf, false, opts); err != nil {
+	if err := installResolved(ctx, d, resolved, false, false, opts); err != nil {
 		return false, err
 	}
 	keepReplacement := false
@@ -102,7 +105,7 @@ func upgradeToolchain(ctx context.Context, currentName string, resolved Resolved
 				if _, err := component.Link(newRoots, intent.Name, intent.Source, false); err != nil {
 					return err
 				}
-			} else if err := InstallComponentsList(ctx, resolved.Name, []string{string(intent.Name)}, false, false, fetcher, opts); err != nil {
+			} else if err := installComponents(ctx, d, resolved.Name, []string{string(intent.Name)}, false, opts); err != nil {
 				return err
 			}
 		}

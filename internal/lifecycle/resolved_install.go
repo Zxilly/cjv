@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/Zxilly/cjv/internal/cjverr"
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/dist"
 	"github.com/Zxilly/cjv/internal/fstx"
@@ -27,81 +28,41 @@ type ResolvedToolchain struct {
 	Tuple       string
 }
 
-func InstallResolved(ctx context.Context, rt ResolvedToolchain, settings *config.Settings, sf *config.SettingsFile, force bool, opts Options) error {
-	return installResolvedWithDefault(ctx, rt, settings, sf, force, true, opts)
+// acquisition is how one SDK archive reaches the downloads area and how it
+// becomes the staged SDK tree. It is the only part of placing a toolchain
+// that differs between a manifest release, a CI bundle fetched from a URL
+// and a local archive; everything around it is placeToolchain.
+type acquisition struct {
+	// fetch returns the archive path and whether cjv owns that file, in which
+	// case it is removed once the toolchain is committed. A failed placement
+	// keeps it for the next retry.
+	fetch func(ctx context.Context, downloadsDir string) (archivePath string, owned bool, err error)
+	// extract materializes the SDK tree at stagingDir from archivePath.
+	extract func(ctx context.Context, archivePath, stagingDir string) error
 }
 
-func InstallResolvedNoDefault(ctx context.Context, rt ResolvedToolchain, settings *config.Settings, sf *config.SettingsFile, force bool, opts Options) error {
-	return installResolvedWithDefault(ctx, rt, settings, sf, force, false, opts)
-}
-
-func installResolvedWithDefault(ctx context.Context, rt ResolvedToolchain, settings *config.Settings, sf *config.SettingsFile, force bool, allowDefault bool, opts Options) (retErr error) {
+// installResolved places one manifest release. setDefault allows the first
+// host toolchain to become the default; target variants pass false. An
+// already installed release without force is reported and kept.
+func installResolved(ctx context.Context, d *Distribution, rt ResolvedToolchain, force, setDefault bool, opts Options) error {
 	resolvedName := rt.Name
-	tcDir, err := config.ToolchainsDir()
-	if err != nil {
-		return err
+	acq := acquisition{
+		fetch: func(ctx context.Context, downloadsDir string) (string, bool, error) {
+			if u, err := url.Parse(rt.URL); err != nil || u.Path == "" {
+				return "", false, fmt.Errorf("invalid toolchain download URL: %s", rt.URL)
+			}
+			archivePath, err := dist.DownloadCachedWithName(ctx, rt.URL, rt.SHA256, downloadsDir, rt.ArchiveName)
+			return archivePath, true, err
+		},
+		extract: dist.InstallSDK,
 	}
-	if err := toolchain.RecoverHome(); err != nil {
-		return err
-	}
-	destDir := filepath.Join(tcDir, resolvedName)
-	isReinstall := false
-	if _, err := os.Stat(destDir); err == nil {
-		if !force {
-			opts.report("ToolchainAlreadyInstalled", i18n.MsgData{"Name": resolvedName})
-			return nil
-		}
-		isReinstall = true
-	}
-
-	if err := config.EnsureDirs(); err != nil {
-		return err
-	}
-
-	downloadsDir, err := config.DownloadsDir()
-	if err != nil {
-		return err
-	}
-	if u, err := url.Parse(rt.URL); err != nil || u.Path == "" {
-		return fmt.Errorf("invalid toolchain download URL: %s", rt.URL)
-	}
-
-	archivePath, err := dist.DownloadCachedWithName(ctx, rt.URL, rt.SHA256, downloadsDir, rt.ArchiveName)
-	if err != nil {
-		return err
-	}
-	defer func() {
-		if retErr == nil {
-			_ = dist.CleanupDownload(archivePath) //nolint:errcheck
-		}
-	}()
-
-	stagingDir := config.StagingDir(destDir)
-	if err := utils.RemoveAllRetry(stagingDir); err != nil {
-		return fmt.Errorf("failed to clean staging directory: %w", err)
-	}
-	defer func() {
-		var recoveryErr *fstx.RecoveryError
-		if retErr != nil && !errors.As(retErr, &recoveryErr) {
-			_ = utils.RemoveAllRetry(stagingDir) //nolint:errcheck
-		}
-	}()
-
-	opts.report("Extracting", nil)
-	if err := dist.InstallSDK(ctx, archivePath, stagingDir); err != nil {
-		return err
-	}
-	if err := validateInstallation(stagingDir, rt.Tuple); err != nil {
-		return err
-	}
-	isFirstInstall := allowDefault && (settings.DefaultToolchain == "" || !defaultToolchainExists(settings.DefaultToolchain))
 	var publishDefault func() error
-	if isFirstInstall {
+	if setDefault && (d.Settings.DefaultToolchain == "" || !defaultToolchainExists(d.Settings.DefaultToolchain)) {
 		publishDefault = func() error {
-			if _, err := sf.Update(config.SettingsUpdate{DefaultToolchain: &resolvedName}); err != nil {
+			if _, err := d.File.Update(config.SettingsUpdate{DefaultToolchain: &resolvedName}); err != nil {
 				return err
 			}
-			settings.DefaultToolchain = resolvedName
+			d.Settings.DefaultToolchain = resolvedName
 			if opts.ConfigurePath {
 				reachable.ConfigurePath()
 			}
@@ -111,11 +72,83 @@ func installResolvedWithDefault(ctx context.Context, rt ResolvedToolchain, setti
 			return nil
 		}
 	}
-	if err := swapInstalledToolchain(stagingDir, destDir, isReinstall, finalizeInstalledToolchain, publishDefault); err != nil {
+	err := placeToolchain(ctx, resolvedName, force, rt.Tuple, acq, publishDefault, opts)
+	var already *cjverr.ToolchainAlreadyInstalledError
+	if errors.As(err, &already) {
+		opts.report("ToolchainAlreadyInstalled", i18n.MsgData{"Name": resolvedName})
+		return nil
+	}
+	return err
+}
+
+// placeToolchain materializes a toolchain under CJV_HOME/toolchains/<name>:
+// recover interrupted changes, refuse (or with force, replace) an installed
+// one, acquire the SDK into the staging tree beside the destination, validate
+// it for tuple ("" is the host), then swap it into place in one transaction
+// that also establishes the managed binary and proxy links and, when publish
+// is set, commits the settings change with it. A failed placement removes the
+// staging tree unless recovery is blocked, in which case every transaction
+// path is retained for a later startup.
+func placeToolchain(ctx context.Context, name string, force bool, tuple string, acq acquisition, publish func() error, opts Options) (retErr error) {
+	if err := config.EnsureDirs(); err != nil {
 		return err
 	}
+	tcDir, err := config.ToolchainsDir()
+	if err != nil {
+		return err
+	}
+	if err := toolchain.RecoverHome(); err != nil {
+		return err
+	}
+	destDir := filepath.Join(tcDir, name)
+	isReinstall := false
+	if _, err := os.Stat(destDir); err == nil {
+		if !force {
+			return &cjverr.ToolchainAlreadyInstalledError{Name: name}
+		}
+		isReinstall = true
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("failed to stat %s: %w", destDir, err)
+	}
 
-	opts.report("ToolchainInstalled", i18n.MsgData{"Name": resolvedName})
+	downloadsDir, err := config.DownloadsDir()
+	if err != nil {
+		return err
+	}
+	archivePath, owned, err := acq.fetch(ctx, downloadsDir)
+	if err != nil {
+		return err
+	}
+	if owned {
+		defer func() {
+			if retErr == nil {
+				_ = dist.CleanupDownload(archivePath) //nolint:errcheck // best-effort
+			}
+		}()
+	}
+
+	stagingDir := config.StagingDir(destDir)
+	if err := utils.RemoveAllRetry(stagingDir); err != nil {
+		return fmt.Errorf("failed to clean staging directory: %w", err)
+	}
+	defer func() {
+		var recoveryErr *fstx.RecoveryError
+		if retErr != nil && !errors.As(retErr, &recoveryErr) {
+			_ = utils.RemoveAllRetry(stagingDir) //nolint:errcheck // best-effort
+		}
+	}()
+
+	opts.report("Extracting", nil)
+	if err := acq.extract(ctx, archivePath, stagingDir); err != nil {
+		return err
+	}
+	if err := validateInstallation(stagingDir, tuple); err != nil {
+		return err
+	}
+	if err := swapInstalledToolchain(stagingDir, destDir, isReinstall, finalizeInstalledToolchain, publish); err != nil {
+		return err
+	}
+	opts.report("ToolchainInstalled", i18n.MsgData{"Name": name})
 	return nil
 }
 

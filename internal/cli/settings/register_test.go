@@ -40,7 +40,7 @@ func TestRegisteredCommandsKeepFlagStatePerRoot(t *testing.T) {
 	second.SetArgs([]string{"override", "set", "sts"})
 	require.NoError(t, first.Execute())
 	require.NoError(t, second.Execute())
-	_, settings, err := LoadSettings()
+	_, settings, err := config.LoadDefaultSettings()
 	require.NoError(t, err)
 	assert.Equal(t, "lts", settings.Overrides[config.NormalizePath(explicitDir)])
 	assert.Equal(t, "sts", settings.Overrides[config.NormalizePath(currentDir)])
@@ -50,7 +50,7 @@ func TestRegisteredUnsetCommandsKeepModesPerRoot(t *testing.T) {
 	home := t.TempDir()
 	config.IsolateForTest(t, home)
 	existingDir := t.TempDir()
-	sf, settings, err := LoadSettings()
+	sf, settings, err := config.LoadDefaultSettings()
 	require.NoError(t, err)
 	settings.Overrides[config.NormalizePath(existingDir)] = "lts"
 	settings.Overrides[config.NormalizePath(filepath.Join(home, "missing"))] = "sts"
@@ -65,7 +65,7 @@ func TestRegisteredUnsetCommandsKeepModesPerRoot(t *testing.T) {
 	second.SetArgs([]string{"override", "unset", "--path", existingDir})
 	require.NoError(t, first.Execute())
 	require.NoError(t, second.Execute())
-	_, settings, err = LoadSettings()
+	_, settings, err = config.LoadDefaultSettings()
 	require.NoError(t, err)
 	assert.Empty(t, settings.Overrides)
 }

@@ -38,7 +38,6 @@ type application struct {
 	installCmd                      *cobra.Command
 	installComponents               []string
 	installTargets                  []string
-	installToolchainWithExtrasFn    func(context.Context, string, []string, []string, bool) error
 	linkForce                       bool
 	linkNoStdx                      bool
 	linkSHA256                      string

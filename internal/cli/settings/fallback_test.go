@@ -39,7 +39,7 @@ auto_self_update = "check"
 auto_install = false
 `), 0o600))
 	config.ResetDefaultSettingsFileCache()
-	_, loaded, err := LoadSettings()
+	_, loaded, err := config.LoadDefaultSettings()
 	require.NoError(t, err)
 	assert.Equal(t, "https://new.example/cjv", loaded.DistServer)
 	assert.Equal(t, "lts-1.0.6", loaded.DefaultToolchain)
@@ -57,7 +57,7 @@ func TestSetPinsValueEqualToFallback(t *testing.T) {
 	require.NoError(t, executeSettings(t, "set", "auto-install", "false"))
 	require.NoError(t, os.WriteFile(fallback, []byte("auto_install = true\n"), 0o600))
 	config.ResetDefaultSettingsFileCache()
-	_, loaded, err := LoadSettings()
+	_, loaded, err := config.LoadDefaultSettings()
 	require.NoError(t, err)
 	assert.False(t, loaded.AutoInstall)
 }
@@ -89,7 +89,7 @@ func TestDefaultAndOverrideKeepUnrelatedFallback(t *testing.T) {
 	require.NoError(t, executeSettings(t, "override", "unset", "--path", dir))
 	require.NoError(t, os.WriteFile(fallback, []byte("default_toolchain = 'lts-1.0.6'\nauto_install = true\n"), 0o600))
 	config.ResetDefaultSettingsFileCache()
-	_, loaded, err := LoadSettings()
+	_, loaded, err := config.LoadDefaultSettings()
 	require.NoError(t, err)
 	assert.Empty(t, loaded.DefaultToolchain, "explicit none suppresses the system default")
 	assert.Empty(t, loaded.Overrides)

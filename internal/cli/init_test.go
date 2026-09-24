@@ -15,6 +15,7 @@ import (
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/i18n"
 	"github.com/Zxilly/cjv/internal/sdktools"
+	"github.com/Zxilly/cjv/internal/testutil"
 	"github.com/Zxilly/cjv/internal/toolchain"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/exp/teatest"
@@ -201,7 +202,7 @@ func TestRunInitPassesConfiguredComponentsToDefaultToolchainInstall(t *testing.T
 	config.IsolateForTest(t, home)
 	t.Setenv(config.EnvDistServer, "")
 	t.Setenv(config.EnvNoPathSetup, "1")
-	server := validMockServer(t)
+	server := testutil.ValidMockServer(t)
 	settings := config.DefaultSettings()
 	settings.ManifestURL = server.URL + "/sdk-versions.json"
 	settingsPath, err := config.SettingsPath()

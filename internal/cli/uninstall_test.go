@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"context"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -10,6 +9,7 @@ import (
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/fstx"
 	"github.com/Zxilly/cjv/internal/lifecycle"
+	"github.com/Zxilly/cjv/internal/testutil"
 	"github.com/Zxilly/cjv/internal/toolchain"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -25,11 +25,11 @@ func TestRunUninstall_RemovesToolchain(t *testing.T) {
 	require.NoError(t, config.EnsureDirs())
 
 	// Install first using mock server
-	server := validMockServer(t)
+	server := testutil.ValidMockServer(t)
 	settings := config.DefaultSettings()
 	settings.ManifestURL = server.URL + "/sdk-versions.json"
 	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
-	require.NoError(t, app.InstallToolchainWithOptions(context.Background(), "lts", false))
+	installTestToolchain(t, app, "lts")
 
 	// Verify installed
 	installed, _ := toolchain.ListInstalled()
@@ -143,13 +143,13 @@ func TestRunUninstall_MultipleInstalled(t *testing.T) {
 	config.IsolateForTest(t, home)
 	require.NoError(t, config.EnsureDirs())
 
-	server := validMockServer(t)
+	server := testutil.ValidMockServer(t)
 	settings := config.DefaultSettings()
 	settings.ManifestURL = server.URL + "/sdk-versions.json"
 	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 
 	// Install lts
-	require.NoError(t, app.InstallToolchainWithOptions(context.Background(), "lts", false))
+	installTestToolchain(t, app, "lts")
 	// Create a fake sts toolchain
 	require.NoError(t, os.MkdirAll(filepath.Join(home, "toolchains", "sts-2.0.0"), 0o755))
 

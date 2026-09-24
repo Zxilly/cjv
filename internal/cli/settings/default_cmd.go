@@ -80,7 +80,7 @@ func ensureActiveToolchainName(input string, parsed toolchain.ToolchainName) err
 }
 
 func showDefault(w io.Writer) error {
-	_, settings, err := LoadSettings()
+	_, settings, err := config.LoadDefaultSettings()
 	if err != nil {
 		return err
 	}

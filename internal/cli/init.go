@@ -432,7 +432,7 @@ func (app *application) installInit(ctx context.Context, initialHome string, opt
 		// it again. The policy travels with this invocation.
 		installOpts := app.lifecycleOptions()
 		installOpts.ConfigurePath = false
-		if err := lifecycle.InstallToolchainWithExtras(ctx, opts.toolchain, nil, opts.components, false, installOpts); err != nil {
+		if err := lifecycle.Install(ctx, lifecycle.InstallRequest{Toolchain: opts.toolchain, Components: opts.components}, installOpts); err != nil {
 			fmt.Fprintf(os.Stderr, "\n%s\n", i18n.T("InitToolchainFailed", i18n.MsgData{
 				"Name": opts.toolchain,
 				"Err":  err.Error(),

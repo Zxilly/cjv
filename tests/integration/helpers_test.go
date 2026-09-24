@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	"github.com/Zxilly/cjv/internal/dist"
+	sdktarget "github.com/Zxilly/cjv/internal/target"
 	"github.com/Zxilly/cjv/internal/testutil"
 	"github.com/stretchr/testify/require"
 )
@@ -248,7 +249,7 @@ func newMockSDKServer(t *testing.T, sdkArchive []byte, sdkHash string) *httptest
 	mux := http.NewServeMux()
 	server := httptest.NewServer(mux)
 
-	platformKey, err := dist.CurrentTargetTuple("", "")
+	platformKey, err := sdktarget.CurrentTargetTuple("", "")
 	require.NoError(t, err, "failed to get platform key")
 
 	var manifest dist.Manifest
@@ -314,7 +315,7 @@ func newUnifiedNightlyServer(t *testing.T, sdkArchive []byte, sdkHash string) *h
 	t.Helper()
 	mux := http.NewServeMux()
 	server := httptest.NewServer(mux)
-	tuple, err := dist.CurrentHostTuple("")
+	tuple, err := sdktarget.CurrentHostTuple("")
 	require.NoError(t, err)
 
 	entry := func(name, path string) dist.DownloadInfo {

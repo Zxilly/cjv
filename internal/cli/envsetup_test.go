@@ -12,7 +12,7 @@ import (
 	"github.com/Zxilly/cjv/internal/cjverr"
 	componentlib "github.com/Zxilly/cjv/internal/component"
 	"github.com/Zxilly/cjv/internal/config"
-	"github.com/Zxilly/cjv/internal/dist"
+	sdktarget "github.com/Zxilly/cjv/internal/target"
 	"github.com/Zxilly/cjv/internal/toolchain"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -182,7 +182,7 @@ func TestEnvsetupRunJSONTargetSDK(t *testing.T) {
 	setupFakeToolchainForCLI(t, home, "lts-1.0.5")
 	require.NoError(t, os.MkdirAll(filepath.Join(home, "bin"), 0o755))
 
-	tuple, err := dist.CurrentTargetTuple("", "ohos")
+	tuple, err := sdktarget.CurrentTargetTuple("", "ohos")
 	require.NoError(t, err)
 	targetName := toolchain.ToolchainName{Channel: toolchain.LTS, Version: "1.0.5", Target: tuple}.String()
 	targetDir := setupFakeToolchainForCLI(t, home, targetName)

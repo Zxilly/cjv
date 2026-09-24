@@ -12,9 +12,9 @@ import (
 	"github.com/Zxilly/cjv/internal/cjverr"
 	"github.com/Zxilly/cjv/internal/component"
 	"github.com/Zxilly/cjv/internal/config"
-	"github.com/Zxilly/cjv/internal/dist"
 	"github.com/Zxilly/cjv/internal/i18n"
 	"github.com/Zxilly/cjv/internal/lifecycle"
+	sdktarget "github.com/Zxilly/cjv/internal/target"
 	"github.com/Zxilly/cjv/internal/toolchain"
 )
 
@@ -41,7 +41,7 @@ func Active(ctx context.Context, tcOverride string) (ActiveToolchain, error) {
 		slog.Warn("failed to recover install transaction", "error", err)
 	}
 
-	settings, settingsErr := loadSettings()
+	_, settings, settingsErr := config.LoadDefaultSettings()
 	tcName, source, targets, components, err := resolveName(settings, settingsErr, tcOverride)
 	if err != nil {
 		return ActiveToolchain{}, err
@@ -91,14 +91,6 @@ func Active(ctx context.Context, tcOverride string) (ActiveToolchain, error) {
 	}, nil
 }
 
-func loadSettings() (*config.Settings, error) {
-	sf, err := config.DefaultSettingsFile()
-	if err != nil {
-		return nil, err
-	}
-	return sf.Load()
-}
-
 // ActiveTarget resolves the installed cross-compilation target SDK for the
 // given target suffix, layered on the host toolchain selected by tcOverride.
 // Unlike Active (which rejects target variants as the active toolchain), this
@@ -123,7 +115,7 @@ func ActiveTarget(ctx context.Context, tcOverride, target string) (ActiveToolcha
 		return ActiveToolchain{}, fmt.Errorf("cannot resolve target %q: host toolchain %q has no channel/version", target, host.Name)
 	}
 
-	settings, settingsErr := loadSettings()
+	_, settings, settingsErr := config.LoadDefaultSettings()
 	if settingsErr != nil {
 		slog.Warn("failed to load settings", "error", settingsErr)
 	}
@@ -250,7 +242,7 @@ func autoInstallFunc() func(context.Context, string, []string) error {
 		return AutoInstallFunc
 	}
 	return func(ctx context.Context, input string, targets []string) error {
-		return lifecycle.InstallToolchainWithTargets(ctx, input, targets, false, lifecycle.Options{})
+		return lifecycle.Install(ctx, lifecycle.InstallRequest{Toolchain: input, Targets: targets}, lifecycle.Options{})
 	}
 }
 
@@ -325,5 +317,5 @@ func targetPlatformKey(settings *config.Settings, target string) (string, error)
 	if settings != nil {
 		defaultHost = settings.DefaultHost
 	}
-	return dist.CurrentTargetTuple(defaultHost, target)
+	return sdktarget.CurrentTargetTuple(defaultHost, target)
 }

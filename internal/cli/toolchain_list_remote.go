@@ -7,11 +7,9 @@ import (
 	"sort"
 	"strings"
 
-	clisettings "github.com/Zxilly/cjv/internal/cli/settings"
-	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/dist"
 	"github.com/Zxilly/cjv/internal/i18n"
-	sdktarget "github.com/Zxilly/cjv/internal/target"
+	"github.com/Zxilly/cjv/internal/lifecycle"
 	"github.com/Zxilly/cjv/internal/toolchain"
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
@@ -55,15 +53,15 @@ func (app *application) runToolchainListRemote(cmd *cobra.Command, _ []string) e
 		return err
 	}
 
-	_, settings, err := clisettings.LoadSettings()
+	d, err := lifecycle.OpenDistribution(app.lifecycleOptions())
 	if err != nil {
 		return err
 	}
 
 	if app.toolchainListRemoteAllPlatforms {
-		return app.runToolchainListRemoteAllPlatforms(ctx, cmd, settings, channel, allChannels)
+		return app.runToolchainListRemoteAllPlatforms(ctx, cmd, d.Source, channel, allChannels)
 	}
-	return app.runToolchainListRemoteSingle(ctx, cmd, settings, channel, allChannels)
+	return app.runToolchainListRemoteSingle(ctx, cmd, d, channel, allChannels)
 }
 
 func parseListRemoteChannel(raw string) (toolchain.Channel, bool, error) {
@@ -77,8 +75,12 @@ func parseListRemoteChannel(raw string) (toolchain.Channel, bool, error) {
 	return toolchain.UnknownChannel, false, errors.New(i18n.T("ListRemoteUnknownChannelFlag", i18n.MsgData{"Value": raw}))
 }
 
-func (app *application) runToolchainListRemoteSingle(ctx context.Context, cmd *cobra.Command, settings *config.Settings, channel toolchain.Channel, allChannels bool) error {
-	tuple, err := app.resolveListRemoteTuple(settings)
+func (app *application) runToolchainListRemoteSingle(ctx context.Context, cmd *cobra.Command, d *lifecycle.Distribution, channel toolchain.Channel, allChannels bool) error {
+	// --target mirrors install's semantics: an empty environment yields the
+	// current host tuple, otherwise <host>-<environment>. Validation
+	// (rejecting host tuples passed as environments, etc.) is the
+	// Distribution's.
+	tuple, err := d.TargetTuple(app.toolchainListRemoteTarget)
 	if err != nil {
 		return err
 	}
@@ -92,10 +94,7 @@ func (app *application) runToolchainListRemoteSingle(ctx context.Context, cmd *c
 	needSTS := allChannels || channel == toolchain.STS
 	needNightly := allChannels || channel == toolchain.Nightly
 
-	source, err := dist.NewSource(settings)
-	if err != nil {
-		return err
-	}
+	source := d.Source
 	if needLTS {
 		result.Channels = append(result.Channels, app.buildSourceChannelEntry(ctx, source, toolchain.LTS, tuple))
 	}
@@ -134,19 +133,7 @@ func (app *application) buildSourceChannelEntry(ctx context.Context, source *dis
 	return entry
 }
 
-// resolveListRemoteTuple mirrors install's --target semantics: an empty
-// environment yields the current host tuple, otherwise it composes
-// <host>-<environment>. Validation (rejecting host tuples passed as
-// environments, etc.) is delegated to dist.CurrentTargetTuple.
-func (app *application) resolveListRemoteTuple(settings *config.Settings) (string, error) {
-	target, err := sdktarget.Normalize(app.toolchainListRemoteTarget)
-	if err != nil {
-		return "", err
-	}
-	return dist.CurrentTargetTuple(settings.DefaultHost, target)
-}
-
-func (app *application) runToolchainListRemoteAllPlatforms(ctx context.Context, cmd *cobra.Command, settings *config.Settings, channel toolchain.Channel, allChannels bool) error {
+func (app *application) runToolchainListRemoteAllPlatforms(ctx context.Context, cmd *cobra.Command, source *dist.Source, channel toolchain.Channel, allChannels bool) error {
 	needLTS := allChannels || channel == toolchain.LTS
 	needSTS := allChannels || channel == toolchain.STS
 	needNightly := allChannels || channel == toolchain.Nightly
@@ -156,10 +143,6 @@ func (app *application) runToolchainListRemoteAllPlatforms(ctx context.Context, 
 		Channels:     []toolchainListRemoteAllPlatformsEntry{},
 	}
 
-	source, err := dist.NewSource(settings)
-	if err != nil {
-		return err
-	}
 	if needLTS {
 		result.Channels = append(result.Channels, app.buildSourceAllPlatformsEntry(ctx, source, toolchain.LTS))
 	}

@@ -6,7 +6,6 @@ import (
 	"log/slog"
 
 	"github.com/Zxilly/cjv/internal/cli/selfmgmt"
-	clisettings "github.com/Zxilly/cjv/internal/cli/settings"
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/i18n"
 	"github.com/Zxilly/cjv/internal/lifecycle"
@@ -94,7 +93,7 @@ func (app *application) runUpdate(cmd *cobra.Command, args []string) error {
 // The result is returned for the JSON envelope; in text mode an applied
 // self-update is rendered here and a check prints the current version.
 func (app *application) autoSelfUpdate(ctx context.Context, cmd *cobra.Command) (*selfmgmt.UpdateResult, error) {
-	_, settings, err := clisettings.LoadSettings()
+	_, settings, err := config.LoadDefaultSettings()
 	if err != nil || app.noSelfUpdate || settings.AutoSelfUpdate == config.AutoSelfUpdateDisable {
 		return nil, nil
 	}

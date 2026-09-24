@@ -65,11 +65,7 @@ func ResolveActiveToolchain() (tcDir string, tcName string, source config.Overri
 	if err != nil {
 		return "", "", 0, fmt.Errorf("failed to get working directory: %w", err)
 	}
-	sf, err := config.DefaultSettingsFile()
-	if err != nil {
-		return "", "", 0, err
-	}
-	settings, err := sf.Load()
+	_, settings, err := config.LoadDefaultSettings()
 	if err != nil {
 		return "", "", 0, err
 	}

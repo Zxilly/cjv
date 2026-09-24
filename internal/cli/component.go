@@ -8,10 +8,11 @@ import (
 	"strings"
 
 	"github.com/Zxilly/cjv/internal/cjverr"
-	clisettings "github.com/Zxilly/cjv/internal/cli/settings"
 	componentlib "github.com/Zxilly/cjv/internal/component"
-	"github.com/Zxilly/cjv/internal/dist"
+	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/i18n"
+	"github.com/Zxilly/cjv/internal/lifecycle"
+	sdktarget "github.com/Zxilly/cjv/internal/target"
 	"github.com/Zxilly/cjv/internal/toolchain"
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
@@ -141,7 +142,7 @@ func (app *application) runComponentAdd(cmd *cobra.Command, args []string) error
 	if tcName.IsCustom() {
 		return &cjverr.ComponentRequiresHostError{Component: args[0]}
 	}
-	if err := app.installComponentsList(cmd.Context(), filepath.Base(tcDir), args, app.componentAddForce, false); err != nil {
+	if err := lifecycle.InstallComponents(cmd.Context(), filepath.Base(tcDir), args, app.componentAddForce, app.lifecycleOptions()); err != nil {
 		return err
 	}
 	components, err := componentlib.NormalizeList(args)
@@ -256,11 +257,11 @@ func (app *application) runComponentList(cmd *cobra.Command, args []string) erro
 	if !tcName.IsCustom() {
 		tuple := tcName.Target
 		if tuple == "" {
-			_, settings, err := clisettings.LoadSettings()
+			_, settings, err := config.LoadDefaultSettings()
 			if err != nil {
 				return err
 			}
-			tuple, err = dist.CurrentHostTuple(settings.DefaultHost)
+			tuple, err = sdktarget.CurrentHostTuple(settings.DefaultHost)
 			if err != nil {
 				return err
 			}
