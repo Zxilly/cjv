@@ -50,7 +50,7 @@ func newOverrideSetCommand() *cobra.Command {
 				return err
 			}
 
-			sf, settings, err := LoadSettings()
+			sf, settings, err := config.LoadDefaultSettings()
 			if err != nil {
 				return err
 			}
@@ -85,7 +85,7 @@ func newOverrideUnsetCommand() *cobra.Command {
 		Use:   "unset",
 		Short: i18n.T("OverrideUnsetShort", nil),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			sf, settings, err := LoadSettings()
+			sf, settings, err := config.LoadDefaultSettings()
 			if err != nil {
 				return err
 			}
@@ -162,7 +162,7 @@ func newOverrideListCommand() *cobra.Command {
 		Use:   "list",
 		Short: i18n.T("OverrideListShort", nil),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			_, settings, err := LoadSettings()
+			_, settings, err := config.LoadDefaultSettings()
 			if err != nil {
 				return err
 			}

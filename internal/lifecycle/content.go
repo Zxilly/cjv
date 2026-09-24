@@ -45,7 +45,7 @@ func RemoveToolchain(name string) error {
 	if err != nil {
 		return err
 	}
-	sf, settings, err := LoadSettings()
+	sf, settings, err := config.LoadDefaultSettings()
 	if err != nil {
 		return err
 	}

@@ -6,9 +6,8 @@ import (
 	"strings"
 
 	"github.com/Zxilly/cjv/internal/cjverr"
-	clisettings "github.com/Zxilly/cjv/internal/cli/settings"
-	"github.com/Zxilly/cjv/internal/dist"
 	"github.com/Zxilly/cjv/internal/i18n"
+	"github.com/Zxilly/cjv/internal/lifecycle"
 	"github.com/Zxilly/cjv/internal/toolchain"
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
@@ -71,20 +70,11 @@ func (app *application) runCheck(cmd *cobra.Command, args []string) error {
 		return app.output.RenderTo(cmdOutput(cmd), checkResult{NoneInstalled: true, CjvVersion: app.version})
 	}
 
-	_, settings, err := clisettings.LoadSettings()
+	d, err := lifecycle.OpenDistribution(app.lifecycleOptions())
 	if err != nil {
 		return err
 	}
-
-	source, err := dist.NewSource(settings)
-	if err != nil {
-		return err
-	}
-
-	tuple, err := dist.CurrentHostTuple(settings.DefaultHost)
-	if err != nil {
-		return err
-	}
+	source, tuple := d.Source, d.HostTuple
 
 	result := checkResult{CjvVersion: app.version}
 

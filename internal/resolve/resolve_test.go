@@ -10,8 +10,8 @@ import (
 	"github.com/Zxilly/cjv/internal/cjverr"
 	"github.com/Zxilly/cjv/internal/component"
 	"github.com/Zxilly/cjv/internal/config"
-	"github.com/Zxilly/cjv/internal/dist"
 	"github.com/Zxilly/cjv/internal/sdktools"
+	sdktarget "github.com/Zxilly/cjv/internal/target"
 	"github.com/Zxilly/cjv/internal/testutil"
 	"github.com/Zxilly/cjv/internal/toolchain"
 	"github.com/stretchr/testify/assert"
@@ -66,7 +66,7 @@ func TestActiveRejectsTargetVariantAsActiveToolchain(t *testing.T) {
 	t.Setenv("CJV_TOOLCHAIN", "")
 	require.NoError(t, config.EnsureDirs())
 
-	key, err := dist.CurrentTargetTuple("", "ohos")
+	key, err := sdktarget.CurrentTargetTuple("", "ohos")
 	require.NoError(t, err)
 	name := toolchain.ToolchainName{
 		Channel: toolchain.STS,
@@ -96,7 +96,7 @@ func TestActiveTargetResolvesInstalledTargetSDK(t *testing.T) {
 	hostName := "sts-2.0.0"
 	require.NoError(t, os.MkdirAll(filepath.Join(home, "toolchains", hostName), 0o755))
 
-	tuple, err := dist.CurrentTargetTuple("", "ohos")
+	tuple, err := sdktarget.CurrentTargetTuple("", "ohos")
 	require.NoError(t, err)
 	targetName := toolchain.ToolchainName{Channel: toolchain.STS, Version: "2.0.0", Target: tuple}.String()
 	targetDir := filepath.Join(home, "toolchains", targetName)
@@ -156,7 +156,7 @@ components = ["docs"]
 	AutoInstallFunc = func(ctx context.Context, input string, targets []string) error {
 		gotInput = input
 		gotTargets = append([]string(nil), targets...)
-		key, err := dist.CurrentTargetTuple(settings.DefaultHost, "ohos")
+		key, err := sdktarget.CurrentTargetTuple(settings.DefaultHost, "ohos")
 		require.NoError(t, err)
 		targetName := toolchain.ToolchainName{Channel: toolchain.STS, Version: "2.0.0", Target: key}.String()
 		return os.MkdirAll(filepath.Join(home, "toolchains", targetName), 0o755)

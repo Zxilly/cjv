@@ -4,8 +4,8 @@ import (
 	"fmt"
 
 	"github.com/Zxilly/cjv/internal/config"
-	"github.com/Zxilly/cjv/internal/dist"
 	"github.com/Zxilly/cjv/internal/i18n"
+	sdktarget "github.com/Zxilly/cjv/internal/target"
 	"github.com/spf13/cobra"
 )
 
@@ -58,7 +58,7 @@ func newSetDefaultHostCommand() *cobra.Command {
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			val := args[0]
-			if _, err := dist.CurrentHostTuple(val); err != nil {
+			if _, err := sdktarget.CurrentHostTuple(val); err != nil {
 				return fmt.Errorf("invalid default-host %q: %w", val, err)
 			}
 			return updateSetting(cmd.OutOrStdout(), "default-host", val, config.SettingsUpdate{DefaultHost: &val})

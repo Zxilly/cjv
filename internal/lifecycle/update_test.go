@@ -12,6 +12,7 @@ import (
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/dist"
 	"github.com/Zxilly/cjv/internal/i18n"
+	sdktarget "github.com/Zxilly/cjv/internal/target"
 	"github.com/Zxilly/cjv/internal/testutil"
 	"github.com/Zxilly/cjv/internal/toolchain"
 	"github.com/stretchr/testify/assert"
@@ -72,11 +73,11 @@ func manifestServer(t *testing.T, build func(base string) dist.Manifest) *httpte
 func targetSDKServer(t *testing.T, channel toolchain.Channel, version string, targets ...string) *httptest.Server {
 	t.Helper()
 	_, sha := testutil.CreateMockSDKZip("1.0.5")
-	hostKey, err := dist.CurrentHostTuple("")
+	hostKey, err := sdktarget.CurrentHostTuple("")
 	require.NoError(t, err)
 	keys := []string{hostKey}
 	for _, target := range targets {
-		key, err := dist.CurrentTargetTuple("", target)
+		key, err := sdktarget.CurrentTargetTuple("", target)
 		require.NoError(t, err)
 		keys = append(keys, key)
 	}
@@ -105,7 +106,7 @@ func targetSDKServer(t *testing.T, channel toolchain.Channel, version string, ta
 func splitNightlyServer(t *testing.T) *httptest.Server {
 	t.Helper()
 	sdk, sha := testutil.CreateMockSDKZip("1.2.0")
-	tuple, err := dist.CurrentHostTuple("")
+	tuple, err := sdktarget.CurrentHostTuple("")
 	require.NoError(t, err)
 	const latest = "1.2.0-alpha.20260822010101"
 	nightly := dist.ChannelInfo{
@@ -144,7 +145,7 @@ func TestUpdateAllReportsUpToDateAndSkipsCustom(t *testing.T) {
 	settings := config.DefaultSettings()
 	settings.ManifestURL = server.URL + "/sdk-versions.json"
 	saveUpdateSettings(t, home, settings)
-	require.NoError(t, InstallToolchainWithOptions(t.Context(), "lts", false, quietLifecycleOptions()))
+	require.NoError(t, Install(t.Context(), InstallRequest{Toolchain: "lts"}, quietLifecycleOptions()))
 	fakeInstalled(t, home, "local-sdk")
 
 	report, err := UpdateAll(t.Context(), quietLifecycleOptions())
@@ -214,7 +215,7 @@ func TestUpdateInstalledChannelAlreadyUpToDate(t *testing.T) {
 	settings := config.DefaultSettings()
 	settings.ManifestURL = server.URL + "/sdk-versions.json"
 	saveUpdateSettings(t, home, settings)
-	require.NoError(t, InstallToolchainWithOptions(t.Context(), "lts", false, quietLifecycleOptions()))
+	require.NoError(t, Install(t.Context(), InstallRequest{Toolchain: "lts"}, quietLifecycleOptions()))
 
 	var reports []string
 	outcome, err := UpdateInstalled(t.Context(), parse(t, "lts"), Options{Report: func(message string, _ i18n.MsgData) { reports = append(reports, message) }})
@@ -266,7 +267,7 @@ func TestUpdateInstalledNightlyUsesUnifiedDistServer(t *testing.T) {
 
 func TestUpdateInstalledTargetVariantUpdatesVariant(t *testing.T) {
 	home := updateHome(t)
-	targetKey, err := dist.CurrentTargetTuple("", "ohos")
+	targetKey, err := sdktarget.CurrentTargetTuple("", "ohos")
 	require.NoError(t, err)
 	oldName := "sts-1.0.0-" + targetKey
 	fakeInstalled(t, home, oldName)
@@ -317,7 +318,7 @@ func TestUpdateInstalledRejectsCustomMissingChannelAndMissingVariant(t *testing.
 	require.ErrorAs(t, err, &notInstalled)
 	assert.Equal(t, "lts", notInstalled.Name)
 
-	targetKey, err := dist.CurrentTargetTuple("", "ohos")
+	targetKey, err := sdktarget.CurrentTargetTuple("", "ohos")
 	require.NoError(t, err)
 	_, err = UpdateInstalled(t.Context(), parse(t, "sts-2.0.0-"+targetKey), quietLifecycleOptions())
 	require.ErrorAs(t, err, &notInstalled)
@@ -346,7 +347,7 @@ func TestInstalledForChannelNightly(t *testing.T) {
 
 func TestInstalledForChannelIgnoresTargetVariants(t *testing.T) {
 	home := updateHome(t)
-	targetKey, err := dist.CurrentTargetTuple("", "ohos")
+	targetKey, err := sdktarget.CurrentTargetTuple("", "ohos")
 	require.NoError(t, err)
 	fakeInstalled(t, home, "lts-1.0.5-"+targetKey)
 

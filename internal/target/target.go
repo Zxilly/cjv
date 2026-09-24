@@ -191,6 +191,16 @@ func CurrentTargetIdentity(defaultHost, environment string) (Identity, error) {
 	return host.WithEnvironment(environment)
 }
 
+// CurrentTargetTuple is CurrentTargetIdentity as a manifest index key: the
+// current/default host tuple with an optional environment applied.
+func CurrentTargetTuple(defaultHost, environment string) (string, error) {
+	id, err := CurrentTargetIdentity(defaultHost, environment)
+	if err != nil {
+		return "", err
+	}
+	return id.Tuple(), nil
+}
+
 // BuildTuple composes a target tuple from a bare host tuple and an optional
 // environment (the trailing component, e.g. "ohos", "gnu", "musl"). An empty
 // environment returns hostTuple unchanged.

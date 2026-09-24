@@ -14,9 +14,9 @@ import (
 	"testing"
 
 	"github.com/Zxilly/cjv/internal/config"
-	"github.com/Zxilly/cjv/internal/dist"
 	"github.com/Zxilly/cjv/internal/resolve"
 	"github.com/Zxilly/cjv/internal/sdktools"
+	sdktarget "github.com/Zxilly/cjv/internal/target"
 	"github.com/Zxilly/cjv/internal/toolchain"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -177,7 +177,7 @@ func proxyMockServer(t *testing.T) *httptest.Server {
 	sdkData := buf.Bytes()
 	hash := sha256.Sum256(sdkData)
 	sha := hex.EncodeToString(hash[:])
-	pk, _ := dist.CurrentHostTuple("")
+	pk, _ := sdktarget.CurrentHostTuple("")
 
 	var serverURL string
 	mux := http.NewServeMux()
@@ -258,7 +258,7 @@ targets = ["ohos", "android"]
 		gotInput = input
 		gotTargets = append([]string(nil), targets...)
 		for _, target := range targets {
-			key, err := dist.CurrentTargetTuple(settings.DefaultHost, target)
+			key, err := sdktarget.CurrentTargetTuple(settings.DefaultHost, target)
 			require.NoError(t, err)
 			name := toolchain.ToolchainName{Channel: toolchain.STS, Version: "2.0.0", Target: key}.String()
 			require.NoError(t, os.MkdirAll(filepath.Join(home, "toolchains", name), 0o755))

@@ -2,7 +2,6 @@ package cli
 
 import (
 	"context"
-	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -72,54 +71,6 @@ func TestResolveToolchainArgValidationAndActiveFallback(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, tcDir, gotDir)
 	assert.Equal(t, tcName, gotName.String())
-}
-
-func TestInstallComponentsListRollsBackPreviousComponentOnLaterFailure(t *testing.T) {
-	app := newApplication("dev", "")
-	tcName := "lts-1.0.5"
-	tcDir := setupComponentCLITest(t, tcName)
-
-	app.componentInstallFunc = func(ctx context.Context, roots componentlib.Roots, tc toolchain.ToolchainName, name componentlib.Name, tuple, downloadsDir string, force bool) error {
-		if name == componentlib.Docs {
-			return errors.New("docs failed")
-		}
-		require.NoError(t, os.MkdirAll(filepath.Join(roots.StdxDir, "dynamic"), 0o755))
-		require.NoError(t, os.WriteFile(filepath.Join(roots.StdxDir, "dynamic", "libfoo.so"), []byte("x"), 0o644))
-		return componentlib.WriteManifest(roots.TcDir, name, []string{"dynamic/libfoo.so"})
-	}
-
-	err := app.installComponentsList(context.Background(), tcName, []string{"stdx", "docs"}, false, true)
-
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "docs failed")
-	assert.False(t, componentlib.IsInstalled(tcDir, componentlib.Stdx))
-	stdxDir, dirErr := config.StdxDirFor(tcName)
-	require.NoError(t, dirErr)
-	assert.NoFileExists(t, filepath.Join(stdxDir, "dynamic", "libfoo.so"))
-}
-
-func TestInstallComponentsListUsesTargetTupleForTargetVariant(t *testing.T) {
-	app := newApplication("dev", "")
-	const targetName = "lts-1.0.5-linux-x64-ohos"
-	setupComponentCLITest(t, targetName)
-
-	var gotTuple string
-	var gotTcDir string
-
-	app.componentInstallFunc = func(_ context.Context, roots componentlib.Roots, _ toolchain.ToolchainName, _ componentlib.Name, tuple, _ string, _ bool) error {
-		gotTuple = tuple
-		gotTcDir = roots.TcDir
-		return nil
-	}
-
-	err := app.installComponentsList(context.Background(), targetName, []string{"stdx"}, false, true)
-	require.NoError(t, err)
-
-	// The target tuple encoded in the resolved name drives the stdx download,
-	// not the host tuple.
-	assert.Equal(t, "linux-x64-ohos", gotTuple)
-	// Roots (and thus the manifest + StdxDir) are keyed by the full target name.
-	assert.Equal(t, targetName, filepath.Base(gotTcDir))
 }
 
 func TestRunComponentListQuietShowsInstalledThenAvailable(t *testing.T) {
@@ -302,19 +253,4 @@ func TestRunComponentLinkAllowsCustomToolchain(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, called, "Link should not be gated by IsCustom")
 	assert.True(t, componentlib.IsInstalled(tcDir, componentlib.Stdx))
-}
-
-func TestInstallComponentsForToolchainUsesInstalledToolchain(t *testing.T) {
-	app := newApplication("dev", "")
-	tcName := "lts-1.0.5"
-	tcDir := setupComponentCLITest(t, tcName)
-
-	app.componentInstallFunc = func(ctx context.Context, roots componentlib.Roots, tc toolchain.ToolchainName, name componentlib.Name, tuple, downloadsDir string, force bool) error {
-		return componentlib.WriteManifest(roots.TcDir, name, []string{"index.html"})
-	}
-
-	err := app.InstallComponentsForToolchain(context.Background(), "lts", []string{"docs"})
-
-	require.NoError(t, err)
-	assert.True(t, componentlib.IsInstalled(tcDir, componentlib.Docs))
 }

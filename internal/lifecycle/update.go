@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 
 	"github.com/Zxilly/cjv/internal/cjverr"
-	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/i18n"
 	"github.com/Zxilly/cjv/internal/toolchain"
 )
@@ -88,7 +87,7 @@ func UpdateInstalled(ctx context.Context, name toolchain.ToolchainName, opts Opt
 		return updateChannelToolchain(ctx, name.Channel, installed, "", opts)
 	default:
 		// Specific version: install it (already installed is a no-op).
-		if err := InstallToolchainWithOptions(ctx, name.String(), false, opts); err != nil {
+		if err := Install(ctx, InstallRequest{Toolchain: name.String()}, opts); err != nil {
 			return UpdateOutcome{}, err
 		}
 		return UpdateOutcome{Name: name.String(), Status: UpdatePinned}, nil
@@ -116,11 +115,7 @@ func UpdateAll(ctx context.Context, opts Options) (UpdateReport, error) {
 		return UpdateReport{NoneInstalled: true}, nil
 	}
 
-	sf, settings, err := LoadSettings()
-	if err != nil {
-		return UpdateReport{}, err
-	}
-	fetcher, err := NewManifestFetcherForSettings(settings, opts)
+	d, err := OpenDistribution(opts)
 	if err != nil {
 		return UpdateReport{}, err
 	}
@@ -136,15 +131,9 @@ func UpdateAll(ctx context.Context, opts Options) (UpdateReport, error) {
 			report.Outcomes = append(report.Outcomes, UpdateOutcome{Name: name, Status: UpdateSkipped})
 			continue
 		}
-		// Each iteration sees the settings saved by the previous upgrade
-		// through this same SettingsFile.
-		settings, err = sf.Load()
-		if err != nil {
-			errs = append(errs, err)
-			report.Outcomes = append(report.Outcomes, UpdateOutcome{Name: name, Status: UpdateFailed, Err: err})
-			continue
-		}
-		outcome, err := upgradeChannelToolchain(ctx, parsed.Channel, name, parsed.Target, settings, sf, fetcher, opts)
+		// Each upgrade reloads the references saved by the previous one
+		// through the Distribution's SettingsFile.
+		outcome, err := upgradeChannelToolchain(ctx, d, parsed.Channel, name, parsed.Target, opts)
 		if err != nil {
 			slog.Warn("failed to update toolchain", "name", name, "error", err)
 			errs = append(errs, err)
@@ -154,28 +143,24 @@ func UpdateAll(ctx context.Context, opts Options) (UpdateReport, error) {
 	return report, errors.Join(errs...)
 }
 
-// updateChannelToolchain loads settings and the distribution source for a
-// single-toolchain update, then upgrades currentName to the channel head for
-// tuple (empty means the host).
+// updateChannelToolchain opens the distribution for a single-toolchain
+// update, then upgrades currentName to the channel head for tuple (empty
+// means the host).
 func updateChannelToolchain(ctx context.Context, channel toolchain.Channel, currentName, tuple string, opts Options) (UpdateOutcome, error) {
-	sf, settings, err := LoadSettings()
+	d, err := OpenDistribution(opts)
 	if err != nil {
 		return UpdateOutcome{}, err
 	}
-	fetcher, err := NewManifestFetcherForSettings(settings, opts)
-	if err != nil {
-		return UpdateOutcome{}, err
-	}
-	return upgradeChannelToolchain(ctx, channel, currentName, tuple, settings, sf, fetcher, opts)
+	return upgradeChannelToolchain(ctx, d, channel, currentName, tuple, opts)
 }
 
-func upgradeChannelToolchain(ctx context.Context, channel toolchain.Channel, currentName, tuple string, settings *config.Settings, sf *config.SettingsFile, fetcher *ManifestFetcher, opts Options) (UpdateOutcome, error) {
-	resolved, err := ResolveAndLocatePlatform(ctx, toolchain.ToolchainName{Channel: channel}, settings, fetcher, tuple)
+func upgradeChannelToolchain(ctx context.Context, d *Distribution, channel toolchain.Channel, currentName, tuple string, opts Options) (UpdateOutcome, error) {
+	resolved, err := d.Resolve(ctx, toolchain.ToolchainName{Channel: channel}, tuple)
 	if err != nil {
 		return UpdateOutcome{Name: currentName, Status: UpdateFailed, Err: err}, err
 	}
 	outcome := UpdateOutcome{Name: currentName, Replacement: resolved.Name, Status: UpdateUpToDate}
-	updated, err := upgradeToolchain(ctx, currentName, resolved, sf, fetcher, opts)
+	updated, err := upgradeToolchain(ctx, currentName, resolved, d, opts)
 	if err != nil {
 		outcome.Status, outcome.Err = UpdateFailed, err
 		return outcome, err

@@ -10,6 +10,7 @@ import (
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/i18n"
 	"github.com/Zxilly/cjv/internal/lifecycle"
+	"github.com/Zxilly/cjv/internal/testutil"
 	"github.com/stretchr/testify/require"
 )
 
@@ -20,7 +21,7 @@ func setupComponentOutputTest(t *testing.T) (string, string) {
 	t.Setenv(config.EnvNoPathSetup, "1")
 	t.Setenv(config.EnvDistServer, "")
 	t.Setenv(config.EnvFallbackSettings, filepath.Join(home, "missing-fallback.toml"))
-	server := splitNightlyMockServer(t)
+	server := testutil.SplitNightlyMockServer(t)
 	settings := config.DefaultSettings()
 	settings.DistServer = server.URL + "/corp/cjv"
 	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
@@ -48,7 +49,7 @@ func TestInstallWithComponentsEmitsSingleJSON(t *testing.T) {
 
 func TestComponentAddJSONIncludesResultOnInstallAndSkip(t *testing.T) {
 	home, name := setupComponentOutputTest(t)
-	require.NoError(t, lifecycle.InstallToolchainWithExtras(t.Context(), "nightly", nil, nil, false, lifecycle.Options{}))
+	require.NoError(t, lifecycle.Install(t.Context(), lifecycle.InstallRequest{Toolchain: "nightly"}, lifecycle.Options{}))
 	for _, force := range []bool{false, false, true} {
 		app := newApplication("dev", "")
 		args := []string{"--json", "component", "add", "docs", "--toolchain", name}
@@ -75,7 +76,7 @@ func TestComponentAddJSONIncludesResultOnInstallAndSkip(t *testing.T) {
 
 func TestComponentProgressUsesCommandWriterAndQuietInstaller(t *testing.T) {
 	_, name := setupComponentOutputTest(t)
-	require.NoError(t, lifecycle.InstallToolchainWithExtras(t.Context(), "nightly", nil, nil, false, lifecycle.Options{}))
+	require.NoError(t, lifecycle.Install(t.Context(), lifecycle.InstallRequest{Toolchain: "nightly"}, lifecycle.Options{}))
 	// Proxy auto-install remains silent even if a caller supplies a reporter.
 	stdout, err := captureStdout(t, func() error {
 		return lifecycle.InstallComponentsForToolchain(t.Context(), name, []string{"docs"}, lifecycle.Options{

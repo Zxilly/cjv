@@ -15,8 +15,8 @@ import (
 	"github.com/Zxilly/cjv/internal/component"
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/dist"
-	"github.com/Zxilly/cjv/internal/fstx"
 	"github.com/Zxilly/cjv/internal/i18n"
+	"github.com/Zxilly/cjv/internal/sdktools"
 	"github.com/Zxilly/cjv/internal/toolchain"
 	"github.com/Zxilly/cjv/internal/utils"
 )
@@ -56,21 +56,17 @@ func InstallToolchainFromZip(ctx context.Context, name, archivePath, sha256 stri
 	})
 }
 
-// installLinkedToolchain holds the logic shared by the URL and local-archive link
-// paths. acquire obtains the SDK archive (downloading it, or vetting a local
-// file) and reports whether cjv owns that file and may delete it on success;
-// everything after — outer extraction, inner SDK/stdx location, materialization
-// into a cjv-owned toolchain, and bundled-stdx install — is identical for both.
-func installLinkedToolchain(ctx context.Context, name string, force, noStdx bool, opts Options, acquire func(ctx context.Context, downloadsDir string) (string, bool, error)) (retErr error) {
-	if ctx == nil {
-		ctx = context.Background()
-	}
-	if err := config.EnsureDirs(); err != nil {
-		return err
-	}
-	downloadsDir, err := config.DownloadsDir()
-	if err != nil {
-		return err
+// LinkToolchainDir references a user-owned SDK directory as the custom
+// toolchain name. Nothing is copied: the toolchain entry is a symlink (or a
+// junction on Windows) to dir, so a directory link has no staging tree or
+// transaction of its own. It still goes through the same home recovery,
+// compiler check and finalization as an installed toolchain, so the managed
+// binary and proxy links are in place when it returns. A link whose
+// finalization fails is removed again, leaving nothing half-configured. An
+// existing toolchain of that name is never replaced.
+func LinkToolchainDir(name, dir string) error {
+	if _, err := sdktools.ResolveInstalledToolBinary(dir, "cjc"); err != nil {
+		return fmt.Errorf("%s: %w", i18n.T("LinkNotSDK", nil), err)
 	}
 	tcDir, err := config.ToolchainsDir()
 	if err != nil {
@@ -79,97 +75,93 @@ func installLinkedToolchain(ctx context.Context, name string, force, noStdx bool
 	if err := toolchain.RecoverHome(); err != nil {
 		return err
 	}
-	destDir := filepath.Join(tcDir, name)
-	isReinstall := false
-	if _, err := os.Stat(destDir); err == nil {
-		if !force {
-			return &cjverr.ToolchainAlreadyInstalledError{Name: name}
-		}
-		isReinstall = true
-	} else if !errors.Is(err, os.ErrNotExist) {
-		return fmt.Errorf("failed to stat %s: %w", destDir, err)
+	linkPath := filepath.Join(tcDir, name)
+	if _, err := os.Lstat(linkPath); err == nil {
+		return &cjverr.ToolchainAlreadyInstalledError{Name: name}
 	}
-
-	archivePath, owned, err := acquire(ctx, downloadsDir)
-	if err != nil {
+	if err := os.MkdirAll(tcDir, 0o755); err != nil {
 		return err
 	}
-	if owned {
-		defer func() {
-			if retErr == nil {
-				_ = dist.CleanupDownload(archivePath) //nolint:errcheck // best-effort
-			}
-		}()
+	if err := utils.SymlinkOrJunction(dir, linkPath); err != nil {
+		return fmt.Errorf("%s: %w", i18n.T("LinkCreateFailed", nil), err)
 	}
+	if err := finalizeInstalledToolchain(); err != nil {
+		_ = os.Remove(linkPath) //nolint:errcheck // best-effort rollback
+		return fmt.Errorf("failed to finalize installation: %w", err)
+	}
+	return nil
+}
 
-	// Extract the outer archive into a temp dir under downloads/ (NOT toolchains/),
-	// so ExtractFlattened's own .cjv-install-* scratch dir never pollutes the
-	// toolchain listing.
-	outerTmp, err := os.MkdirTemp(downloadsDir, ".cjv-link-*")
-	if err != nil {
-		return err
+// installLinkedToolchain holds the logic shared by the URL and local-archive link
+// paths. fetch obtains the SDK archive (downloading it, or vetting a local file)
+// and reports whether cjv owns that file and may delete it on success. The
+// placement itself is the shared pipeline; what this adds is the CI bundle
+// layout (outer archive, inner SDK/stdx archives, bare-archive fallback), the
+// cross-OS guard, and the bundled-stdx install after the SDK is committed.
+func installLinkedToolchain(ctx context.Context, name string, force, noStdx bool, opts Options, fetch func(ctx context.Context, downloadsDir string) (string, bool, error)) (retErr error) {
+	if ctx == nil {
+		ctx = context.Background()
 	}
-	defer os.RemoveAll(outerTmp) //nolint:errcheck // best-effort cleanup
-	if _, err := dist.ExtractFlattened(ctx, archivePath, outerTmp, false); err != nil {
-		return err
-	}
-
-	innerSDK, innerStdx, bareSDKDir, err := locateInnerArchives(outerTmp)
-	if err != nil {
-		return err
-	}
-
-	stagingDir := config.StagingDir(destDir)
-	if err := utils.RemoveAllRetry(stagingDir); err != nil {
-		return fmt.Errorf("failed to clean staging directory: %w", err)
-	}
+	// The outer archive is extracted into a temp dir under downloads/ (NOT
+	// toolchains/), so ExtractFlattened's own .cjv-install-* scratch dir never
+	// pollutes the toolchain listing. It outlives the placement because the
+	// bundled stdx archive inside it is installed after the SDK is committed.
+	var outerTmp, innerStdx string
 	defer func() {
-		var recoveryErr *fstx.RecoveryError
-		if retErr != nil && !errors.As(retErr, &recoveryErr) {
-			_ = utils.RemoveAllRetry(stagingDir) //nolint:errcheck // best-effort
+		if outerTmp != "" {
+			_ = os.RemoveAll(outerTmp) //nolint:errcheck // best-effort cleanup
 		}
 	}()
-
-	opts.report("Extracting", nil)
-	switch {
-	case innerSDK != "":
-		if err := dist.InstallSDK(ctx, innerSDK, stagingDir); err != nil {
-			return err
-		}
-	case bareSDKDir != "":
-		// The bare archive's top-level dir is already extracted in outerTmp; move
-		// it into staging (a cheap rename on the shared CJV_HOME volume) rather
-		// than extracting again. Across volumes the rename fails, so fall back to
-		// moving the already-extracted tree entry-by-entry (copy) — not a second
-		// full decompression of the archive.
-		if err := utils.RenameRetry(bareSDKDir, stagingDir); err != nil {
-			if err := dist.MoveTreeContents(bareSDKDir, stagingDir); err != nil {
-				return fmt.Errorf("failed to stage SDK: %w", err)
+	acq := acquisition{
+		fetch: fetch,
+		extract: func(ctx context.Context, archivePath, stagingDir string) error {
+			var err error
+			outerTmp, err = os.MkdirTemp(filepath.Dir(archivePath), ".cjv-link-*")
+			if err != nil {
+				return err
 			}
-		}
-	default:
-		return errors.New(i18n.T("LinkNoSDKArchive", nil))
+			if _, err := dist.ExtractFlattened(ctx, archivePath, outerTmp, false); err != nil {
+				return err
+			}
+			innerSDK, stdx, bareSDKDir, err := locateInnerArchives(outerTmp)
+			if err != nil {
+				return err
+			}
+			innerStdx = stdx
+			switch {
+			case innerSDK != "":
+				if err := dist.InstallSDK(ctx, innerSDK, stagingDir); err != nil {
+					return err
+				}
+			case bareSDKDir != "":
+				// The bare archive's top-level dir is already extracted in outerTmp; move
+				// it into staging (a cheap rename on the shared CJV_HOME volume) rather
+				// than extracting again. Across volumes the rename fails, so fall back to
+				// moving the already-extracted tree entry-by-entry (copy) — not a second
+				// full decompression of the archive.
+				if err := utils.RenameRetry(bareSDKDir, stagingDir); err != nil {
+					if err := dist.MoveTreeContents(bareSDKDir, stagingDir); err != nil {
+						return fmt.Errorf("failed to stage SDK: %w", err)
+					}
+				}
+			default:
+				return errors.New(i18n.T("LinkNoSDKArchive", nil))
+			}
+			// Cross-OS guard. Read the target OS from the staged cjc executable's magic
+			// (ELF/Mach-O/PE) rather than the archive filename: it is authoritative and
+			// works for both the nested-archive and bare-archive paths.
+			if archOS := sdkBinaryOS(stagingDir); archOS != "" && archOS != runtime.GOOS {
+				return errors.New(i18n.T("LinkCrossOSUnsupported", i18n.MsgData{
+					"Target": archOS,
+					"Host":   runtime.GOOS,
+				}))
+			}
+			return nil
+		},
 	}
-
-	// Cross-OS guard. Read the target OS from the staged cjc executable's magic
-	// (ELF/Mach-O/PE) rather than the archive filename: it is authoritative and
-	// works for both the nested-archive and bare-archive paths.
-	if archOS := sdkBinaryOS(stagingDir); archOS != "" && archOS != runtime.GOOS {
-		return errors.New(i18n.T("LinkCrossOSUnsupported", i18n.MsgData{
-			"Target": archOS,
-			"Host":   runtime.GOOS,
-		}))
-	}
-
-	// tuple is always "" — URL install validates against the host OS only and
-	// does not support cross-OS SDKs.
-	if err := validateInstallation(stagingDir, ""); err != nil {
-		return err
-	}
-
-	// Transactional swap into place. Finalization ensures the managed cjv binary
-	// and proxy links exist; the default toolchain is deliberately NOT changed.
-	if err := swapInstalledToolchain(stagingDir, destDir, isReinstall, finalizeInstalledToolchain, nil); err != nil {
+	// tuple is always "": a linked SDK is validated against the host OS only
+	// and never sets the default toolchain.
+	if err := placeToolchain(ctx, name, force, "", acq, nil, opts); err != nil {
 		return err
 	}
 
@@ -177,27 +169,26 @@ func installLinkedToolchain(ctx context.Context, name string, force, noStdx bool
 	// is already committed at this point; if stdx fails we keep the working SDK
 	// (matching `install -c stdx` half-failure semantics) but surface recovery
 	// guidance, since a plain retry would hit ToolchainAlreadyInstalledError.
-	if innerStdx != "" && !noStdx {
-		opts.report("LinkInstallingStdx", i18n.MsgData{"Name": name})
-		roots, err := component.RootsFor(name)
-		if err != nil {
-			return err
-		}
-		guidance := i18n.T("LinkStdxFailedAfterSDK", i18n.MsgData{"Name": name})
-		if err := component.InstallFromArchive(ctx, roots, component.Stdx, innerStdx, force); err != nil {
-			return fmt.Errorf("%s: %w", guidance, err)
-		}
-		for _, sub := range []string{"dynamic", "static"} {
-			if _, err := os.Stat(filepath.Join(roots.StdxDir, sub)); err != nil {
-				// Roll back the half-written stdx (wrong-layout tree + manifest +
-				// index entry) so it does not falsely report as installed.
-				_ = component.Remove(roots, component.Stdx) //nolint:errcheck // best-effort rollback
-				return fmt.Errorf("%s: %s", i18n.T("LinkStdxMissingDirs", nil), guidance)
-			}
+	if innerStdx == "" || noStdx {
+		return nil
+	}
+	opts.report("LinkInstallingStdx", i18n.MsgData{"Name": name})
+	roots, err := component.RootsFor(name)
+	if err != nil {
+		return err
+	}
+	guidance := i18n.T("LinkStdxFailedAfterSDK", i18n.MsgData{"Name": name})
+	if err := component.InstallFromArchive(ctx, roots, component.Stdx, innerStdx, force); err != nil {
+		return fmt.Errorf("%s: %w", guidance, err)
+	}
+	for _, sub := range []string{"dynamic", "static"} {
+		if _, err := os.Stat(filepath.Join(roots.StdxDir, sub)); err != nil {
+			// Roll back the half-written stdx (wrong-layout tree + manifest +
+			// index entry) so it does not falsely report as installed.
+			_ = component.Remove(roots, component.Stdx) //nolint:errcheck // best-effort rollback
+			return fmt.Errorf("%s: %s", i18n.T("LinkStdxMissingDirs", nil), guidance)
 		}
 	}
-
-	opts.report("ToolchainInstalled", i18n.MsgData{"Name": name})
 	return nil
 }
 

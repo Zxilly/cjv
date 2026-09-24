@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	"github.com/Zxilly/cjv/internal/dist"
+	sdktarget "github.com/Zxilly/cjv/internal/target"
 )
 
 // MockDistServer creates a mock distribution server providing
@@ -23,7 +24,7 @@ func MockDistServer(t testing.TB) *httptest.Server {
 	mux := http.NewServeMux()
 	server := httptest.NewServer(mux)
 
-	tuple, err := dist.CurrentHostTuple("")
+	tuple, err := sdktarget.CurrentHostTuple("")
 	if err != nil {
 		t.Fatalf("failed to get host tuple: %v", err)
 	}

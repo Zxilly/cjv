@@ -190,6 +190,21 @@ func DefaultSettingsFile() (*SettingsFile, error) {
 	return sf, nil
 }
 
+// LoadDefaultSettings opens the user's settings file and loads its current
+// snapshot. Every command and lifecycle operation reads settings through this
+// one call, so the cached file and the returned copy always agree.
+func LoadDefaultSettings() (*SettingsFile, *Settings, error) {
+	sf, err := DefaultSettingsFile()
+	if err != nil {
+		return nil, nil, err
+	}
+	settings, err := sf.Load()
+	if err != nil {
+		return nil, nil, err
+	}
+	return sf, settings, nil
+}
+
 // ResetDefaultSettingsFileCache clears the cached SettingsFile instances.
 // This should only be used in tests to ensure isolation between test cases.
 func ResetDefaultSettingsFileCache() {

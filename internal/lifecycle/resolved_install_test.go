@@ -3,6 +3,8 @@ package lifecycle_test
 import (
 	"errors"
 	"fmt"
+	"io"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -18,6 +20,39 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+// installVia runs the placement pipeline through the acquisition named by
+// source: "manifest" resolves lts from the mock server, "url" fetches the
+// same archive as a CI bundle, "zip" links it from a local copy. All three
+// share placeToolchain; only how the archive reaches staging differs.
+func installVia(t *testing.T, source, serverURL string, force bool, opts lifecycle.Options) error {
+	t.Helper()
+	url := serverURL + "/download/cangjie-sdk-1.0.5.zip"
+	switch source {
+	case "manifest":
+		return lifecycle.Install(t.Context(), lifecycle.InstallRequest{Toolchain: "lts", Force: force}, opts)
+	case "url":
+		return lifecycle.InstallToolchainFromURL(t.Context(), "custom-sdk", url, "", force, true, opts)
+	default:
+		archive := filepath.Join(t.TempDir(), "sdk.zip")
+		if _, err := os.Stat(archive); err != nil {
+			resp, err := http.Get(url) //nolint:noctx // test helper
+			require.NoError(t, err)
+			data, err := io.ReadAll(resp.Body)
+			require.NoError(t, err)
+			require.NoError(t, resp.Body.Close())
+			require.NoError(t, os.WriteFile(archive, data, 0o644))
+		}
+		return lifecycle.InstallToolchainFromZip(t.Context(), "custom-sdk", archive, "", force, true, opts)
+	}
+}
+
+func installedNameFor(source string) string {
+	if source == "manifest" {
+		return "lts-1.0.5"
+	}
+	return "custom-sdk"
+}
 
 func prepareInstallTest(t *testing.T) (string, *config.SettingsFile, string) {
 	t.Helper()
@@ -42,14 +77,11 @@ func compilerPath(dir string) string {
 }
 
 func TestInstallRestoresToolchainsAfterFinalizeFailure(t *testing.T) {
-	for _, source := range []string{"manifest", "url"} {
+	for _, source := range []string{"manifest", "url", "zip"} {
 		for _, reinstall := range []bool{false, true} {
 			t.Run(fmt.Sprintf("%s/reinstall=%t", source, reinstall), func(t *testing.T) {
 				home, sf, serverURL := prepareInstallTest(t)
-				name := "lts-1.0.5"
-				if source == "url" {
-					name = "custom-sdk"
-				}
+				name := installedNameFor(source)
 				tcRoot := filepath.Join(home, "toolchains")
 				dest := filepath.Join(tcRoot, name)
 				compiler := compilerPath(dest)
@@ -85,12 +117,7 @@ func TestInstallRestoresToolchainsAfterFinalizeFailure(t *testing.T) {
 					return nil
 				})
 				opts := lifecycle.Options{ConfigurePath: true}
-				if source == "url" {
-					err = lifecycle.InstallToolchainFromURL(t.Context(), name,
-						serverURL+"/download/cangjie-sdk-1.0.5.zip", "", reinstall, true, opts)
-				} else {
-					err = lifecycle.InstallToolchainWithExtras(t.Context(), "lts", nil, nil, reinstall, opts)
-				}
+				err = installVia(t, source, serverURL, reinstall, opts)
 
 				require.ErrorIs(t, err, finalizeErr)
 				assert.True(t, finalizeCalled)
@@ -136,7 +163,7 @@ func TestInstallPreservesFinalizeAndRollbackErrors(t *testing.T) {
 		require.NoError(t, os.WriteFile(filepath.Join(staging, "occupied"), []byte("occupied"), 0o644))
 		return finalizeErr
 	})
-	err := lifecycle.InstallToolchainWithExtras(t.Context(), "lts", nil, nil, false, lifecycle.Options{})
+	err := lifecycle.Install(t.Context(), lifecycle.InstallRequest{Toolchain: "lts"}, lifecycle.Options{})
 
 	require.ErrorIs(t, err, finalizeErr)
 	assert.ErrorContains(t, err, "rollback after failed install also failed")
@@ -149,13 +176,10 @@ func TestInstallPreservesFinalizeAndRollbackErrors(t *testing.T) {
 }
 
 func TestForceInstallRetainsOldSDKUntilBlockedRecoveryCanFinish(t *testing.T) {
-	for _, source := range []string{"manifest", "url"} {
+	for _, source := range []string{"manifest", "url", "zip"} {
 		t.Run(source, func(t *testing.T) {
 			home, _, serverURL := prepareInstallTest(t)
-			name := "lts-1.0.5"
-			if source == "url" {
-				name = "custom-sdk"
-			}
+			name := installedNameFor(source)
 			tcRoot := filepath.Join(home, "toolchains")
 			dest := filepath.Join(tcRoot, name)
 			staging := config.StagingDir(dest)
@@ -164,11 +188,7 @@ func TestForceInstallRetainsOldSDKUntilBlockedRecoveryCanFinish(t *testing.T) {
 			require.NoError(t, os.WriteFile(filepath.Join(dest, "old-sdk-only"), []byte("old SDK"), 0o644))
 			finalizeErr := errors.New("finalization failed while staging is occupied")
 			install := func(opts lifecycle.Options) error {
-				if source == "url" {
-					return lifecycle.InstallToolchainFromURL(t.Context(), name,
-						serverURL+"/download/cangjie-sdk-1.0.5.zip", "", true, true, opts)
-				}
-				return lifecycle.InstallToolchainWithExtras(t.Context(), "lts", nil, nil, true, opts)
+				return installVia(t, source, serverURL, true, opts)
 			}
 			lifecycle.SetAfterFinalizeHook(t, func() error {
 				require.NoError(t, os.MkdirAll(staging, 0o755))
@@ -217,7 +237,7 @@ func TestFirstInstallDefaultSurvivesInterruptionAfterPublication(t *testing.T) {
 			os.Exit(71)
 			return nil
 		})
-		err := lifecycle.InstallToolchainWithExtras(t.Context(), "lts", nil, nil, false, lifecycle.Options{})
+		err := lifecycle.Install(t.Context(), lifecycle.InstallRequest{Toolchain: "lts"}, lifecycle.Options{})
 		t.Fatalf("expected interruption at default publication, got %v", err)
 	}
 
@@ -264,7 +284,7 @@ func TestFirstInstallSettingsWriteFailureRollsBackPreparedSDK(t *testing.T) {
 		require.NoError(t, os.WriteFile(filepath.Join(sf.Path(), "occupied"), []byte("block publication"), 0o644))
 		return nil
 	})
-	err = lifecycle.InstallToolchainWithExtras(t.Context(), "lts", nil, nil, false, lifecycle.Options{ConfigurePath: true})
+	err = lifecycle.Install(t.Context(), lifecycle.InstallRequest{Toolchain: "lts"}, lifecycle.Options{ConfigurePath: true})
 	require.Error(t, err)
 	assert.False(t, publishCalled)
 	assert.NoDirExists(t, filepath.Join(home, "toolchains", "lts-1.0.5"))

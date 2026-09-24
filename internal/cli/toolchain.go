@@ -7,14 +7,10 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/Zxilly/cjv/internal/cjverr"
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/i18n"
 	"github.com/Zxilly/cjv/internal/lifecycle"
-	"github.com/Zxilly/cjv/internal/reachable"
-	"github.com/Zxilly/cjv/internal/sdktools"
 	"github.com/Zxilly/cjv/internal/toolchain"
-	"github.com/Zxilly/cjv/internal/utils"
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 )
@@ -115,36 +111,9 @@ func (app *application) initToolchainCommands() {
 				}
 			}
 
-			// Validate the directory contains a Cangjie SDK (bin/cjc must exist)
-			if _, err := sdktools.ResolveInstalledToolBinary(absPath, "cjc"); err != nil {
-				return fmt.Errorf("%s: %w", i18n.T("LinkNotSDK", nil), err)
-			}
-
-			tcDir, err := config.ToolchainsDir()
-			if err != nil {
+			if err := lifecycle.LinkToolchainDir(name, absPath); err != nil {
 				return err
 			}
-			linkPath := filepath.Join(tcDir, name)
-
-			if _, err := os.Stat(linkPath); err == nil {
-				return &cjverr.ToolchainAlreadyInstalledError{Name: name}
-			}
-
-			if err := os.MkdirAll(tcDir, 0o755); err != nil {
-				return err
-			}
-
-			// Create symlink (with junction fallback on Windows)
-			if err := utils.SymlinkOrJunction(absPath, linkPath); err != nil {
-				return fmt.Errorf("%s: %w", i18n.T("LinkCreateFailed", nil), err)
-			}
-
-			// A linked toolchain is reachable through the managed binary and
-			// its proxy links, like an installed one.
-			if err := reachable.Ensure(reachable.Policy{}); err != nil {
-				return err
-			}
-
 			return app.output.RenderTo(cmdOutput(cmd), toolchainLinkResult{Name: name, Path: absPath})
 		},
 	}

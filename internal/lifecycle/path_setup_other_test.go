@@ -36,7 +36,7 @@ func TestFirstDefaultInstallConfiguresPathOnlyWhenRequested(t *testing.T) {
 			rc := fakeShellConfig(t)
 			opts := lifecycle.Options{ConfigurePath: configure}
 
-			require.NoError(t, lifecycle.InstallToolchainWithExtras(t.Context(), "lts", nil, nil, false, opts))
+			require.NoError(t, lifecycle.Install(t.Context(), lifecycle.InstallRequest{Toolchain: "lts"}, opts))
 			data, err := os.ReadFile(rc)
 			require.NoError(t, err)
 			if configure {
@@ -49,7 +49,7 @@ func TestFirstDefaultInstallConfiguresPathOnlyWhenRequested(t *testing.T) {
 			// A later install does not publish a first default, so it leaves
 			// PATH alone even when the policy allows configuring it.
 			require.NoError(t, os.WriteFile(rc, []byte("# existing\n"), 0o644))
-			require.NoError(t, lifecycle.InstallToolchainWithExtras(t.Context(), "sts", nil, nil, false, opts))
+			require.NoError(t, lifecycle.Install(t.Context(), lifecycle.InstallRequest{Toolchain: "sts"}, opts))
 			data, err = os.ReadFile(rc)
 			require.NoError(t, err)
 			assert.Equal(t, "# existing\n", string(data))

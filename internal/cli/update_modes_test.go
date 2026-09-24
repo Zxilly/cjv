@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/Zxilly/cjv/internal/config"
+	"github.com/Zxilly/cjv/internal/testutil"
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/require"
 	"os"
@@ -23,7 +24,7 @@ func TestUpdateExistingLatestAcrossRenderModes(t *testing.T) {
 			for _, name := range []string{"lts-1.0.0", "lts-1.0.5"} {
 				require.NoError(t, os.MkdirAll(filepath.Join(home, "toolchains", name), 0755))
 			}
-			server := validMockServer(t)
+			server := testutil.ValidMockServer(t)
 			settings := config.DefaultSettings()
 			settings.ManifestURL = server.URL + "/sdk-versions.json"
 			settings.DefaultToolchain = "lts-1.0.0"

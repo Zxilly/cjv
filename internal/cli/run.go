@@ -9,6 +9,7 @@ import (
 	"github.com/Zxilly/cjv/internal/cjverr"
 	"github.com/Zxilly/cjv/internal/env"
 	"github.com/Zxilly/cjv/internal/i18n"
+	"github.com/Zxilly/cjv/internal/lifecycle"
 	"github.com/Zxilly/cjv/internal/process"
 	"github.com/Zxilly/cjv/internal/proxy"
 	"github.com/Zxilly/cjv/internal/toolchain"
@@ -65,7 +66,7 @@ flagLoop:
 	tcDir, findErr := toolchain.FindInstalled(parsed)
 	if findErr != nil {
 		if install {
-			if installErr := app.InstallToolchainWithOptions(ctx, tcInput, false); installErr != nil {
+			if installErr := lifecycle.Install(ctx, lifecycle.InstallRequest{Toolchain: tcInput}, app.lifecycleOptions()); installErr != nil {
 				return installErr
 			}
 			tcDir, findErr = toolchain.FindInstalled(parsed)
