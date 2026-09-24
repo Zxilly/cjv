@@ -42,8 +42,8 @@ func TestRunDocPathPrintsResolvedDoc(t *testing.T) {
 	app.docPath = true
 	app.docToolchain = tcName
 
-	stdout, err := captureStdout(t, func() error {
-		return app.runDoc(&cobra.Command{}, nil)
+	stdout, err := runWithCommandOutput(t, func(cmd *cobra.Command) error {
+		return app.runDoc(cmd, nil)
 	})
 
 	require.NoError(t, err)
