@@ -3,7 +3,6 @@ package env
 import (
 	"os"
 	"path/filepath"
-	"runtime"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -106,5 +105,4 @@ func TestHostArchMapsGoArch(t *testing.T) {
 	assert.Equal(t, "x86_64", hostArchName("amd64"))
 	assert.Equal(t, "aarch64", hostArchName("arm64"))
 	assert.Equal(t, "riscv64", hostArchName("riscv64"))
-	assert.Equal(t, hostArchName(runtime.GOARCH), hostArch())
 }

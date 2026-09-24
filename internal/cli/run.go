@@ -116,15 +116,6 @@ func resolveToolchainToolPath(tcDir, command string) (string, bool) {
 	return env.ResolveToolPath(tcDir, command)
 }
 
-// lookPathInEnv resolves a bare command name against the PATH carried in
-// environ, honoring PATHEXT on Windows. exec.Command resolves a bare name via
-// exec.LookPath using the parent process PATH (os.Getenv), not c.Env, so this
-// lets `cjv run` honor the toolchain bin dirs prepended to the child env.
-// Returns the absolute path and true if found.
-func lookPathInEnv(command string, environ []string) (string, bool) {
-	return env.LookPathInEnv(command, environ)
-}
-
 func (app *application) initRunCommands() {
 	app.runCmd = &cobra.Command{
 		Use:   "run [--install] <toolchain> <command> [args...]",

@@ -151,7 +151,7 @@ func TestUpdateAllReportsUpToDateAndSkipsCustom(t *testing.T) {
 	report, err := UpdateAll(t.Context(), quietLifecycleOptions())
 	require.NoError(t, err)
 	assert.False(t, report.NoneInstalled)
-	assert.Empty(t, report.Applied())
+	assert.Empty(t, applied(report))
 	assert.ElementsMatch(t, []UpdateOutcome{
 		{Name: "local-sdk", Status: UpdateSkipped},
 		{Name: "lts-1.0.5", Replacement: "lts-1.0.5", Status: UpdateUpToDate},
@@ -170,7 +170,7 @@ func TestUpdateAllUpgradesReferencesAcrossToolchains(t *testing.T) {
 
 	report, err := UpdateAll(t.Context(), quietLifecycleOptions())
 	require.NoError(t, err)
-	assert.Equal(t, []UpdateOutcome{{Name: "lts-1.0.0", Replacement: "lts-1.0.5", Status: UpdateApplied}}, report.Applied())
+	assert.Equal(t, []UpdateOutcome{{Name: "lts-1.0.0", Replacement: "lts-1.0.5", Status: UpdateApplied}}, applied(report))
 	loaded, err := config.LoadSettings(filepath.Join(home, ".cjv", "settings.toml"))
 	require.NoError(t, err)
 	assert.Equal(t, "lts-1.0.5", loaded.DefaultToolchain)
@@ -191,7 +191,7 @@ func TestUpdateAllContinuesAfterFailure(t *testing.T) {
 	report, err := UpdateAll(t.Context(), quietLifecycleOptions())
 	require.Error(t, err)
 	assert.Len(t, report.Outcomes, 2)
-	assert.Equal(t, []UpdateOutcome{{Name: "lts-1.0.0", Replacement: "lts-1.0.5", Status: UpdateApplied}}, report.Applied())
+	assert.Equal(t, []UpdateOutcome{{Name: "lts-1.0.0", Replacement: "lts-1.0.5", Status: UpdateApplied}}, applied(report))
 	for _, o := range report.Outcomes {
 		if o.Name != "lts-1.0.0" {
 			assert.Equal(t, UpdateFailed, o.Status)
@@ -368,4 +368,14 @@ func TestInstalledForChannelNotInstalled(t *testing.T) {
 	name, err = installedForChannel(toolchain.LTS)
 	require.NoError(t, err)
 	assert.Empty(t, name)
+}
+
+func applied(r UpdateReport) []UpdateOutcome {
+	var out []UpdateOutcome
+	for _, o := range r.Outcomes {
+		if o.Status == UpdateApplied {
+			out = append(out, o)
+		}
+	}
+	return out
 }

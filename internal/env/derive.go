@@ -17,12 +17,6 @@ func hostArchName(goarch string) string {
 	return goarch
 }
 
-// hostArch maps runtime.GOARCH to the SDK's arch suffix used in
-// runtime/lib subdirectory names (e.g. "x86_64" in "windows_x86_64_cjnative").
-func hostArch() string {
-	return hostArchName(runtime.GOARCH)
-}
-
 // hostBackendDirForArch returns the SDK's host backend subdirectory name
 // (e.g. "windows_x86_64_cjnative") by scanning runtime/lib for an entry
 // shaped like "<os>_<host_arch>_<backend>". The host arch component is what

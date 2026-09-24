@@ -146,7 +146,7 @@ func TestSourceUsesConfiguredManifestURL(t *testing.T) {
 	source, err := NewSource(&settings)
 	require.NoError(t, err)
 
-	assert.Equal(t, settings.ManifestURL, source.ManifestURL())
+	assert.Equal(t, settings.ManifestURL, source.manifestURL)
 }
 
 func TestSourceResolvesNightlyFromManifest(t *testing.T) {

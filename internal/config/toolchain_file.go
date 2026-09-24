@@ -2,10 +2,8 @@ package config
 
 import (
 	"bytes"
-	"errors"
 	"log/slog"
 	"os"
-	"path/filepath"
 
 	"github.com/BurntSushi/toml"
 )
@@ -39,25 +37,4 @@ func ParseToolchainFile(path string) (*ToolchainFileContent, error) {
 	}
 
 	return &tc, nil
-}
-
-// FindToolchainFile walks up from startDir looking for cangjie-sdk.toml.
-func FindToolchainFile(startDir string) (string, error) {
-	dir, err := filepath.Abs(startDir)
-	if err != nil {
-		return "", err
-	}
-	for {
-		candidate := filepath.Join(dir, ToolchainFileName)
-		if _, err := os.Stat(candidate); err == nil {
-			return candidate, nil
-		} else if !errors.Is(err, os.ErrNotExist) {
-			return "", err
-		}
-		parent := filepath.Dir(dir)
-		if parent == dir {
-			return "", nil // reached filesystem root
-		}
-		dir = parent
-	}
 }

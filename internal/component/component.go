@@ -58,8 +58,6 @@ func (s Spec) SupportsChannel(ch toolchain.Channel) bool {
 	return slices.Contains(s.SupportedChannels, ch)
 }
 
-func (s Spec) String() string { return string(s.Name) }
-
 var specs = map[Name]Spec{
 	Stdx: {
 		Name:              Stdx,

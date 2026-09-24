@@ -81,28 +81,12 @@ func NewSource(settings *config.Settings) (*Source, error) {
 	}, nil
 }
 
-// NightlyManifestURL returns the effective nightly channel endpoint.
-func (s *Source) NightlyManifestURL() string {
-	if s == nil {
-		return ""
-	}
-	return s.nightlyURL
-}
-
 // ToolchainRelease is the source-level result for one concrete toolchain
 // build. Download is ready for the shared downloader.
 type ToolchainRelease struct {
 	Channel  toolchain.Channel
 	Version  string
 	Download DownloadInfo
-}
-
-// ManifestURL returns the effective manifest endpoint.
-func (s *Source) ManifestURL() string {
-	if s == nil {
-		return ""
-	}
-	return s.manifestURL
 }
 
 // Manifest fetches and validates the source manifest at most once.
