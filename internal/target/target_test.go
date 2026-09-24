@@ -57,40 +57,20 @@ func TestHostTuple(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.goos+"-"+tt.goarch, func(t *testing.T) {
-			got, err := HostTuple(tt.goos, tt.goarch)
+			got, err := HostIdentity(tt.goos, tt.goarch)
 			require.NoError(t, err)
-			assert.Equal(t, tt.want, got)
+			assert.Equal(t, tt.want, got.Tuple())
 		})
 	}
 }
 
-func TestBuildTuple(t *testing.T) {
-	tuple, err := BuildTuple("linux-x64", "")
-	require.NoError(t, err)
-	assert.Equal(t, "linux-x64", tuple)
-
-	tuple, err = BuildTuple("linux-x64", "ohos")
-	require.NoError(t, err)
-	assert.Equal(t, "linux-x64-ohos", tuple)
-
-	_, err = BuildTuple("linux-x64-ohos", "android")
-	assert.Error(t, err)
-
-	_, err = BuildTuple("unknown-host", "ohos")
-	assert.Error(t, err)
-}
-
-func TestCurrentHostTupleAndHostPartOf(t *testing.T) {
+func TestCurrentHostTuple(t *testing.T) {
 	tuple, err := CurrentHostTuple("linux-amd64")
 	require.NoError(t, err)
 	assert.Equal(t, "linux-x64", tuple)
 
 	_, err = CurrentHostTuple("linux")
 	assert.Error(t, err)
-
-	host, err := HostPartOf("linux-x64-ohos")
-	require.NoError(t, err)
-	assert.Equal(t, "linux-x64", host)
 }
 
 func TestParseTuple(t *testing.T) {

@@ -47,17 +47,6 @@ type UpdateReport struct {
 	Outcomes      []UpdateOutcome
 }
 
-// Applied returns the outcomes whose replacement is now installed.
-func (r UpdateReport) Applied() []UpdateOutcome {
-	var applied []UpdateOutcome
-	for _, o := range r.Outcomes {
-		if o.Status == UpdateApplied {
-			applied = append(applied, o)
-		}
-	}
-	return applied
-}
-
 // UpdateInstalled brings one installed toolchain to its channel head. A
 // channel name ("lts") updates the newest installed host version of that
 // channel; a target variant name ("sts-1.0.0-<tuple>") updates that variant;

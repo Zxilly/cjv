@@ -44,26 +44,6 @@ func (id Identity) Tuple() string {
 	return id.tuple
 }
 
-// HostTuple returns the host portion of the tuple.
-func (id Identity) HostTuple() string {
-	return id.parts.Host
-}
-
-// Environment returns the optional cross-target environment suffix without its
-// leading dash, e.g. "ohos-arm32".
-func (id Identity) Environment() string {
-	return id.parts.Environment
-}
-
-// EnvironmentSuffix returns the target environment with its leading dash, or an
-// empty string for host SDKs. It is useful for archive stems.
-func (id Identity) EnvironmentSuffix() string {
-	if id.parts.Environment == "" {
-		return ""
-	}
-	return "-" + id.parts.Environment
-}
-
 // IsTargetVariant reports whether this identity points at a cross-target SDK.
 func (id Identity) IsTargetVariant() bool {
 	return id.parts.Environment != ""
@@ -137,16 +117,6 @@ func NormalizeList(values []string) ([]string, error) {
 	return targets, nil
 }
 
-// HostTuple returns the canonical host target tuple for a (goos, goarch) pair,
-// e.g. ("linux", "amd64") → "linux-x64".
-func HostTuple(goos, goarch string) (string, error) {
-	id, err := HostIdentity(goos, goarch)
-	if err != nil {
-		return "", err
-	}
-	return id.Tuple(), nil
-}
-
 // HostIdentity returns the structured target identity for a (goos, goarch)
 // host pair.
 func HostIdentity(goos, goarch string) (Identity, error) {
@@ -199,32 +169,6 @@ func CurrentTargetTuple(defaultHost, environment string) (string, error) {
 		return "", err
 	}
 	return id.Tuple(), nil
-}
-
-// BuildTuple composes a target tuple from a bare host tuple and an optional
-// environment (the trailing component, e.g. "ohos", "gnu", "musl"). An empty
-// environment returns hostTuple unchanged.
-func BuildTuple(hostTuple, environment string) (string, error) {
-	id, err := ParseIdentity(hostTuple)
-	if err != nil {
-		return "", err
-	}
-	withEnvironment, err := id.WithEnvironment(environment)
-	if err != nil {
-		return "", err
-	}
-	return withEnvironment.Tuple(), nil
-}
-
-// HostPartOf strips any target suffix from a target tuple, returning just the
-// host portion (e.g. "linux-x64-ohos" → "linux-x64"). Useful for components
-// like stdx that are not target-specific.
-func HostPartOf(tuple string) (string, error) {
-	id, err := ParseIdentity(tuple)
-	if err != nil {
-		return "", err
-	}
-	return id.HostTuple(), nil
 }
 
 // ParseTuple splits a target tuple into its host portion and optional target

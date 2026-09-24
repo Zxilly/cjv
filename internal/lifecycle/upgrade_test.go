@@ -46,8 +46,11 @@ func newUpgradeFixture(t *testing.T, targetVariant, missingComponent bool) upgra
 	require.NoError(t, err)
 	oldName, newName := "lts-1.0.0", "lts-2.0.0"
 	if targetVariant {
-		tuple, err = sdktarget.BuildTuple(tuple, "ohos")
+		id, err := sdktarget.ParseIdentity(tuple)
 		require.NoError(t, err)
+		id, err = id.WithEnvironment("ohos")
+		require.NoError(t, err)
+		tuple = id.Tuple()
 		oldName += "-" + tuple
 		newName += "-" + tuple
 	}
