@@ -68,7 +68,7 @@ func PrepareToolchainRemoval(name string) error {
 	if err != nil {
 		return err
 	}
-	if err := fstx.Recover(filepath.Dir(roots.TcDir)); err != nil {
+	if err := toolchain.RecoverHome(); err != nil {
 		return err
 	}
 	if _, err := os.Lstat(roots.TcDir); err != nil {
@@ -88,7 +88,7 @@ func retireToolchain(roots component.Roots, sf *config.SettingsFile, before *con
 	if err != nil {
 		return err
 	}
-	if err := fstx.Recover(filepath.Dir(roots.TcDir)); err != nil {
+	if err := toolchain.RecoverHome(); err != nil {
 		return err
 	}
 	tx, err := fstx.NewToolchainTransaction(home, filepath.Base(roots.TcDir))

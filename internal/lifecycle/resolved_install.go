@@ -42,7 +42,7 @@ func installResolvedWithDefault(ctx context.Context, rt ResolvedToolchain, setti
 	if err != nil {
 		return err
 	}
-	if err := fstx.Recover(tcDir); err != nil {
+	if err := toolchain.RecoverHome(); err != nil {
 		return err
 	}
 	destDir := filepath.Join(tcDir, resolvedName)
@@ -77,7 +77,7 @@ func installResolvedWithDefault(ctx context.Context, rt ResolvedToolchain, setti
 		}
 	}()
 
-	stagingDir := destDir + toolchain.StagingSuffix
+	stagingDir := config.StagingDir(destDir)
 	if err := utils.RemoveAllRetry(stagingDir); err != nil {
 		return fmt.Errorf("failed to clean staging directory: %w", err)
 	}

@@ -3,20 +3,23 @@ package toolchain
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
+	"github.com/Zxilly/cjv/internal/config"
+	"github.com/Zxilly/cjv/internal/fstx"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-// Tests for CleanupStagingDirs -- recovery from interrupted installations.
+// Tests for RecoverHome -- recovery from interrupted installations.
 //
 // When "cjv install" is interrupted (Ctrl-C, power loss, etc.), it can
-// leave behind .staging (incomplete new install) and .old (backup of
-// previous install) directories. CleanupStagingDirs must restore a
+// leave behind staging (incomplete new install), legacy backup (previous
+// install) and fstx transaction directories. RecoverHome must restore a
 // usable state.
 
-func TestCleanupStagingDirs_RemovesAbandonedStaging(t *testing.T) {
+func TestRecoverHome_RemovesAbandonedStaging(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("CJV_HOME", tmpDir)
 
@@ -25,13 +28,13 @@ func TestCleanupStagingDirs_RemovesAbandonedStaging(t *testing.T) {
 	require.NoError(t, os.MkdirAll(staging, 0o755))
 	require.NoError(t, os.WriteFile(filepath.Join(staging, "partial.bin"), []byte("x"), 0o644))
 
-	CleanupStagingDirs()
+	require.NoError(t, RecoverHome())
 
 	_, err := os.Stat(staging)
 	assert.True(t, os.IsNotExist(err), "incomplete staging directory should be removed")
 }
 
-func TestCleanupStagingDirs_RestoresBackupWhenOriginalMissing(t *testing.T) {
+func TestRecoverHome_RestoresBackupWhenOriginalMissing(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("CJV_HOME", tmpDir)
 
@@ -39,7 +42,7 @@ func TestCleanupStagingDirs_RestoresBackupWhenOriginalMissing(t *testing.T) {
 	backup := filepath.Join(tcDir, "sts-2.0.0.old")
 	require.NoError(t, os.MkdirAll(backup, 0o755))
 
-	CleanupStagingDirs()
+	require.NoError(t, RecoverHome())
 
 	restored := filepath.Join(tcDir, "sts-2.0.0")
 	_, err := os.Stat(restored)
@@ -49,7 +52,7 @@ func TestCleanupStagingDirs_RestoresBackupWhenOriginalMissing(t *testing.T) {
 	assert.True(t, os.IsNotExist(err), ".old should no longer exist after restoration")
 }
 
-func TestCleanupStagingDirs_RestoresFstxBackupWhenOriginalMissing(t *testing.T) {
+func TestRecoverHome_RestoresFstxBackupWhenOriginalMissing(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("CJV_HOME", tmpDir)
 
@@ -58,14 +61,14 @@ func TestCleanupStagingDirs_RestoresFstxBackupWhenOriginalMissing(t *testing.T) 
 	require.NoError(t, os.MkdirAll(backup, 0o755))
 	require.NoError(t, os.WriteFile(filepath.Join(backup, "release.txt"), []byte("old"), 0o644))
 
-	CleanupStagingDirs()
+	require.NoError(t, RecoverHome())
 
 	restored := filepath.Join(tcDir, "lts-1.0.5")
 	assert.FileExists(t, filepath.Join(restored, "release.txt"))
 	assert.NoDirExists(t, filepath.Join(tcDir, ".fstx-crash"))
 }
 
-func TestCleanupStagingDirs_PreservesBackupWhenOriginalExists(t *testing.T) {
+func TestRecoverHome_PreservesBackupWhenOriginalExists(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("CJV_HOME", tmpDir)
 
@@ -75,7 +78,7 @@ func TestCleanupStagingDirs_PreservesBackupWhenOriginalExists(t *testing.T) {
 	require.NoError(t, os.MkdirAll(original, 0o755))
 	require.NoError(t, os.MkdirAll(backup, 0o755))
 
-	CleanupStagingDirs()
+	require.NoError(t, RecoverHome())
 
 	_, err := os.Stat(original)
 	assert.NoError(t, err, "current install should not be touched")
@@ -83,7 +86,7 @@ func TestCleanupStagingDirs_PreservesBackupWhenOriginalExists(t *testing.T) {
 	assert.DirExists(t, backup, "without a commit marker the backup may be the only good SDK")
 }
 
-func TestCleanupStagingDirs_PreservesAmbiguousTransactionsAndStaging(t *testing.T) {
+func TestRecoverHome_PreservesAmbiguousTransactionsAndStaging(t *testing.T) {
 	for _, artifact := range []string{"legacy-conflict", "unknown-file", "invalid-journal"} {
 		t.Run(artifact, func(t *testing.T) {
 			home := t.TempDir()
@@ -104,7 +107,9 @@ func TestCleanupStagingDirs_PreservesAmbiguousTransactionsAndStaging(t *testing.
 				require.NoError(t, os.WriteFile(filepath.Join(txDir, "journal.json"), []byte("{"), 0o644))
 			}
 
-			CleanupStagingDirs()
+			var recoveryErr *fstx.RecoveryError
+			require.ErrorAs(t, RecoverHome(), &recoveryErr)
+			assert.Equal(t, txDir, recoveryErr.Directory)
 
 			assert.DirExists(t, txDir)
 			assert.DirExists(t, staging)
@@ -117,7 +122,7 @@ func TestCleanupStagingDirs_PreservesAmbiguousTransactionsAndStaging(t *testing.
 	}
 }
 
-func TestCleanupStagingDirs_LeavesNormalToolchainsAlone(t *testing.T) {
+func TestRecoverHome_LeavesNormalToolchainsAlone(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("CJV_HOME", tmpDir)
 
@@ -125,27 +130,85 @@ func TestCleanupStagingDirs_LeavesNormalToolchainsAlone(t *testing.T) {
 	require.NoError(t, os.MkdirAll(filepath.Join(tcDir, "lts-1.0.5"), 0o755))
 	require.NoError(t, os.MkdirAll(filepath.Join(tcDir, "sts-2.0.0"), 0o755))
 
-	CleanupStagingDirs()
+	require.NoError(t, RecoverHome())
 
 	assert.DirExists(t, filepath.Join(tcDir, "lts-1.0.5"))
 	assert.DirExists(t, filepath.Join(tcDir, "sts-2.0.0"))
 }
 
-func TestCleanupStagingDirs_NoToolchainsDirIsNotAnError(t *testing.T) {
+func TestRecoverHome_NoToolchainsDirIsNotAnError(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("CJV_HOME", tmpDir)
 
-	assert.NotPanics(t, func() { CleanupStagingDirs() })
+	assert.NoError(t, RecoverHome())
 }
 
-func TestCleanupStagingDirs_RestoresDotPrefixedLegacyBackup(t *testing.T) {
+func TestRecoverHome_RestoresDotPrefixedLegacyBackup(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("CJV_HOME", home)
 	original := filepath.Join(home, "toolchains", ".local-sdk")
-	backup := original + BackupSuffix
+	backup := original + config.BackupSuffix
 	require.NoError(t, os.MkdirAll(backup, 0o755))
 	require.NoError(t, os.WriteFile(filepath.Join(backup, "old-sdk"), []byte("old SDK"), 0o644))
-	CleanupStagingDirs()
+	require.NoError(t, RecoverHome())
 	assert.FileExists(t, filepath.Join(original, "old-sdk"))
 	assert.NoDirExists(t, backup)
+}
+
+// The staging name produced by the layout is the one recovery cleans up and
+// listing hides, so no package needs to know the suffix rule itself.
+func TestRecoverHome_CleansStagingDirNamedByLayout(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("CJV_HOME", home)
+	dest, err := config.ToolchainDirFor("lts-1.0.6")
+	require.NoError(t, err)
+	staging := config.StagingDir(dest)
+	require.NoError(t, os.MkdirAll(staging, 0o755))
+	require.NoError(t, os.MkdirAll(dest, 0o755))
+	assert.True(t, config.IsScratchName(filepath.Base(staging)))
+
+	installed, err := ListInstalled()
+	require.NoError(t, err)
+	assert.Equal(t, []string{"lts-1.0.6"}, installed)
+
+	require.NoError(t, RecoverHome())
+	assert.NoDirExists(t, staging)
+	assert.DirExists(t, dest)
+}
+
+// A transaction interrupted while swapping its staging tree in is resumed by
+// RecoverHome from the directories the layout names: its temp dir carries the
+// layout's prefix and its staging tree is within the transaction's scope.
+func TestRecoverHome_RollsBackTransactionUnderLayoutDirs(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("CJV_HOME", home)
+	require.NoError(t, config.EnsureDirs())
+	dest, err := config.ToolchainDirFor("lts-1.0.5")
+	require.NoError(t, err)
+	staging := config.StagingDir(dest)
+	require.NoError(t, os.MkdirAll(staging, 0o755))
+	src := filepath.Join(home, "payload")
+	require.NoError(t, os.WriteFile(src, []byte("new"), 0o644))
+
+	tx, err := fstx.NewTransaction(dest)
+	require.NoError(t, err)
+	require.NoError(t, tx.AddFile(src, filepath.Join(staging, "release.txt")))
+	require.NoError(t, tx.RenameFile(staging, dest))
+	// The process dies here, without Commit or Rollback.
+
+	entries, err := os.ReadDir(filepath.Dir(dest))
+	require.NoError(t, err)
+	var txDirs []string
+	for _, e := range entries {
+		if strings.HasPrefix(e.Name(), config.TxTempPrefix) {
+			assert.True(t, config.IsScratchName(e.Name()))
+			txDirs = append(txDirs, e.Name())
+		}
+	}
+	require.Len(t, txDirs, 1)
+
+	require.NoError(t, RecoverHome())
+	assert.NoDirExists(t, dest)
+	assert.NoDirExists(t, staging)
+	assert.NoDirExists(t, filepath.Join(filepath.Dir(dest), txDirs[0]))
 }

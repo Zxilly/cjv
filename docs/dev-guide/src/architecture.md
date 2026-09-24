@@ -59,7 +59,7 @@ docs/           两本 mdBook（见“文档站”一章）
 
 ### `toolchain` 与 `component`：已装内容的模型
 
-`internal/toolchain` 管已安装的 SDK：列出已装工具链（`ListInstalled`）、解析活动工具链目录，并在清理临时目录前调用 `fstx` 恢复事务。它定义了 staging（`.staging`）、备份（`.old`）、事务（`.fstx-`）这些目录后缀约定，以及工具链名字的解析与版本比较；需要恢复的备份不会作为普通残留直接删除。
+`internal/toolchain` 管已安装的 SDK：列出已装工具链（`ListInstalled`）、解析活动工具链目录，以及工具链名字的解析与版本比较。`RecoverHome` 是 CJV_HOME 唯一的恢复入口：先让 `fstx` 恢复 `toolchains/` 下未完成的事务，再删除废弃的 staging 树、把原目录已缺失的旧式备份放回去。恢复受阻时它原样返回 `fstx.RecoveryError`，不碰任何残留；需要恢复的备份不会作为普通残留直接删除。安装、升级、删除在改动文件前调用它，代理解析与 `update` 在启动时调用它并把受阻的恢复记为警告。
 
 `internal/component` 管工具链的附加组件：`stdx`、`docs`、`stdx-docs`。每个组件是单独下载的归档，解压后的文件通过逐组件的清单（manifest）记录，从而能独立卸载。`component` 还定义了组件装到哪（`InstallLocation`：有的落进工具链目录树，有的作为纯数据放到 `<CJV_HOME>/docs/<tc>/`）以及组件要注入哪些环境变量。
 
@@ -87,7 +87,7 @@ docs/           两本 mdBook（见“文档站”一章）
 
 ### `config`：配置与路径
 
-`internal/config` 是配置层。它定义所有 `CJV_*` 环境变量名（包括 `CJV_DIST_SERVER`）、解析 `CJV_HOME`、读写用户与系统后备设置、工具链文件和目录级 override。`manifest_url` 提供正式通道清单并确定 nightly 文件目录，`dist_server` 选择包含两份清单的企业分发根；`mirror` 构建标记选择默认地址。
+`internal/config` 是配置层。它定义所有 `CJV_*` 环境变量名（包括 `CJV_DIST_SERVER`）、解析 `CJV_HOME`、读写用户与系统后备设置、工具链文件和目录级 override。`layout.go` 是 CJV_HOME 布局的唯一出处：`toolchains/`、`stdx/`、`docs/`、`downloads/`、`bin/` 这些子目录名及各工具链在其中的目录（`ToolchainDirFor`、`StdxDirFor`、`DocsDirFor`），以及安装残留的命名规则——staging 树由 `StagingDir(dest)` 给出，`IsScratchName` 判断一个目录名是 staging、旧式备份还是 `fstx` 事务目录。其他包从这里派生路径，不自己拼后缀。`manifest_url` 提供正式通道清单并确定 nightly 文件目录，`dist_server` 选择包含两份清单的企业分发根；`mirror` 构建标记选择默认地址。
 
 `SettingsFile.Load` 返回生效配置的副本，同时保留用户字段的来源。`Update(SettingsUpdate)` 只保存明确选择的字段，未指定字段继续继承系统或内置默认值；显式选择与继承值相同的值仍可将其固定，`false` 和空字符串也不会被当成未设置。`Save` 支持恢复已加载快照的值与字段存在性。写入前完成配置校验和缓存准备，文件发布成功后不会因重新读取失败而误报保存失败。环境覆盖保持临时生效，不会落盘。
 
@@ -101,7 +101,7 @@ docs/           两本 mdBook（见“文档站”一章）
 
 - `i18n` 国际化。消息存在 `locales/en.toml` 和 `locales/zh-CN.toml` 里并嵌进二进制，`i18n.T` 按消息 ID 取串。所有面向用户的文本都走它，错误信息也是。
 - `cjverr` 错误类型。定义带稳定机器码（`ErrorCode`）的结构化错误，`Error()` 方法通过 `i18n` 产出人读信息，`Coded` 接口让 `output` 能在 JSON 模式下输出错误码。`ExitCodeError` 携带进程退出码。
-- `fstx` 文件系统事务。落盘日志记录受管路径、备份和事务状态，读取时限制日志大小与路径范围。启动清理及安装、删除重试会先恢复未完成操作；提交及准备发布的状态保留已就绪内容，再清理备份。恢复受阻时保留日志和备份并报告位置，后续可以重试，而不是依赖进程内的 undo 闭包。
+- `fstx` 文件系统事务。落盘日志记录受管路径、备份和事务状态，读取时限制日志大小与路径范围；事务目录名、staging 树和工具链事务覆盖的 `toolchains/`、`stdx/`、`docs/` 条目都取自 `config` 的布局。`toolchain.RecoverHome` 在启动清理及安装、删除重试时先调用 `Recover` 恢复未完成操作；提交及准备发布的状态保留已就绪内容，再清理备份。恢复受阻时保留日志和备份并报告位置，后续可以重试，而不是依赖进程内的 undo 闭包。
 - `utils` 杂项工具：原子写、文件操作、Windows junction、重试、控制台 UTF-8、打开浏览器、版本号解析等，多数按平台分文件。
 - `logging` 用 `CJV_LOG` 环境变量配 `slog` 全局 logger（默认 `warn`）。
 - `testutil` 测试辅助：mock 下载服务器、Windows 注册表守卫。它带 `_test.go` 之外的源文件，供其他包的测试导入。

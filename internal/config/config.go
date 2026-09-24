@@ -155,78 +155,6 @@ func loadHomeFromSettings() string {
 	return s.Home
 }
 
-const (
-	toolchainsSubdir = "toolchains"
-	binSubdir        = "bin"
-	downloadsSubdir  = "downloads"
-	docsSubdir       = "docs"
-	stdxSubdir       = "stdx"
-)
-
-func ToolchainsDir() (string, error) {
-	h, err := Home()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(h, toolchainsSubdir), nil
-}
-
-func BinDir() (string, error) {
-	h, err := Home()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(h, binSubdir), nil
-}
-
-func DownloadsDir() (string, error) {
-	h, err := Home()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(h, downloadsSubdir), nil
-}
-
-// DocsDir returns the root directory holding per-toolchain documentation
-// trees: <CJV_HOME>/docs/. Each toolchain's docs live in a subdirectory named
-// after the toolchain (e.g. <CJV_HOME>/docs/lts-1.0.5/).
-func DocsDir() (string, error) {
-	h, err := Home()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(h, docsSubdir), nil
-}
-
-// DocsDirFor returns the documentation directory for a specific toolchain.
-func DocsDirFor(tcName string) (string, error) {
-	root, err := DocsDir()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(root, tcName), nil
-}
-
-// StdxDir returns the root directory holding per-toolchain stdx trees:
-// <CJV_HOME>/stdx/. Each toolchain's stdx files (dynamic/, static/) live
-// directly under the toolchain-named subdir below.
-func StdxDir() (string, error) {
-	h, err := Home()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(h, stdxSubdir), nil
-}
-
-// StdxDirFor returns the stdx directory for a specific toolchain.
-func StdxDirFor(tcName string) (string, error) {
-	root, err := StdxDir()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(root, tcName), nil
-}
-
 // SettingsPath returns the location of the persisted settings file. It is
 // intentionally decoupled from Home(): settings.toml always lives at
 // <user-home>/.cjv/settings.toml so that the home path itself can be
@@ -295,7 +223,7 @@ func EnsureDirs() error {
 	if err != nil {
 		return err
 	}
-	for _, sub := range []string{toolchainsSubdir, binSubdir, downloadsSubdir} {
+	for _, sub := range []string{ToolchainsSubdir, binSubdir, downloadsSubdir} {
 		if err := os.MkdirAll(filepath.Join(home, sub), 0o755); err != nil {
 			return err
 		}

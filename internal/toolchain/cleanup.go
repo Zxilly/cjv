@@ -12,33 +12,36 @@ import (
 	"github.com/Zxilly/cjv/internal/utils"
 )
 
-// CleanupStagingDirs first recovers interrupted transactions, then removes
-// abandoned staging trees. If recovery is blocked, keep all staging data: it
-// may still be part of a transaction whose state could not be read.
-func CleanupStagingDirs() {
+// RecoverHome is the single recovery entry point for CJV_HOME. It first
+// resumes interrupted fstx transactions under toolchains/, then removes
+// abandoned staging trees and restores legacy backups whose original is
+// missing. A blocked recovery is returned as a *fstx.RecoveryError with its
+// journal and backups left in place, and no residue is touched: it may still
+// belong to the transaction whose state could not be read. Residue cleanup
+// failures are logged; they never fail the caller.
+func RecoverHome() error {
 	tcDir, err := config.ToolchainsDir()
 	if err != nil {
-		return
+		return err
 	}
 	if err := fstx.Recover(tcDir); err != nil {
-		slog.Warn("failed to recover install transaction", "error", err)
-		return
+		return err
 	}
 	entries, err := os.ReadDir(tcDir)
 	if err != nil {
-		return
+		return nil
 	}
 	for _, e := range entries {
 		name := e.Name()
 		fullPath := filepath.Join(tcDir, name)
-		if strings.HasSuffix(name, StagingSuffix) {
+		if strings.HasSuffix(name, config.StagingSuffix) {
 			if err := utils.RemoveAllRetry(fullPath); err != nil {
 				slog.Warn("failed to clean up staging directory", "name", name, "error", err)
 			}
-		} else if originalName, ok := strings.CutSuffix(name, BackupSuffix); ok {
+		} else if originalName, ok := strings.CutSuffix(name, config.BackupSuffix); ok {
 			// Legacy .old backups have no commit marker. Restore only when the
 			// original is missing; a present original never proves commitment.
-			if !filepath.IsLocal(originalName) || originalName == "." || strings.HasPrefix(originalName, FstxTempPrefix) {
+			if !filepath.IsLocal(originalName) || originalName == "." || strings.HasPrefix(originalName, config.TxTempPrefix) {
 				continue
 			}
 			originalPath := filepath.Join(tcDir, originalName)
@@ -51,4 +54,5 @@ func CleanupStagingDirs() {
 			}
 		}
 	}
+	return nil
 }

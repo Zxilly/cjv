@@ -37,7 +37,9 @@ func Active(ctx context.Context, tcOverride string) (ActiveToolchain, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	toolchain.CleanupStagingDirs()
+	if err := toolchain.RecoverHome(); err != nil {
+		slog.Warn("failed to recover install transaction", "error", err)
+	}
 
 	settings, settingsErr := loadSettings()
 	tcName, source, targets, components, err := resolveName(settings, settingsErr, tcOverride)
