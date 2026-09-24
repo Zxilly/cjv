@@ -122,7 +122,7 @@ func TestInstallRestoresToolchainsAfterFinalizeFailure(t *testing.T) {
 func TestInstallPreservesFinalizeAndRollbackErrors(t *testing.T) {
 	home, _, _ := prepareInstallTest(t)
 	dest := filepath.Join(home, "toolchains", "lts-1.0.5")
-	staging := dest + toolchain.StagingSuffix
+	staging := config.StagingDir(dest)
 	finalizeErr := errors.New("proxy refresh failed")
 	err := lifecycle.InstallToolchainWithExtras(t.Context(), "lts", nil, nil, false, lifecycle.Options{
 
@@ -157,7 +157,7 @@ func TestForceInstallRetainsOldSDKUntilBlockedRecoveryCanFinish(t *testing.T) {
 			}
 			tcRoot := filepath.Join(home, "toolchains")
 			dest := filepath.Join(tcRoot, name)
-			staging := dest + toolchain.StagingSuffix
+			staging := config.StagingDir(dest)
 			require.NoError(t, os.MkdirAll(filepath.Dir(compilerPath(dest)), 0o755))
 			require.NoError(t, os.WriteFile(compilerPath(dest), []byte("old compiler"), 0o755))
 			require.NoError(t, os.WriteFile(filepath.Join(dest, "old-sdk-only"), []byte("old SDK"), 0o644))
@@ -183,7 +183,7 @@ func TestForceInstallRetainsOldSDKUntilBlockedRecoveryCanFinish(t *testing.T) {
 
 			// Startup and another attempted force-install must keep the old
 			// SDK and the obstructing path until recovery is possible.
-			toolchain.CleanupStagingDirs()
+			require.ErrorAs(t, toolchain.RecoverHome(), &recoveryErr)
 			assert.FileExists(t, backup)
 			assert.FileExists(t, filepath.Join(staging, "occupied"))
 			err = install(lifecycle.Options{})
@@ -194,7 +194,7 @@ func TestForceInstallRetainsOldSDKUntilBlockedRecoveryCanFinish(t *testing.T) {
 			// sequence, restores the old SDK and cleans the discarded new SDK.
 			require.NoError(t, os.Remove(filepath.Join(staging, "occupied")))
 			require.NoError(t, os.Remove(staging))
-			toolchain.CleanupStagingDirs()
+			require.NoError(t, toolchain.RecoverHome())
 			data, err := os.ReadFile(compilerPath(dest))
 			require.NoError(t, err)
 			assert.Equal(t, "old compiler", string(data))
@@ -232,7 +232,7 @@ func TestFirstInstallDefaultSurvivesInterruptionAfterPublication(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, journals, 1, "interruption must precede normal transaction cleanup")
 
-	toolchain.CleanupStagingDirs()
+	require.NoError(t, toolchain.RecoverHome())
 
 	assert.FileExists(t, compilerPath(dest), "startup must retain the SDK referenced by the published default")
 	journals, err = filepath.Glob(filepath.Join(home, "toolchains", ".fstx-*"))

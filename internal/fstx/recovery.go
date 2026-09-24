@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/utils"
 )
 
@@ -18,7 +19,8 @@ const journalName = "journal.json"
 
 // Recover rolls back unfinished transactions and cleans committed ones under
 // rootDir. On any ambiguity it preserves the transaction and reports its path.
-// Call this before removing abandoned staging trees or starting a new install.
+// toolchain.RecoverHome is the entry point for CJV_HOME; it calls this before
+// removing abandoned staging trees.
 func Recover(rootDir string) error {
 	abs, err := filepath.Abs(rootDir)
 	if err != nil {
@@ -32,7 +34,7 @@ func Recover(rootDir string) error {
 		return err
 	}
 	for _, entry := range entries {
-		if !strings.HasPrefix(entry.Name(), tempPrefix) {
+		if !strings.HasPrefix(entry.Name(), config.TxTempPrefix) {
 			continue
 		}
 		tx := &Transaction{rootDir: abs, tmpDir: filepath.Join(abs, entry.Name())}
@@ -85,7 +87,7 @@ func (tx *Transaction) recover() error {
 	}
 	tx.journal = state
 	if state.Scope == "toolchain" {
-		if filepath.Base(tx.rootDir) != "toolchains" {
+		if filepath.Base(tx.rootDir) != config.ToolchainsSubdir {
 			return errors.New("fstx: toolchain transaction must be under toolchains")
 		}
 		tx.rootDir = filepath.Dir(tx.rootDir)
@@ -147,7 +149,7 @@ func validateJournal(state journal) error {
 }
 
 func validTarget(name string) bool {
-	return name != "" && name != "." && name != ".." && !strings.HasPrefix(name, tempPrefix) &&
+	return name != "" && name != "." && name != ".." && !strings.HasPrefix(name, config.TxTempPrefix) &&
 		!strings.ContainsAny(name, `/\`) && filepath.IsLocal(name) && filepath.Clean(name) == name
 }
 
@@ -156,19 +158,20 @@ func scopedPath(state journal, path string) bool {
 		return false
 	}
 	if state.Scope == "toolchain" {
-		for _, base := range []string{"toolchains", "stdx", "docs"} {
+		for _, base := range []string{config.ToolchainsSubdir, config.StdxSubdir, config.DocsSubdir} {
 			owned := filepath.Join(base, state.Target)
 			if path == owned || strings.HasPrefix(path, owned+string(filepath.Separator)) {
 				return true
 			}
-			if base == "toolchains" && (path == owned+stagingSuffix || strings.HasPrefix(path, owned+stagingSuffix+string(filepath.Separator))) {
+			staging := config.StagingDir(owned)
+			if base == config.ToolchainsSubdir && (path == staging || strings.HasPrefix(path, staging+string(filepath.Separator))) {
 				return true
 			}
 		}
 		return false
 	}
 	first, _, _ := strings.Cut(path, string(filepath.Separator))
-	return first == state.Target || first == state.Target+stagingSuffix
+	return first == state.Target || first == config.StagingDir(state.Target)
 }
 
 func (tx *Transaction) relativePath(path string) (string, error) {

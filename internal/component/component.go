@@ -98,7 +98,7 @@ type Roots struct {
 }
 
 func RootsFor(tcName string) (Roots, error) {
-	tcDirRoot, err := config.ToolchainsDir()
+	tcDir, err := config.ToolchainDirFor(tcName)
 	if err != nil {
 		return Roots{}, err
 	}
@@ -111,7 +111,7 @@ func RootsFor(tcName string) (Roots, error) {
 		return Roots{}, err
 	}
 	return Roots{
-		TcDir:   filepath.Join(tcDirRoot, tcName),
+		TcDir:   tcDir,
 		DocsDir: docsDir,
 		StdxDir: stdxDir,
 	}, nil

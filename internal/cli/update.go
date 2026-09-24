@@ -43,7 +43,9 @@ func (app *application) runUpdate(cmd *cobra.Command, args []string) error {
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	toolchain.CleanupStagingDirs()
+	if err := toolchain.RecoverHome(); err != nil {
+		slog.Warn("failed to recover install transaction", "error", err)
+	}
 
 	if len(args) == 1 {
 		updates, err := app.updateSingle(ctx, args[0])

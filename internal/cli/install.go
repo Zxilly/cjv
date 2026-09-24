@@ -53,7 +53,6 @@ func (r installResult) Text() string { return "" }
 
 func (app *application) runInstall(cmd *cobra.Command, args []string) error {
 	selfmgmt.CheckSudoSafety()
-	toolchain.CleanupStagingDirs()
 	if err := app.InstallToolchainWithExtras(cmd.Context(), args[0], app.installTargets, app.installComponents, app.forceInstall); err != nil {
 		return err
 	}

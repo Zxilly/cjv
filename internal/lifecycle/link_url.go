@@ -76,7 +76,7 @@ func installLinkedToolchain(ctx context.Context, name string, force, noStdx bool
 	if err != nil {
 		return err
 	}
-	if err := fstx.Recover(tcDir); err != nil {
+	if err := toolchain.RecoverHome(); err != nil {
 		return err
 	}
 	destDir := filepath.Join(tcDir, name)
@@ -119,7 +119,7 @@ func installLinkedToolchain(ctx context.Context, name string, force, noStdx bool
 		return err
 	}
 
-	stagingDir := destDir + toolchain.StagingSuffix
+	stagingDir := config.StagingDir(destDir)
 	if err := utils.RemoveAllRetry(stagingDir); err != nil {
 		return fmt.Errorf("failed to clean staging directory: %w", err)
 	}

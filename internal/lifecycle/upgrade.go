@@ -6,12 +6,10 @@ import (
 	"fmt"
 	"maps"
 	"os"
-	"path/filepath"
 
 	"github.com/Zxilly/cjv/internal/cjverr"
 	"github.com/Zxilly/cjv/internal/component"
 	"github.com/Zxilly/cjv/internal/config"
-	"github.com/Zxilly/cjv/internal/fstx"
 	"github.com/Zxilly/cjv/internal/i18n"
 	"github.com/Zxilly/cjv/internal/toolchain"
 )
@@ -31,7 +29,7 @@ func UpgradeToolchain(ctx context.Context, currentName string, resolved Resolved
 	if err != nil {
 		return false, err
 	}
-	if err := fstx.Recover(filepath.Dir(oldRoots.TcDir)); err != nil {
+	if err := toolchain.RecoverHome(); err != nil {
 		return false, err
 	}
 	if _, err := os.Lstat(oldRoots.TcDir); err != nil {
