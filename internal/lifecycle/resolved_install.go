@@ -12,8 +12,8 @@ import (
 	"github.com/Zxilly/cjv/internal/dist"
 	"github.com/Zxilly/cjv/internal/fstx"
 	"github.com/Zxilly/cjv/internal/i18n"
+	"github.com/Zxilly/cjv/internal/reachable"
 	"github.com/Zxilly/cjv/internal/sdktools"
-	"github.com/Zxilly/cjv/internal/selfupdate"
 	"github.com/Zxilly/cjv/internal/toolchain"
 	"github.com/Zxilly/cjv/internal/utils"
 )
@@ -102,7 +102,12 @@ func installResolvedWithDefault(ctx context.Context, rt ResolvedToolchain, setti
 				return err
 			}
 			settings.DefaultToolchain = resolvedName
-			opts.ensurePathConfigured()
+			if opts.ConfigurePath {
+				reachable.ConfigurePath()
+			}
+			if afterPublishHook != nil {
+				return afterPublishHook()
+			}
 			return nil
 		}
 	}
@@ -146,10 +151,7 @@ func validateInstallation(dir, tuple string) error {
 // reachable through the proxies whether it was installed by `cjv install` or
 // by proxy auto-install.
 func finalizeInstalledToolchain() error {
-	if _, err := selfupdate.EnsureManagedExecutable(); err != nil {
-		return err
-	}
-	if err := sdktools.CreateAllProxyLinks(); err != nil {
+	if err := reachable.Ensure(reachable.Policy{}); err != nil {
 		return err
 	}
 	if afterFinalizeHook != nil {
@@ -161,6 +163,11 @@ func finalizeInstalledToolchain() error {
 // afterFinalizeHook lets tests observe or fail the window between placing the
 // toolchain and committing the transaction. Production never sets it.
 var afterFinalizeHook func() error
+
+// afterPublishHook lets tests observe or interrupt the window between
+// publishing the first default toolchain and completing the transaction.
+// Production never sets it.
+var afterPublishHook func() error
 
 func swapInstalledToolchain(stagingDir, destDir string, isReinstall bool, afterSwap, publish func() error) (err error) {
 	if isReinstall {
@@ -202,10 +209,4 @@ func swapInstalledToolchain(stagingDir, destDir string, isReinstall bool, afterS
 	}
 	committed = true
 	return nil
-}
-
-// EnsurePathConfigured is the default lifecycle hook for first install. CLI
-// adapters inject the real shell/registry writer; proxy auto-install leaves
-// PATH alone because cjv is already reachable.
-func EnsurePathConfigured() {
 }

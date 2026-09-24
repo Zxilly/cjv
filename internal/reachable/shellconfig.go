@@ -1,4 +1,4 @@
-package env
+package reachable
 
 import (
 	"errors"
@@ -42,15 +42,15 @@ func addBlockToShellConfig(configPath, block string) error {
 	return utils.WriteFileAtomic(configPath, []byte(str+block), perm)
 }
 
-// AddPathToShellConfig adds a PATH export block to a shell config file
+// addPathToShellConfig adds a PATH export block to a shell config file
 // (e.g., .bashrc, .zshrc) using marker comments. Idempotent.
-func AddPathToShellConfig(configPath string, binDir string) error {
+func addPathToShellConfig(configPath string, binDir string) error {
 	block := fmt.Sprintf("\n%s\nexport PATH='%s':\"$PATH\"\n%s\n", markerStart, strings.ReplaceAll(binDir, "'", "'\\''"), markerEnd)
 	return addBlockToShellConfig(configPath, block)
 }
 
-// AddPathToFishConfig adds a fish_add_path block to fish config.
-func AddPathToFishConfig(configPath string, binDir string) error {
+// addPathToFishConfig adds a fish_add_path block to fish config.
+func addPathToFishConfig(configPath string, binDir string) error {
 	// Fish uses \' to escape single quotes inside single-quoted strings (since fish 3.1),
 	// unlike POSIX shells which use the '\'' concatenation trick.
 	block := fmt.Sprintf("\n%s\nfish_add_path -g '%s'\n%s\n", markerStart, strings.ReplaceAll(binDir, "'", "\\'"), markerEnd)
@@ -75,8 +75,8 @@ func ShellConfigPaths() (posix []string, fish string) {
 	return posix, fish
 }
 
-// RemovePathFromShellConfig removes the cjv marker block from a shell config file.
-func RemovePathFromShellConfig(configPath string) error {
+// removePathFromShellConfig removes the cjv marker block from a shell config file.
+func removePathFromShellConfig(configPath string) error {
 	content, err := os.ReadFile(configPath)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {

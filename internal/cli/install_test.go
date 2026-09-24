@@ -1059,11 +1059,6 @@ func TestInstallToolchainWithExtrasRejectsCustomAndTargetVariantWithTargets(t *t
 	assert.Contains(t, err.Error(), "cannot combine")
 }
 
-func TestEnsurePathConfiguredCanBeDisabledByEnv(t *testing.T) {
-	t.Setenv(config.EnvNoPathSetup, "1")
-	ensurePathConfigured()
-}
-
 func TestInstallComponentsForToolchainNoComponentsIsNoop(t *testing.T) {
 	app := newApplication("dev", "")
 	require.NoError(t, app.InstallComponentsForToolchain(context.Background(), "lts", nil))

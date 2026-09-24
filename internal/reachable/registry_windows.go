@@ -1,4 +1,4 @@
-package env
+package reachable
 
 import (
 	"errors"
@@ -53,9 +53,9 @@ func findPathValueName(key registry.Key) string {
 	return "Path"
 }
 
-// AddPathToWindowsRegistry adds binDir to HKCU\Environment\Path.
+// addPathToWindowsRegistry adds binDir to HKCU\Environment\Path.
 // Uses REG_EXPAND_SZ to preserve %VAR% expansions in existing entries.
-func AddPathToWindowsRegistry(binDir string) error {
+func addPathToWindowsRegistry(binDir string) error {
 	key, _, err := registry.CreateKey(registry.CURRENT_USER, `Environment`, registry.SET_VALUE|registry.QUERY_VALUE)
 	if err != nil {
 		return err
@@ -94,8 +94,8 @@ func addPathToRegistryKey(key registry.Key, binDir string) error {
 	return nil
 }
 
-// RemovePathFromWindowsRegistry removes binDir from HKCU\Environment\Path.
-func RemovePathFromWindowsRegistry(binDir string) error {
+// removePathFromWindowsRegistry removes binDir from HKCU\Environment\Path.
+func removePathFromWindowsRegistry(binDir string) error {
 	key, err := registry.OpenKey(registry.CURRENT_USER, `Environment`, registry.SET_VALUE|registry.QUERY_VALUE)
 	if err != nil {
 		return nil // Key doesn't exist, nothing to remove

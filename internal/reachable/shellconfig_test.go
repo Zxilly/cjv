@@ -1,4 +1,4 @@
-package env
+package reachable
 
 import (
 	"os"
@@ -20,7 +20,7 @@ func TestAddToShellConfig(t *testing.T) {
 	rcFile := filepath.Join(tmp, ".bashrc")
 	os.WriteFile(rcFile, []byte("# existing content\n"), 0o644)
 
-	require.NoError(t, AddPathToShellConfig(rcFile, "/home/user/.cjv/bin"))
+	require.NoError(t, addPathToShellConfig(rcFile, "/home/user/.cjv/bin"))
 
 	content, _ := os.ReadFile(rcFile)
 	assert.Contains(t, string(content), "# cjv (managed by cjv, do not edit)")
@@ -37,8 +37,8 @@ func TestAddToShellConfigIdempotent(t *testing.T) {
 	rcFile := filepath.Join(tmp, ".bashrc")
 	os.WriteFile(rcFile, []byte(""), 0o644)
 
-	AddPathToShellConfig(rcFile, "/home/user/.cjv/bin")
-	AddPathToShellConfig(rcFile, "/home/user/.cjv/bin")
+	addPathToShellConfig(rcFile, "/home/user/.cjv/bin")
+	addPathToShellConfig(rcFile, "/home/user/.cjv/bin")
 
 	content, _ := os.ReadFile(rcFile)
 	assert.Equal(t, 1, strings.Count(string(content), "# cjv (managed by cjv, do not edit)"))
@@ -52,7 +52,7 @@ func TestRemoveFromShellConfig(t *testing.T) {
 	rcFile := filepath.Join(tmp, ".bashrc")
 	os.WriteFile(rcFile, []byte("before\n# cjv (managed by cjv, do not edit)\nexport PATH=\"$HOME/.cjv/bin:$PATH\"\n# cjv end\nafter\n"), 0o644)
 
-	require.NoError(t, RemovePathFromShellConfig(rcFile))
+	require.NoError(t, removePathFromShellConfig(rcFile))
 
 	content, _ := os.ReadFile(rcFile)
 	assert.NotContains(t, string(content), "cjv")
@@ -69,7 +69,7 @@ func TestRemoveFromShellConfigNoMarker(t *testing.T) {
 	original := "# some content\nexport FOO=bar\n"
 	os.WriteFile(rcFile, []byte(original), 0o644)
 
-	require.NoError(t, RemovePathFromShellConfig(rcFile))
+	require.NoError(t, removePathFromShellConfig(rcFile))
 
 	content, _ := os.ReadFile(rcFile)
 	assert.Equal(t, original, string(content))
@@ -83,7 +83,7 @@ func TestAddToFishConfig(t *testing.T) {
 	fishConfig := filepath.Join(tmp, "config.fish")
 	os.WriteFile(fishConfig, []byte("# fish config\n"), 0o644)
 
-	require.NoError(t, AddPathToFishConfig(fishConfig, "/home/user/.cjv/bin"))
+	require.NoError(t, addPathToFishConfig(fishConfig, "/home/user/.cjv/bin"))
 
 	content, _ := os.ReadFile(fishConfig)
 	assert.Contains(t, string(content), "# cjv (managed by cjv, do not edit)")
@@ -95,7 +95,7 @@ func TestAddPathToShellConfig_CreatesBlock(t *testing.T) {
 	rcPath := filepath.Join(t.TempDir(), ".bashrc")
 	binDir := "/home/user/.cjv/bin"
 
-	require.NoError(t, AddPathToShellConfig(rcPath, binDir))
+	require.NoError(t, addPathToShellConfig(rcPath, binDir))
 
 	content, err := os.ReadFile(rcPath)
 	require.NoError(t, err)
@@ -107,14 +107,14 @@ func TestAddPathToShellConfig_Idempotent(t *testing.T) {
 	rcPath := filepath.Join(t.TempDir(), ".bashrc")
 	binDir := "/home/user/.cjv/bin"
 
-	require.NoError(t, AddPathToShellConfig(rcPath, binDir))
+	require.NoError(t, addPathToShellConfig(rcPath, binDir))
 	firstContent, _ := os.ReadFile(rcPath)
 
-	require.NoError(t, AddPathToShellConfig(rcPath, binDir))
+	require.NoError(t, addPathToShellConfig(rcPath, binDir))
 	secondContent, _ := os.ReadFile(rcPath)
 
 	assert.Equal(t, firstContent, secondContent,
-		"calling AddPathToShellConfig twice should not duplicate the block")
+		"calling addPathToShellConfig twice should not duplicate the block")
 }
 
 func TestAddPathToShellConfig_PreservesExistingContent(t *testing.T) {
@@ -122,7 +122,7 @@ func TestAddPathToShellConfig_PreservesExistingContent(t *testing.T) {
 	existing := "# My custom config\nexport EDITOR=vim\n"
 	require.NoError(t, utils.WriteFileAtomic(rcPath, []byte(existing), 0o644))
 
-	require.NoError(t, AddPathToShellConfig(rcPath, "/cjv/bin"))
+	require.NoError(t, addPathToShellConfig(rcPath, "/cjv/bin"))
 
 	content, _ := os.ReadFile(rcPath)
 	assert.Contains(t, string(content), "export EDITOR=vim",
@@ -134,8 +134,8 @@ func TestRemovePathFromShellConfig_RemovesBlock(t *testing.T) {
 	rcPath := filepath.Join(t.TempDir(), ".bashrc")
 	binDir := "/home/user/.cjv/bin"
 
-	require.NoError(t, AddPathToShellConfig(rcPath, binDir))
-	require.NoError(t, RemovePathFromShellConfig(rcPath))
+	require.NoError(t, addPathToShellConfig(rcPath, binDir))
+	require.NoError(t, removePathFromShellConfig(rcPath))
 
 	content, _ := os.ReadFile(rcPath)
 	assert.NotContains(t, string(content), binDir,
@@ -149,7 +149,7 @@ func TestRemovePathFromShellConfig_NoOpWhenNoMarker(t *testing.T) {
 	original := "export PATH=$PATH:/usr/local/bin\n"
 	require.NoError(t, os.WriteFile(rcPath, []byte(original), 0o644))
 
-	require.NoError(t, RemovePathFromShellConfig(rcPath))
+	require.NoError(t, removePathFromShellConfig(rcPath))
 
 	content, _ := os.ReadFile(rcPath)
 	assert.Equal(t, original, string(content),
@@ -157,7 +157,7 @@ func TestRemovePathFromShellConfig_NoOpWhenNoMarker(t *testing.T) {
 }
 
 func TestRemovePathFromShellConfig_MissingFileIsNotError(t *testing.T) {
-	err := RemovePathFromShellConfig(filepath.Join(t.TempDir(), "nonexistent"))
+	err := removePathFromShellConfig(filepath.Join(t.TempDir(), "nonexistent"))
 	assert.NoError(t, err, "removing from non-existent file should not error")
 }
 
@@ -165,7 +165,7 @@ func TestAddPathToFishConfig_CreatesBlock(t *testing.T) {
 	fishPath := filepath.Join(t.TempDir(), "config.fish")
 	binDir := "/home/user/.cjv/bin"
 
-	require.NoError(t, AddPathToFishConfig(fishPath, binDir))
+	require.NoError(t, addPathToFishConfig(fishPath, binDir))
 
 	content, err := os.ReadFile(fishPath)
 	require.NoError(t, err)
