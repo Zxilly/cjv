@@ -5,6 +5,7 @@ import (
 
 	"github.com/Zxilly/cjv/internal/cjverr"
 	"github.com/Zxilly/cjv/internal/i18n"
+	"github.com/Zxilly/cjv/internal/progress"
 	"github.com/Zxilly/cjv/internal/reachable"
 	"github.com/Zxilly/cjv/internal/selfupdate"
 )
@@ -61,13 +62,14 @@ func (r UpdateResult) Text() string {
 // UpdateManaged updates the managed binary and refreshes its proxy links and
 // shell scripts. Both explicit and automatic updates use this operation;
 // callers decide how to render its result and whether failures are fatal.
-func UpdateManaged(ctx context.Context, updateURL, currentVersion string) (UpdateResult, error) {
+// The release download reports its progress to sink; nil reports nothing.
+func UpdateManaged(ctx context.Context, updateURL, currentVersion string, sink progress.Sink) (UpdateResult, error) {
 	// Recover an interrupted update before bootstrapping a missing binary.
 	selfupdate.CleanupOldBinaries()
 	if _, err := selfupdate.EnsureManagedExecutable(); err != nil {
 		return UpdateResult{}, err
 	}
-	result, err := selfupdate.Update(ctx, updateURL, currentVersion)
+	result, err := selfupdate.Update(ctx, updateURL, currentVersion, sink)
 	if err != nil {
 		return UpdateResult{}, err
 	}

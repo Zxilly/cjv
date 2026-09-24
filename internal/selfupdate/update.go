@@ -1,6 +1,10 @@
 package selfupdate
 
-import "context"
+import (
+	"context"
+
+	"github.com/Zxilly/cjv/internal/progress"
+)
 
 // Status describes whether a build can be updated and whether it changed.
 type Status string
@@ -25,13 +29,14 @@ type Result struct {
 // update_default.go and update_mirror.go.
 //
 // updateURL is the releases URL embedded at build time; currentVersion is the
-// running binary's version (or "dev" for unstamped local builds).
-func Update(ctx context.Context, updateURL, currentVersion string) (Result, error) {
+// running binary's version (or "dev" for unstamped local builds). The release
+// asset download reports its progress to sink; nil reports nothing.
+func Update(ctx context.Context, updateURL, currentVersion string, sink progress.Sink) (Result, error) {
 	if updateURL == "" {
 		return Result{CurrentVersion: currentVersion, Version: currentVersion, Status: StatusSkipped}, nil
 	}
 	if currentVersion == "dev" {
 		return Result{CurrentVersion: currentVersion, Version: currentVersion, Status: StatusDevelopment}, nil
 	}
-	return runUpdate(ctx, updateURL, currentVersion)
+	return runUpdate(ctx, updateURL, currentVersion, sink)
 }

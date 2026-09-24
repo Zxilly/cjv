@@ -2,7 +2,6 @@ package cli
 
 import (
 	"bytes"
-	"context"
 	"io"
 	"os"
 	"path/filepath"
@@ -11,12 +10,10 @@ import (
 	"testing"
 	"time"
 
-	componentlib "github.com/Zxilly/cjv/internal/component"
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/i18n"
 	"github.com/Zxilly/cjv/internal/sdktools"
 	"github.com/Zxilly/cjv/internal/testutil"
-	"github.com/Zxilly/cjv/internal/toolchain"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/exp/teatest"
 	"github.com/spf13/cobra"
@@ -202,26 +199,18 @@ func TestRunInitPassesConfiguredComponentsToDefaultToolchainInstall(t *testing.T
 	config.IsolateForTest(t, home)
 	t.Setenv(config.EnvDistServer, "")
 	t.Setenv(config.EnvNoPathSetup, "1")
-	server := testutil.ValidMockServer(t)
+	server := testutil.SplitNightlyMockServer(t)
 	settings := config.DefaultSettings()
-	settings.ManifestURL = server.URL + "/sdk-versions.json"
+	settings.DistServer = server.URL + "/corp/cjv"
 	settingsPath, err := config.SettingsPath()
 	require.NoError(t, err)
 	require.NoError(t, config.SaveSettings(&settings, settingsPath))
 	config.ResetDefaultSettingsFileCache()
 
 	app.initYes = true
-	app.initDefaultToolchain = "sts"
+	app.initDefaultToolchain = "nightly"
 	app.initNoModifyPath = true
-	app.initComponents = []string{"stdx", "docs"}
-
-	var gotToolchain string
-	var gotComponents []string
-	app.componentInstallFunc = func(_ context.Context, _ componentlib.Roots, tc toolchain.ToolchainName, name componentlib.Name, _, _ string, _ bool) error {
-		gotToolchain = tc.String()
-		gotComponents = append(gotComponents, string(name))
-		return nil
-	}
+	app.initComponents = []string{"docs"}
 
 	t.Cleanup(func() {
 		config.ResetDefaultSettingsFileCache()
@@ -229,9 +218,10 @@ func TestRunInitPassesConfiguredComponentsToDefaultToolchainInstall(t *testing.T
 
 	require.NoError(t, app.runInit(&cobra.Command{}, nil))
 
-	assert.DirExists(t, filepath.Join(home, "toolchains", "sts-2.0.0"))
-	assert.Equal(t, "sts-2.0.0", gotToolchain)
-	assert.Equal(t, []string{"stdx", "docs"}, gotComponents)
+	const name = "nightly-1.2.0-alpha.20260822010101"
+	assert.DirExists(t, filepath.Join(home, "toolchains", name))
+	assert.FileExists(t, filepath.Join(home, "docs", name, "main", "index.html"),
+		"the configured component is installed into the default toolchain")
 }
 
 func TestRenderInitMarkdown(t *testing.T) {

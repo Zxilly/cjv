@@ -5,13 +5,13 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"sync"
 	"testing"
 
 	"github.com/Zxilly/cjv/internal/cjverr"
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/dist"
+	"github.com/Zxilly/cjv/internal/progress"
 	"github.com/Zxilly/cjv/internal/toolchain"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -60,6 +60,17 @@ func sourceWithComponents(t *testing.T, channel toolchain.Channel, version strin
 	source, err := dist.NewSource(&settings)
 	require.NoError(t, err)
 	return source
+}
+
+// stageRecorder collects the non-download stages an install reports.
+type stageRecorder struct{ stages *[]progress.Kind }
+
+func (r stageRecorder) Report(e progress.Event) {
+	switch e.Kind {
+	case progress.DownloadStarted, progress.DownloadAdvanced, progress.DownloadFinished:
+	default:
+		*r.stages = append(*r.stages, e.Kind)
+	}
 }
 
 // recordingArchiveServer serves a stdx-shaped zip for every request and
@@ -193,11 +204,9 @@ func TestInstallFromSource_ReportsStages(t *testing.T) {
 	})
 	roots := Roots{TcDir: t.TempDir(), DocsDir: t.TempDir(), StdxDir: t.TempDir()}
 	tc := toolchain.ToolchainName{Channel: toolchain.LTS, Version: "1.0.5"}
-	var stages []string
-	require.NoError(t, InstallFromSource(context.Background(), roots, tc, Docs, "", t.TempDir(), false, source, func(stage string) {
-		stages = append(stages, stage)
-	}))
-	assert.Equal(t, "FetchingComponent,InstallingComponent", strings.Join(stages, ","))
+	var stages []progress.Kind
+	require.NoError(t, InstallFromSource(context.Background(), roots, tc, Docs, "", t.TempDir(), false, source, stageRecorder{&stages}))
+	assert.Equal(t, []progress.Kind{progress.FetchingComponent, progress.InstallingComponent}, stages)
 }
 
 func TestNormalizeList(t *testing.T) {

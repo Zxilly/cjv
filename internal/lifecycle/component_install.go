@@ -9,13 +9,13 @@ import (
 	"github.com/Zxilly/cjv/internal/cjverr"
 	"github.com/Zxilly/cjv/internal/component"
 	"github.com/Zxilly/cjv/internal/config"
-	"github.com/Zxilly/cjv/internal/i18n"
+	"github.com/Zxilly/cjv/internal/progress"
 	"github.com/Zxilly/cjv/internal/toolchain"
 )
 
 // InstallComponentsForToolchain backs the proxy auto_install path: it resolves
-// tcInput to an already-installed toolchain and installs missing components
-// quietly, whatever reporter the caller supplied.
+// tcInput to an already-installed toolchain and installs the missing
+// components, reporting progress to the caller's sink like any install.
 func InstallComponentsForToolchain(ctx context.Context, tcInput string, components []string, opts Options) error {
 	if len(components) == 0 {
 		return nil
@@ -31,7 +31,6 @@ func InstallComponentsForToolchain(ctx context.Context, tcInput string, componen
 	if err != nil {
 		return err
 	}
-	opts.Report = nil
 	return InstallComponents(ctx, filepath.Base(installedDir), components, false, opts)
 }
 
@@ -81,15 +80,16 @@ func installComponents(ctx context.Context, d *Distribution, resolvedName string
 	}
 	return component.ApplyChanges(roots, parsed, func() error {
 		for _, c := range parsed {
-			if err := opts.installComponent(ctx, d, roots, resolvedTC, c, tuple, downloadsDir, force); err != nil {
+			d.note()
+			if err := component.InstallFromSource(ctx, roots, resolvedTC, c, tuple, downloadsDir, force, d.Source, opts.sink()); err != nil {
 				var alreadyErr *cjverr.ComponentAlreadyInstalledError
 				if errors.As(err, &alreadyErr) {
-					opts.report("ComponentAlreadyInstalled", i18n.MsgData{"Toolchain": resolvedName, "Component": string(c)})
+					opts.emit(progress.Event{Kind: progress.ComponentAlreadyInstalled, Toolchain: resolvedName, Component: string(c)})
 					continue
 				}
 				return err
 			}
-			opts.report("ComponentInstalled", i18n.MsgData{"Toolchain": resolvedName, "Component": string(c)})
+			opts.emit(progress.Event{Kind: progress.ComponentInstalled, Toolchain: resolvedName, Component: string(c)})
 		}
 		return nil
 	})

@@ -12,8 +12,8 @@ import (
 	"github.com/Zxilly/cjv/internal/cjverr"
 	"github.com/Zxilly/cjv/internal/component"
 	"github.com/Zxilly/cjv/internal/config"
-	"github.com/Zxilly/cjv/internal/i18n"
 	"github.com/Zxilly/cjv/internal/lifecycle"
+	"github.com/Zxilly/cjv/internal/progress"
 	sdktarget "github.com/Zxilly/cjv/internal/target"
 	"github.com/Zxilly/cjv/internal/toolchain"
 )
@@ -24,6 +24,13 @@ var AutoInstallFunc func(ctx context.Context, input string, targets []string) er
 
 // AutoInstallComponentsFunc is the test seam for missing component installs.
 var AutoInstallComponentsFunc func(ctx context.Context, input string, components []string) error
+
+// autoInstallProgress is the adapter auto-install reports to. The proxy path
+// runs before any renderer exists and its stdout belongs to the proxied
+// tool, so every message and the download bar go to stderr.
+func autoInstallProgress() progress.Sink {
+	return progress.NewText(os.Stderr, os.Stderr)
+}
 
 type ActiveToolchain struct {
 	Dir        string
@@ -54,17 +61,15 @@ func Active(ctx context.Context, tcOverride string) (ActiveToolchain, error) {
 	// toolchain.ResolveActiveToolchain; the auto-install retry and the
 	// target/component ensuring below are the deliberate extra behavior of the
 	// proxy path.
+	sink := autoInstallProgress()
 	tcDir, displayName, parsed, err := toolchain.FindActiveDir(tcName)
 	if err != nil {
 		var notInstalled *cjverr.ToolchainNotInstalledError
-		installFunc := autoInstallFunc()
+		installFunc := autoInstallFunc(sink)
 		if errors.As(err, &notInstalled) && !parsed.IsCustom() && shouldAutoInstall(settings) && installFunc != nil {
-			fmt.Fprintln(os.Stderr, i18n.T("AutoInstalling", i18n.MsgData{"Name": tcName}))
+			sink.Report(progress.Event{Kind: progress.AutoInstalling, Subject: tcName})
 			if installErr := installFunc(ctx, tcName, targets); installErr != nil {
-				fmt.Fprintf(os.Stderr, "%s\n", i18n.T("AutoInstallFailed", i18n.MsgData{
-					"Name": tcName,
-					"Err":  installErr.Error(),
-				}))
+				sink.Report(progress.Event{Kind: progress.AutoInstallFailed, Subject: tcName, Err: installErr})
 				return ActiveToolchain{}, &cjverr.ToolchainNotInstalledError{Name: tcName}
 			}
 			tcDir, displayName, _, err = toolchain.FindActiveDir(tcName)
@@ -74,11 +79,11 @@ func Active(ctx context.Context, tcOverride string) (ActiveToolchain, error) {
 		}
 	}
 
-	if err := ensureTargets(ctx, displayName, tcDir, settings, targets); err != nil {
+	if err := ensureTargets(ctx, displayName, tcDir, settings, targets, sink); err != nil {
 		return ActiveToolchain{}, err
 	}
 
-	if err := ensureComponents(ctx, displayName, tcDir, settings, components); err != nil {
+	if err := ensureComponents(ctx, displayName, tcDir, settings, components, sink); err != nil {
 		return ActiveToolchain{}, err
 	}
 
@@ -170,7 +175,7 @@ func resolveName(settings *config.Settings, settingsErr error, tcOverride string
 	return resolved.Name, resolved.Source, resolved.Targets, resolved.Components, nil
 }
 
-func ensureTargets(ctx context.Context, tcInput, tcDir string, settings *config.Settings, targets []string) error {
+func ensureTargets(ctx context.Context, tcInput, tcDir string, settings *config.Settings, targets []string, sink progress.Sink) error {
 	if len(targets) == 0 {
 		return nil
 	}
@@ -207,17 +212,15 @@ func ensureTargets(ctx context.Context, tcInput, tcDir string, settings *config.
 		return nil
 	}
 
-	installFunc := autoInstallFunc()
+	installFunc := autoInstallFunc(sink)
 	if !shouldAutoInstall(settings) || installFunc == nil {
 		return &cjverr.ToolchainNotInstalledError{Name: missingNames[0]}
 	}
 
-	fmt.Fprintln(os.Stderr, i18n.T("AutoInstalling", i18n.MsgData{"Name": strings.Join(missingNames, ", ")}))
+	subject := strings.Join(missingNames, ", ")
+	sink.Report(progress.Event{Kind: progress.AutoInstalling, Subject: subject})
 	if installErr := installFunc(ctx, tcInput, missingTargets); installErr != nil {
-		fmt.Fprintf(os.Stderr, "%s\n", i18n.T("AutoInstallFailed", i18n.MsgData{
-			"Name": strings.Join(missingNames, ", "),
-			"Err":  installErr.Error(),
-		}))
+		sink.Report(progress.Event{Kind: progress.AutoInstallFailed, Subject: subject, Err: installErr})
 		return &cjverr.ToolchainNotInstalledError{Name: missingNames[0]}
 	}
 
@@ -237,25 +240,25 @@ func shouldAutoInstall(settings *config.Settings) bool {
 	return settings != nil && settings.AutoInstall
 }
 
-func autoInstallFunc() func(context.Context, string, []string) error {
+func autoInstallFunc(sink progress.Sink) func(context.Context, string, []string) error {
 	if AutoInstallFunc != nil {
 		return AutoInstallFunc
 	}
 	return func(ctx context.Context, input string, targets []string) error {
-		return lifecycle.Install(ctx, lifecycle.InstallRequest{Toolchain: input, Targets: targets}, lifecycle.Options{})
+		return lifecycle.Install(ctx, lifecycle.InstallRequest{Toolchain: input, Targets: targets}, lifecycle.Options{Progress: sink})
 	}
 }
 
-func autoInstallComponentsFunc() func(context.Context, string, []string) error {
+func autoInstallComponentsFunc(sink progress.Sink) func(context.Context, string, []string) error {
 	if AutoInstallComponentsFunc != nil {
 		return AutoInstallComponentsFunc
 	}
 	return func(ctx context.Context, input string, components []string) error {
-		return lifecycle.InstallComponentsForToolchain(ctx, input, components, lifecycle.Options{})
+		return lifecycle.InstallComponentsForToolchain(ctx, input, components, lifecycle.Options{Progress: sink})
 	}
 }
 
-func ensureComponents(ctx context.Context, tcInput, tcDir string, settings *config.Settings, components []string) error {
+func ensureComponents(ctx context.Context, tcInput, tcDir string, settings *config.Settings, components []string, sink progress.Sink) error {
 	if len(components) == 0 {
 		return nil
 	}
@@ -280,7 +283,7 @@ func ensureComponents(ctx context.Context, tcInput, tcDir string, settings *conf
 		asStrings[i] = string(n)
 	}
 
-	installComponentsFunc := autoInstallComponentsFunc()
+	installComponentsFunc := autoInstallComponentsFunc(sink)
 	if !shouldAutoInstall(settings) || installComponentsFunc == nil {
 		return &cjverr.ComponentNotInstalledError{
 			Toolchain: filepath.Base(tcDir),
@@ -288,14 +291,10 @@ func ensureComponents(ctx context.Context, tcInput, tcDir string, settings *conf
 		}
 	}
 
-	fmt.Fprintln(os.Stderr, i18n.T("AutoInstalling", i18n.MsgData{
-		"Name": strings.Join(asStrings, ", "),
-	}))
+	subject := strings.Join(asStrings, ", ")
+	sink.Report(progress.Event{Kind: progress.AutoInstalling, Subject: subject})
 	if err := installComponentsFunc(ctx, tcInput, asStrings); err != nil {
-		fmt.Fprintf(os.Stderr, "%s\n", i18n.T("AutoInstallFailed", i18n.MsgData{
-			"Name": strings.Join(asStrings, ", "),
-			"Err":  err.Error(),
-		}))
+		sink.Report(progress.Event{Kind: progress.AutoInstallFailed, Subject: subject, Err: err})
 		return &cjverr.ComponentNotInstalledError{
 			Toolchain: filepath.Base(tcDir),
 			Component: asStrings[0],

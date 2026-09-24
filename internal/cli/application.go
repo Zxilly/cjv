@@ -1,11 +1,8 @@
 package cli
 
 import (
-	"context"
-
 	"github.com/Zxilly/cjv/internal/cli/output"
 	componentlib "github.com/Zxilly/cjv/internal/component"
-	"github.com/Zxilly/cjv/internal/toolchain"
 	"github.com/spf13/cobra"
 )
 
@@ -16,7 +13,6 @@ type application struct {
 	componentAddCmd                 *cobra.Command
 	componentAddForce               bool
 	componentCmd                    *cobra.Command
-	componentInstallFunc            func(context.Context, componentlib.Roots, toolchain.ToolchainName, componentlib.Name, string, string, bool) error
 	componentLinkCmd                *cobra.Command
 	componentLinkForce              bool
 	componentLinkFunc               func(componentlib.Roots, componentlib.Name, string, bool) (string, error)

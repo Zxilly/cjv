@@ -11,7 +11,7 @@ import (
 	"github.com/Zxilly/cjv/internal/cjverr"
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/dist"
-	"github.com/Zxilly/cjv/internal/i18n"
+	"github.com/Zxilly/cjv/internal/progress"
 	sdktarget "github.com/Zxilly/cjv/internal/target"
 	"github.com/Zxilly/cjv/internal/testutil"
 	"github.com/Zxilly/cjv/internal/toolchain"
@@ -217,11 +217,11 @@ func TestUpdateInstalledChannelAlreadyUpToDate(t *testing.T) {
 	saveUpdateSettings(t, home, settings)
 	require.NoError(t, Install(t.Context(), InstallRequest{Toolchain: "lts"}, quietLifecycleOptions()))
 
-	var reports []string
-	outcome, err := UpdateInstalled(t.Context(), parse(t, "lts"), Options{Report: func(message string, _ i18n.MsgData) { reports = append(reports, message) }})
+	recorder := &testutil.ProgressRecorder{}
+	outcome, err := UpdateInstalled(t.Context(), parse(t, "lts"), Options{Progress: recorder})
 	require.NoError(t, err)
 	assert.Equal(t, UpdateOutcome{Name: "lts-1.0.5", Replacement: "lts-1.0.5", Status: UpdateUpToDate}, outcome)
-	assert.Contains(t, reports, "AlreadyUpToDate")
+	assert.Contains(t, recorder.Kinds, progress.AlreadyUpToDate)
 }
 
 func TestUpdateInstalledChannelUpgradesNewestInstalledVersion(t *testing.T) {

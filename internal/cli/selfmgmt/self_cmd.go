@@ -40,7 +40,7 @@ func NewSelfCommand(ver, updURL string, renderer *output.Renderer) *cobra.Comman
 		Use:   "update",
 		Short: i18n.T("SelfUpdateShort", nil),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			result, err := UpdateManaged(cmd.Context(), updURL, ver)
+			result, err := UpdateManaged(cmd.Context(), updURL, ver, renderer.Progress(cmd.OutOrStdout()))
 			if err != nil {
 				return err
 			}

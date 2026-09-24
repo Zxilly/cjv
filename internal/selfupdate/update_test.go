@@ -17,10 +17,10 @@ import (
 )
 
 func TestUpdateSkipsNetworkForUnsupportedOrDevBuilds(t *testing.T) {
-	result, err := Update(context.Background(), "", "1.0.0")
+	result, err := Update(context.Background(), "", "1.0.0", nil)
 	require.NoError(t, err)
 	assert.Equal(t, Result{CurrentVersion: "1.0.0", Version: "1.0.0", Status: StatusSkipped}, result)
-	result, err = Update(context.Background(), "https://example.invalid/owner/repo/releases", "dev")
+	result, err = Update(context.Background(), "https://example.invalid/owner/repo/releases", "dev", nil)
 	require.NoError(t, err)
 	assert.Equal(t, Result{CurrentVersion: "dev", Version: "dev", Status: StatusDevelopment}, result)
 }
@@ -50,7 +50,7 @@ func TestUpdateReportsInstalledRelease(t *testing.T) {
 				digest = strings.Repeat("0", 64)
 			}
 			updateURL := serveUpdateRelease(t, tc.tag, archive, digest)
-			result, err := Update(context.Background(), updateURL, "1.0.0")
+			result, err := Update(context.Background(), updateURL, "1.0.0", nil)
 			if tc.invalidChecksum {
 				require.Error(t, err)
 				assert.NotEqual(t, StatusUpdated, result.Status)

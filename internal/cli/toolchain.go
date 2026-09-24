@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/Zxilly/cjv/internal/cli/output"
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/i18n"
 	"github.com/Zxilly/cjv/internal/lifecycle"
@@ -26,11 +27,30 @@ type toolchainLinkResult struct {
 	Path string `json:"path"`
 }
 
+// toolchainMaterializedResult is the URL and archive form of a link: the
+// toolchain was downloaded or unpacked into CJV_HOME, and the install
+// progress already told the user so.
+type toolchainMaterializedResult struct {
+	output.ProgressDriven
+	Name string `json:"name"`
+	Path string `json:"path"`
+}
+
 func (r toolchainLinkResult) Text() string {
 	return color.GreenString(i18n.T("ToolchainLinked", i18n.MsgData{
 		"Name": r.Name,
 		"Path": r.Path,
 	}))
+}
+
+// renderMaterializedToolchain renders the result of a URL or archive link,
+// whose toolchain now lives under the toolchains directory.
+func (app *application) renderMaterializedToolchain(cmd *cobra.Command, name string) error {
+	tcDir, err := config.ToolchainsDir()
+	if err != nil {
+		return err
+	}
+	return app.output.RenderTo(cmdOutput(cmd), toolchainMaterializedResult{Name: name, Path: filepath.Join(tcDir, name)})
 }
 
 func (app *application) initToolchainCommands() {
@@ -66,14 +86,7 @@ func (app *application) initToolchainCommands() {
 				if err := lifecycle.InstallToolchainFromURL(cmd.Context(), name, targetPath, app.linkSHA256, app.linkForce, app.linkNoStdx, app.lifecycleOptions()); err != nil {
 					return err
 				}
-				if !app.output.IsJSON() {
-					return nil
-				}
-				tcDir, err := config.ToolchainsDir()
-				if err != nil {
-					return err
-				}
-				return app.output.RenderTo(cmdOutput(cmd), toolchainLinkResult{Name: name, Path: filepath.Join(tcDir, name)})
+				return app.renderMaterializedToolchain(cmd, name)
 			}
 
 			absPath, err := filepath.Abs(targetPath)
@@ -93,14 +106,7 @@ func (app *application) initToolchainCommands() {
 				if err := lifecycle.InstallToolchainFromZip(cmd.Context(), name, absPath, app.linkSHA256, app.linkForce, app.linkNoStdx, app.lifecycleOptions()); err != nil {
 					return err
 				}
-				if !app.output.IsJSON() {
-					return nil
-				}
-				tcDir, err := config.ToolchainsDir()
-				if err != nil {
-					return err
-				}
-				return app.output.RenderTo(cmdOutput(cmd), toolchainLinkResult{Name: name, Path: filepath.Join(tcDir, name)})
+				return app.renderMaterializedToolchain(cmd, name)
 			}
 
 			// Directory link: the archive/URL-only flags must not be used here. Reject

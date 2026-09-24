@@ -90,7 +90,7 @@ func TestUpdateManagedRegeneratesEnvScripts(t *testing.T) {
 	for _, name := range scripts {
 		require.NoError(t, os.WriteFile(filepath.Join(home, name), []byte("outdated script"), 0o644))
 	}
-	result, err := UpdateManaged(context.Background(), "", "dev")
+	result, err := UpdateManaged(context.Background(), "", "dev", nil)
 	require.NoError(t, err)
 	assert.False(t, result.Updated)
 	for _, name := range scripts {

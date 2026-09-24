@@ -1,43 +1,34 @@
 package cli
 
 import (
-	"fmt"
-
+	"github.com/Zxilly/cjv/internal/cli/output"
 	"github.com/Zxilly/cjv/internal/cli/selfmgmt"
 	"github.com/Zxilly/cjv/internal/i18n"
 	"github.com/Zxilly/cjv/internal/lifecycle"
-	"github.com/fatih/color"
+	"github.com/Zxilly/cjv/internal/progress"
 	"github.com/spf13/cobra"
 )
 
-// reportProgress owns presentation for installation and component operations.
-func (app *application) reportProgress(message string, data i18n.MsgData) {
-	if app.output.IsJSON() {
-		return
-	}
-	text := i18n.T(message, data)
-	if message == "ToolchainInstalled" || message == "ComponentInstalled" {
-		text = color.GreenString("%s", text)
-	}
-	_, _ = fmt.Fprintln(app.rootCmd.OutOrStdout(), text)
+// progress is the adapter this invocation's operations report to: the
+// renderer picks text on the command writer or nothing in JSON mode.
+func (app *application) progress() progress.Sink {
+	return app.output.Progress(app.rootCmd.OutOrStdout())
 }
 
 func (app *application) lifecycleOptions() lifecycle.Options {
 	return lifecycle.Options{
-		Report:           app.reportProgress,
-		ConfigurePath:    true,
-		ComponentInstall: app.componentInstallFunc,
+		Progress:      app.progress(),
+		ConfigurePath: true,
 	}
 }
 
 type installResult struct {
+	output.ProgressDriven
 	Toolchain  string   `json:"toolchain"`
 	Targets    []string `json:"targets"`
 	Components []string `json:"components"`
 	Forced     bool     `json:"forced"`
 }
-
-func (r installResult) Text() string { return "" }
 
 func (app *application) runInstall(cmd *cobra.Command, args []string) error {
 	selfmgmt.CheckSudoSafety()
@@ -49,9 +40,6 @@ func (app *application) runInstall(cmd *cobra.Command, args []string) error {
 	}, app.lifecycleOptions())
 	if err != nil {
 		return err
-	}
-	if !app.output.IsJSON() {
-		return nil
 	}
 	return app.output.RenderTo(cmdOutput(cmd), installResult{
 		Toolchain:  args[0],

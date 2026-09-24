@@ -241,25 +241,29 @@ func TestSourceNightlyFallsBackToAggregatedManifestDuringMigration(t *testing.T)
 }
 
 func TestSourceResolvesNightlyChecksumSidecar(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		_, _ = w.Write([]byte(sourceTestManifestWithNightly("")))
+	var sidecarRequests []string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/versions.json":
+			_, _ = w.Write([]byte(sourceTestManifestWithNightly("")))
+		case "/nightly/nightly.tar.gz.sha256":
+			sidecarRequests = append(sidecarRequests, r.URL.Path)
+			_, _ = w.Write([]byte(sourceTestSHA256 + "\n"))
+		default:
+			http.NotFound(w, r)
+		}
 	}))
 	defer server.Close()
 
 	settings := config.DefaultSettings()
 	settings.ManifestURL = server.URL + "/versions.json"
-	var checksumAssetURL string
-	source, err := NewSourceWithOptions(&settings, SourceOptions{
-		FetchNightlySHA256: func(_ context.Context, assetURL string) (string, error) {
-			checksumAssetURL = assetURL
-			return sourceTestSHA256, nil
-		},
-	})
+	source, err := NewSource(&settings)
 	require.NoError(t, err)
 
 	release, err := source.ResolveToolchain(context.Background(), toolchain.Nightly, "", "linux-x64")
 	require.NoError(t, err)
-	assert.Equal(t, server.URL+"/nightly/nightly.tar.gz", checksumAssetURL)
+	// The sidecar sits next to the asset the manifest links to.
+	assert.Equal(t, []string{"/nightly/nightly.tar.gz.sha256"}, sidecarRequests)
 	assert.Equal(t, sourceTestSHA256, release.Download.SHA256)
 }
 
