@@ -5,8 +5,6 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
-
-	"github.com/Zxilly/cjv/internal/utils"
 )
 
 // ClassifyShellName maps a process name to a ShellType.
@@ -35,7 +33,7 @@ func ClassifyShellName(name string) (ShellType, bool) {
 // Falls back to DefaultShellType() if detection fails.
 func DetectShell() (ShellType, bool) {
 	ppid := os.Getppid()
-	name, err := utils.ProcessName(ppid)
+	name, err := processName(ppid)
 	if err != nil {
 		return DefaultShellType(), false
 	}

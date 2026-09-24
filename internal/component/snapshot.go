@@ -3,12 +3,11 @@ package component
 import (
 	"errors"
 	"fmt"
-	"io/fs"
 	"os"
 	"path/filepath"
 	"slices"
 
-	"github.com/Zxilly/cjv/internal/utils"
+	"github.com/Zxilly/cjv/internal/fsops"
 )
 
 type snapshot struct {
@@ -72,7 +71,7 @@ func (s *snapshot) addPath(live, label string) error {
 		return err
 	}
 	entry.existed = true
-	if err := copyTree(live, entry.backup); err != nil {
+	if err := fsops.CopyTree(live, entry.backup); err != nil {
 		return err
 	}
 	s.entries = append(s.entries, entry)
@@ -83,14 +82,14 @@ func (s *snapshot) restore() error {
 	var errs []error
 	for i := len(s.entries) - 1; i >= 0; i-- {
 		entry := s.entries[i]
-		if err := utils.RemoveAllRetry(entry.live); err != nil {
+		if err := fsops.RemoveAllRetry(entry.live); err != nil {
 			errs = append(errs, err)
 			continue
 		}
 		if !entry.existed {
 			continue
 		}
-		if err := copyTree(entry.backup, entry.live); err != nil {
+		if err := fsops.CopyTree(entry.backup, entry.live); err != nil {
 			errs = append(errs, err)
 		}
 	}
@@ -101,60 +100,5 @@ func (s *snapshot) cleanup() error {
 	if s == nil || s.tempDir == "" {
 		return nil
 	}
-	return utils.RemoveAllRetry(s.tempDir)
-}
-
-func copyTree(src, dst string) error {
-	info, err := os.Lstat(src)
-	if err != nil {
-		return err
-	}
-	if info.Mode()&os.ModeSymlink != 0 {
-		target, err := os.Readlink(src)
-		if err != nil {
-			return err
-		}
-		if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
-			return err
-		}
-		return os.Symlink(target, dst)
-	}
-	if !info.IsDir() {
-		if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
-			return err
-		}
-		return utils.CopyFile(src, dst, info.Mode())
-	}
-
-	return filepath.WalkDir(src, func(path string, entry fs.DirEntry, walkErr error) error {
-		if walkErr != nil {
-			return walkErr
-		}
-		rel, err := filepath.Rel(src, path)
-		if err != nil {
-			return err
-		}
-		target := filepath.Join(dst, rel)
-		info, err := entry.Info()
-		if err != nil {
-			return err
-		}
-		if entry.Type()&os.ModeSymlink != 0 {
-			linkTarget, err := os.Readlink(path)
-			if err != nil {
-				return err
-			}
-			if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
-				return err
-			}
-			return os.Symlink(linkTarget, target)
-		}
-		if entry.IsDir() {
-			return os.MkdirAll(target, info.Mode())
-		}
-		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
-			return err
-		}
-		return utils.CopyFile(path, target, info.Mode())
-	})
+	return fsops.RemoveAllRetry(s.tempDir)
 }

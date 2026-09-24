@@ -1,6 +1,6 @@
 //go:build windows
 
-package utils
+package main
 
 import "testing"
 
@@ -12,9 +12,9 @@ import "testing"
 func TestEnableConsoleUTF8RestoresCodePage(t *testing.T) {
 	before, _, _ := procGetConsoleOutputCP.Call()
 
-	restore := EnableConsoleUTF8()
+	restore := enableConsoleUTF8()
 	if restore == nil {
-		t.Fatal("EnableConsoleUTF8 returned a nil restore func")
+		t.Fatal("enableConsoleUTF8 returned a nil restore func")
 	}
 	restore()
 

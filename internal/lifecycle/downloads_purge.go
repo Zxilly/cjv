@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 
 	"github.com/Zxilly/cjv/internal/config"
-	"github.com/Zxilly/cjv/internal/utils"
+	"github.com/Zxilly/cjv/internal/fsops"
 )
 
 // purgeDownloadsDir wipes leftover entries from the downloads staging area.
@@ -65,14 +65,14 @@ func purgeDownloadsDir() (int, error) {
 }
 
 func removePurgeEntry(path string) error {
-	err := utils.RemoveAllRetry(path)
+	err := fsops.RemoveAllRetry(path)
 	if err == nil {
 		return nil
 	}
 	if chmodErr := makePurgeEntryWritable(path); chmodErr != nil {
 		return errors.Join(err, chmodErr)
 	}
-	if retryErr := utils.RemoveAllRetry(path); retryErr != nil {
+	if retryErr := fsops.RemoveAllRetry(path); retryErr != nil {
 		return errors.Join(err, retryErr)
 	}
 	return nil

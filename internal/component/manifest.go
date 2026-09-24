@@ -8,7 +8,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/Zxilly/cjv/internal/utils"
+	"github.com/Zxilly/cjv/internal/fsops"
 )
 
 // MetaDir holds component metadata under a hidden subdir to avoid colliding
@@ -89,7 +89,7 @@ func WriteManifest(tcDir string, name Name, relPaths []string) error {
 	if body != "" {
 		body += "\n"
 	}
-	if err := utils.WriteFileAtomic(filepath.Join(dir, manifestPrefix+string(name)), []byte(body), 0o644); err != nil {
+	if err := fsops.WriteFileAtomic(filepath.Join(dir, manifestPrefix+string(name)), []byte(body), 0o644); err != nil {
 		return err
 	}
 	return addToComponentsIndex(tcDir, name)
@@ -150,7 +150,7 @@ func writeComponentsIndex(tcDir string, names []Name) error {
 		b.WriteString(string(n))
 		b.WriteByte('\n')
 	}
-	return utils.WriteFileAtomic(filepath.Join(dir, componentsFile), []byte(b.String()), 0o644)
+	return fsops.WriteFileAtomic(filepath.Join(dir, componentsFile), []byte(b.String()), 0o644)
 }
 
 // Remove drops a component's manifest and the files it tracks. Files also

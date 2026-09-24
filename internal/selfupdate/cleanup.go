@@ -9,8 +9,8 @@ import (
 	"strings"
 
 	"github.com/Zxilly/cjv/internal/config"
+	"github.com/Zxilly/cjv/internal/fsops"
 	"github.com/Zxilly/cjv/internal/sdktools"
-	"github.com/Zxilly/cjv/internal/utils"
 )
 
 // CleanupOldBinaries removes stale updater/uninstall leftovers from the managed
@@ -64,7 +64,7 @@ func CleanupOldBinaries() {
 	restored := ""
 	if !managedExists {
 		for _, oldPath := range oldPaths {
-			if err := utils.RenameRetry(oldPath, managedExe); err == nil {
+			if err := fsops.RenameRetry(oldPath, managedExe); err == nil {
 				restored = oldPath
 				managedExists = true
 				break

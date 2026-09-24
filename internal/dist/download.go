@@ -20,7 +20,7 @@ import (
 
 	"github.com/Zxilly/cjv/internal/cjverr"
 	"github.com/Zxilly/cjv/internal/config"
-	"github.com/Zxilly/cjv/internal/utils"
+	"github.com/Zxilly/cjv/internal/fsops"
 	"github.com/mattn/go-isatty"
 	"github.com/vbauerster/mpb/v8"
 	"github.com/vbauerster/mpb/v8/decor"
@@ -111,7 +111,7 @@ func DownloadCachedWithName(ctx context.Context, url, sha256Hex, cacheDir, displ
 					return "", fmt.Errorf("downloaded file is not a valid archive: %w", err)
 				}
 			}
-			if err := utils.RenameRetry(partialPath, stagedPath); err != nil {
+			if err := fsops.RenameRetry(partialPath, stagedPath); err != nil {
 				return "", fmt.Errorf("promote staged file %s: %w", stagedPath, err)
 			}
 			return stagedPath, nil
@@ -178,14 +178,14 @@ func tryReuseStaged(stagedPath, sha256Hex string) (bool, error) {
 	} else {
 		slog.Warn("staged download is invalid; redownloading", "path", stagedPath, "error", verifyErr)
 	}
-	if err := utils.RemoveAllRetry(stagedPath); err != nil {
+	if err := fsops.RemoveAllRetry(stagedPath); err != nil {
 		return false, fmt.Errorf("remove corrupt staged file %s: %w", stagedPath, err)
 	}
 	return false, nil
 }
 
 func removeLegacyPartial(path string) error {
-	if err := utils.RemoveAllRetry(path); err != nil {
+	if err := fsops.RemoveAllRetry(path); err != nil {
 		return fmt.Errorf("remove stale partial download %s: %w", path, err)
 	}
 	return nil
@@ -209,7 +209,7 @@ func verifyChecksum(hasher hash.Hash, expected string) error {
 // during install must NOT call this: leaving the file on disk lets the next
 // run reuse it instead of re-downloading.
 func CleanupDownload(stagedPath string) error {
-	return utils.RemoveAllRetry(stagedPath)
+	return fsops.RemoveAllRetry(stagedPath)
 }
 
 // VerifyArchive validates a local archive file the same way a freshly downloaded
@@ -308,7 +308,7 @@ func cleanupDownloadTemp(path string) {
 }
 
 func promoteDownloadedFile(tmpPath, dest string) error {
-	if err := utils.RenameRetry(tmpPath, dest); err != nil {
+	if err := fsops.RenameRetry(tmpPath, dest); err != nil {
 		return &nonRetriableError{err: fmt.Errorf("promote downloaded file to %s: %w", dest, err)}
 	}
 	return nil

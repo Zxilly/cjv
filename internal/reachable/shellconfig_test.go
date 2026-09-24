@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Zxilly/cjv/internal/utils"
+	"github.com/Zxilly/cjv/internal/fsops"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -120,7 +120,7 @@ func TestAddPathToShellConfig_Idempotent(t *testing.T) {
 func TestAddPathToShellConfig_PreservesExistingContent(t *testing.T) {
 	rcPath := filepath.Join(t.TempDir(), ".bashrc")
 	existing := "# My custom config\nexport EDITOR=vim\n"
-	require.NoError(t, utils.WriteFileAtomic(rcPath, []byte(existing), 0o644))
+	require.NoError(t, fsops.WriteFileAtomic(rcPath, []byte(existing), 0o644))
 
 	require.NoError(t, addPathToShellConfig(rcPath, "/cjv/bin"))
 

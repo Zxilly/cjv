@@ -1,6 +1,6 @@
 //go:build !windows
 
-package utils
+package fsops
 
 func isWindowsSharingViolation(_ error) bool {
 	return false

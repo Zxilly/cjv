@@ -12,7 +12,7 @@ import (
 	"strings"
 
 	"github.com/Zxilly/cjv/internal/config"
-	"github.com/Zxilly/cjv/internal/utils"
+	"github.com/Zxilly/cjv/internal/fsops"
 )
 
 const journalName = "journal.json"
@@ -262,7 +262,7 @@ func (tx *Transaction) save(state journal) error {
 	if err := errors.Join(writeErr, f.Close()); err != nil {
 		return err
 	}
-	if err := utils.RetryWithBackoff(10, utils.IsRetryableError, func() error {
+	if err := fsops.Retry(func() error {
 		return root.Rename(temp, filepath.Join(dir, journalName))
 	}); err != nil {
 		return err

@@ -2,8 +2,8 @@
 
 package selfupdate
 
-import "github.com/Zxilly/cjv/internal/utils"
+import "github.com/Zxilly/cjv/internal/fsops"
 
 func replaceManagedExecutableFile(src, dst string) error {
-	return utils.RenameRetry(src, dst)
+	return fsops.RenameRetry(src, dst)
 }

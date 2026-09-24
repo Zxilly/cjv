@@ -11,8 +11,8 @@ import (
 	"strings"
 
 	"github.com/BurntSushi/toml"
+	"github.com/Zxilly/cjv/internal/fsops"
 	"github.com/Zxilly/cjv/internal/i18n"
-	"github.com/Zxilly/cjv/internal/utils"
 )
 
 // AutoSelfUpdate controls self-update behavior.
@@ -183,5 +183,5 @@ func writeSettingsData(data []byte, path string) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
-	return utils.WriteFileAtomic(path, data, 0o644)
+	return fsops.WriteFileAtomic(path, data, 0o644)
 }

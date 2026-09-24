@@ -1,6 +1,6 @@
 //go:build windows
 
-package utils
+package env
 
 import (
 	"fmt"
@@ -10,8 +10,8 @@ import (
 	"golang.org/x/sys/windows"
 )
 
-// ProcessName returns the name of the process with the given PID.
-func ProcessName(pid int) (string, error) {
+// processName returns the name of the process with the given PID.
+func processName(pid int) (string, error) {
 	h, err := windows.CreateToolhelp32Snapshot(windows.TH32CS_SNAPPROCESS, 0)
 	if err != nil {
 		return "", err

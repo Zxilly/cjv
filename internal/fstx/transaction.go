@@ -11,7 +11,7 @@ import (
 	"path/filepath"
 
 	"github.com/Zxilly/cjv/internal/config"
-	"github.com/Zxilly/cjv/internal/utils"
+	"github.com/Zxilly/cjv/internal/fsops"
 )
 
 const (
@@ -341,7 +341,7 @@ func rename(root *os.Root, from, to string) error {
 	if err := requireMissing(root, to); err != nil {
 		return &os.LinkError{Op: "rename", Old: filepath.Join(root.Name(), from), New: filepath.Join(root.Name(), to), Err: err}
 	}
-	if err := utils.RetryWithBackoff(10, utils.IsRetryableError, func() error { return root.Rename(from, to) }); err != nil {
+	if err := fsops.Retry(func() error { return root.Rename(from, to) }); err != nil {
 		return err
 	}
 	return syncDirs(root, filepath.Dir(from), filepath.Dir(to))
@@ -378,7 +378,7 @@ func (tx *Transaction) cleanup() error {
 			continue
 		}
 		path := filepath.Join(dir, entry.Name())
-		if err := utils.RetryWithBackoff(10, utils.IsRetryableError, func() error { return root.RemoveAll(path) }); err != nil {
+		if err := fsops.Retry(func() error { return root.RemoveAll(path) }); err != nil {
 			return err
 		}
 	}

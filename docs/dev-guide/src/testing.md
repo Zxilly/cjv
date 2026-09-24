@@ -20,6 +20,7 @@ CI 的全部 job 定义在 `.github/workflows/ci.yml`，smoke 单独在 `.github
 - `fstx`：验证中断后的日志恢复和重复恢复、提交及准备发布状态、失败恢复后的备份保留，并检查异常日志和越界路径不会触发未授权的文件修改。
 - `reachable`：单元测试覆盖 PATH 策略与可达性操作：在类 Unix 系统把 `HOME` 指向临时目录，验证 `ConfigurePath` 对每个 shell 配置只写一次标记块、`CJV_NO_PATH_SETUP=1` 时不写、`RemovePath` 能撤销、`Ensure` 只在策略要求时配置 PATH；Windows 用 `testutil.SaveRegistryPath` 守护后对注册表做同样的验证，只在 CI 上运行。`Ensure` 本身的测试覆盖受管二进制的保留与强制覆盖、代理链接和按需写 env 脚本。`lifecycle` 另验证首次发布默认工具链时按 `Options.ConfigurePath` 配置 PATH、后续安装不再改动。
 - `selfupdate`：通过 `Update` 验证两种构建的版本发现、无需更新、校验失败及实际文件替换，保留运行中二进制替换测试；`cli/selfmgmt` 检查跳过更新的真实 JSON 状态及 stdout 无文本混入。
+- `fsops`：树操作 `MoveTree`/`CopyTree` 在临时目录上验证嵌套目录、已有目标条目的覆盖与合并、内部相对符号链接的保留、逃出源树的符号链接被拒绝且不删除已有目标，以及 Linux 上借 `/dev/shm` 触发的跨文件系统复制回退；Windows 专有测试覆盖 junction 和瞬时错误的分类与删除重试。
 - `process`：启动真实子进程，验证标准流、环境、启动错误、退出码和取消；Unix 专有测试另验证终止信号转发、超时升级及不重复转发终端中断。
 
 本地跑全部单元测试：
