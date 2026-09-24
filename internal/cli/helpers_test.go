@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"bytes"
 	"context"
 	"io"
 	"os"
@@ -8,8 +9,39 @@ import (
 
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/lifecycle"
+	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/require"
 )
+
+// runWithCommandOutput runs fn with a command whose output writer is a
+// buffer, and returns what the command wrote.
+func runWithCommandOutput(t *testing.T, fn func(cmd *cobra.Command) error) (string, error) {
+	t.Helper()
+	var out bytes.Buffer
+	cmd := &cobra.Command{}
+	cmd.SetOut(&out)
+	err := fn(cmd)
+	return out.String(), err
+}
+
+// executeWithOutput runs the application with args and returns what the
+// command tree wrote to its output writer, including JSON error envelopes.
+func executeWithOutput(t *testing.T, app *application, args []string) (string, error) {
+	t.Helper()
+	var out bytes.Buffer
+	app.rootCmd.SetOut(&out)
+	err := app.execute(args)
+	return out.String(), err
+}
+
+// runWithRootOutput runs the bare root command and returns its output.
+func runWithRootOutput(t *testing.T, app *application) (string, error) {
+	t.Helper()
+	var out bytes.Buffer
+	app.rootCmd.SetOut(&out)
+	err := app.rootCmd.RunE(app.rootCmd, nil)
+	return out.String(), err
+}
 
 // installTestToolchain installs name through the production entry with the
 // application's lifecycle adapters, as `cjv install <name>` would.

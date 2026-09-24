@@ -82,8 +82,8 @@ func TestRunComponentListQuietShowsInstalledThenAvailable(t *testing.T) {
 	app.componentListQuiet = true
 	app.componentListInstalledOnly = false
 
-	stdout, err := captureStdout(t, func() error {
-		return app.runComponentList(&cobra.Command{}, nil)
+	stdout, err := runWithCommandOutput(t, func(cmd *cobra.Command) error {
+		return app.runComponentList(cmd, nil)
 	})
 
 	require.NoError(t, err)
@@ -91,8 +91,8 @@ func TestRunComponentListQuietShowsInstalledThenAvailable(t *testing.T) {
 	assert.Equal(t, []string{"docs", "stdx", "stdx-docs"}, lines)
 
 	app.componentListInstalledOnly = true
-	stdout, err = captureStdout(t, func() error {
-		return app.runComponentList(&cobra.Command{}, nil)
+	stdout, err = runWithCommandOutput(t, func(cmd *cobra.Command) error {
+		return app.runComponentList(cmd, nil)
 	})
 
 	require.NoError(t, err)
@@ -149,8 +149,8 @@ func TestRunComponentListInstalledOnlyNoComponents(t *testing.T) {
 	app.componentListQuiet = false
 	app.componentListInstalledOnly = true
 
-	stdout, err := captureStdout(t, func() error {
-		return app.runComponentList(&cobra.Command{}, nil)
+	stdout, err := runWithCommandOutput(t, func(cmd *cobra.Command) error {
+		return app.runComponentList(cmd, nil)
 	})
 
 	require.NoError(t, err)
@@ -167,8 +167,8 @@ func TestRunComponentListNonQuietShowsInstalledAndAvailable(t *testing.T) {
 	app.componentListQuiet = false
 	app.componentListInstalledOnly = false
 
-	stdout, err := captureStdout(t, func() error {
-		return app.runComponentList(&cobra.Command{}, nil)
+	stdout, err := runWithCommandOutput(t, func(cmd *cobra.Command) error {
+		return app.runComponentList(cmd, nil)
 	})
 
 	require.NoError(t, err)

@@ -79,9 +79,7 @@ func TestToolchainLinkCommandRendersArchiveResultAsJSON(t *testing.T) {
 	src := filepath.Join(t.TempDir(), "sdk.zip")
 	require.NoError(t, os.WriteFile(src, sdkData, 0o644))
 
-	stdout, err := captureStdout(t, func() error {
-		return app.execute([]string{"--json", "toolchain", "link", "my-sdk", src})
-	})
+	stdout, err := executeWithOutput(t, app, []string{"--json", "toolchain", "link", "my-sdk", src})
 	require.NoError(t, err)
 	var result toolchainLinkResult
 	require.NoError(t, json.Unmarshal([]byte(stdout), &result), stdout)

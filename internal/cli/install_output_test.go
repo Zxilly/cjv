@@ -31,9 +31,7 @@ func setupComponentOutputTest(t *testing.T) (string, string) {
 func TestInstallWithComponentsEmitsSingleJSON(t *testing.T) {
 	home, name := setupComponentOutputTest(t)
 	app := newApplication("dev", "")
-	stdout, err := captureStdout(t, func() error {
-		return app.execute([]string{"--json", "install", "nightly", "--component", "docs"})
-	})
+	stdout, err := executeWithOutput(t, app, []string{"--json", "install", "nightly", "--component", "docs"})
 	require.NoError(t, err)
 	require.FileExists(t, filepath.Join(home, "docs", name, "main", "index.html"))
 	var result installResult
@@ -42,7 +40,7 @@ func TestInstallWithComponentsEmitsSingleJSON(t *testing.T) {
 
 	// Idempotent SDK installation has the same success semantics in JSON mode.
 	app = newApplication("dev", "")
-	stdout, err = captureStdout(t, func() error { return app.execute([]string{"--json", "install", "nightly"}) })
+	stdout, err = executeWithOutput(t, app, []string{"--json", "install", "nightly"})
 	require.NoError(t, err)
 	require.True(t, json.Valid([]byte(stdout)), stdout)
 }
@@ -56,7 +54,7 @@ func TestComponentAddJSONIncludesResultOnInstallAndSkip(t *testing.T) {
 		if force {
 			args = append(args, "--force")
 		}
-		stdout, err := captureStdout(t, func() error { return app.execute(args) })
+		stdout, err := executeWithOutput(t, app, args)
 		require.NoError(t, err)
 		var result componentAddResult
 		require.NoError(t, json.Unmarshal([]byte(stdout), &result), stdout)
@@ -67,9 +65,7 @@ func TestComponentAddJSONIncludesResultOnInstallAndSkip(t *testing.T) {
 		require.FileExists(t, filepath.Join(home, "docs", name, "main", "index.html"))
 	}
 	app := newApplication("dev", "")
-	stdout, err := captureStdout(t, func() error {
-		return app.execute([]string{"--json", "component", "add", "not-a-component", "--toolchain", name})
-	})
+	stdout, err := executeWithOutput(t, app, []string{"--json", "component", "add", "not-a-component", "--toolchain", name})
 	require.Error(t, err)
 	require.True(t, json.Valid([]byte(stdout)), stdout)
 }
