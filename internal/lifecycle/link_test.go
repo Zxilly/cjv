@@ -297,6 +297,30 @@ func TestLinkZip_MaterializesOwnedToolchainAndKeepsSource(t *testing.T) {
 	assert.FileExists(t, src)
 }
 
+func TestLinkZip_ScratchesUnderDownloadsNotBesideArchive(t *testing.T) {
+	home := linkHome(t)
+	src := writeArchive(t, ciBundle(t, sdkInnerArchive(t), stdxInnerArchiveWith(t, "libfoo")))
+	srcDir := filepath.Dir(src)
+	// Where the OS enforces it, make the archive's directory read-only so any
+	// attempt to scratch beside it fails loudly instead of leaving residue.
+	if runtime.GOOS != "windows" && os.Geteuid() != 0 {
+		require.NoError(t, os.Chmod(srcDir, 0o555))
+		t.Cleanup(func() { _ = os.Chmod(srcDir, 0o755) })
+	}
+
+	require.NoError(t, lifecycle.InstallToolchainFromZip(context.Background(), "my-sdk", src, "", false, false, lifecycle.Options{}))
+	assert.FileExists(t, filepath.Join(home, "toolchains", "my-sdk", "bin", sdktools.PlatformBinaryName("cjc")))
+
+	// Nothing was extracted next to the user's archive, and no scratch dir
+	// survives under downloads either.
+	entries, err := os.ReadDir(srcDir)
+	require.NoError(t, err)
+	require.Len(t, entries, 1)
+	leftovers, err := filepath.Glob(filepath.Join(home, "downloads", ".cjv-link-*"))
+	require.NoError(t, err)
+	assert.Empty(t, leftovers)
+}
+
 func TestLinkZip_SHA256MismatchKeepsArchive(t *testing.T) {
 	home := linkHome(t)
 	src := writeArchive(t, ciBundle(t, sdkInnerArchive(t), nil))

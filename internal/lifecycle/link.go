@@ -107,17 +107,23 @@ func installLinkedToolchain(ctx context.Context, name string, force, noStdx bool
 	// toolchains/), so ExtractFlattened's own .cjv-install-* scratch dir never
 	// pollutes the toolchain listing. It outlives the placement because the
 	// bundled stdx archive inside it is installed after the SDK is committed.
-	var outerTmp, innerStdx string
+	var outerTmp, innerStdx, downloadsDir string
 	defer func() {
 		if outerTmp != "" {
 			_ = os.RemoveAll(outerTmp) //nolint:errcheck // best-effort cleanup
 		}
 	}()
 	acq := acquisition{
-		fetch: fetch,
+		// A local archive stays wherever the user keeps it (possibly read-only,
+		// possibly on another volume), so the scratch dir is keyed off the
+		// downloads dir the pipeline hands to fetch, not off the archive's parent.
+		fetch: func(ctx context.Context, dir string) (string, bool, error) {
+			downloadsDir = dir
+			return fetch(ctx, dir)
+		},
 		extract: func(ctx context.Context, archivePath, stagingDir string) error {
 			var err error
-			outerTmp, err = os.MkdirTemp(filepath.Dir(archivePath), ".cjv-link-*")
+			outerTmp, err = os.MkdirTemp(downloadsDir, ".cjv-link-*")
 			if err != nil {
 				return err
 			}
