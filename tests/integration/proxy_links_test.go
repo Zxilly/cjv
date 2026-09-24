@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/Zxilly/cjv/internal/proxy"
+	"github.com/Zxilly/cjv/internal/sdktools"
 	"github.com/Zxilly/cjv/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -23,8 +23,8 @@ func TestIntegrationInitCreatesAllProxyLinks(t *testing.T) {
 	require.NoError(t, err, "init failed: stdout=%s stderr=%s", stdout, stderr)
 
 	binDir := filepath.Join(cjvHome, "bin")
-	for _, tool := range proxy.AllProxyTools() {
-		toolPath := filepath.Join(binDir, proxy.PlatformBinaryName(tool))
+	for _, tool := range sdktools.AllProxyTools() {
+		toolPath := filepath.Join(binDir, sdktools.PlatformBinaryName(tool))
 		assert.FileExists(t, toolPath, "proxy link for %q should exist after init", tool)
 
 		info, err := os.Stat(toolPath)
@@ -46,8 +46,8 @@ func TestIntegrationInstallCreatesProxyLinks(t *testing.T) {
 	require.NoError(t, err, "install failed: stdout=%s stderr=%s", stdout, stderr)
 
 	binDir := filepath.Join(cjvHome, "bin")
-	for _, tool := range proxy.AllProxyTools() {
-		toolPath := filepath.Join(binDir, proxy.PlatformBinaryName(tool))
+	for _, tool := range sdktools.AllProxyTools() {
+		toolPath := filepath.Join(binDir, sdktools.PlatformBinaryName(tool))
 		assert.FileExists(t, toolPath, "proxy link for %q should exist after install", tool)
 	}
 }
@@ -63,7 +63,7 @@ func TestIntegrationInitRerunRestoresProxyLinks(t *testing.T) {
 	require.NoError(t, err, "first init failed: stdout=%s stderr=%s", stdout, stderr)
 
 	// Corrupt one proxy link
-	cjcPath := filepath.Join(cjvHome, "bin", proxy.PlatformBinaryName("cjc"))
+	cjcPath := filepath.Join(cjvHome, "bin", sdktools.PlatformBinaryName("cjc"))
 	require.NoError(t, os.WriteFile(cjcPath, []byte{}, 0o755))
 	info, _ := os.Stat(cjcPath)
 	require.Equal(t, int64(0), info.Size(), "cjc should be corrupted (empty)")

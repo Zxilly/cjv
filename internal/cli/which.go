@@ -3,8 +3,8 @@ package cli
 import (
 	"github.com/Zxilly/cjv/internal/cjverr"
 	"github.com/Zxilly/cjv/internal/i18n"
-	"github.com/Zxilly/cjv/internal/proxy"
 	"github.com/Zxilly/cjv/internal/resolve"
+	"github.com/Zxilly/cjv/internal/sdktools"
 	"github.com/spf13/cobra"
 )
 
@@ -31,12 +31,12 @@ func (app *application) runWhich(cmd *cobra.Command, args []string) error {
 	// tools/bin/ (not just the fixed proxy-tool table).
 	toolPath, found := resolveToolchainToolPath(active.Dir, args[0])
 	if !found {
-		if proxy.IsProxyTool(args[0]) {
+		if sdktools.IsProxyTool(args[0]) {
 			// A known tool that is simply absent from this toolchain — surface
 			// the precise "not in toolchain" error rather than "unknown tool".
 			// Use ResolveToolBinary (path only, no extra stat) since
 			// resolveToolchainToolPath already confirmed it is missing.
-			binary, _ := proxy.ResolveToolBinary(active.Dir, args[0])
+			binary, _ := sdktools.ResolveToolBinary(active.Dir, args[0])
 			return &cjverr.ToolNotInToolchainError{Tool: args[0], Path: binary}
 		}
 		return &cjverr.UnknownToolError{Name: args[0]}

@@ -7,14 +7,13 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
-	"runtime"
-	"strings"
 
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/dist"
 	"github.com/Zxilly/cjv/internal/fstx"
 	"github.com/Zxilly/cjv/internal/i18n"
-	sdktarget "github.com/Zxilly/cjv/internal/target"
+	"github.com/Zxilly/cjv/internal/sdktools"
+	"github.com/Zxilly/cjv/internal/selfupdate"
 	"github.com/Zxilly/cjv/internal/toolchain"
 	"github.com/Zxilly/cjv/internal/utils"
 )
@@ -92,7 +91,7 @@ func installResolvedWithDefault(ctx context.Context, rt ResolvedToolchain, setti
 	if err := dist.InstallSDK(ctx, archivePath, stagingDir); err != nil {
 		return err
 	}
-	if err := opts.validateInstallation(stagingDir, rt.Tuple); err != nil {
+	if err := validateInstallation(stagingDir, rt.Tuple); err != nil {
 		return err
 	}
 	isFirstInstall := allowDefault && (settings.DefaultToolchain == "" || !defaultToolchainExists(settings.DefaultToolchain))
@@ -107,15 +106,7 @@ func installResolvedWithDefault(ctx context.Context, rt ResolvedToolchain, setti
 			return nil
 		}
 	}
-	if err := swapInstalledToolchain(stagingDir, destDir, isReinstall, func() error {
-		if err := opts.ensureManagedBinary(); err != nil {
-			return err
-		}
-		if err := opts.createProxyLinks(); err != nil {
-			return err
-		}
-		return nil
-	}, publishDefault); err != nil {
+	if err := swapInstalledToolchain(stagingDir, destDir, isReinstall, finalizeInstalledToolchain, publishDefault); err != nil {
 		return err
 	}
 
@@ -132,20 +123,44 @@ func defaultToolchainExists(name string) bool {
 	return err == nil
 }
 
+// validateInstallation checks that the extracted SDK carries the compiler at
+// the place the proxy will look for it. tuple names the SDK's platform so a
+// cross-target SDK is checked against its own executable naming rather than
+// the running OS; empty means the host.
 func validateInstallation(dir, tuple string) error {
-	binary := filepath.Join(dir, "bin", "cjc")
-	if tuple != "" {
-		if id, err := sdktarget.ParseIdentity(tuple); err == nil && strings.HasPrefix(id.HostTuple(), "win32-") {
-			binary += ".exe"
-		}
-	} else if runtime.GOOS == "windows" {
-		binary += ".exe"
+	var err error
+	if tuple == "" {
+		_, err = sdktools.ResolveInstalledToolBinary(dir, "cjc")
+	} else {
+		_, err = sdktools.ResolveInstalledToolBinaryForTuple(dir, "cjc", tuple)
 	}
-	if _, err := os.Stat(binary); err != nil {
+	if err != nil {
 		return fmt.Errorf("installation validation failed: %w", err)
 	}
 	return nil
 }
+
+// finalizeInstalledToolchain runs once the new toolchain is in place and before
+// the transaction commits: the running cjv becomes the managed binary under
+// CJV_HOME/bin and every SDK tool gets its proxy link, so the toolchain is
+// reachable through the proxies whether it was installed by `cjv install` or
+// by proxy auto-install.
+func finalizeInstalledToolchain() error {
+	if _, err := selfupdate.EnsureManagedExecutable(); err != nil {
+		return err
+	}
+	if err := sdktools.CreateAllProxyLinks(); err != nil {
+		return err
+	}
+	if afterFinalizeHook != nil {
+		return afterFinalizeHook()
+	}
+	return nil
+}
+
+// afterFinalizeHook lets tests observe or fail the window between placing the
+// toolchain and committing the transaction. Production never sets it.
+var afterFinalizeHook func() error
 
 func swapInstalledToolchain(stagingDir, destDir string, isReinstall bool, afterSwap, publish func() error) (err error) {
 	if isReinstall {

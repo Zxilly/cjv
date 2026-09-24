@@ -5,6 +5,7 @@ import (
 	"runtime"
 	"slices"
 
+	"github.com/Zxilly/cjv/internal/component"
 	"github.com/Zxilly/cjv/internal/config"
 )
 
@@ -17,10 +18,6 @@ type EnvConfig struct {
 	LibraryPathPrepend []string
 }
 
-// ComponentEnvProvider injects env vars contributed by installed components.
-// Passed in by callers so the env package does not need to import component.
-type ComponentEnvProvider func(vars map[string]string, tcDir string)
-
 // NewEnvConfig returns an initialized empty EnvConfig.
 func NewEnvConfig() *EnvConfig {
 	return &EnvConfig{Vars: make(map[string]string)}
@@ -28,11 +25,15 @@ func NewEnvConfig() *EnvConfig {
 
 // LoadToolchainEnv computes the runtime environment for the SDK installed
 // at tcDir. The configuration is derived from the on-disk layout (no
-// envsetup script execution), with component-contributed vars layered on top.
-// It does not capture the process's PATH, library search path, or SDKROOT.
-func LoadToolchainEnv(tcDir string, componentEnv ComponentEnvProvider) *EnvConfig {
+// envsetup script execution), with the vars contributed by the toolchain's
+// installed components layered on top. It does not capture the process's
+// PATH, library search path, or SDKROOT.
+func LoadToolchainEnv(tcDir string) *EnvConfig {
 	cfg := DeriveToolchainEnv(tcDir)
-	applyComponentEnv(cfg, tcDir, componentEnv)
+	if cfg.Vars == nil {
+		cfg.Vars = make(map[string]string)
+	}
+	component.ApplyEnv(cfg.Vars, tcDir)
 	return cfg
 }
 
@@ -64,14 +65,4 @@ func environmentContributions(cfg *EnvConfig, baseEnv []string) Contributions {
 	}
 	applyPlatformVars(result.Vars, baseEnv)
 	return result
-}
-
-func applyComponentEnv(cfg *EnvConfig, tcDir string, componentEnv ComponentEnvProvider) {
-	if componentEnv == nil {
-		return
-	}
-	if cfg.Vars == nil {
-		cfg.Vars = make(map[string]string)
-	}
-	componentEnv(cfg.Vars, tcDir)
 }

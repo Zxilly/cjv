@@ -163,18 +163,13 @@ func installLinkedToolchain(ctx context.Context, name string, force, noStdx bool
 
 	// tuple is always "" — URL install validates against the host OS only and
 	// does not support cross-OS SDKs.
-	if err := opts.validateInstallation(stagingDir, ""); err != nil {
+	if err := validateInstallation(stagingDir, ""); err != nil {
 		return err
 	}
 
-	// Transactional swap into place. afterSwap ensures the managed cjv binary
+	// Transactional swap into place. Finalization ensures the managed cjv binary
 	// and proxy links exist; the default toolchain is deliberately NOT changed.
-	if err := swapInstalledToolchain(stagingDir, destDir, isReinstall, func() error {
-		if err := opts.ensureManagedBinary(); err != nil {
-			return err
-		}
-		return opts.createProxyLinks()
-	}, nil); err != nil {
+	if err := swapInstalledToolchain(stagingDir, destDir, isReinstall, finalizeInstalledToolchain, nil); err != nil {
 		return err
 	}
 

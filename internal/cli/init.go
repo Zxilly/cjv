@@ -16,7 +16,7 @@ import (
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/env"
 	"github.com/Zxilly/cjv/internal/i18n"
-	"github.com/Zxilly/cjv/internal/proxy"
+	"github.com/Zxilly/cjv/internal/sdktools"
 	"github.com/Zxilly/cjv/internal/selfupdate"
 	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/glamour/styles"
@@ -351,7 +351,7 @@ func (app *application) runInit(cmd *cobra.Command, _ []string) error {
 		return errors.New(i18n.T("InitComponentsRequireToolchain", nil))
 	}
 
-	managedPath := filepath.Join(binDir, proxy.CjvBinaryName())
+	managedPath := filepath.Join(binDir, sdktools.CjvBinaryName())
 	if _, err := os.Stat(managedPath); err == nil {
 		fmt.Println(i18n.T("InitAlreadyInstalled", i18n.MsgData{"Path": managedPath}))
 
@@ -421,7 +421,7 @@ func (app *application) installInit(ctx context.Context, initialHome string, opt
 	if _, err := selfupdate.ForceUpdateManagedExecutable(); err != nil {
 		return err
 	}
-	if err := proxy.CreateAllProxyLinks(); err != nil {
+	if err := sdktools.CreateAllProxyLinks(); err != nil {
 		return err
 	}
 	if opts.modifyPath {

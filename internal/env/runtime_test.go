@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Zxilly/cjv/internal/component"
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/env"
 	"github.com/stretchr/testify/assert"
@@ -27,7 +28,7 @@ func TestRuntimeHonorsBaseLibraryPath(t *testing.T) {
 	sdk := t.TempDir()
 	libraryDir := filepath.Join(sdk, "tools", "lib")
 	require.NoError(t, os.MkdirAll(libraryDir, 0o755))
-	rt, err := env.RuntimeForToolchain(sdk, "review-sdk", nil)
+	rt, err := env.RuntimeForToolchain(sdk, "review-sdk")
 	require.NoError(t, err)
 
 	for _, mode := range []struct {
@@ -78,7 +79,7 @@ func TestRuntimeContributionsExcludeInheritedEnvironment(t *testing.T) {
 	libraryDir := filepath.Join(sdk, "tools", "lib")
 	require.NoError(t, os.MkdirAll(bin, 0o755))
 	require.NoError(t, os.MkdirAll(libraryDir, 0o755))
-	rt, err := env.RuntimeForToolchain(sdk, "lts-1.0.5", nil)
+	rt, err := env.RuntimeForToolchain(sdk, "lts-1.0.5")
 	require.NoError(t, err)
 	base := []string{
 		"PATH=/caller/bin", "OTHER=keep", "CJV_TOOLCHAIN=old", "CJV_RECURSION_COUNT=5",
@@ -123,7 +124,7 @@ func TestRuntimePreservesUnixPathKeyCasing(t *testing.T) {
 	sdk := t.TempDir()
 	bin := filepath.Join(sdk, "bin")
 	require.NoError(t, os.MkdirAll(bin, 0o755))
-	rt, err := env.RuntimeForToolchain(sdk, "lts-1.0.5", nil)
+	rt, err := env.RuntimeForToolchain(sdk, "lts-1.0.5")
 	require.NoError(t, err)
 	base := []string{"PATH=/caller/bin", "path=/unrelated-variable"}
 	for _, got := range [][]string{rt.ProxyEnv(base, 0), rt.ToolchainEnv(base)} {
@@ -138,12 +139,14 @@ func TestRuntimePreservesUnixPathKeyCasing(t *testing.T) {
 func TestRuntimePreservesProxyAndToolchainEnvironmentModes(t *testing.T) {
 	home := t.TempDir()
 	config.IsolateForTest(t, home)
-	sdk := t.TempDir()
+	sdk := filepath.Join(home, "toolchains", "lts-1.0.5")
 	bin := filepath.Join(sdk, "bin")
 	require.NoError(t, os.MkdirAll(bin, 0o755))
-	rt, err := env.RuntimeForToolchain(sdk, "lts-1.0.5", func(vars map[string]string, dir string) {
-		vars["CANGJIE_STDX_PATH_DYNAMIC"] = filepath.Join(dir, "stdx", "dynamic")
-	})
+	// An installed stdx contributes its library paths through component.ApplyEnv.
+	require.NoError(t, component.WriteManifest(sdk, component.Stdx, []string{"dynamic/libfoo.so"}))
+	stdxRoot, err := config.StdxDirFor("lts-1.0.5")
+	require.NoError(t, err)
+	rt, err := env.RuntimeForToolchain(sdk, "lts-1.0.5")
 	require.NoError(t, err)
 
 	base := []string{"PATH=/caller/bin", "OTHER=keep", "=C:=C:\\work"}
@@ -161,7 +164,7 @@ func TestRuntimePreservesProxyAndToolchainEnvironmentModes(t *testing.T) {
 			assert.Contains(t, parts, "/caller/bin")
 			assert.Contains(t, got, "OTHER=keep")
 			assert.Contains(t, got, "=C:=C:\\work")
-			assert.Contains(t, got, "CANGJIE_STDX_PATH_DYNAMIC="+filepath.Join(sdk, "stdx", "dynamic"))
+			assert.Contains(t, got, component.EnvStdxDynamic+"="+filepath.Join(stdxRoot, "dynamic"))
 			if mode.name == "proxy" {
 				assert.Equal(t, filepath.Join(home, "bin"), parts[0])
 				assert.Contains(t, got, "CJV_RECURSION_COUNT=4")
@@ -182,7 +185,7 @@ func TestRuntimePreservesWindowsEnvironmentCasing(t *testing.T) {
 		t.Skip("environment keys are case sensitive on Unix")
 	}
 	config.IsolateForTest(t, t.TempDir())
-	rt, err := env.RuntimeForToolchain(t.TempDir(), "lts-1.0.5", nil)
+	rt, err := env.RuntimeForToolchain(t.TempDir(), "lts-1.0.5")
 	require.NoError(t, err)
 	base := []string{"Path=C:\\old", "path=C:\\caller", "cangjie_home=C:\\old-sdk", "=D:=D:\\work"}
 	for _, got := range [][]string{rt.ProxyEnv(base, 0), rt.ToolchainEnv(base)} {

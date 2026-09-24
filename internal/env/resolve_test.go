@@ -60,7 +60,7 @@ func TestResolveRuntimeEnv_DefaultToolchain(t *testing.T) {
 	settings.DefaultToolchain = "lts-1.0.5"
 	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 
-	result, err := env.ResolveRuntimeEnv(context.Background(), "", nil)
+	result, err := env.ResolveRuntimeEnv(context.Background(), "")
 	require.NoError(t, err)
 	assert.NotEmpty(t, result)
 
@@ -81,7 +81,7 @@ func TestResolveRuntimeEnv_WithOverride(t *testing.T) {
 	settings.DefaultToolchain = "lts-1.0.5"
 	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 
-	result, err := env.ResolveRuntimeEnv(context.Background(), "sts-1.0.3", nil)
+	result, err := env.ResolveRuntimeEnv(context.Background(), "sts-1.0.3")
 	require.NoError(t, err)
 
 	// Should use sts-1.0.3, not the default lts-1.0.5
@@ -98,7 +98,7 @@ func TestResolveRuntimeEnv_NoToolchain(t *testing.T) {
 	settings := config.DefaultSettings()
 	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 
-	_, err := env.ResolveRuntimeEnv(context.Background(), "", nil)
+	_, err := env.ResolveRuntimeEnv(context.Background(), "")
 	assert.Error(t, err)
 }
 
@@ -133,7 +133,7 @@ targets = ["ohos"]
 	}
 	t.Cleanup(func() { resolve.AutoInstallFunc = oldAutoInstall })
 
-	_, err := env.ResolveRuntimeEnv(context.Background(), "", nil)
+	_, err := env.ResolveRuntimeEnv(context.Background(), "")
 	require.NoError(t, err)
 	assert.Equal(t, "sts-2.0.0", gotInput)
 	assert.Equal(t, []string{"ohos"}, gotTargets)

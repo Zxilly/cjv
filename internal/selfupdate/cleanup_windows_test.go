@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/Zxilly/cjv/internal/proxy"
+	"github.com/Zxilly/cjv/internal/sdktools"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -23,7 +23,7 @@ func TestCleanupOldBinaries_RemovesGCFiles(t *testing.T) {
 	require.NoError(t, os.MkdirAll(binDir, 0o755))
 
 	// Create the managed binary
-	binaryName := proxy.CjvBinaryName()
+	binaryName := sdktools.CjvBinaryName()
 	require.NoError(t, os.WriteFile(filepath.Join(binDir, binaryName), []byte("cjv"), 0o755))
 
 	// Create garbage-collected leftover files
@@ -61,7 +61,7 @@ func TestCleanupOldBinaries_RestoresDotOldWhenManagedBinaryMissing(t *testing.T)
 
 	binDir := filepath.Join(home, "bin")
 	require.NoError(t, os.MkdirAll(binDir, 0o755))
-	binaryName := proxy.CjvBinaryName()
+	binaryName := sdktools.CjvBinaryName()
 	dotOld := filepath.Join(binDir, "."+binaryName+".old")
 	require.NoError(t, os.WriteFile(dotOld, []byte("old binary"), 0o755))
 

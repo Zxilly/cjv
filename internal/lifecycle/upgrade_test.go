@@ -247,10 +247,11 @@ func TestUpgradeReportsIncompleteReplacementCleanupFailure(t *testing.T) {
 		t.Skip("Windows working-directory handle prevents replacement cleanup")
 	}
 	f := newUpgradeFixture(t, false, true)
-	_, err := f.upgrade(t, lifecycle.Options{CreateProxyLinks: func() error {
+	lifecycle.SetAfterFinalizeHook(t, func() error {
 		t.Chdir(f.newRoots.TcDir)
 		return nil
-	}})
+	})
+	_, err := f.upgrade(t, lifecycle.Options{})
 	require.Error(t, err)
 	assert.ErrorContains(t, err, "remove incomplete replacement")
 	assert.ErrorContains(t, err, "stdx-docs")
@@ -267,13 +268,14 @@ func TestUpgradeSettingsFailureRestoresOldContent(t *testing.T) {
 	f := newUpgradeFixture(t, false, false)
 	before, err := os.ReadFile(f.sf.Path())
 	require.NoError(t, err)
-	_, err = f.upgrade(t, lifecycle.Options{CreateProxyLinks: func() error {
+	lifecycle.SetAfterFinalizeHook(t, func() error {
 		// Block the real settings write after materializing the replacement.
 		require.NoError(t, os.Rename(f.sf.Path(), f.sf.Path()+".saved"))
 		require.NoError(t, os.Mkdir(f.sf.Path(), 0o755))
 		require.NoError(t, os.WriteFile(filepath.Join(f.sf.Path(), "obstruction"), []byte("keep"), 0o644))
 		return nil
-	}})
+	})
+	_, err = f.upgrade(t, lifecycle.Options{})
 	require.Error(t, err)
 	for _, path := range []string{f.oldRoots.TcDir, f.oldRoots.StdxDir, f.oldRoots.DocsDir} {
 		assert.DirExists(t, path)

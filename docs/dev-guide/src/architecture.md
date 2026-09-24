@@ -25,7 +25,7 @@ docs/           两本 mdBook（见“文档站”一章）
 
 `main` 调 `run`，`run` 先初始化日志（`logging.Init`）、记下版本号，再从 `os.Args[0]` 取出被调用的程序名（`proxy.ExtractToolName`），据此分三条路：
 
-- 程序名是某个已知 SDK 工具（`cjc`、`cjpm` 等，由 `proxy.IsProxyTool` 判定），走代理路径 `proxy.Run`，把参数透传给真正的工具。
+- 程序名是某个已知 SDK 工具（`cjc`、`cjpm` 等，由 `sdktools.IsProxyTool` 判定），走代理路径 `proxy.Run`，把参数透传给真正的工具。
 - 程序名以 `cjv-init` / `cjv-setup` 开头，把它当安装器，改写 `os.Args` 为 `cjv init` 再继续。
 - 否则就是普通的 `cjv ...` 调用，交给 `cli.Execute(version, updateURL)`。
 
@@ -47,7 +47,7 @@ docs/           两本 mdBook（见“文档站”一章）
 
 ### `lifecycle`：安装与内容生命周期
 
-`internal/lifecycle` 把下载、解压、校验、组件、PATH 和代理链接串成一条安装流程。它通过 `Options` 接收 `Report`、`ComponentInstall`、`CreateProxyLinks`、`ValidateInstallation` 等 adapter，依赖方向从 `cli` 指向 `lifecycle`。`Report` 只报告进度，未设置时保持静默；输出格式由 CLI 决定。同一流程服务 `cli install` 与代理自动安装，已有 SDK 的重复安装在文本与 JSON 模式下都成功，`component add` 的 JSON 结果也由 CLI 统一渲染。
+`internal/lifecycle` 把下载、解压、校验、组件、PATH、受管二进制和代理链接串成一条安装流程。校验、受管二进制（`selfupdate.EnsureManagedExecutable`）和代理链接（`sdktools.CreateAllProxyLinks`）由它直接调用，不经 adapter；`Options` 只剩表现层与测试需要的 `Report`、`EnsurePathConfigured`、`ComponentInstall`，依赖方向从 `cli` 指向 `lifecycle`，再从 `lifecycle` 指向 `selfupdate` 与 `sdktools`。`Report` 只报告进度，未设置时保持静默；输出格式由 CLI 决定。同一流程服务 `cli install` 与代理自动安装：两者装出的工具链都带受管二进制和代理链接。已有 SDK 的重复安装在文本与 JSON 模式下都成功，`component add` 的 JSON 结果也由 CLI 统一渲染。
 
 包内按职责分文件：`install.go` 负责安装编排，`source.go` 把通道请求交给分发源并产出 `ResolvedToolchain`，`component_install.go` 编排组件批量安装并交给 `component.ApplyChanges` 负责回滚，`resolved_install.go` 管下载后的落盘、校验和事务替换，`update.go` 编排更新流程，`upgrade.go` 是它替换单个工具链的步骤，`downloads_purge.go` 在全量更新结束后清空下载暂存区。分发源选择集中在 `source.go`。工具链替换的回归测试直接调用这些生产安装入口，验证最终步骤失败后的旧安装恢复和回滚错误传播。
 
@@ -75,11 +75,15 @@ docs/           两本 mdBook（见“文档站”一章）
 
 ### `env`：运行时环境
 
-`internal/env` 组装运行仓颉工具所需的环境。`Runtime` 持有活动工具链和私有的 SDK 环境配置，调用方不再读取或修改内部配置。`ProxyEnv`、`ToolchainEnv` 都显式接收基础环境，按同一规则合并 PATH、动态库路径、`SDKROOT` 和组件变量；不会在合并时偷读进程中的另一份环境。`Contributions` 返回不含继承值的 SDK 贡献，`ShellScript` 根据相同合并结果生成 shell 差异脚本。平台变量名、路径次序与大小写规则集中在环境 module 中，shell 检测及格式化仍由 `shelldetect.go`、`shell_*.go`、`shellformat.go` 负责。
+`internal/env` 组装运行仓颉工具所需的环境。`Runtime` 持有活动工具链和私有的 SDK 环境配置，调用方不再读取或修改内部配置。组件变量由 `component.ApplyEnv` 直接叠加，工具链内的工具路径经 `sdktools` 定位。`ProxyEnv`、`ToolchainEnv` 都显式接收基础环境，按同一规则合并 PATH、动态库路径、`SDKROOT` 和组件变量；不会在合并时偷读进程中的另一份环境。`Contributions` 返回不含继承值的 SDK 贡献，`ShellScript` 根据相同合并结果生成 shell 差异脚本。平台变量名、路径次序与大小写规则集中在环境 module 中，shell 检测及格式化仍由 `shelldetect.go`、`shell_*.go`、`shellformat.go` 负责。
 
 ### `proxy`：透明代理
 
-`internal/proxy` 实现透明代理：当二进制以 `cjc`、`cjpm` 等工具名被调用时，`Run` 解析活动工具链（经 `env.ResolveRuntime`）、在工具链目录里定位真正的工具二进制（`tools.go` 里 `toolPathMap` 是工具名到相对路径的映射）、组装代理环境并透传参数。Unix 通过 `syscall.Exec` 替换当前进程，Windows 通过 `process.Run` 启动并等待子进程。它带一个递归计数器（`CJV_RECURSION_COUNT`），防止代理无限自调。`link.go` 负责在安装时建出这些代理链接（`CreateAllProxyLinks`）。
+`internal/proxy` 实现透明代理：当二进制以 `cjc`、`cjpm` 等工具名被调用时，`Run` 解析活动工具链（经 `env.ResolveRuntime`）、经 `sdktools` 在工具链目录里定位真正的工具二进制、组装代理环境并透传参数。Unix 通过 `syscall.Exec` 替换当前进程，Windows 通过 `process.Run` 启动并等待子进程。它带一个递归计数器（`CJV_RECURSION_COUNT`），防止代理无限自调。包里只有这条运行路径，工具布局本身不在这里。
+
+### `sdktools`：SDK 工具布局
+
+`internal/sdktools` 描述 SDK 的工具布局：工具链带哪些工具、每个工具在工具链目录里的相对路径（`toolPathMap`）、cjv 二进制和各工具在各平台上的文件名（`CjvBinaryName`、`PlatformBinaryName`）、在 `CJV_HOME/bin` 下建出代理链接（`CreateAllProxyLinks`），以及按工具链目录和目标 tuple 定位已装工具二进制（`ResolveInstalledToolBinary`、`ResolveInstalledToolBinaryForTuple`）。它只依赖 `config`、`target`、`utils` 和 `cjverr`，位于 `lifecycle`、`env`、`selfupdate` 和 `proxy` 之下，让安装校验、代理链接、`cjv run`/`which` 的工具查找和受管二进制路径读的是同一份布局。
 
 ### `process`：子进程执行
 
@@ -93,7 +97,7 @@ docs/           两本 mdBook（见“文档站”一章）
 
 ### `selfupdate`：自我更新
 
-`internal/selfupdate` 负责发现、校验和安装 cjv 更新。具体走 GitHub 还是 GitCode 由 `mirror` 构建标记在编译期选定（`update_default.go` / `update_mirror.go`）。`Update` 返回状态（`skipped`、`dev`、`up-to-date`、`updated`）及版本，供 `cli/selfmgmt` 渲染，不自行向 stdout 打印结果。它还管理把当前二进制确立为受管可执行文件、以及更新时替换正在运行的二进制（Windows 与其他平台分 `replace_windows.go` / `replace_other.go`）。
+`internal/selfupdate` 负责发现、校验和安装 cjv 更新。具体走 GitHub 还是 GitCode 由 `mirror` 构建标记在编译期选定（`update_default.go` / `update_mirror.go`）。`Update` 返回状态（`skipped`、`dev`、`up-to-date`、`updated`）及版本，供 `cli/selfmgmt` 渲染，不自行向 stdout 打印结果。它还管理把当前二进制确立为受管可执行文件（`EnsureManagedExecutable`，安装流程在落盘后直接调用）、以及更新时替换正在运行的二进制（Windows 与其他平台分 `replace_windows.go` / `replace_other.go`）。受管二进制的文件名取自 `sdktools`。
 
 ### 支撑包
 
@@ -110,10 +114,10 @@ docs/           两本 mdBook（见“文档站”一章）
 
 把上面串起来，看 `cjv install <toolchain>` 大致怎么走。
 
-进程从 `cmd/cjv/main.go` 的 `run` 起步：`logging.Init` 配好日志，程序名是 `cjv` 不是某个工具名，于是走 `cli.Execute`。cobra 把 `install` 子命令路由到 `internal/cli/install.go` 的 `runInstall`。`runInstall` 收集 `--target`、`--component`、`--force` 等标志，组好 `lifecycle.Options`（把 `output`、`component`、`proxy`、`selfupdate` 的实现接进去），调进 `internal/lifecycle`。
+进程从 `cmd/cjv/main.go` 的 `run` 起步：`logging.Init` 配好日志，程序名是 `cjv` 不是某个工具名，于是走 `cli.Execute`。cobra 把 `install` 子命令路由到 `internal/cli/install.go` 的 `runInstall`。`runInstall` 收集 `--target`、`--component`、`--force` 等标志，组好 `lifecycle.Options`（把进度报告、PATH 配置接进去），调进 `internal/lifecycle`。
 
-`lifecycle` 编排其余步骤：先让 `dist.Source` 从 manifest 解析通道、版本、平台和组件制品，再让通用下载与解包逻辑落到 staging 目录，最后由 `component`、`proxy` 与 `fstx` 完成组件、代理链接和事务替换。所有通道共用这条安装路径。CLI 按输出模式选择进度报告方式，并用本次调用的 renderer 渲染命令结果；错误由 `cli.Execute` 输出，再由 `main` 翻译成退出码。
+`lifecycle` 编排其余步骤：先让 `dist.Source` 从 manifest 解析通道、版本、平台和组件制品，再让通用下载与解包逻辑落到 staging 目录，最后由 `component`、`selfupdate`、`sdktools` 与 `fstx` 完成组件、受管二进制、代理链接和事务替换。所有通道共用这条安装路径。CLI 按输出模式选择进度报告方式，并用本次调用的 renderer 渲染命令结果；错误由 `cli.Execute` 输出，再由 `main` 翻译成退出码。
 
-代理路径是另一条主线。运行 `cjc build` 时，被调用的其实是名为 `cjc` 的 cjv 链接，`main` 认出工具名走 `proxy.Run`：`proxy` 经 `env.ResolveRuntime` 让 `resolve` 定出活动工具链、在工具链目录里找到真正的 `cjc`、组装好运行环境，然后按平台替换当前进程或运行子进程。这条线绕过 cobra 命令树，保留工具的标准流和退出语义。
+代理路径是另一条主线。运行 `cjc build` 时，被调用的其实是名为 `cjc` 的 cjv 链接，`main` 认出工具名走 `proxy.Run`：`proxy` 经 `env.ResolveRuntime` 让 `resolve` 定出活动工具链、经 `sdktools` 在工具链目录里找到真正的 `cjc`、组装好运行环境，然后按平台替换当前进程或运行子进程。这条线绕过 cobra 命令树，保留工具的标准流和退出语义。
 
 想深入某一块，从这几处入手最快：命令定义看 `internal/cli/root.go`，安装编排看 `internal/lifecycle/install.go`，分发源看 `internal/dist/source.go`，落盘事务看 `internal/lifecycle/resolved_install.go`，代理看 `internal/proxy/proxy.go`。测试怎么组织见[测试](testing.md)。

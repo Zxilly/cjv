@@ -11,7 +11,7 @@ import (
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/i18n"
 	"github.com/Zxilly/cjv/internal/lifecycle"
-	"github.com/Zxilly/cjv/internal/proxy"
+	"github.com/Zxilly/cjv/internal/sdktools"
 	"github.com/Zxilly/cjv/internal/selfupdate"
 	"github.com/Zxilly/cjv/internal/toolchain"
 	"github.com/Zxilly/cjv/internal/utils"
@@ -116,7 +116,7 @@ func (app *application) initToolchainCommands() {
 			}
 
 			// Validate the directory contains a Cangjie SDK (bin/cjc must exist)
-			if _, err := proxy.ResolveInstalledToolBinary(absPath, "cjc"); err != nil {
+			if _, err := sdktools.ResolveInstalledToolBinary(absPath, "cjc"); err != nil {
 				return fmt.Errorf("%s: %w", i18n.T("LinkNotSDK", nil), err)
 			}
 
@@ -143,7 +143,7 @@ func (app *application) initToolchainCommands() {
 			}
 
 			// Ensure proxy links exist in bin directory
-			if err := proxy.CreateAllProxyLinks(); err != nil {
+			if err := sdktools.CreateAllProxyLinks(); err != nil {
 				return err
 			}
 

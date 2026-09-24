@@ -12,8 +12,6 @@ import (
 	"github.com/Zxilly/cjv/internal/env"
 	"github.com/Zxilly/cjv/internal/i18n"
 	"github.com/Zxilly/cjv/internal/lifecycle"
-	"github.com/Zxilly/cjv/internal/proxy"
-	"github.com/Zxilly/cjv/internal/selfupdate"
 	"github.com/Zxilly/cjv/internal/toolchain"
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
@@ -36,9 +34,6 @@ func (app *application) lifecycleOptions() lifecycle.Options {
 		Report:               app.reportProgress,
 		EnsurePathConfigured: app.ensurePathConfiguredFn,
 		ComponentInstall:     app.componentInstallFunc,
-		EnsureManagedBinary:  selfupdate.EnsureManagedExecutable,
-		CreateProxyLinks:     proxy.CreateAllProxyLinks,
-		ValidateInstallation: validateInstallation,
 	}
 }
 
@@ -146,20 +141,6 @@ func ensurePathConfigured() {
 
 func resolveAndLocate(ctx context.Context, name toolchain.ToolchainName, settings *config.Settings, fetcher *lifecycle.ManifestFetcher, tuple string) (lifecycle.ResolvedToolchain, error) {
 	return lifecycle.ResolveAndLocatePlatform(ctx, name, settings, fetcher, tuple)
-}
-
-// validateInstallation checks that the installed SDK has essential binaries.
-func validateInstallation(dir, tuple string) error {
-	var err error
-	if tuple == "" {
-		_, err = proxy.ResolveInstalledToolBinary(dir, "cjc")
-	} else {
-		_, err = proxy.ResolveInstalledToolBinaryForTuple(dir, "cjc", tuple)
-	}
-	if err != nil {
-		return fmt.Errorf("installation validation failed: %w", err)
-	}
-	return nil
 }
 
 func (app *application) initInstallCommands() {

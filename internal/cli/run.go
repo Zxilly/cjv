@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 
 	"github.com/Zxilly/cjv/internal/cjverr"
-	componentlib "github.com/Zxilly/cjv/internal/component"
 	"github.com/Zxilly/cjv/internal/env"
 	"github.com/Zxilly/cjv/internal/i18n"
 	"github.com/Zxilly/cjv/internal/process"
@@ -80,7 +79,7 @@ flagLoop:
 
 	count := proxy.GetRecursionCount()
 
-	rt, err := env.RuntimeForToolchain(tcDir, filepath.Base(tcDir), componentlib.ApplyEnv)
+	rt, err := env.RuntimeForToolchain(tcDir, filepath.Base(tcDir))
 	if err != nil {
 		return err
 	}
@@ -113,7 +112,7 @@ flagLoop:
 // tools/bin/. The bool reports whether the tool was found inside the toolchain;
 // when false the returned path is the bare command name.
 func resolveToolchainToolPath(tcDir, command string) (string, bool) {
-	return env.ResolveToolPath(tcDir, command, proxy.ResolveInstalledToolBinary, proxy.PlatformBinaryName)
+	return env.ResolveToolPath(tcDir, command)
 }
 
 // lookPathInEnv resolves a bare command name against the PATH carried in

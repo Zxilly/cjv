@@ -36,11 +36,7 @@ func NewManifestFetcherForSettings(settings *config.Settings, opts Options) (*Ma
 }
 
 func newDistributionSource(settings *config.Settings) (*dist.Source, error) {
-	return dist.NewSourceWithOptions(settings, dist.SourceOptions{
-		FetchNightlySHA256: func(ctx context.Context, assetURL string) (string, error) {
-			return FetchNightlySHA256(ctx, assetURL)
-		},
-	})
+	return dist.NewSource(settings)
 }
 
 func (f *ManifestFetcher) Get(ctx context.Context) (*dist.Manifest, error) {
@@ -98,6 +94,3 @@ func ResolveAndLocatePlatform(ctx context.Context, name toolchain.ToolchainName,
 	}
 	return result, nil
 }
-
-// FetchNightlySHA256 is a package-level seam for tests that resolve nightly toolchains.
-var FetchNightlySHA256 = dist.FetchNightlySHA256

@@ -18,7 +18,7 @@ import (
 	"github.com/Zxilly/cjv/internal/cli/output"
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/dist"
-	"github.com/Zxilly/cjv/internal/proxy"
+	"github.com/Zxilly/cjv/internal/sdktools"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -31,10 +31,10 @@ func TestSelfUpdateReportsAppliedVersionAfterProxyRefresh(t *testing.T) {
 			t.Setenv(config.EnvMaxRetries, "0")
 			binDir := filepath.Join(home, "bin")
 			require.NoError(t, os.MkdirAll(binDir, 0o755))
-			managed := filepath.Join(binDir, proxy.CjvBinaryName())
+			managed := filepath.Join(binDir, sdktools.CjvBinaryName())
 			require.NoError(t, os.WriteFile(managed, []byte("old executable"), 0o755))
 			if blocked {
-				obstruction := filepath.Join(binDir, proxy.PlatformBinaryName("cjc"))
+				obstruction := filepath.Join(binDir, sdktools.PlatformBinaryName("cjc"))
 				require.NoError(t, os.Mkdir(obstruction, 0o755))
 				require.NoError(t, os.WriteFile(filepath.Join(obstruction, "keep"), []byte("obstruction"), 0o644))
 			}
@@ -90,8 +90,8 @@ func TestSelfUpdateReportsAppliedVersionAfterProxyRefresh(t *testing.T) {
 				require.NoError(t, json.Unmarshal(stdout.Bytes(), &result))
 				assert.Equal(t, "1.1.0", result.Version)
 				assert.True(t, result.Updated)
-				for _, tool := range proxy.AllProxyTools() {
-					data, readErr := os.ReadFile(filepath.Join(binDir, proxy.PlatformBinaryName(tool)))
+				for _, tool := range sdktools.AllProxyTools() {
+					data, readErr := os.ReadFile(filepath.Join(binDir, sdktools.PlatformBinaryName(tool)))
 					require.NoError(t, readErr)
 					assert.Equal(t, "new executable", string(data), "proxy %s must use the replacement binary", tool)
 				}
@@ -115,7 +115,7 @@ func serveManagedUpdate(t *testing.T) string {
 	var archive bytes.Buffer
 	w := zip.NewWriter(&archive)
 	for _, binary := range []string{"cjv", "cjv-mirror"} {
-		f, err := w.Create(proxy.PlatformBinaryName(binary))
+		f, err := w.Create(sdktools.PlatformBinaryName(binary))
 		require.NoError(t, err)
 		_, err = f.Write([]byte("new executable"))
 		require.NoError(t, err)

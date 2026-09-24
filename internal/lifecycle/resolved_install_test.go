@@ -12,6 +12,7 @@ import (
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/fstx"
 	"github.com/Zxilly/cjv/internal/lifecycle"
+	"github.com/Zxilly/cjv/internal/sdktools"
 	"github.com/Zxilly/cjv/internal/testutil"
 	"github.com/Zxilly/cjv/internal/toolchain"
 	"github.com/stretchr/testify/assert"
@@ -62,23 +63,22 @@ func TestInstallRestoresToolchainsAfterFinalizeFailure(t *testing.T) {
 				require.NoError(t, err)
 
 				finalizeErr := errors.New("proxy refresh failed")
-				managedCalled, proxyCalled, pathCalled := false, false, false
+				finalizeCalled, pathCalled := false, false
+				lifecycle.SetAfterFinalizeHook(t, func() error {
+					finalizeCalled = true
+					// The real archive must have been downloaded, validated and
+					// placed at its final path before finalization fails.
+					data, readErr := os.ReadFile(compiler)
+					require.NoError(t, readErr)
+					assert.Contains(t, string(data), "cjc 1.0.5")
+					assert.NoFileExists(t, oldMarker)
+					// Finalization itself has already established the managed
+					// binary and the proxy links by the time the hook runs.
+					assert.FileExists(t, filepath.Join(home, "bin", sdktools.CjvBinaryName()))
+					assert.FileExists(t, filepath.Join(home, "bin", sdktools.PlatformBinaryName("cjc")))
+					return finalizeErr
+				})
 				opts := lifecycle.Options{
-
-					EnsureManagedBinary: func() (string, error) {
-						managedCalled = true
-						return filepath.Join(home, "bin", "cjv"), nil
-					},
-					CreateProxyLinks: func() error {
-						proxyCalled = true
-						// The real archive must have been downloaded, validated and
-						// placed at its final path before finalization fails.
-						data, readErr := os.ReadFile(compiler)
-						require.NoError(t, readErr)
-						assert.Contains(t, string(data), "cjc 1.0.5")
-						assert.NoFileExists(t, oldMarker)
-						return finalizeErr
-					},
 					EnsurePathConfigured: func() { pathCalled = true },
 				}
 				if source == "url" {
@@ -89,8 +89,7 @@ func TestInstallRestoresToolchainsAfterFinalizeFailure(t *testing.T) {
 				}
 
 				require.ErrorIs(t, err, finalizeErr)
-				assert.True(t, managedCalled)
-				assert.True(t, proxyCalled)
+				assert.True(t, finalizeCalled)
 				assert.False(t, pathCalled)
 				if reinstall {
 					data, readErr := os.ReadFile(compiler)
@@ -124,18 +123,16 @@ func TestInstallPreservesFinalizeAndRollbackErrors(t *testing.T) {
 	dest := filepath.Join(home, "toolchains", "lts-1.0.5")
 	staging := config.StagingDir(dest)
 	finalizeErr := errors.New("proxy refresh failed")
-	err := lifecycle.InstallToolchainWithExtras(t.Context(), "lts", nil, nil, false, lifecycle.Options{
-
-		CreateProxyLinks: func() error {
-			require.FileExists(t, compilerPath(dest))
-			// Simulate a conflicting filesystem entry appearing while the
-			// finalization callback runs. The installed directory cannot be
-			// renamed back to staging, so rollback must report its own error.
-			require.NoError(t, os.MkdirAll(staging, 0o755))
-			require.NoError(t, os.WriteFile(filepath.Join(staging, "occupied"), []byte("occupied"), 0o644))
-			return finalizeErr
-		},
+	lifecycle.SetAfterFinalizeHook(t, func() error {
+		require.FileExists(t, compilerPath(dest))
+		// Simulate a conflicting filesystem entry appearing while the
+		// finalization callback runs. The installed directory cannot be
+		// renamed back to staging, so rollback must report its own error.
+		require.NoError(t, os.MkdirAll(staging, 0o755))
+		require.NoError(t, os.WriteFile(filepath.Join(staging, "occupied"), []byte("occupied"), 0o644))
+		return finalizeErr
 	})
+	err := lifecycle.InstallToolchainWithExtras(t.Context(), "lts", nil, nil, false, lifecycle.Options{})
 
 	require.ErrorIs(t, err, finalizeErr)
 	assert.ErrorContains(t, err, "rollback after failed install also failed")
@@ -169,12 +166,14 @@ func TestForceInstallRetainsOldSDKUntilBlockedRecoveryCanFinish(t *testing.T) {
 				}
 				return lifecycle.InstallToolchainWithExtras(t.Context(), "lts", nil, nil, true, opts)
 			}
-			err := install(lifecycle.Options{CreateProxyLinks: func() error {
+			lifecycle.SetAfterFinalizeHook(t, func() error {
 				require.NoError(t, os.MkdirAll(staging, 0o755))
 				require.NoError(t, os.WriteFile(filepath.Join(staging, "occupied"), []byte("obstruction"), 0o644))
 				return finalizeErr
-			}})
+			})
+			err := install(lifecycle.Options{})
 			require.ErrorIs(t, err, finalizeErr)
+			lifecycle.SetAfterFinalizeHook(t, nil)
 			var recoveryErr *fstx.RecoveryError
 			require.ErrorAs(t, err, &recoveryErr)
 			assert.ErrorContains(t, err, recoveryErr.Directory)
@@ -246,15 +245,15 @@ func TestFirstInstallSettingsWriteFailureRollsBackPreparedSDK(t *testing.T) {
 	require.NoError(t, err)
 	backup := sf.Path() + ".test-backup"
 	pathConfigured := false
+	lifecycle.SetAfterFinalizeHook(t, func() error {
+		// Fail the actual atomic settings write after SDK placement and
+		// before any default reference can be published.
+		require.NoError(t, os.Rename(sf.Path(), backup))
+		require.NoError(t, os.Mkdir(sf.Path(), 0o755))
+		require.NoError(t, os.WriteFile(filepath.Join(sf.Path(), "occupied"), []byte("block publication"), 0o644))
+		return nil
+	})
 	err = lifecycle.InstallToolchainWithExtras(t.Context(), "lts", nil, nil, false, lifecycle.Options{
-		CreateProxyLinks: func() error {
-			// Fail the actual atomic settings write after SDK placement and
-			// before any default reference can be published.
-			require.NoError(t, os.Rename(sf.Path(), backup))
-			require.NoError(t, os.Mkdir(sf.Path(), 0o755))
-			require.NoError(t, os.WriteFile(filepath.Join(sf.Path(), "occupied"), []byte("block publication"), 0o644))
-			return nil
-		},
 		EnsurePathConfigured: func() { pathConfigured = true },
 	})
 	require.Error(t, err)

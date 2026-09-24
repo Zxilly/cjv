@@ -1,13 +1,9 @@
 package proxy
 
 import (
-	"errors"
-	"os"
-	"path/filepath"
 	"runtime"
 	"testing"
 
-	"github.com/Zxilly/cjv/internal/cjverr"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -47,43 +43,6 @@ func TestCheckRecursion(t *testing.T) {
 	require.NoError(t, checkRecursion(0))
 	require.NoError(t, checkRecursion(19))
 	assert.Error(t, checkRecursion(20))
-}
-
-func TestResolveInstalledToolBinaryRequiresExistingBinary(t *testing.T) {
-	tcDir := t.TempDir()
-
-	_, err := ResolveInstalledToolBinary(tcDir, "cjc")
-	var missing *cjverr.ToolNotInToolchainError
-	require.ErrorAs(t, err, &missing)
-
-	expectedPath := filepath.Join(tcDir, "bin", "cjc")
-	if runtime.GOOS == "windows" {
-		expectedPath += ".exe"
-	}
-	assert.Equal(t, "cjc", missing.Tool)
-	assert.Equal(t, expectedPath, missing.Path)
-}
-
-func TestResolveInstalledToolBinaryReturnsPathWhenPresent(t *testing.T) {
-	tcDir := t.TempDir()
-	binDir := filepath.Join(tcDir, "tools", "bin")
-	require.NoError(t, os.MkdirAll(binDir, 0o755))
-
-	toolPath := filepath.Join(binDir, "cjpm")
-	if runtime.GOOS == "windows" {
-		toolPath += ".exe"
-	}
-	require.NoError(t, os.WriteFile(toolPath, []byte("stub"), 0o755))
-
-	resolved, err := ResolveInstalledToolBinary(tcDir, "cjpm")
-	require.NoError(t, err)
-	assert.Equal(t, toolPath, resolved)
-}
-
-func TestResolveInstalledToolBinaryPreservesUnknownToolError(t *testing.T) {
-	_, err := ResolveInstalledToolBinary(t.TempDir(), "not-a-proxy")
-	var unknown *cjverr.UnknownToolError
-	require.True(t, errors.As(err, &unknown))
 }
 
 func TestGetRecursionCount_ValidInteger(t *testing.T) {

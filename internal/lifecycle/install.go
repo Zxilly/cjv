@@ -21,10 +21,7 @@ type Options struct {
 	EnsurePathConfigured func()
 	// ComponentInstall, when set, replaces the real component installer and
 	// gives orchestration tests a source-independent adapter.
-	ComponentInstall     func(context.Context, component.Roots, toolchain.ToolchainName, component.Name, string, string, bool) error
-	EnsureManagedBinary  func() (string, error)
-	CreateProxyLinks     func() error
-	ValidateInstallation func(dir, tuple string) error
+	ComponentInstall func(context.Context, component.Roots, toolchain.ToolchainName, component.Name, string, string, bool) error
 }
 
 func (o Options) report(message string, data i18n.MsgData) {
@@ -51,28 +48,6 @@ func (o Options) installComponent(ctx context.Context, roots component.Roots, tc
 	return component.InstallFromSource(ctx, roots, tc, name, tuple, downloadsDir, force, fetcher.source, func(stage string) {
 		o.report(stage, i18n.MsgData{"Toolchain": tc.String(), "Component": string(name)})
 	})
-}
-
-func (o Options) createProxyLinks() error {
-	if o.CreateProxyLinks == nil {
-		return nil
-	}
-	return o.CreateProxyLinks()
-}
-
-func (o Options) ensureManagedBinary() error {
-	if o.EnsureManagedBinary == nil {
-		return nil
-	}
-	_, err := o.EnsureManagedBinary()
-	return err
-}
-
-func (o Options) validateInstallation(dir, tuple string) error {
-	if o.ValidateInstallation != nil {
-		return o.ValidateInstallation(dir, tuple)
-	}
-	return validateInstallation(dir, tuple)
 }
 
 // InstallToolchainWithOptions installs a toolchain with optional force re-install.

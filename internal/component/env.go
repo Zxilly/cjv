@@ -11,9 +11,10 @@ const (
 	EnvStdxStatic  = "CANGJIE_STDX_PATH_STATIC"
 )
 
-// ApplyEnv satisfies env.ComponentEnvHook: each installed component contributes
-// the runtime environment variables declared in its Spec.EnvVars (currently
-// only stdx). Driven by Spec rather than special-cased per component name.
+// ApplyEnv is called by env.LoadToolchainEnv: each installed component
+// contributes the runtime environment variables declared in its Spec.EnvVars
+// (currently only stdx). Driven by Spec rather than special-cased per
+// component name.
 //
 // This is on the proxy hot path (called for every proxied tool invocation), so
 // it iterates the spec table directly — skipping components with no EnvVars

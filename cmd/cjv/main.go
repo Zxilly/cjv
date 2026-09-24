@@ -12,6 +12,7 @@ import (
 	"github.com/Zxilly/cjv/internal/cli"
 	"github.com/Zxilly/cjv/internal/logging"
 	"github.com/Zxilly/cjv/internal/proxy"
+	"github.com/Zxilly/cjv/internal/sdktools"
 	"github.com/Zxilly/cjv/internal/utils"
 	"github.com/spf13/cobra"
 )
@@ -34,7 +35,7 @@ func run() int {
 
 	toolName := proxy.ExtractToolName(os.Args[0])
 
-	if proxy.IsProxyTool(toolName) {
+	if sdktools.IsProxyTool(toolName) {
 		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 		defer stop()
 

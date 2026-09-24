@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/Zxilly/cjv/internal/config"
-	"github.com/Zxilly/cjv/internal/proxy"
+	"github.com/Zxilly/cjv/internal/sdktools"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -21,11 +21,11 @@ func TestCleanupOldBinariesRemovesDotOldAndGcFiles(t *testing.T) {
 
 	binDir := filepath.Join(home, "bin")
 	require.NoError(t, os.MkdirAll(binDir, 0o755))
-	managed := filepath.Join(binDir, proxy.CjvBinaryName())
+	managed := filepath.Join(binDir, sdktools.CjvBinaryName())
 	require.NoError(t, os.WriteFile(managed, []byte("current"), 0o755))
 
-	dotOld := filepath.Join(binDir, "."+proxy.CjvBinaryName()+".old")
-	gcFile := filepath.Join(binDir, gcTestName(proxy.CjvBinaryName()))
+	dotOld := filepath.Join(binDir, "."+sdktools.CjvBinaryName()+".old")
+	gcFile := filepath.Join(binDir, gcTestName(sdktools.CjvBinaryName()))
 	require.NoError(t, os.WriteFile(dotOld, []byte("old"), 0o755))
 	require.NoError(t, os.WriteFile(gcFile, []byte("gc"), 0o755))
 

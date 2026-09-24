@@ -1,4 +1,10 @@
-package proxy
+// Package sdktools describes the SDK tool layout: which tools a toolchain
+// ships and where each one lives inside the toolchain directory, how the cjv
+// binary and the tools are named per platform, how the proxy links under
+// CJV_HOME/bin are created, and how an installed tool binary is located for a
+// toolchain directory and target tuple. It sits below lifecycle, env and
+// selfupdate so that all of them read the same layout.
+package sdktools
 
 import (
 	"path/filepath"
