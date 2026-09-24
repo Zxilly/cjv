@@ -21,23 +21,13 @@ func TestCreateLink(t *testing.T) {
 }
 
 func TestCreateLinkPreservesExistingDestinationWhenReplacementFails(t *testing.T) {
-	oldSymlink := createSymlink
-	oldHardLink := createHardLink
-	oldCopyFile := copyFileForLink
-	defer func() {
-		createSymlink = oldSymlink
-		createHardLink = oldHardLink
-		copyFileForLink = oldCopyFile
-	}()
-
-	createSymlink = func(string, string) error {
-		return errors.New("symlink disabled")
+	failing := func(msg string) linkStrategy {
+		return func(string, string) error { return errors.New(msg) }
 	}
-	createHardLink = func(string, string) error {
-		return errors.New("hard link disabled")
-	}
-	copyFileForLink = func(string, string, os.FileMode) error {
-		return errors.New("copy failed")
+	strategies := []linkStrategy{
+		failing("symlink disabled"),
+		failing("hard link disabled"),
+		failing("copy failed"),
 	}
 
 	tmp := t.TempDir()
@@ -46,12 +36,45 @@ func TestCreateLinkPreservesExistingDestinationWhenReplacementFails(t *testing.T
 	require.NoError(t, os.WriteFile(src, []byte("new"), 0o755))
 	require.NoError(t, os.WriteFile(dst, []byte("old"), 0o755))
 
-	err := CreateLink(src, dst)
-	require.Error(t, err)
+	err := createLinkWith(strategies, src, dst)
+	require.EqualError(t, err, "copy failed", "the last strategy's error is reported")
 
 	data, readErr := os.ReadFile(dst)
 	require.NoError(t, readErr)
 	assert.Equal(t, []byte("old"), data)
+}
+
+// The production chain is symlink -> hard link -> copy: each strategy runs
+// only after the previous one failed, and the first success ends the chain.
+func TestCreateLinkFallsBackInOrder(t *testing.T) {
+	tmp := t.TempDir()
+	src := filepath.Join(tmp, "source")
+	dst := filepath.Join(tmp, "link")
+	require.NoError(t, os.WriteFile(src, []byte("binary"), 0o755))
+
+	var order []string
+	record := func(name string, next linkStrategy) linkStrategy {
+		return func(src, dst string) error {
+			order = append(order, name)
+			return next(src, dst)
+		}
+	}
+	failing := func(string, string) error { return errors.New("unavailable") }
+
+	require.NoError(t, createLinkWith([]linkStrategy{
+		record("symlink", failing),
+		record("hardlink", failing),
+		record("copy", copyStrategy),
+		record("never", copyStrategy),
+	}, src, dst))
+
+	assert.Equal(t, []string{"symlink", "hardlink", "copy"}, order)
+	data, err := os.ReadFile(dst)
+	require.NoError(t, err)
+	assert.Equal(t, []byte("binary"), data)
+	entries, err := os.ReadDir(tmp)
+	require.NoError(t, err)
+	assert.Len(t, entries, 2, "no scratch path is left behind")
 }
 
 // --- Tests merged from copy_file_test.go ---
