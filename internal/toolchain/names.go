@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/target"
 )
 
@@ -92,6 +93,12 @@ func ParseToolchainName(input string) (ToolchainName, error) {
 	}
 	if input == "." || input == ".." {
 		return ToolchainName{}, fmt.Errorf("invalid toolchain name '%s'", input)
+	}
+
+	// Reserve scratch names on every platform, including case-insensitive
+	// filesystems, before classifying channel versions or custom names.
+	if config.IsScratchName(strings.ToLower(input)) {
+		return ToolchainName{}, fmt.Errorf("invalid toolchain name %q: reserved for installation recovery", input)
 	}
 
 	lowerInput := strings.ToLower(input)

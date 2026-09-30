@@ -1,6 +1,7 @@
 package lifecycle
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"maps"
@@ -88,7 +89,12 @@ func retireToolchain(roots component.Roots, sf *config.SettingsFile, before *con
 	if err != nil {
 		return err
 	}
-	if err := toolchain.RecoverHome(); err != nil {
+	lock, err := toolchain.LockHome(context.Background())
+	if err != nil {
+		return err
+	}
+	defer lock.Close() //nolint:errcheck // release after commit or rollback
+	if err := lock.Recover(); err != nil {
 		return err
 	}
 	tx, err := fstx.NewToolchainTransaction(home, filepath.Base(roots.TcDir))

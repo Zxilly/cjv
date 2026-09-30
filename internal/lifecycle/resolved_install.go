@@ -81,15 +81,17 @@ func installResolved(ctx context.Context, d *Distribution, rt ResolvedToolchain,
 	return err
 }
 
-// placeToolchain materializes a toolchain under CJV_HOME/toolchains/<name>:
-// recover interrupted changes, refuse (or with force, replace) an installed
-// one, acquire the SDK into the staging tree beside the destination, validate
-// it for tuple ("" is the host), then swap it into place in one transaction
-// that also establishes the managed binary and proxy links and, when publish
-// is set, commits the settings change with it. A failed placement removes the
-// staging tree unless recovery is blocked, in which case every transaction
-// path is retained for a later startup.
+// placeToolchain prepares a private SDK tree under downloads/, then publishes
+// it under the home mutation lock. Downloads and decompression do not block
+// proxy recovery; a separate install lock protects the shared archive cache.
+// The destination is rechecked after preparation. Staging and all journal
+// changes stay locked until commit/rollback and residue cleanup finish.
 func placeToolchain(ctx context.Context, name string, force bool, tuple string, acq acquisition, publish func() error, opts Options) (retErr error) {
+	parsed, err := toolchain.ParseToolchainName(name)
+	if err != nil {
+		return err
+	}
+	name = parsed.String()
 	if err := config.EnsureDirs(); err != nil {
 		return err
 	}
@@ -97,18 +99,20 @@ func placeToolchain(ctx context.Context, name string, force bool, tuple string, 
 	if err != nil {
 		return err
 	}
-	if err := toolchain.RecoverHome(); err != nil {
+	// Always take the install lock before the home lock. Recovery, links and
+	// removal only need the home lock, so they can proceed during downloads.
+	installLock, err := fsops.LockFile(ctx, filepath.Join(filepath.Dir(tcDir), ".install.lock"))
+	if err != nil {
 		return err
 	}
+	defer installLock.Close() //nolint:errcheck // protect cache consumption and cleanup
 	destDir := filepath.Join(tcDir, name)
-	isReinstall := false
-	if _, err := os.Stat(destDir); err == nil {
-		if !force {
-			return &cjverr.ToolchainAlreadyInstalledError{Name: name}
-		}
-		isReinstall = true
-	} else if !errors.Is(err, os.ErrNotExist) {
-		return fmt.Errorf("failed to stat %s: %w", destDir, err)
+	lock, _, err := lockPlacement(ctx, destDir, force)
+	if err != nil {
+		return err
+	}
+	if err := lock.Close(); err != nil {
+		return err
 	}
 
 	downloadsDir, err := config.DownloadsDir()
@@ -126,30 +130,75 @@ func placeToolchain(ctx context.Context, name string, force bool, tuple string, 
 			}
 		}()
 	}
-
-	stagingDir := config.StagingDir(destDir)
-	if err := fsops.RemoveAllRetry(stagingDir); err != nil {
-		return fmt.Errorf("failed to clean staging directory: %w", err)
+	preparedRoot, err := os.MkdirTemp(downloadsDir, ".cjv-stage-*")
+	if err != nil {
+		return err
 	}
+	defer os.RemoveAll(preparedRoot) //nolint:errcheck // private extraction scratch
+	preparedDir := filepath.Join(preparedRoot, "sdk")
+	opts.emit(progress.Event{Kind: progress.Extracting})
+	if err := acq.extract(ctx, archivePath, preparedDir); err != nil {
+		return err
+	}
+	if err := validateInstallation(preparedDir, tuple); err != nil {
+		return err
+	}
+
+	lock, isReinstall, err := lockPlacement(ctx, destDir, force)
+	if err != nil {
+		return err
+	}
+	defer lock.Close() //nolint:errcheck // release after staging and transaction cleanup
+	stagingDir := config.StagingDir(destDir)
 	defer func() {
 		var recoveryErr *fstx.RecoveryError
 		if retErr != nil && !errors.As(retErr, &recoveryErr) {
 			_ = fsops.RemoveAllRetry(stagingDir) //nolint:errcheck // best-effort
 		}
 	}()
-
-	opts.emit(progress.Event{Kind: progress.Extracting})
-	if err := acq.extract(ctx, archivePath, stagingDir); err != nil {
-		return err
+	if err := fsops.RemoveAllRetry(stagingDir); err != nil {
+		return fmt.Errorf("failed to clean staging directory: %w", err)
 	}
-	if err := validateInstallation(stagingDir, tuple); err != nil {
-		return err
+	if err := fsops.RenameRetry(preparedDir, stagingDir); err != nil {
+		// downloads/ may be on a different volume from toolchains/.
+		if _, err := fsops.MoveTree(preparedDir, stagingDir); err != nil {
+			return fmt.Errorf("failed to stage SDK: %w", err)
+		}
+	}
+	if afterStagingHook != nil {
+		if err := afterStagingHook(); err != nil {
+			return err
+		}
 	}
 	if err := swapInstalledToolchain(stagingDir, destDir, isReinstall, finalizeInstalledToolchain, publish); err != nil {
 		return err
 	}
 	opts.emit(progress.Event{Kind: progress.ToolchainInstalled, Toolchain: name})
 	return nil
+}
+
+// lockPlacement recovers and checks the destination atomically with respect
+// to other home mutations. A successful caller owns the returned lock.
+func lockPlacement(ctx context.Context, destDir string, force bool) (*toolchain.HomeLock, bool, error) {
+	lock, err := toolchain.LockHome(ctx)
+	if err != nil {
+		return nil, false, err
+	}
+	if err := lock.Recover(); err != nil {
+		_ = lock.Close() //nolint:errcheck // preserve the recovery error
+		return nil, false, err
+	}
+	if _, err := os.Stat(destDir); err == nil {
+		if !force {
+			_ = lock.Close() //nolint:errcheck // release on refused placement
+			return nil, false, &cjverr.ToolchainAlreadyInstalledError{Name: filepath.Base(destDir)}
+		}
+		return lock, true, nil
+	} else if !errors.Is(err, os.ErrNotExist) {
+		_ = lock.Close() //nolint:errcheck // preserve the stat error
+		return nil, false, fmt.Errorf("failed to stat %s: %w", destDir, err)
+	}
+	return lock, false, nil
 }
 
 func defaultToolchainExists(name string) bool {
@@ -192,6 +241,10 @@ func finalizeInstalledToolchain() error {
 	}
 	return nil
 }
+
+// afterStagingHook lets tests pause once the staging tree is materialized.
+// Production never sets it.
+var afterStagingHook func() error
 
 // afterFinalizeHook lets tests observe or fail the window between placing the
 // toolchain and committing the transaction. Production never sets it.

@@ -44,7 +44,10 @@ func Active(ctx context.Context, tcOverride string) (ActiveToolchain, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	if err := toolchain.RecoverHome(); err != nil {
+	if err := toolchain.RecoverHomeContext(ctx); err != nil {
+		if ctx.Err() != nil {
+			return ActiveToolchain{}, ctx.Err()
+		}
 		slog.Warn("failed to recover install transaction", "error", err)
 	}
 

@@ -26,3 +26,11 @@ func SetAfterPublishHook(t *testing.T, hook func() error) {
 	afterPublishHook = hook
 	t.Cleanup(func() { afterPublishHook = previous })
 }
+
+// SetAfterStagingHook pauses placement before the staging tree is published.
+func SetAfterStagingHook(t *testing.T, hook func() error) {
+	t.Helper()
+	previous := afterStagingHook
+	afterStagingHook = hook
+	t.Cleanup(func() { afterStagingHook = previous })
+}
