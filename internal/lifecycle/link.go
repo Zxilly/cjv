@@ -30,6 +30,11 @@ import (
 // pointing directly at a bare SDK archive is also supported. Cross-OS installs
 // are not supported. The default toolchain is never changed.
 func InstallToolchainFromURL(ctx context.Context, name, url, sha256 string, force, noStdx bool, opts Options) error {
+	parsed, err := toolchain.ParseToolchainName(name)
+	if err != nil {
+		return err
+	}
+	name = parsed.String()
 	return installLinkedToolchain(ctx, name, force, noStdx, opts, func(ctx context.Context, downloadsDir string) (string, bool, error) {
 		// An optional sha256 verifies the download; otherwise we rely on the
 		// transport (TLS for https — a plain http URL is the user's risk) plus the
@@ -47,6 +52,11 @@ func InstallToolchainFromURL(ctx context.Context, name, url, sha256 string, forc
 // by its magic header — but, unlike a download, it is never moved or deleted: it
 // stays where the user put it. The default toolchain is not changed.
 func InstallToolchainFromZip(ctx context.Context, name, archivePath, sha256 string, force, noStdx bool, opts Options) error {
+	parsed, err := toolchain.ParseToolchainName(name)
+	if err != nil {
+		return err
+	}
+	name = parsed.String()
 	return installLinkedToolchain(ctx, name, force, noStdx, opts, func(_ context.Context, _ string) (string, bool, error) {
 		opts.emit(progress.Event{Kind: progress.LinkUsingArchive, Subject: archivePath})
 		if err := dist.VerifyArchive(archivePath, sha256); err != nil {
@@ -66,6 +76,11 @@ func InstallToolchainFromZip(ctx context.Context, name, archivePath, sha256 stri
 // finalization fails is removed again, leaving nothing half-configured. An
 // existing toolchain of that name is never replaced.
 func LinkToolchainDir(name, dir string) error {
+	parsed, err := toolchain.ParseToolchainName(name)
+	if err != nil {
+		return err
+	}
+	name = parsed.String()
 	if _, err := sdktools.ResolveInstalledToolBinary(dir, "cjc"); err != nil {
 		return fmt.Errorf("%s: %w", i18n.T("LinkNotSDK", nil), err)
 	}
@@ -73,7 +88,12 @@ func LinkToolchainDir(name, dir string) error {
 	if err != nil {
 		return err
 	}
-	if err := toolchain.RecoverHome(); err != nil {
+	lock, err := toolchain.LockHome(context.Background())
+	if err != nil {
+		return err
+	}
+	defer lock.Close() //nolint:errcheck // keep the link protected through finalization
+	if err := lock.Recover(); err != nil {
 		return err
 	}
 	linkPath := filepath.Join(tcDir, name)

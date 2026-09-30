@@ -87,3 +87,15 @@ func TestToolchainLinkCommandRendersArchiveResultAsJSON(t *testing.T) {
 	assert.Equal(t, filepath.Join(home, "toolchains", "my-sdk"), result.Path)
 	assert.FileExists(t, src, "the user's archive is kept")
 }
+
+func TestToolchainLinkCommandNormalizesNameInResult(t *testing.T) {
+	app := newApplication("dev", "")
+	home := t.TempDir()
+	config.IsolateForTest(t, home)
+	stdout, err := executeWithOutput(t, app, []string{"--json", "toolchain", "link", " my-sdk/ ", sdkDirForLink(t)})
+	require.NoError(t, err)
+	var result toolchainLinkResult
+	require.NoError(t, json.Unmarshal([]byte(stdout), &result))
+	assert.Equal(t, "my-sdk", result.Name)
+	assert.DirExists(t, filepath.Join(home, "toolchains", "my-sdk"))
+}

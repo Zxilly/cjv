@@ -81,6 +81,8 @@ func (app *application) initToolchainCommands() {
 				return errors.New(i18n.T("LinkReservedName", i18n.MsgData{"Name": name}))
 			}
 
+			name = parsed.String()
+
 			// URL target: download and materialize a cjv-owned toolchain.
 			if isURLPath(targetPath) {
 				if err := lifecycle.InstallToolchainFromURL(cmd.Context(), name, targetPath, app.linkSHA256, app.linkForce, app.linkNoStdx, app.lifecycleOptions()); err != nil {

@@ -375,3 +375,44 @@ func TestLinkToolchainDir_RemovesLinkWhenFinalizeFails(t *testing.T) {
 	_, statErr := os.Lstat(filepath.Join(home, "toolchains", "local-sdk"))
 	assert.True(t, errors.Is(statErr, os.ErrNotExist), "a link whose finalization failed must not remain")
 }
+
+func TestLinkRejectsScratchNamesBeforeAccessingSource(t *testing.T) {
+	for _, name := range []string{"dev.staging", "dev.old", ".fstx-dev", " DEV.STAGING/ "} {
+		for _, source := range []string{"directory", "archive", "url"} {
+			t.Run(name+"/"+source, func(t *testing.T) {
+				home := linkHome(t)
+				var err error
+				switch source {
+				case "directory":
+					err = lifecycle.LinkToolchainDir(name, filepath.Join(home, "missing"))
+				case "archive":
+					err = lifecycle.InstallToolchainFromZip(t.Context(), name, filepath.Join(home, "missing.zip"), "", false, true, lifecycle.Options{})
+				case "url":
+					err = lifecycle.InstallToolchainFromURL(t.Context(), name, "https://example.invalid/sdk.zip", "", false, true, lifecycle.Options{})
+				}
+				require.ErrorContains(t, err, "reserved for installation recovery")
+				assert.NoDirExists(t, filepath.Join(home, "toolchains"))
+			})
+		}
+	}
+}
+
+func TestLinkNormalizesNamesForEverySource(t *testing.T) {
+	for _, source := range []string{"directory", "archive", "url"} {
+		t.Run(source, func(t *testing.T) {
+			home := linkHome(t)
+			const name = " custom-sdk/ "
+			var err error
+			switch source {
+			case "directory":
+				err = lifecycle.LinkToolchainDir(name, sdkDir(t))
+			case "archive":
+				err = lifecycle.InstallToolchainFromZip(t.Context(), name, writeArchive(t, sdkInnerArchive(t)), "", false, true, lifecycle.Options{})
+			case "url":
+				err = linkURL(t, name, sdkInnerArchive(t), "", false, true)
+			}
+			require.NoError(t, err)
+			assert.FileExists(t, filepath.Join(home, "toolchains", "custom-sdk", "bin", sdktools.PlatformBinaryName("cjc")))
+		})
+	}
+}

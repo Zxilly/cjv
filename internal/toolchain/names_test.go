@@ -151,3 +151,16 @@ func TestParseChannel_ReturnsUnknownChannelOnFailure(t *testing.T) {
 	assert.False(t, ok)
 	assert.Equal(t, UnknownChannel, ch)
 }
+
+func TestParseToolchainNameRejectsScratchNames(t *testing.T) {
+	for _, input := range []string{
+		"dev.staging", "dev.old", ".fstx-dev",
+		"lts-1.0.5.staging", "1.0.5.old",
+		"DEV.STAGING", ".FSTX-dev", " dev.old/ ",
+	} {
+		t.Run(input, func(t *testing.T) {
+			_, err := ParseToolchainName(input)
+			require.ErrorContains(t, err, "reserved for installation recovery")
+		})
+	}
+}

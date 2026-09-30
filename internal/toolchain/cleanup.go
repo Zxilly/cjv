@@ -1,6 +1,7 @@
 package toolchain
 
 import (
+	"context"
 	"errors"
 	"log/slog"
 	"os"
@@ -12,18 +13,30 @@ import (
 	"github.com/Zxilly/cjv/internal/fstx"
 )
 
-// RecoverHome is the single recovery entry point for CJV_HOME. It first
-// resumes interrupted fstx transactions under toolchains/, then removes
+// RecoverHome waits for the CJV_HOME mutation lock before recovering residue.
+// This excludes live staging trees and journals. It first resumes interrupted fstx transactions under toolchains/, then removes
 // abandoned staging trees and restores legacy backups whose original is
 // missing. A blocked recovery is returned as a *fstx.RecoveryError with its
 // journal and backups left in place, and no residue is touched: it may still
 // belong to the transaction whose state could not be read. Residue cleanup
 // failures are logged; they never fail the caller.
 func RecoverHome() error {
-	tcDir, err := config.ToolchainsDir()
+	return RecoverHomeContext(context.Background())
+}
+
+// RecoverHomeContext allows callers to cancel while another process owns home.
+func RecoverHomeContext(ctx context.Context) error {
+	lock, err := LockHome(ctx)
 	if err != nil {
 		return err
 	}
+	defer lock.Close() //nolint:errcheck // closing releases the OS lock
+	return lock.Recover()
+}
+
+// Recover repairs interrupted changes while the caller holds the home lock.
+func (lock *HomeLock) Recover() error {
+	tcDir := lock.tcDir
 	if err := fstx.Recover(tcDir); err != nil {
 		return err
 	}
