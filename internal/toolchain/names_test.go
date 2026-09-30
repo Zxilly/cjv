@@ -156,7 +156,7 @@ func TestParseToolchainNameRejectsScratchNames(t *testing.T) {
 	for _, input := range []string{
 		"dev.staging", "dev.old", ".fstx-dev",
 		"lts-1.0.5.staging", "1.0.5.old",
-		"DEV.STAGING", ".FSTX-dev", " dev.old/ ",
+		"DEV.STAGING", ".FSTX-dev", " dev.old/ ", "dev.staging.", "dev.old...",
 	} {
 		t.Run(input, func(t *testing.T) {
 			_, err := ParseToolchainName(input)

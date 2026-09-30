@@ -96,8 +96,9 @@ func ParseToolchainName(input string) (ToolchainName, error) {
 	}
 
 	// Reserve scratch names on every platform, including case-insensitive
-	// filesystems, before classifying channel versions or custom names.
-	if config.IsScratchName(strings.ToLower(input)) {
+	// filesystems and Win32 names with ignored trailing dots/spaces, before
+	// classifying channel versions or custom names.
+	if config.IsScratchName(strings.TrimRight(strings.ToLower(input), ". ")) {
 		return ToolchainName{}, fmt.Errorf("invalid toolchain name %q: reserved for installation recovery", input)
 	}
 

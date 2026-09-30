@@ -377,7 +377,7 @@ func TestLinkToolchainDir_RemovesLinkWhenFinalizeFails(t *testing.T) {
 }
 
 func TestLinkRejectsScratchNamesBeforeAccessingSource(t *testing.T) {
-	for _, name := range []string{"dev.staging", "dev.old", ".fstx-dev", " DEV.STAGING/ "} {
+	for _, name := range []string{"dev.staging", "dev.old", ".fstx-dev", " DEV.STAGING/ ", "dev.staging.", "dev.old..."} {
 		for _, source := range []string{"directory", "archive", "url"} {
 			t.Run(name+"/"+source, func(t *testing.T) {
 				home := linkHome(t)
