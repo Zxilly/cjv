@@ -97,5 +97,5 @@ func TestToolchainLinkCommandNormalizesNameInResult(t *testing.T) {
 	var result toolchainLinkResult
 	require.NoError(t, json.Unmarshal([]byte(stdout), &result))
 	assert.Equal(t, "my-sdk", result.Name)
-	assert.DirExists(t, filepath.Join(home, "toolchains", "my-sdk"))
+	assert.FileExists(t, filepath.Join(home, "toolchains", "my-sdk", "bin", sdktools.PlatformBinaryName("cjc")))
 }
