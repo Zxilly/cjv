@@ -110,20 +110,24 @@ func upgradeToolchain(ctx context.Context, currentName string, resolved Resolved
 			}
 		}
 		update := config.SettingsUpdate{}
-		if parsed.Target == "" {
-			if settings.DefaultToolchain == currentName || !defaultToolchainExists(settings.DefaultToolchain) {
-				update.DefaultToolchain = &resolved.Name
-			}
-			for dir, name := range settings.Overrides {
-				if name == currentName {
-					if update.Overrides == nil {
-						update.Overrides = maps.Clone(settings.Overrides)
+		if opts.tracking != "" {
+			retirementErr = advanceTracking(ctx, oldRoots, d, opts.tracking, currentName, resolved.Name)
+		} else {
+			if parsed.Target == "" && opts.tracking == "" {
+				if settings.DefaultToolchain == currentName || !defaultToolchainExists(settings.DefaultToolchain) {
+					update.DefaultToolchain = &resolved.Name
+				}
+				for dir, name := range settings.Overrides {
+					if name == currentName {
+						if update.Overrides == nil {
+							update.Overrides = maps.Clone(settings.Overrides)
+						}
+						update.Overrides[dir] = resolved.Name
 					}
-					update.Overrides[dir] = resolved.Name
 				}
 			}
+			retirementErr = retireToolchain(oldRoots, sf, settings, update)
 		}
-		retirementErr = retireToolchain(oldRoots, sf, settings, update)
 		var partial *retirementError
 		if errors.As(retirementErr, &partial) && partial.KeepReplacement {
 			// Commit the already working component set when recovery must
@@ -148,6 +152,11 @@ func replacementRequired(sf *config.SettingsFile, name string) (bool, error) {
 	}
 	if settings.DefaultToolchain == name {
 		return true, nil
+	}
+	for _, concrete := range settings.Installations {
+		if concrete == name {
+			return true, nil
+		}
 	}
 	for _, selected := range settings.Overrides {
 		if selected == name {

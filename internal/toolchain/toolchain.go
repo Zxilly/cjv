@@ -50,6 +50,20 @@ func FindInstalled(name ToolchainName) (string, error) {
 
 	// For channel-only names (e.g. "lts"), find the latest installed version for that channel
 	if name.Channel != UnknownChannel && name.Version == "" {
+		_, settings, err := config.LoadDefaultSettings()
+		if err != nil {
+			return "", err
+		}
+		if installed := settings.Installations[name.Channel.String()]; installed != "" {
+			parsed, err := ParseToolchainName(installed)
+			if err != nil || parsed.Channel != name.Channel || parsed.Version == "" || parsed.Target != "" {
+				return "", errors.New("invalid installed channel mapping: " + installed)
+			}
+			return FindInstalled(parsed)
+		}
+		if settings.Installations != nil {
+			return "", os.ErrNotExist
+		}
 		prefix := name.Channel.String() + "-"
 		entries, err := os.ReadDir(tcDir)
 		if err != nil {

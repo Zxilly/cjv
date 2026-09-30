@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/Zxilly/cjv/internal/cjverr"
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/dist"
 	"github.com/Zxilly/cjv/internal/progress"
@@ -164,8 +163,9 @@ func TestUpdateAllUpgradesReferencesAcrossToolchains(t *testing.T) {
 	server := testutil.MockDistServer(t)
 	settings := config.DefaultSettings()
 	settings.ManifestURL = server.URL + "/sdk-versions.json"
-	settings.DefaultToolchain = "lts-1.0.0"
-	settings.Overrides[filepath.Join(home, "project")] = "lts-1.0.0"
+	settings.Installations = map[string]string{"lts": "lts-1.0.0"}
+	settings.DefaultToolchain = "lts"
+	settings.Overrides[filepath.Join(home, "project")] = "lts"
 	saveUpdateSettings(t, home, settings)
 
 	report, err := UpdateAll(t.Context(), quietLifecycleOptions())
@@ -173,8 +173,8 @@ func TestUpdateAllUpgradesReferencesAcrossToolchains(t *testing.T) {
 	assert.Equal(t, []UpdateOutcome{{Name: "lts-1.0.0", Replacement: "lts-1.0.5", Status: UpdateApplied}}, applied(report))
 	loaded, err := config.LoadSettings(filepath.Join(home, ".cjv", "settings.toml"))
 	require.NoError(t, err)
-	assert.Equal(t, "lts-1.0.5", loaded.DefaultToolchain)
-	assert.Equal(t, "lts-1.0.5", loaded.Overrides[filepath.Join(home, "project")])
+	assert.Equal(t, "lts", loaded.DefaultToolchain)
+	assert.Equal(t, "lts", loaded.Overrides[filepath.Join(home, "project")])
 	assert.NoDirExists(t, filepath.Join(home, "toolchains", "lts-1.0.0"))
 }
 
@@ -185,6 +185,7 @@ func TestUpdateAllContinuesAfterFailure(t *testing.T) {
 	fakeInstalled(t, home, "lts-1.0.0", "nightly-1.0.0-alpha.20260101000000")
 	server := testutil.MockDistServer(t)
 	settings := config.DefaultSettings()
+	settings.Installations = map[string]string{"lts": "lts-1.0.0", "nightly": "nightly-1.0.0-alpha.20260101000000"}
 	settings.ManifestURL = server.URL + "/sdk-versions.json"
 	saveUpdateSettings(t, home, settings)
 
@@ -224,14 +225,15 @@ func TestUpdateInstalledChannelAlreadyUpToDate(t *testing.T) {
 	assert.Contains(t, recorder.Kinds, progress.AlreadyUpToDate)
 }
 
-func TestUpdateInstalledChannelUpgradesNewestInstalledVersion(t *testing.T) {
+func TestUpdateInstalledChannelUpgradesTrackedVersion(t *testing.T) {
 	home := updateHome(t)
 	fakeInstalled(t, home, "lts-1.0.0", "sts-2.0.0")
 	server := testutil.MockDistServer(t)
 	settings := config.DefaultSettings()
 	settings.ManifestURL = server.URL + "/sdk-versions.json"
-	settings.DefaultToolchain = "lts-1.0.0"
-	settings.Overrides["C:\\project-a"] = "lts-1.0.0"
+	settings.Installations = map[string]string{"lts": "lts-1.0.0"}
+	settings.DefaultToolchain = "lts"
+	settings.Overrides["C:\\project-a"] = "lts"
 	settings.Overrides["C:\\project-b"] = "sts-2.0.0" // different channel, keep
 	saveUpdateSettings(t, home, settings)
 
@@ -246,8 +248,8 @@ func TestUpdateInstalledChannelUpgradesNewestInstalledVersion(t *testing.T) {
 
 	reloaded, err := config.LoadSettings(filepath.Join(home, ".cjv", "settings.toml"))
 	require.NoError(t, err)
-	assert.Equal(t, "lts-1.0.5", reloaded.DefaultToolchain, "default should be updated from old version to new version")
-	assert.Equal(t, "lts-1.0.5", reloaded.Overrides["C:\\project-a"], "override should be updated to new version")
+	assert.Equal(t, "lts", reloaded.DefaultToolchain, "default keeps the channel identity")
+	assert.Equal(t, "lts", reloaded.Overrides["C:\\project-a"], "override keeps the channel identity")
 	assert.Equal(t, "sts-2.0.0", reloaded.Overrides["C:\\project-b"], "unrelated override should be preserved")
 }
 
@@ -258,6 +260,7 @@ func TestUpdateInstalledNightlyUsesUnifiedDistServer(t *testing.T) {
 	server := splitNightlyServer(t)
 	settings := config.DefaultSettings()
 	settings.DistServer = server.URL + "/corp/cjv"
+	settings.Installations = map[string]string{"nightly": oldName}
 	saveUpdateSettings(t, home, settings)
 
 	outcome, err := UpdateInstalled(t.Context(), parse(t, "nightly"), quietLifecycleOptions())
@@ -265,7 +268,7 @@ func TestUpdateInstalledNightlyUsesUnifiedDistServer(t *testing.T) {
 	assert.Equal(t, UpdateOutcome{Name: oldName, Replacement: "nightly-1.2.0-alpha.20260822010101", Status: UpdateApplied}, outcome)
 }
 
-func TestUpdateInstalledTargetVariantUpdatesVariant(t *testing.T) {
+func TestUpdateInstalledExplicitTargetVariantIsPinned(t *testing.T) {
 	home := updateHome(t)
 	targetKey, err := sdktarget.CurrentTargetTuple("", "ohos")
 	require.NoError(t, err)
@@ -278,13 +281,13 @@ func TestUpdateInstalledTargetVariantUpdatesVariant(t *testing.T) {
 
 	outcome, err := UpdateInstalled(t.Context(), parse(t, oldName), quietLifecycleOptions())
 	require.NoError(t, err)
-	assert.Equal(t, UpdateOutcome{Name: oldName, Replacement: "sts-2.0.0-" + targetKey, Status: UpdateApplied}, outcome)
+	assert.Equal(t, UpdateOutcome{Name: oldName, Status: UpdatePinned}, outcome)
 
 	installed, err := toolchain.ListInstalled()
 	require.NoError(t, err)
-	assert.Contains(t, installed, "sts-2.0.0-"+targetKey)
+	assert.NotContains(t, installed, "sts-2.0.0-"+targetKey)
 	assert.NotContains(t, installed, "sts-2.0.0", "the host variant must not be installed alongside")
-	assert.NotContains(t, installed, oldName)
+	assert.Contains(t, installed, oldName)
 }
 
 func TestUpdateInstalledExplicitVersionInstallsWhenMissing(t *testing.T) {
@@ -305,24 +308,25 @@ func TestUpdateInstalledExplicitVersionInstallsWhenMissing(t *testing.T) {
 	assert.Equal(t, UpdatePinned, outcome.Status)
 }
 
-func TestUpdateInstalledRejectsCustomMissingChannelAndMissingVariant(t *testing.T) {
+func TestUpdateInstalledRejectsCustomAndInstallsMissingChannelAndVariant(t *testing.T) {
 	home := updateHome(t)
-	saveUpdateSettings(t, home, config.DefaultSettings())
+	server := targetSDKServer(t, toolchain.STS, "2.0.0", "ohos")
+	settings := config.DefaultSettings()
+	settings.ManifestURL = server.URL + "/sdk-versions.json"
+	saveUpdateSettings(t, home, settings)
 
 	_, err := UpdateInstalled(t.Context(), parse(t, "local-sdk"), quietLifecycleOptions())
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "local-sdk")
 
 	_, err = UpdateInstalled(t.Context(), parse(t, "lts"), quietLifecycleOptions())
-	var notInstalled *cjverr.ToolchainNotInstalledError
-	require.ErrorAs(t, err, &notInstalled)
-	assert.Equal(t, "lts", notInstalled.Name)
+	require.NoError(t, err)
 
 	targetKey, err := sdktarget.CurrentTargetTuple("", "ohos")
 	require.NoError(t, err)
 	_, err = UpdateInstalled(t.Context(), parse(t, "sts-2.0.0-"+targetKey), quietLifecycleOptions())
-	require.ErrorAs(t, err, &notInstalled)
-	assert.Equal(t, "sts-2.0.0-"+targetKey, notInstalled.Name)
+	require.NoError(t, err)
+	assert.DirExists(t, filepath.Join(home, "toolchains", "sts-2.0.0-"+targetKey))
 }
 
 // installedForChannel picks the version a channel-only update replaces.

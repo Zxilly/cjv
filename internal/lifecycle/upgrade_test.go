@@ -214,12 +214,33 @@ func TestUpgradeMissingComponentLeavesOldVersionUsable(t *testing.T) {
 	require.NoError(t, err)
 	assert.Empty(t, components, "partially added replacement components must be undone")
 	assert.NoDirExists(t, f.newRoots.TcDir, "channel resolution must keep selecting the old usable version")
-	selected, err := toolchain.FindInstalled(toolchain.ToolchainName{Channel: toolchain.LTS})
+	selected, err := toolchain.FindInstalled(toolchain.ToolchainName{Channel: toolchain.LTS, Version: "1.0.0"})
 	require.NoError(t, err)
 	assert.Equal(t, f.oldRoots.TcDir, selected)
 	after, err := os.ReadFile(f.sf.Path())
 	require.NoError(t, err)
 	assert.Equal(t, before, after)
+}
+
+func TestTrackingUpdateFailureKeepsChannelAndComponents(t *testing.T) {
+	f := newUpgradeFixture(t, false, true)
+	channel := "lts"
+	_, err := f.sf.Update(config.SettingsUpdate{Installations: map[string]string{channel: f.oldName}, DefaultToolchain: &channel, Overrides: map[string]string{filepath.Join(f.home, "project"): channel}})
+	require.NoError(t, err)
+	_, err = lifecycle.UpdateInstalled(t.Context(), toolchain.ToolchainName{Channel: toolchain.LTS}, lifecycle.Options{})
+	require.Error(t, err)
+	f.sf.Invalidate()
+	settings, err := f.sf.Load()
+	require.NoError(t, err)
+	assert.Equal(t, f.oldName, settings.Installations[channel])
+	assert.Equal(t, channel, settings.DefaultToolchain)
+	selected, err := toolchain.FindInstalled(toolchain.ToolchainName{Channel: toolchain.LTS})
+	require.NoError(t, err)
+	assert.Equal(t, f.oldRoots.TcDir, selected)
+	assert.NoDirExists(t, f.newRoots.TcDir)
+	for _, path := range []string{f.oldRoots.TcDir, f.oldRoots.StdxDir, f.oldRoots.DocsDir} {
+		assert.DirExists(t, path)
+	}
 }
 
 func TestFailedUpgradePreservesExistingReplacementChoices(t *testing.T) {

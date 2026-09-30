@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -57,17 +58,68 @@ func installResolved(ctx context.Context, d *Distribution, rt ResolvedToolchain,
 		extract: dist.InstallSDK,
 	}
 	var publishDefault func() error
-	if setDefault && (d.Settings.DefaultToolchain == "" || !defaultToolchainExists(d.Settings.DefaultToolchain)) {
+	if opts.selection != "" || setDefault && (d.Settings.DefaultToolchain == "" || !defaultToolchainExists(d.Settings.DefaultToolchain)) {
 		publishDefault = func() error {
-			if _, err := d.File.Update(config.SettingsUpdate{DefaultToolchain: &resolvedName}); err != nil {
+			d.File.Invalidate()
+			settings, err := d.File.Load()
+			if err != nil {
 				return err
 			}
-			d.Settings.DefaultToolchain = resolvedName
-			if opts.ConfigurePath {
+			update := config.SettingsUpdate{}
+			if opts.selection != "" {
+				if isTrackingIdentity(opts.selection, resolvedName) {
+					expected, current := d.Settings.Installations[opts.selection], settings.Installations[opts.selection]
+					if current != expected && current != resolvedName {
+						return fmt.Errorf("toolchain %s changed during installation; retry", opts.selection)
+					}
+				}
+				update.Installations = maps.Clone(settings.Installations)
+				if update.Installations == nil {
+					update.Installations = make(map[string]string)
+				}
+				for identity, concrete := range d.legacyPins {
+					// Only preserve legacy fixed SDKs still on disk. A stale
+					// distribution snapshot must not recreate an uninstalled channel.
+					if identity != concrete {
+						continue
+					}
+					path, err := config.ToolchainDirFor(concrete)
+					if err != nil {
+						return err
+					}
+					if _, err := os.Lstat(path); errors.Is(err, os.ErrNotExist) {
+						continue
+					} else if err != nil {
+						return err
+					}
+					if _, exists := update.Installations[identity]; !exists {
+						update.Installations[identity] = concrete
+					}
+				}
+				update.Installations[opts.selection] = resolvedName
+			}
+			defaultName := resolvedName
+			if opts.selection != "" {
+				defaultName = opts.selection
+			}
+			publishFirstDefault := setDefault && (settings.DefaultToolchain == "" || !defaultToolchainExists(settings.DefaultToolchain))
+			if publishFirstDefault {
+				update.DefaultToolchain = &defaultName
+			}
+			if _, err := d.File.Update(update); err != nil {
+				return err
+			}
+			d.Settings, err = d.File.Load()
+			if err != nil {
+				return err
+			}
+			if publishFirstDefault && opts.ConfigurePath {
 				reachable.ConfigurePath()
 			}
 			if afterPublishHook != nil {
-				return afterPublishHook()
+				if err := afterPublishHook(); err != nil {
+					return errors.Join(err, d.File.Save(settings))
+				}
 			}
 			return nil
 		}
@@ -76,6 +128,24 @@ func installResolved(ctx context.Context, d *Distribution, rt ResolvedToolchain,
 	var already *cjverr.ToolchainAlreadyInstalledError
 	if errors.As(err, &already) {
 		opts.emit(progress.Event{Kind: progress.ToolchainAlreadyInstalled, Toolchain: resolvedName})
+		if publishDefault != nil {
+			lock, err := toolchain.LockHome(ctx)
+			if err != nil {
+				return err
+			}
+			defer lock.Close() //nolint:errcheck
+			if err := lock.Recover(); err != nil {
+				return err
+			}
+			path, err := config.ToolchainDirFor(rt.Name)
+			if err != nil {
+				return err
+			}
+			if _, err := os.Stat(path); err != nil {
+				return err
+			}
+			return publishDefault()
+		}
 		return nil
 	}
 	return err

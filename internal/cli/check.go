@@ -83,6 +83,14 @@ func (app *application) runCheck(cmd *cobra.Command, args []string) error {
 		if err != nil || parsed.IsCustom() || parsed.Channel == toolchain.UnknownChannel {
 			continue
 		}
+		identity := parsed.Channel.String()
+		if parsed.Target != "" {
+			identity += "/" + parsed.Target
+		}
+		if d.Settings.Installations[identity] != name {
+			result.Toolchains = append(result.Toolchains, checkEntry{Name: name})
+			continue
+		}
 
 		infoTuple := tuple
 		target := ""

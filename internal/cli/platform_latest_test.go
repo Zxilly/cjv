@@ -24,6 +24,7 @@ func TestRunCheckUsesLatestVersionAvailableForInstalledTarget(t *testing.T) {
 
 	server := testutil.ManifestOnlyServer(t, testutil.ManifestWithPlatformGap())
 	settings := config.DefaultSettings()
+	settings.Installations = map[string]string{"lts/linux-x64-ohos": "lts-1.0.0-linux-x64-ohos"}
 	settings.ManifestURL = server.URL + "/sdk-versions.json"
 	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 

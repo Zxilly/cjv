@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 
 	"github.com/Zxilly/cjv/internal/i18n"
 	"github.com/Zxilly/cjv/internal/progress"
@@ -24,6 +26,10 @@ type Options struct {
 	// has already handled PATH itself, and proxy auto-install leaves PATH
 	// alone because cjv is evidently reachable.
 	ConfigurePath bool
+	// tracking is the identity being advanced by an update. It is internal
+	// because only install/update resolution may choose ownership semantics.
+	tracking  string
+	selection string
 }
 
 // sink returns the progress adapter to emit to, never nil.
@@ -79,11 +85,24 @@ func Install(ctx context.Context, req InstallRequest, opts Options) error {
 	if err != nil {
 		return err
 	}
+	if err := recordLegacyInstallations(ctx, d, false); err != nil {
+		return err
+	}
+	// A fixed version already on disk needs no remote manifest to remain
+	// installed. This also records an explicit pin when sharing a channel SDK.
+	if name.Version != "" && !req.Force && len(targets) == 0 && len(req.Components) == 0 {
+		if dir, err := toolchain.FindInstalled(name); err == nil {
+			opts.selection = filepath.Base(dir)
+			return installResolved(ctx, d, ResolvedToolchain{Name: opts.selection}, false, name.Target == "", opts)
+		} else if !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
+	}
 	resolved, err := d.Resolve(ctx, name, name.Target)
 	if err != nil {
 		return err
 	}
-	if err := installResolved(ctx, d, resolved, req.Force, name.Target == "", opts); err != nil {
+	if err := installSelected(ctx, d, resolved, name.IsChannelOnly(), req.Force, name.Target == "", opts); err != nil {
 		return err
 	}
 
@@ -107,19 +126,25 @@ func Install(ctx context.Context, req InstallRequest, opts Options) error {
 		if err != nil {
 			return err
 		}
-		if err := installResolved(ctx, d, resolvedTarget, req.Force, false, opts); err != nil {
+		if err := installSelected(ctx, d, resolvedTarget, name.IsChannelOnly(), req.Force, false, opts); err != nil {
 			return err
 		}
 		installed = append(installed, resolvedTarget.Name)
 	}
 
 	if len(req.Components) == 0 {
+		if name.IsChannelOnly() {
+			return updateTrackedTargets(ctx, d, name.Channel, opts)
+		}
 		return nil
 	}
 	for _, tcName := range installed {
 		if err := installComponents(ctx, d, tcName, req.Components, req.Force, opts); err != nil {
 			return err
 		}
+	}
+	if name.IsChannelOnly() {
+		return updateTrackedTargets(ctx, d, name.Channel, opts)
 	}
 	return nil
 }

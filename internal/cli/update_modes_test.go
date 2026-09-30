@@ -27,8 +27,9 @@ func TestUpdateExistingLatestAcrossRenderModes(t *testing.T) {
 			server := testutil.ValidMockServer(t)
 			settings := config.DefaultSettings()
 			settings.ManifestURL = server.URL + "/sdk-versions.json"
-			settings.DefaultToolchain = "lts-1.0.0"
-			settings.Overrides[filepath.Join(home, "project")] = "lts-1.0.0"
+			settings.Installations = map[string]string{"lts": "lts-1.0.0"}
+			settings.DefaultToolchain = "lts"
+			settings.Overrides[filepath.Join(home, "project")] = "lts"
 			settingsPath := filepath.Join(home, ".cjv", "settings.toml")
 			require.NoError(t, config.SaveSettings(&settings, settingsPath))
 			cmd := &cobra.Command{}
@@ -39,7 +40,8 @@ func TestUpdateExistingLatestAcrossRenderModes(t *testing.T) {
 			_, oldErr := os.Stat(filepath.Join(home, "toolchains", "lts-1.0.0"))
 			t.Logf("json=%v err=%v default=%s oldExists=%v", jsonMode, err, loaded.DefaultToolchain, oldErr == nil)
 			require.NoError(t, err, "render mode must not decide whether update succeeds")
-			require.Equal(t, "lts-1.0.5", loaded.DefaultToolchain)
+			require.Equal(t, "lts", loaded.DefaultToolchain)
+			require.Equal(t, "lts-1.0.5", loaded.Installations["lts"])
 			require.True(t, os.IsNotExist(oldErr))
 		})
 	}

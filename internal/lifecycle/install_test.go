@@ -162,7 +162,7 @@ func TestInstall_FirstInstallSetsDefaultAndBootstrapsManagedBinary(t *testing.T)
 
 	reloaded, err := config.LoadSettings(filepath.Join(home, ".cjv", "settings.toml"))
 	require.NoError(t, err)
-	assert.Equal(t, "lts-1.0.5", reloaded.DefaultToolchain, "first install should set the default toolchain")
+	assert.Equal(t, "lts", reloaded.DefaultToolchain, "first install should set the channel identity as default")
 	assert.FileExists(t, managedBinary, "first install should bootstrap the managed cjv binary")
 }
 
@@ -206,7 +206,7 @@ func TestInstall_HostAndTargets(t *testing.T) {
 
 	reloaded, err := config.LoadSettings(filepath.Join(home, ".cjv", "settings.toml"))
 	require.NoError(t, err)
-	assert.Equal(t, "sts-2.0.0", reloaded.DefaultToolchain)
+	assert.Equal(t, "sts", reloaded.DefaultToolchain)
 }
 
 func TestInstall_BareVersionWithTargetsResolvesChannel(t *testing.T) {

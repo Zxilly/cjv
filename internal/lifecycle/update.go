@@ -6,9 +6,10 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"slices"
 
-	"github.com/Zxilly/cjv/internal/cjverr"
 	"github.com/Zxilly/cjv/internal/i18n"
+	"github.com/Zxilly/cjv/internal/progress"
 	"github.com/Zxilly/cjv/internal/toolchain"
 )
 
@@ -48,32 +49,45 @@ type UpdateReport struct {
 }
 
 // UpdateInstalled brings one installed toolchain to its channel head. A
-// channel name ("lts") updates the newest installed host version of that
-// channel; a target variant name ("sts-1.0.0-<tuple>") updates that variant;
-// an explicit version is installed when missing and otherwise left alone.
+// channel name ("lts") updates its tracking identity and cross SDKs, installing
+// a missing channel. Explicit host and target versions are installed when
+// missing and otherwise remain fixed.
 func UpdateInstalled(ctx context.Context, name toolchain.ToolchainName, opts Options) (UpdateOutcome, error) {
 	if name.IsCustom() {
 		return UpdateOutcome{}, errors.New(i18n.T("UpdateCustomToolchain", i18n.MsgData{"Name": name.String()}))
 	}
 	switch {
 	case name.Target != "":
-		currentName := name.String()
-		if _, err := toolchain.FindInstalled(name); err != nil {
-			if errors.Is(err, os.ErrNotExist) {
-				return UpdateOutcome{}, &cjverr.ToolchainNotInstalledError{Name: currentName}
-			}
+		// Versioned target names are fixed versions just like host names.
+		if err := Install(ctx, InstallRequest{Toolchain: name.String()}, opts); err != nil {
 			return UpdateOutcome{}, err
 		}
-		return updateChannelToolchain(ctx, name.Channel, currentName, name.Target, opts)
+		return UpdateOutcome{Name: name.String(), Status: UpdatePinned}, nil
 	case name.IsChannelOnly():
-		installed, err := installedForChannel(name.Channel)
+		d, err := OpenDistribution(opts)
 		if err != nil {
 			return UpdateOutcome{}, err
 		}
-		if installed == "" {
-			return UpdateOutcome{}, &cjverr.ToolchainNotInstalledError{Name: name.String()}
+		if err := recordLegacyInstallations(ctx, d, false); err != nil {
+			return UpdateOutcome{}, err
 		}
-		return updateChannelToolchain(ctx, name.Channel, installed, "", opts)
+		resolved, err := d.Resolve(ctx, name, "")
+		if err != nil {
+			return UpdateOutcome{}, err
+		}
+		old := d.Settings.Installations[name.String()]
+		if err := installSelected(ctx, d, resolved, true, false, true, opts); err != nil {
+			return UpdateOutcome{}, err
+		}
+		outcome := UpdateOutcome{Name: old, Replacement: resolved.Name, Status: UpdateApplied}
+		if old == "" {
+			outcome.Name = name.String()
+		}
+		if old == resolved.Name {
+			outcome.Status = UpdateUpToDate
+			opts.emit(progress.Event{Kind: progress.AlreadyUpToDate, Toolchain: old})
+		}
+		return outcome, updateTrackedTargets(ctx, d, name.Channel, opts)
 	default:
 		// Specific version: install it (already installed is a no-op).
 		if err := Install(ctx, InstallRequest{Toolchain: name.String()}, opts); err != nil {
@@ -83,8 +97,8 @@ func UpdateInstalled(ctx context.Context, name toolchain.ToolchainName, opts Opt
 	}
 }
 
-// UpdateAll updates every installed channel toolchain and its target variants,
-// skipping custom and linked ones. A failure does not stop the loop: the
+// UpdateAll updates recorded tracking identities, retaining explicit and legacy
+// versions and skipping custom/linked SDKs. A failure does not stop the loop: the
 // joined error is returned with the report, and the downloads staging area is
 // purged either way.
 func UpdateAll(ctx context.Context, opts Options) (UpdateReport, error) {
@@ -108,9 +122,37 @@ func UpdateAll(ctx context.Context, opts Options) (UpdateReport, error) {
 	if err != nil {
 		return UpdateReport{}, err
 	}
+	if err := recordLegacyInstallations(ctx, d, true); err != nil {
+		return UpdateReport{}, err
+	}
 	var report UpdateReport
 	var errs []error
+	var identities []string
+	tracked := make(map[string]bool)
+	for identity, current := range d.Settings.Installations {
+		if isTrackingIdentity(identity, current) {
+			identities = append(identities, identity)
+			tracked[current] = true
+		}
+	}
+	slices.Sort(identities)
+	for _, identity := range identities {
+		current := d.Settings.Installations[identity]
+		parsed, err := toolchain.ParseToolchainName(current)
+		if err != nil {
+			errs = append(errs, err)
+			continue
+		}
+		outcome, err := upgradeChannelToolchain(ctx, d, parsed.Channel, current, parsed.Target, opts)
+		if err != nil {
+			errs = append(errs, err)
+		}
+		report.Outcomes = append(report.Outcomes, outcome)
+	}
 	for _, name := range installed {
+		if tracked[name] {
+			continue
+		}
 		parsed, err := toolchain.ParseToolchainName(name)
 		if err != nil {
 			slog.Warn("skipping toolchain", "name", name, "error", err)
@@ -120,27 +162,9 @@ func UpdateAll(ctx context.Context, opts Options) (UpdateReport, error) {
 			report.Outcomes = append(report.Outcomes, UpdateOutcome{Name: name, Status: UpdateSkipped})
 			continue
 		}
-		// Each upgrade reloads the references saved by the previous one
-		// through the Distribution's SettingsFile.
-		outcome, err := upgradeChannelToolchain(ctx, d, parsed.Channel, name, parsed.Target, opts)
-		if err != nil {
-			slog.Warn("failed to update toolchain", "name", name, "error", err)
-			errs = append(errs, err)
-		}
-		report.Outcomes = append(report.Outcomes, outcome)
+		report.Outcomes = append(report.Outcomes, UpdateOutcome{Name: name, Status: UpdatePinned})
 	}
 	return report, errors.Join(errs...)
-}
-
-// updateChannelToolchain opens the distribution for a single-toolchain
-// update, then upgrades currentName to the channel head for tuple (empty
-// means the host).
-func updateChannelToolchain(ctx context.Context, channel toolchain.Channel, currentName, tuple string, opts Options) (UpdateOutcome, error) {
-	d, err := OpenDistribution(opts)
-	if err != nil {
-		return UpdateOutcome{}, err
-	}
-	return upgradeChannelToolchain(ctx, d, channel, currentName, tuple, opts)
 }
 
 func upgradeChannelToolchain(ctx context.Context, d *Distribution, channel toolchain.Channel, currentName, tuple string, opts Options) (UpdateOutcome, error) {
@@ -149,6 +173,7 @@ func upgradeChannelToolchain(ctx context.Context, d *Distribution, channel toolc
 		return UpdateOutcome{Name: currentName, Status: UpdateFailed, Err: err}, err
 	}
 	outcome := UpdateOutcome{Name: currentName, Replacement: resolved.Name, Status: UpdateUpToDate}
+	opts.tracking = trackingIdentity(toolchain.ToolchainName{Channel: channel, Target: tuple})
 	updated, err := upgradeToolchain(ctx, currentName, resolved, d, opts)
 	if err != nil {
 		outcome.Status, outcome.Err = UpdateFailed, err

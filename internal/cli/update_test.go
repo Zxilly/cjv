@@ -120,6 +120,7 @@ func TestRunUpdateRendersJSONResult(t *testing.T) {
 	require.NoError(t, os.MkdirAll(filepath.Join(home, "toolchains", "lts-1.0.0"), 0o755))
 	server := testutil.ValidMockServer(t)
 	settings := config.DefaultSettings()
+	settings.Installations = map[string]string{"lts": "lts-1.0.0"}
 	settings.ManifestURL = server.URL + "/sdk-versions.json"
 	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 

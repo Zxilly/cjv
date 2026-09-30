@@ -542,7 +542,7 @@ other = "Show the path of an SDK tool for the active toolchain.\nIf no command i
 other = "Update installed toolchains"
 
 [UpdateCmdLong]
-other = "Update a specific toolchain or all installed toolchains to their latest versions."
+other = "Update a channel or all installed tracking channels. Explicit versions remain fixed; a missing named toolchain is installed."
 
 [ShowCmdShort]
 other = "Show active and installed toolchains"

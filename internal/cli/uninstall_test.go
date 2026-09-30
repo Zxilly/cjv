@@ -36,7 +36,7 @@ func TestRunUninstall_RemovesToolchain(t *testing.T) {
 	require.NotEmpty(t, installed)
 
 	// Uninstall
-	err := app.runUninstall(nil, []string{installed[0]})
+	err := app.runUninstall(nil, []string{"lts"})
 	require.NoError(t, err)
 
 	// Verify removed

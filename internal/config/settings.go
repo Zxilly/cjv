@@ -42,6 +42,9 @@ type Settings struct {
 	// GitCodeAPIKey preserves settings v1 files created by earlier cjv releases.
 	GitCodeAPIKey string            `toml:"gitcode_api_key,omitempty"`
 	Overrides     map[string]string `toml:"overrides,omitempty"`
+	// Installations maps user identities to concrete SDK names. Channel keys
+	// track releases; concrete keys retain explicitly installed versions.
+	Installations map[string]string `toml:"installations,omitempty"`
 
 	// snapshot retains the user-defined fields and the effective values read
 	// by SettingsFile. It is immutable and shared by copies for safe rollback.

@@ -23,8 +23,9 @@ type Distribution struct {
 	Source    *dist.Source
 	HostTuple string
 
-	progress progress.Sink
-	noteOnce sync.Once
+	progress   progress.Sink
+	noteOnce   sync.Once
+	legacyPins map[string]string
 }
 
 // OpenDistribution loads the user settings and resolves the distribution

@@ -19,6 +19,7 @@ type SettingsUpdate struct {
 	AutoInstall      *bool
 	DefaultHost      *string
 	Overrides        map[string]string
+	Installations    map[string]string
 }
 
 type settingsSnapshot struct {
@@ -41,6 +42,9 @@ func (u SettingsUpdate) apply(values map[string]any) {
 			values["overrides"] = maps.Clone(u.Overrides)
 		}
 	}
+	if u.Installations != nil {
+		values["installations"] = maps.Clone(u.Installations)
+	}
 }
 
 func setSettingValue[T string | bool](values map[string]any, key string, value *T) {
@@ -60,6 +64,7 @@ func settingsValues(s *Settings) map[string]any {
 		"auto_install":      s.AutoInstall,
 		"default_host":      s.DefaultHost,
 		"overrides":         maps.Clone(s.Overrides),
+		"installations":     maps.Clone(s.Installations),
 	}
 }
 

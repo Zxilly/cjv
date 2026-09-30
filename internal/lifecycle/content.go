@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 
 	"github.com/Zxilly/cjv/internal/cjverr"
 	"github.com/Zxilly/cjv/internal/component"
@@ -42,19 +43,100 @@ func RemoveToolchain(name string) error {
 	if err := PrepareToolchainRemoval(name); err != nil {
 		return err
 	}
-	roots, err := component.RootsFor(name)
+	parsed, err := toolchain.ParseToolchainName(name)
 	if err != nil {
 		return err
 	}
-	sf, settings, err := config.LoadDefaultSettings()
+	dir, err := removalDir(parsed)
 	if err != nil {
 		return err
+	}
+	concrete := filepath.Base(dir)
+	if parsed.Version != "" {
+		name = concrete
+	}
+	if parsed.IsChannelOnly() {
+		_, settings, err := config.LoadDefaultSettings()
+		if err != nil {
+			return err
+		}
+		var variants []string
+		for identity := range settings.Installations {
+			if strings.HasPrefix(identity, name+"/") {
+				variants = append(variants, identity)
+			}
+		}
+		slices.Sort(variants)
+		for _, identity := range variants {
+			if err := removeInstallation(identity, settings.Installations[identity]); err != nil {
+				return err
+			}
+		}
+	}
+	return removeInstallation(name, concrete)
+}
+
+func removeInstallation(name, concrete string) error {
+	lock, err := toolchain.LockHome(context.Background())
+	if err != nil {
+		return err
+	}
+	defer lock.Close() //nolint:errcheck
+	if err := lock.Recover(); err != nil {
+		return err
+	}
+	roots, err := component.RootsFor(concrete)
+	if err != nil {
+		return err
+	}
+	sf, _, err := config.LoadDefaultSettings()
+	if err != nil {
+		return err
+	}
+	sf.Invalidate()
+	settings, err := sf.Load()
+	if err != nil {
+		return err
+	}
+	if current := settings.Installations[name]; current != "" && current != concrete {
+		return fmt.Errorf("toolchain %s changed during removal; retry", name)
 	}
 	update, err := referencesAfterRemoval(settings, name)
 	if err != nil {
 		return err
 	}
-	return retireToolchain(roots, sf, settings, update)
+	update.Installations = maps.Clone(settings.Installations)
+	if update.Installations == nil {
+		update.Installations = make(map[string]string)
+	}
+	delete(update.Installations, name)
+	// Uninstalling one identity must not destroy a shared fixed/channel SDK.
+	shared := false
+	for identity, installed := range update.Installations {
+		if installed == concrete && identity != name {
+			shared = true
+		}
+	}
+	if shared {
+		if settings.Installations[name] == "" {
+			return &cjverr.ToolchainNotInstalledError{Name: name}
+		}
+		_, err = sf.Update(update)
+		return err
+	}
+	for identity, installed := range update.Installations {
+		if installed == concrete {
+			delete(update.Installations, identity)
+		}
+	}
+	if update.DefaultToolchain != nil && *update.DefaultToolchain == concrete {
+		next, err := nextDefaultAfterRemoval(concrete)
+		if err != nil {
+			return err
+		}
+		update.DefaultToolchain = &next
+	}
+	return retireLocked(roots, sf, settings, update)
 }
 
 // PrepareToolchainRemoval recovers interrupted changes before checking whether
@@ -65,11 +147,19 @@ func PrepareToolchainRemoval(name string) error {
 	if _, err := toolchain.ParseToolchainName(name); err != nil {
 		return err
 	}
-	roots, err := component.RootsFor(name)
+	if err := toolchain.RecoverHome(); err != nil {
+		return err
+	}
+	parsed, err := toolchain.ParseToolchainName(name)
 	if err != nil {
 		return err
 	}
-	if err := toolchain.RecoverHome(); err != nil {
+	dir, err := removalDir(parsed)
+	if err != nil {
+		return err
+	}
+	roots, err := component.RootsFor(filepath.Base(dir))
+	if err != nil {
 		return err
 	}
 	if _, err := os.Lstat(roots.TcDir); err != nil {
@@ -81,20 +171,34 @@ func PrepareToolchainRemoval(name string) error {
 	return nil
 }
 
+func removalDir(name toolchain.ToolchainName) (string, error) {
+	// Lstat below must still permit unlinking a broken custom SDK link.
+	if name.IsCustom() || name.Channel != toolchain.UnknownChannel && name.Version != "" {
+		return config.ToolchainDirFor(name.String())
+	}
+	return toolchain.FindInstalled(name)
+}
+
 // retireToolchain removes all managed content in one journal. Failed staging or
 // settings writes restore the old installation; failed recovery retains its
 // journal so normal startup can retry without losing its ownership records.
 func retireToolchain(roots component.Roots, sf *config.SettingsFile, before *config.Settings, update config.SettingsUpdate) (retErr error) {
-	home, err := config.Home()
-	if err != nil {
-		return err
-	}
 	lock, err := toolchain.LockHome(context.Background())
 	if err != nil {
 		return err
 	}
 	defer lock.Close() //nolint:errcheck // release after commit or rollback
 	if err := lock.Recover(); err != nil {
+		return err
+	}
+	return retireLocked(roots, sf, before, update)
+}
+
+// retireLocked requires the home lock to stay held through settings publication
+// and transaction cleanup.
+func retireLocked(roots component.Roots, sf *config.SettingsFile, before *config.Settings, update config.SettingsUpdate) (retErr error) {
+	home, err := config.Home()
+	if err != nil {
 		return err
 	}
 	tx, err := fstx.NewToolchainTransaction(home, filepath.Base(roots.TcDir))

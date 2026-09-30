@@ -22,6 +22,7 @@ func NewSettingsFile(path string) *SettingsFile {
 // copySettings returns a deep copy of s so callers can mutate freely.
 func copySettings(s *Settings) *Settings {
 	cp := *s
+	cp.Installations = maps.Clone(s.Installations)
 	if s.Overrides != nil {
 		cp.Overrides = make(map[string]string, len(s.Overrides))
 		maps.Copy(cp.Overrides, s.Overrides)
