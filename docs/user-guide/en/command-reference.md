@@ -88,7 +88,7 @@ cjv uninstall lts-1.0.0 -y
 
 ### `cjv update`
 
-Updates a specified toolchain or all installed toolchains to the latest version of their respective channels.
+Updates a specified channel or all installed tracking channels. Explicitly installed versions remain fixed.
 
 ```text
 cjv update [toolchain] [--no-self-update]
@@ -96,7 +96,7 @@ cjv update [toolchain] [--no-self-update]
 
 Arguments:
 
-- `[toolchain]` (optional): update only the specified toolchain. When omitted, all installed toolchains are updated.
+- `[toolchain]` (optional): update the specified channel and its cross SDKs, or install and retain an explicit version. When omitted, all installed tracking channels are updated.
 
 Flags:
 
@@ -104,10 +104,10 @@ Flags:
 |-----|-----------|
 |`--no-self-update`|Skip the cjv self-update check|
 
-When given a channel name (such as `lts`), updates the currently installed version of that channel to the latest version. When given a specific version, this is equivalent to installing that version, and is skipped if already installed. Custom (linked) toolchains cannot be updated and are skipped or reported as an error. After updating to a new version, a default toolchain or directory override that pointed at the old version is repointed at the new version, and the old directory is deleted. After the update finishes, whether cjv updates itself depends on the `auto-self-update` setting, which can be disabled with `--no-self-update`.
+A channel name (such as `lts`) updates that tracking channel, installing it if missing. Explicit host and target versions are installed when missing and otherwise remain fixed. Custom or linked toolchains are skipped or rejected. Defaults, directory overrides and project files selecting a channel follow its updates; explicit version selectors remain fixed. Old SDK and component content is removed only when no fixed version or other installation identity needs it. Legacy installations are retained as fixed versions because their original intent is unknown; `install <channel>` or `update <channel>` establishes tracking. Self-update behavior follows `auto-self-update` and can be disabled with `--no-self-update`.
 
 ```bash
-# Update all toolchains
+# Update all tracking channels
 cjv update
 
 # Update only LTS

@@ -72,6 +72,14 @@ channel = "lts"
 
 ## Checking for updates
 
+Installing a channel records a tracking identity. Both `cjv install sts` and `cjv update sts` advance it to the latest STS release; `update sts` also installs a missing channel. Plain `cjv update` updates installed tracking channels and their cross-compilation SDKs. Selected components are preserved, and obsolete SDK, stdx and documentation content is removed after a successful update.
+
+An explicit installation such as `cjv install sts-1.2.0` retains that fixed version. Plain `update` does not replace it. A fixed version and a channel can share one SDK: updating the channel preserves the fixed installation. `cjv uninstall sts` removes the channel identity, while `cjv uninstall sts-1.2.0` removes the fixed identity. Shared content is deleted only when the last installation identity is removed.
+
+The first channel installation records a channel name as the default. Defaults, directory overrides and project files selecting `sts` follow its installed channel release; explicit versions remain fixed. Updates do not rewrite project files.
+
+Older cjv installations did not record intent. Existing SDKs are conservatively retained as fixed versions. Run `cjv install sts` or `cjv update sts` to establish channel tracking, and explicitly uninstall old versions when no longer needed. `cjv check` reports available updates for tracking channels only.
+
 `cjv check` queries the manifest and compares installed channel toolchains with each channel's latest version:
 
 ```bash

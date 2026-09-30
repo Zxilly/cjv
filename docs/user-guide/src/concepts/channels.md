@@ -72,7 +72,23 @@ channel = "lts"
 
 ## 检查更新
 
-`cjv check` 查询 manifest，并比较已安装通道与各通道的最新版本：
+安装通道名会记录跟随该通道的选择。以下命令都会将 STS 通道更新到当前最新版本；首次使用 `update sts` 时也会安装缺失的通道：
+
+```bash
+cjv install sts
+cjv update sts
+cjv update
+```
+
+`install sts` 再次执行时也会更新已有的 STS 通道。无参数 `update` 只更新已跟踪的通道及其交叉编译 SDK。升级会保留已选组件，成功后移除不再需要的旧 SDK、stdx 和文档。
+
+明确安装版本（例如 `cjv install sts-1.2.0`）会保留该固定版本，`update` 不会替换它。固定版本与通道可以共用同一个 SDK；升级通道不会删除仍被固定版本保留的 SDK。`cjv uninstall sts` 取消通道安装，`cjv uninstall sts-1.2.0` 取消固定版本安装，只有最后一个安装身份被移除时才删除共用内容。
+
+首次安装通道时，默认工具链保存为 `sts` 等通道名。`default sts`、目录 override 或项目文件中的 `channel = "sts"` 会使用该通道当前的版本；明确的版本选择保持固定，项目文件不会被升级改写。
+
+旧版 cjv 没有记录安装意图。现有安装会按固定版本保留，避免删除仍被项目使用的 SDK。执行 `cjv install sts` 或 `cjv update sts` 可以建立通道跟踪；旧版本需要时可显式卸载。
+
+`cjv check` 查询 manifest，并比较已跟踪通道与各通道的最新版本，固定版本不会被报告为待升级：
 
 ```bash
 cjv check
