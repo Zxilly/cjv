@@ -13,6 +13,7 @@ import (
 
 	"github.com/Zxilly/cjv/internal/fsops"
 	"github.com/Zxilly/cjv/internal/testutil"
+	"github.com/Zxilly/cjv/internal/toolchain"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -143,12 +144,15 @@ func TestIntegrationInstallFlow(t *testing.T) {
 	// 1. Install lts (resolves to lts-1.0.5 from mock manifest)
 	stdout, stderr, err := runCJV(t, binary, cjvHome, "install", "lts")
 	require.NoError(t, err, "install failed: stdout=%s stderr=%s", stdout, stderr)
-	assert.Contains(t, stdout, "lts-1.0.5")
+	assert.Contains(t, stdout, "Toolchain 'lts' installed successfully")
 
 	// 2. Verify toolchain directory was created
-	tcDir := filepath.Join(cjvHome, "toolchains", "lts-1.0.5")
+	tcDir := filepath.Join(cjvHome, "toolchains", "lts")
 	_, err = os.Stat(tcDir)
 	require.NoError(t, err, "toolchain directory should exist after install")
+	installed, err := toolchain.ReadInstallation(tcDir)
+	require.NoError(t, err)
+	assert.Equal(t, "lts-1.0.5", installed.Release)
 
 	// 3. Verify bin/cjc stub exists in the installed toolchain
 	cjcPath := filepath.Join(tcDir, "bin", "cjc")
@@ -158,15 +162,15 @@ func TestIntegrationInstallFlow(t *testing.T) {
 	_, err = os.Stat(cjcPath)
 	require.NoError(t, err, "cjc stub should exist in toolchain bin/")
 
-	// 4. Show active — should report lts-1.0.5 as default
+	// 4. Show active reports the tracking installation identity.
 	stdout, _, err = runCJV(t, binary, cjvHome, "show", "active")
 	require.NoError(t, err)
-	assert.Contains(t, stdout, "lts-1.0.5")
+	assert.Contains(t, stdout, "Active toolchain: lts ")
 
-	// 5. Toolchain list should include lts-1.0.5
+	// 5. Toolchain list should include the channel identity.
 	stdout, _, err = runCJV(t, binary, cjvHome, "toolchain", "list")
 	require.NoError(t, err)
-	assert.Contains(t, stdout, "lts-1.0.5")
+	assert.Contains(t, stdout, "  lts\n")
 
 	// 6. Which cjc — should return a path ending with bin/cjc
 	stdout, stderr, err = runCJV(t, binary, cjvHome, "which", "cjc")
@@ -175,8 +179,18 @@ func TestIntegrationInstallFlow(t *testing.T) {
 	assert.Contains(t, whichOutput, "bin")
 	assert.Contains(t, whichOutput, "cjc")
 
-	// 7. Uninstall
+	// 7. Install and remove a fixed copy of the same release independently.
+	stdout, stderr, err = runCJV(t, binary, cjvHome, "install", "lts-1.0.5")
+	require.NoError(t, err, "fixed install failed: stdout=%s stderr=%s", stdout, stderr)
+	fixedDir := filepath.Join(cjvHome, "toolchains", "lts-1.0.5")
+	assert.DirExists(t, fixedDir)
 	stdout, stderr, err = runCJV(t, binary, cjvHome, "uninstall", "lts-1.0.5")
+	require.NoError(t, err, "fixed uninstall failed: stdout=%s stderr=%s", stdout, stderr)
+	assert.NoDirExists(t, fixedDir)
+	assert.FileExists(t, cjcPath)
+
+	// 8. Uninstall the tracking installation.
+	stdout, stderr, err = runCJV(t, binary, cjvHome, "uninstall", "lts")
 	require.NoError(t, err, "uninstall failed: stdout=%s stderr=%s", stdout, stderr)
 
 	// 8. Verify toolchain directory is gone
@@ -210,8 +224,10 @@ func TestIntegrationDefaultManifestInstallsNightly(t *testing.T) {
 
 	stdout, stderr, err = runCJVEnv(t, binary, cjvHome, extraEnv, "install", "nightly")
 	require.NoError(t, err, "nightly install failed: stdout=%s stderr=%s", stdout, stderr)
-	assert.Contains(t, stdout, "nightly-1.2.0-alpha.20260822010101")
-	assert.DirExists(t, filepath.Join(cjvHome, "toolchains", "nightly-1.2.0-alpha.20260822010101"))
+	assert.Contains(t, stdout, "Toolchain 'nightly' installed successfully")
+	installed, err := toolchain.ReadInstallation(filepath.Join(cjvHome, "toolchains", "nightly"))
+	require.NoError(t, err)
+	assert.Equal(t, "nightly-1.2.0-alpha.20260822010101", installed.Release)
 }
 
 func TestIntegrationInstallBootstrapsManagedBinaryAndSelfUpdate(t *testing.T) {
@@ -244,10 +260,10 @@ func TestIntegrationDefaultCommand(t *testing.T) {
 	_, _, err := runCJV(t, binary, cjvHome, "install", "lts")
 	require.NoError(t, err)
 
-	// Show active should report lts-1.0.5
+	// Show active should report the channel identity.
 	stdout, _, err := runCJV(t, binary, cjvHome, "show", "active")
 	require.NoError(t, err)
-	assert.Contains(t, stdout, "lts-1.0.5")
+	assert.Contains(t, stdout, "Active toolchain: lts ")
 
 	// Set default to a different name (even if not installed, the command just saves it)
 	stdout, _, err = runCJV(t, binary, cjvHome, "default", "nightly-20250101")
@@ -271,8 +287,15 @@ func TestIntegrationInstallAlreadyInstalled(t *testing.T) {
 	_, _, err := runCJV(t, binary, cjvHome, "install", "lts")
 	require.NoError(t, err)
 
-	// Install again — should report already installed
+	// Install again checks the channel head and reports it is up to date.
 	stdout, _, err := runCJV(t, binary, cjvHome, "install", "lts")
+	require.NoError(t, err)
+	assert.Contains(t, stdout, "Already up to date (lts)")
+
+	// An explicit version still reports an already installed fixed SDK.
+	_, _, err = runCJV(t, binary, cjvHome, "install", "lts-1.0.5")
+	require.NoError(t, err)
+	stdout, _, err = runCJV(t, binary, cjvHome, "install", "lts-1.0.5")
 	require.NoError(t, err)
 	assert.Contains(t, stdout, "already installed")
 }
@@ -286,11 +309,14 @@ func TestIntegrationShowInstalledMultiple(t *testing.T) {
 	// Install lts
 	_, _, err := runCJV(t, binary, cjvHome, "install", "lts")
 	require.NoError(t, err)
+	_, _, err = runCJV(t, binary, cjvHome, "install", "lts-1.0.5")
+	require.NoError(t, err)
 
 	// Show installed
 	stdout, _, err := runCJV(t, binary, cjvHome, "show", "installed")
 	require.NoError(t, err)
 	assert.Contains(t, stdout, "lts-1.0.5")
+	assert.Contains(t, stdout, "  lts\n")
 }
 
 // TestIntegrationWhichUnknownTool tests that 'which' for an unknown tool returns an error.
@@ -320,7 +346,7 @@ func TestIntegrationUninstallClearsDefault(t *testing.T) {
 	require.NoError(t, err)
 
 	// Uninstall
-	_, _, err = runCJV(t, binary, cjvHome, "uninstall", "lts-1.0.5")
+	_, _, err = runCJV(t, binary, cjvHome, "uninstall", "lts")
 	require.NoError(t, err)
 
 	// Show active should fail (no toolchain configured)
