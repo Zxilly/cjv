@@ -1,11 +1,20 @@
 package lifecycle
 
-import "testing"
+import (
+	"context"
+	"github.com/Zxilly/cjv/internal/toolchain"
+	"testing"
+)
 
-// UpgradeToolchain exposes the upgrade step with a caller-chosen current
-// name, so tests can pin which installed version is replaced independently
-// of the channel lookup UpdateInstalled performs.
-var UpgradeToolchain = upgradeToolchain
+// UpgradeToolchain exposes the production group installer with a caller-chosen
+// identity, so tests can exercise replacement without another channel lookup.
+func UpgradeToolchain(ctx context.Context, identity string, rt ResolvedToolchain, d *Distribution, opts Options) (bool, error) {
+	name, err := toolchain.ParseToolchainName(identity)
+	if err != nil {
+		return false, err
+	}
+	return installGroup(ctx, d, name, rt, InstallRequest{Toolchain: identity}, opts)
+}
 
 // SetAfterFinalizeHook installs hook to run after the managed binary and proxy
 // links have been established for a newly placed toolchain, before the

@@ -7,53 +7,12 @@ import (
 	"path/filepath"
 
 	"github.com/BurntSushi/toml"
-	"github.com/Zxilly/cjv/internal/component"
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/fsops"
 	"github.com/Zxilly/cjv/internal/fstx"
 	"github.com/Zxilly/cjv/internal/progress"
 	"github.com/Zxilly/cjv/internal/toolchain"
 )
-
-// publishOfficial holds the home lock. The three roots share one journal and
-// one commit marker, including the release record and component manifests.
-func publishOfficial(prepared component.Roots, identity string, reinstall bool, publish func() error, opts Options) (retErr error) {
-	home, err := config.Home()
-	if err != nil {
-		return err
-	}
-	dest, err := component.RootsFor(identity)
-	if err != nil {
-		return err
-	}
-	if reinstall && opts.prepare == nil {
-		// A forced fixed-version reinstall preserves its external components.
-		if err := preserveComponentMetadata(prepared.TcDir, dest.TcDir); err != nil {
-			return err
-		}
-		for _, pair := range [][2]string{{dest.DocsDir, prepared.DocsDir}, {dest.StdxDir, prepared.StdxDir}} {
-			if _, err := os.Lstat(pair[0]); errors.Is(err, os.ErrNotExist) {
-				continue
-			} else if err != nil {
-				return err
-			}
-			if err := fsops.CopyTree(pair[0], pair[1]); err != nil {
-				return err
-			}
-		}
-	}
-	_, settings, err := config.LoadDefaultSettings()
-	if err != nil {
-		return err
-	}
-	if settings.LinkMode == "hardlink" {
-		if err := deduplicateSDK(prepared.TcDir, identity); err != nil {
-			return err
-		}
-	}
-	pairs := [][2]string{{prepared.TcDir, dest.TcDir}, {prepared.DocsDir, dest.DocsDir}, {prepared.StdxDir, dest.StdxDir}}
-	return publishPrepared(home, []string{identity}, pairs, publish, opts)
-}
 
 // publishPrepared runs with the home lock, after all members have been staged
 // and revalidated. Every root shares the same commit and recovery decision.

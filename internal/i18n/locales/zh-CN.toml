@@ -423,7 +423,7 @@ other = "安装仓颉 SDK 工具链"
 other = "需要附加安装的 component（可重复或逗号分隔）"
 
 [InstallFlagForce]
-other = "强制重新下载并重装，即使已安装"
+other = "即使可选组件或目标不可用也继续更新"
 
 [InstallFlagTarget]
 other = "需要附加安装的交叉编译目标后缀（可重复或逗号分隔）"

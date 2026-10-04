@@ -4,12 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net/url"
 	"os"
 	"path/filepath"
 
 	"github.com/Zxilly/cjv/internal/cjverr"
-	"github.com/Zxilly/cjv/internal/component"
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/dist"
 	"github.com/Zxilly/cjv/internal/fsops"
@@ -31,8 +29,8 @@ type ResolvedToolchain struct {
 
 // acquisition is how one SDK archive reaches the downloads area and how it
 // becomes the staged SDK tree. It is the only part of placing a toolchain
-// that differs between a manifest release, a CI bundle fetched from a URL
-// and a local archive; everything around it is placeToolchain.
+// that differs between a CI bundle fetched from a URL and a local archive;
+// everything around it is placeToolchain.
 type acquisition struct {
 	// fetch returns the archive path and whether cjv owns that file, in which
 	// case it is removed once the toolchain is committed. A failed placement
@@ -40,65 +38,6 @@ type acquisition struct {
 	fetch func(ctx context.Context, downloadsDir string) (archivePath string, owned bool, err error)
 	// extract materializes the SDK tree at stagingDir from archivePath.
 	extract func(ctx context.Context, archivePath, stagingDir string) error
-	prepare func(context.Context, component.Roots) error
-}
-
-// installResolved places one manifest release. setDefault allows the first
-// host toolchain to become the default; target variants pass false. An
-// already installed release without force is reported and kept.
-func installResolved(ctx context.Context, d *Distribution, rt ResolvedToolchain, force, setDefault bool, opts Options) error {
-	identity := rt.Name
-	if opts.selection != "" {
-		identity = opts.selection
-	}
-	acq := acquisition{
-		fetch: func(ctx context.Context, downloadsDir string) (string, bool, error) {
-			if u, err := url.Parse(rt.URL); err != nil || u.Path == "" {
-				return "", false, fmt.Errorf("invalid toolchain download URL: %s", rt.URL)
-			}
-			path, err := dist.DownloadCachedWithName(ctx, rt.URL, rt.SHA256, downloadsDir, rt.ArchiveName, opts.sink())
-			return path, true, err
-		},
-		extract: dist.InstallSDK,
-		prepare: func(ctx context.Context, roots component.Roots) error {
-			if err := toolchain.WriteInstallation(roots.TcDir, toolchain.Installation{Release: rt.Name, Tuple: rt.Tuple, SHA256: rt.SHA256}); err != nil {
-				return err
-			}
-			if opts.prepare != nil {
-				return opts.prepare(ctx, roots)
-			}
-			return nil
-		},
-	}
-	var publish func() error
-	if setDefault {
-		publish = func() error { return publishFirstDefault(d, identity, opts) }
-	}
-	err := placeToolchain(ctx, identity, force, rt.Tuple, acq, publish, opts)
-	var already *cjverr.ToolchainAlreadyInstalledError
-	if errors.As(err, &already) {
-		opts.emit(progress.Event{Kind: progress.ToolchainAlreadyInstalled, Toolchain: identity})
-		if publish != nil {
-			lock, err := toolchain.LockHome(ctx)
-			if err != nil {
-				return err
-			}
-			defer lock.Close() //nolint:errcheck
-			if err := lock.Recover(); err != nil {
-				return err
-			}
-			path, err := config.ToolchainDirFor(identity)
-			if err != nil {
-				return err
-			}
-			if _, err := os.Stat(path); err != nil {
-				return err
-			}
-			return publish()
-		}
-		return nil
-	}
-	return err
 }
 
 // placeToolchain prepares a private SDK tree under downloads/, then publishes
@@ -163,12 +102,6 @@ func placeToolchain(ctx context.Context, name string, force bool, tuple string, 
 	if err := validateInstallation(preparedDir, tuple); err != nil {
 		return err
 	}
-	preparedRoots := component.Roots{TcDir: preparedDir, DocsDir: filepath.Join(preparedRoot, "docs"), StdxDir: filepath.Join(preparedRoot, "stdx")}
-	if acq.prepare != nil {
-		if err := acq.prepare(ctx, preparedRoots); err != nil {
-			return err
-		}
-	}
 
 	lock, isReinstall, err := lockPlacement(ctx, destDir, force)
 	if err != nil {
@@ -178,19 +111,7 @@ func placeToolchain(ctx context.Context, name string, force bool, tuple string, 
 	if err := validateDependencies(opts); err != nil {
 		return err
 	}
-	if opts.expectedSet {
-		current, err := toolchain.ReadInstallation(destDir)
-		if opts.expected == nil {
-			if _, err := os.Lstat(destDir); !errors.Is(err, os.ErrNotExist) {
-				return fmt.Errorf("toolchain %s changed during installation; retry", name)
-			}
-		} else if state, stateErr := installationComponentState(destDir); err != nil || current != *opts.expected || stateErr != nil || state != opts.expectedComponents {
-			return fmt.Errorf("toolchain %s changed during installation; retry", name)
-		}
-	}
-	if acq.prepare != nil {
-		return publishOfficial(preparedRoots, name, isReinstall, publish, opts)
-	}
+
 	stagingDir := config.StagingDir(destDir)
 	defer func() {
 		var recoveryErr *fstx.RecoveryError

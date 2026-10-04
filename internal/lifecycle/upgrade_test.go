@@ -157,7 +157,7 @@ func TestRemoveFailureRestoresComponentRootsAndReferences(t *testing.T) {
 	assert.Equal(t, before, after)
 }
 
-func TestForceReinstallKeepsExternalComponentsManaged(t *testing.T) {
+func TestForceInstallKeepsExternalComponentsManaged(t *testing.T) {
 	f := newUpgradeFixture(t, false, false)
 	source := linkUpgradeStdx(t, f.oldRoots, "my libraries")
 	require.NoError(t, lifecycle.Install(t.Context(), lifecycle.InstallRequest{Toolchain: f.oldName, Force: true}, lifecycle.Options{}))

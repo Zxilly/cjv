@@ -423,7 +423,7 @@ other = "Install a Cangjie SDK toolchain"
 other = "Component to install (repeatable, comma-separated)"
 
 [InstallFlagForce]
-other = "Force re-download and re-install even if already installed"
+other = "Update even when optional components or targets are unavailable"
 
 [InstallFlagTarget]
 other = "Cross-compilation target suffix to install (repeatable, comma-separated)"

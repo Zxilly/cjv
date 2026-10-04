@@ -15,6 +15,7 @@ import (
 	"github.com/Zxilly/cjv/internal/fstx"
 	"github.com/Zxilly/cjv/internal/lifecycle"
 	"github.com/Zxilly/cjv/internal/sdktools"
+	sdktarget "github.com/Zxilly/cjv/internal/target"
 	"github.com/Zxilly/cjv/internal/testutil"
 	"github.com/Zxilly/cjv/internal/toolchain"
 	"github.com/stretchr/testify/assert"
@@ -30,7 +31,7 @@ func installVia(t *testing.T, source, serverURL string, force bool, opts lifecyc
 	url := serverURL + "/download/cangjie-sdk-1.0.5.zip"
 	switch source {
 	case "manifest":
-		return lifecycle.Install(t.Context(), lifecycle.InstallRequest{Toolchain: "lts-1.0.5", Force: force}, opts)
+		return lifecycle.Install(t.Context(), lifecycle.InstallRequest{Toolchain: "lts"}, opts)
 	case "url":
 		return lifecycle.InstallToolchainFromURL(t.Context(), "custom-sdk", url, "", force, true, opts)
 	default:
@@ -49,9 +50,20 @@ func installVia(t *testing.T, source, serverURL string, force bool, opts lifecyc
 
 func installedNameFor(source string) string {
 	if source == "manifest" {
-		return "lts-1.0.5"
+		return "lts"
 	}
 	return "custom-sdk"
+}
+
+// Official SDK replacement is a channel upgrade, not a forced reinstall.
+func recordPredecessor(t *testing.T, source, dest string) {
+	t.Helper()
+	if source != "manifest" {
+		return
+	}
+	tuple, err := sdktarget.CurrentHostTuple("")
+	require.NoError(t, err)
+	require.NoError(t, toolchain.WriteInstallation(dest, toolchain.Installation{Release: "lts-1.0.4", Tuple: tuple}))
 }
 
 func prepareInstallTest(t *testing.T) (string, *config.SettingsFile, string) {
@@ -91,6 +103,7 @@ func TestInstallRestoresToolchainsAfterFinalizeFailure(t *testing.T) {
 					require.NoError(t, os.MkdirAll(filepath.Dir(compiler), 0o755))
 					require.NoError(t, os.WriteFile(compiler, []byte("previous compiler"), 0o755))
 					require.NoError(t, os.WriteFile(oldMarker, []byte("previous SDK file"), 0o644))
+					recordPredecessor(t, source, dest)
 				}
 				beforeSettings, err := os.ReadFile(sf.Path())
 				require.NoError(t, err)
@@ -176,7 +189,7 @@ func TestInstallPreservesFinalizeAndRollbackErrors(t *testing.T) {
 	assert.DirExists(t, staging, "blocked recovery must retain all transaction paths")
 }
 
-func TestForceInstallRetainsOldSDKUntilBlockedRecoveryCanFinish(t *testing.T) {
+func TestSDKReplacementRetainsOldSDKUntilBlockedRecoveryCanFinish(t *testing.T) {
 	for _, source := range []string{"manifest", "url", "zip"} {
 		t.Run(source, func(t *testing.T) {
 			home, _, serverURL := prepareInstallTest(t)
@@ -187,6 +200,7 @@ func TestForceInstallRetainsOldSDKUntilBlockedRecoveryCanFinish(t *testing.T) {
 			require.NoError(t, os.MkdirAll(filepath.Dir(compilerPath(dest)), 0o755))
 			require.NoError(t, os.WriteFile(compilerPath(dest), []byte("old compiler"), 0o755))
 			require.NoError(t, os.WriteFile(filepath.Join(dest, "old-sdk-only"), []byte("old SDK"), 0o644))
+			recordPredecessor(t, source, dest)
 			finalizeErr := errors.New("finalization failed while staging is occupied")
 			install := func(opts lifecycle.Options) error {
 				return installVia(t, source, serverURL, true, opts)
@@ -205,7 +219,7 @@ func TestForceInstallRetainsOldSDKUntilBlockedRecoveryCanFinish(t *testing.T) {
 			backup := filepath.Join(recoveryErr.Directory, "0-"+name, "old-sdk-only")
 			assert.FileExists(t, backup)
 
-			// Startup and another attempted force-install must keep the old
+			// Startup and another attempted replacement must keep the old
 			// SDK and the obstructing path until recovery is possible.
 			require.ErrorAs(t, toolchain.RecoverHome(), &recoveryErr)
 			assert.FileExists(t, backup)

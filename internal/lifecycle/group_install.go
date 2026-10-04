@@ -28,7 +28,6 @@ type groupMember struct {
 	state           string
 	intents         []component.Intent
 	original        []component.Intent
-	reuse           bool
 	prepared        component.Roots
 	addedComponents bool
 	drop            bool
@@ -38,6 +37,10 @@ type groupMember struct {
 // installed root. The home lock is only held for snapshots and publication.
 func installGroup(ctx context.Context, d *Distribution, name toolchain.ToolchainName, rt ResolvedToolchain, req InstallRequest, opts Options) (bool, error) {
 	tracking := name.Version == ""
+	trackingHost := tracking && name.Target == ""
+	if name.Target != "" {
+		opts.preserveDefault = true
+	}
 	identity := selectedIdentity(rt, tracking)
 	home, err := config.Home()
 	if err != nil {
@@ -97,7 +100,7 @@ func installGroup(ctx context.Context, d *Distribution, name toolchain.Toolchain
 		_ = lock.Close()
 		return false, err
 	}
-	if (req.NoUpdate || !tracking && !req.Force) && host.before != nil {
+	if (req.NoUpdate || !tracking) && host.before != nil {
 		release, err := toolchain.ParseToolchainName(host.before.Release)
 		if err != nil {
 			_ = lock.Close()
@@ -105,12 +108,18 @@ func installGroup(ctx context.Context, d *Distribution, name toolchain.Toolchain
 		}
 		rt.Name, rt.Tuple, rt.SHA256, rt.URL = release.String(), host.before.Tuple, host.before.SHA256, ""
 		if rt.Tuple == "" {
-			rt.Tuple = d.HostTuple
+			rt.Tuple = release.Target
+			if rt.Tuple == "" {
+				rt.Tuple = release.Host
+			}
+			if rt.Tuple == "" {
+				rt.Tuple = d.HostTuple
+			}
 		}
 	}
 	host.release = rt
 	members = append(members, host)
-	tracked, err := trackedGroupTargets(name.Channel, rt.Tuple, tracking)
+	tracked, err := trackedGroupTargets(name.Channel, rt.Tuple, trackingHost)
 	if err != nil {
 		_ = lock.Close()
 		return false, err
@@ -139,9 +148,6 @@ func installGroup(ctx context.Context, d *Distribution, name toolchain.Toolchain
 			return false, err
 		}
 		members = append(members, m)
-	}
-	for _, m := range members {
-		m.reuse = !req.Force
 	}
 	if err := lock.Close(); err != nil {
 		return false, err
@@ -182,7 +188,7 @@ func installGroup(ctx context.Context, d *Distribution, name toolchain.Toolchain
 			}
 			continue
 		}
-		reuse := m.reuse && m.before != nil && m.before.Release == m.release.Name && (m.before.Tuple == "" || m.before.Tuple == m.release.Tuple) && (m.release.URL == "" || m.before.SHA256 == m.release.SHA256)
+		reuse := m.before != nil && m.before.Release == m.release.Name && (m.before.Tuple == "" || m.before.Tuple == m.release.Tuple) && (m.release.URL == "" || m.before.SHA256 == m.release.SHA256)
 		if reuse {
 			if !m.addedComponents {
 				continue
@@ -261,7 +267,7 @@ func installGroup(ctx context.Context, d *Distribution, name toolchain.Toolchain
 	if err := validateDependencies(opts); err != nil {
 		return false, err
 	}
-	nowTargets, err := trackedGroupTargets(name.Channel, rt.Tuple, tracking)
+	nowTargets, err := trackedGroupTargets(name.Channel, rt.Tuple, trackingHost)
 	if err != nil {
 		return false, err
 	}
@@ -366,7 +372,7 @@ func resolveGroup(ctx context.Context, d *Distribution, name toolchain.Toolchain
 		return err
 	}
 	versions := []string{concrete.Version}
-	if name.Channel == toolchain.Nightly && name.Version == "" && host.URL != "" && !opts.AllowMissing {
+	if name.Channel == toolchain.Nightly && name.Version == "" && name.Target == "" && host.URL != "" && !opts.AllowMissing {
 		_, versions, err = d.Source.ChannelVersions(ctx, name.Channel, host.Tuple)
 		if err != nil {
 			return err
@@ -392,7 +398,7 @@ func resolveGroup(ctx context.Context, d *Distribution, name toolchain.Toolchain
 		for i, m := range members {
 			if i > 0 {
 				child, _ := toolchain.ParseToolchainName(m.identity)
-				if host.URL == "" && m.before != nil && m.reuse {
+				if host.URL == "" && m.before != nil {
 					previous, parseErr := toolchain.ParseToolchainName(m.before.Release)
 					if parseErr != nil {
 						return parseErr
@@ -418,7 +424,7 @@ func resolveGroup(ctx context.Context, d *Distribution, name toolchain.Toolchain
 			}
 			var selected []component.Intent
 			for _, intent := range m.intents {
-				preserved := m.reuse && m.before != nil && m.before.Release == m.release.Name && (m.before.Tuple == "" || m.before.Tuple == m.release.Tuple) && slices.ContainsFunc(m.original, func(old component.Intent) bool { return old == intent })
+				preserved := m.before != nil && m.before.Release == m.release.Name && (m.before.Tuple == "" || m.before.Tuple == m.release.Tuple) && slices.ContainsFunc(m.original, func(old component.Intent) bool { return old == intent })
 				if intent.Source == "" && !preserved {
 					platform := ""
 					if intent.Name == component.Stdx {
@@ -434,7 +440,6 @@ func resolveGroup(ctx context.Context, d *Distribution, name toolchain.Toolchain
 					_, err = d.Source.ResolveComponent(ctx, candidate.Channel, version, string(intent.Name), platform)
 					if err != nil && opts.AllowMissing && isUnavailable(err) {
 						slog.Warn("dropping unavailable component", "toolchain", m.identity, "component", intent.Name, "release", version)
-						m.addedComponents = true
 						continue
 					}
 					if err != nil {
@@ -449,6 +454,7 @@ func resolveGroup(ctx context.Context, d *Distribution, name toolchain.Toolchain
 			}
 			if opts.AllowMissing {
 				m.intents = selected
+				m.addedComponents = !slices.Equal(m.original, selected)
 			}
 		}
 		if unavailable == nil {

@@ -6,7 +6,6 @@ import (
 	"log/slog"
 
 	"github.com/Zxilly/cjv/internal/i18n"
-	"github.com/Zxilly/cjv/internal/progress"
 	sdktarget "github.com/Zxilly/cjv/internal/target"
 	"github.com/Zxilly/cjv/internal/toolchain"
 )
@@ -77,44 +76,23 @@ func UpdateInstalled(ctx context.Context, name toolchain.ToolchainName, opts Opt
 		if err != nil {
 			return UpdateOutcome{}, err
 		}
-		old := toolchain.Installation{}
-		if dir, err := toolchain.FindInstalled(name); err == nil {
-			record, err := toolchain.ReadInstallation(dir)
-			if err != nil {
-				return UpdateOutcome{}, err
-			}
-			old = record
-		}
-		if name.Target == "" {
-			changed, err := installGroup(ctx, d, name, resolved, InstallRequest{Toolchain: name.String()}, opts)
-			if err != nil {
-				return UpdateOutcome{}, err
-			}
-			dir, err := toolchain.FindInstalled(name)
-			if err != nil {
-				return UpdateOutcome{}, err
-			}
-			record, err := toolchain.ReadInstallation(dir)
-			if err != nil {
-				return UpdateOutcome{}, err
-			}
-			status := UpdateUpToDate
-			if changed {
-				status = UpdateApplied
-			}
-			return UpdateOutcome{Name: name.String(), Replacement: record.Release, Status: status}, nil
-		} else if err := installSelected(ctx, d, resolved, true, false, false, opts); err != nil {
+		changed, err := installGroup(ctx, d, name, resolved, InstallRequest{Toolchain: name.String()}, opts)
+		if err != nil {
 			return UpdateOutcome{}, err
 		}
-		outcome := UpdateOutcome{Name: name.String(), Replacement: resolved.Name, Status: UpdateApplied}
-		if old.Release == resolved.Name && old.Tuple == resolved.Tuple && old.SHA256 == resolved.SHA256 {
-			outcome.Status = UpdateUpToDate
-			opts.emit(progress.Event{Kind: progress.AlreadyUpToDate, Toolchain: name.String()})
+		dir, err := toolchain.FindInstalled(name)
+		if err != nil {
+			return UpdateOutcome{}, err
 		}
-		if name.Target != "" {
-			return outcome, nil
+		record, err := toolchain.ReadInstallation(dir)
+		if err != nil {
+			return UpdateOutcome{}, err
 		}
-		return outcome, nil
+		status := UpdateUpToDate
+		if changed {
+			status = UpdateApplied
+		}
+		return UpdateOutcome{Name: name.String(), Replacement: record.Release, Status: status}, nil
 	default:
 		// Specific version: install it (already installed is a no-op).
 		if err := Install(ctx, InstallRequest{Toolchain: name.String()}, opts); err != nil {
@@ -229,19 +207,7 @@ func upgradeChannelToolchain(ctx context.Context, d *Distribution, channel toolc
 	if err != nil {
 		return outcome, err
 	}
-	current, err := toolchain.ReadInstallation(dir)
-	if err != nil {
-		return outcome, err
-	}
-	if tuple != "" && current.Release == resolved.Name && current.Tuple == resolved.Tuple && current.SHA256 == resolved.SHA256 {
-		return outcome, nil
-	}
-	var updated bool
-	if tuple == "" {
-		updated, err = installGroup(ctx, d, selector, resolved, InstallRequest{Toolchain: currentName}, opts)
-	} else {
-		updated, err = upgradeToolchain(ctx, currentName, resolved, d, opts)
-	}
+	updated, err := installGroup(ctx, d, currentIdentity, resolved, InstallRequest{Toolchain: currentName}, opts)
 	if err != nil {
 		outcome.Status, outcome.Err = UpdateFailed, err
 		return outcome, err
@@ -249,12 +215,10 @@ func upgradeChannelToolchain(ctx context.Context, d *Distribution, channel toolc
 	if updated {
 		outcome.Status = UpdateApplied
 	}
-	if tuple == "" {
-		record, err := toolchain.ReadInstallation(dir)
-		if err != nil {
-			return outcome, err
-		}
-		outcome.Replacement = record.Release
+	record, err := toolchain.ReadInstallation(dir)
+	if err != nil {
+		return outcome, err
 	}
+	outcome.Replacement = record.Release
 	return outcome, nil
 }

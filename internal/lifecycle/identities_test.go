@@ -161,7 +161,8 @@ func TestStaleDistributionCannotReplaceNewerChannel(t *testing.T) {
 	require.NoError(t, err)
 	selectRelease(t, "2.0.0")
 	require.NoError(t, Install(t.Context(), InstallRequest{Toolchain: "sts"}, quietLifecycleOptions()))
-	require.Error(t, installSelected(t.Context(), stale, rt, true, false, false, quietLifecycleOptions()))
+	_, err = installGroup(t.Context(), stale, parse(t, "sts"), rt, InstallRequest{Toolchain: "sts"}, quietLifecycleOptions())
+	require.Error(t, err)
 	assert.Equal(t, "sts-2.0.0", readRelease(t, home, "sts").Release)
 }
 
