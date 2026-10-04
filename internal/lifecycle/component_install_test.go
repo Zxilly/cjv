@@ -7,6 +7,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -16,6 +17,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/Zxilly/cjv/internal/component"
 	"github.com/Zxilly/cjv/internal/config"
@@ -23,6 +25,7 @@ import (
 	"github.com/Zxilly/cjv/internal/progress"
 	sdktarget "github.com/Zxilly/cjv/internal/target"
 	"github.com/Zxilly/cjv/internal/testutil"
+	"github.com/Zxilly/cjv/internal/toolchain"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -131,7 +134,7 @@ func TestInstallComponentsInputValidationAndAlreadyInstalled(t *testing.T) {
 	require.NoError(t, component.WriteManifest(tcDir, component.Docs, []string{"index.html"}))
 	recorder := &testutil.ProgressRecorder{}
 	require.NoError(t, InstallComponents(context.Background(), tcName, []string{"docs"}, false, Options{Progress: recorder}))
-	assert.Equal(t, []progress.Kind{progress.FetchingManifest, progress.ComponentAlreadyInstalled}, recorder.Kinds)
+	assert.Equal(t, []progress.Kind{progress.ComponentAlreadyInstalled}, recorder.Kinds)
 	assert.True(t, component.IsInstalled(tcDir, component.Docs))
 }
 
@@ -193,7 +196,7 @@ func TestInstallComponentsForToolchainResolvesInstalledToolchain(t *testing.T) {
 	require.Error(t, InstallComponentsForToolchain(context.Background(), "sts-2.0.0", []string{"docs"}, quietLifecycleOptions()), "missing toolchain")
 }
 
-func TestInstallComponentsRestoresBatchAfterLaterArchiveFailure(t *testing.T) {
+func TestInstallComponentsPreparesWholeBatchBeforePublishing(t *testing.T) {
 	const toolchainName = "lts-1.0.5"
 	config.IsolateForTest(t, t.TempDir())
 	t.Setenv(config.EnvDistServer, "")
@@ -241,10 +244,10 @@ func TestInstallComponentsRestoresBatchAfterLaterArchiveFailure(t *testing.T) {
 	var secondArchiveRequested atomic.Bool
 	mux.HandleFunc("/stdx-docs.zip", func(w http.ResponseWriter, _ *http.Request) {
 		secondArchiveRequested.Store(true)
-		// Prove the first installation really committed before the next
-		// archive failed; the final assertions therefore exercise batch recovery.
-		assert.FileExists(t, filepath.Join(docsRoot, "new.html"))
-		assert.NoFileExists(t, filepath.Join(docsRoot, "old.html"))
+		// Even after the first archive has been prepared, every live root stays
+		// intact until the complete batch is ready to publish.
+		assert.NoFileExists(t, filepath.Join(docsRoot, "new.html"))
+		assert.FileExists(t, filepath.Join(docsRoot, "old.html"))
 		_, err := w.Write([]byte("invalid archive"))
 		assert.NoError(t, err)
 	})
@@ -265,4 +268,43 @@ func TestInstallComponentsRestoresBatchAfterLaterArchiveFailure(t *testing.T) {
 	installed, readErr := component.ListInstalled(roots.TcDir)
 	require.NoError(t, readErr)
 	assert.ElementsMatch(t, []component.Name{component.Docs, component.Stdx}, installed)
+}
+
+type componentInstallSink func(progress.Event)
+
+func (f componentInstallSink) Report(e progress.Event) { f(e) }
+
+func TestComponentPreparationAllowsRecoveryAndRejectsConcurrentChanges(t *testing.T) {
+	for _, change := range []bool{false, true} {
+		t.Run(fmt.Sprint(change), func(t *testing.T) {
+			tcDir := installedToolchainHome(t, "lts-1.0.5")
+			componentServer(t, map[string]string{"index.html": "docs"}, nil, nil)
+			observed := false
+			opts := Options{Progress: componentInstallSink(func(e progress.Event) {
+				if e.Kind != progress.FetchingComponent {
+					return
+				}
+				observed = true
+				ctx, cancel := context.WithTimeout(t.Context(), time.Second)
+				defer cancel()
+				require.NoError(t, toolchain.RecoverHomeContext(ctx), "proxy recovery must proceed during downloads")
+				if change {
+					lock, err := toolchain.LockHome(t.Context())
+					require.NoError(t, err)
+					require.NoError(t, component.WriteManifest(tcDir, component.Stdx, []string{"user-owned"}))
+					require.NoError(t, lock.Close())
+				}
+			})}
+			err := InstallComponents(t.Context(), "lts-1.0.5", []string{"docs"}, false, opts)
+			assert.True(t, observed)
+			if change {
+				require.ErrorContains(t, err, "changed during component installation")
+				assert.False(t, component.IsInstalled(tcDir, component.Docs))
+				assert.True(t, component.IsInstalled(tcDir, component.Stdx))
+			} else {
+				require.NoError(t, err)
+				assert.True(t, component.IsInstalled(tcDir, component.Docs))
+			}
+		})
+	}
 }

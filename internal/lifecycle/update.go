@@ -111,7 +111,7 @@ func UpdateInstalled(ctx context.Context, name toolchain.ToolchainName, opts Opt
 // purged either way.
 func UpdateAll(ctx context.Context, opts Options) (UpdateReport, error) {
 	defer func() {
-		if n, purgeErr := purgeDownloadsDir(); purgeErr != nil {
+		if n, purgeErr := purgeDownloadsDirContext(ctx); purgeErr != nil {
 			slog.Warn("failed to purge downloads dir", "removed", n, "error", purgeErr)
 		} else if n > 0 {
 			slog.Debug("purged downloads dir", "removed", n)

@@ -1,15 +1,38 @@
 package lifecycle
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"runtime"
 	"testing"
 
 	"github.com/Zxilly/cjv/internal/config"
+	"github.com/Zxilly/cjv/internal/fsops"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func TestPurgeDownloadsProtectsLiveInstallationAndHonorsCancellation(t *testing.T) {
+	home := t.TempDir()
+	config.IsolateForTest(t, home)
+	stage := filepath.Join(home, "downloads", ".cjv-components-live", "payload")
+	require.NoError(t, os.MkdirAll(filepath.Dir(stage), 0o755))
+	require.NoError(t, os.WriteFile(stage, []byte("live"), 0o644))
+	lock, err := fsops.LockFile(t.Context(), filepath.Join(home, ".install.lock"))
+	require.NoError(t, err)
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	removed, err := purgeDownloadsDirContext(ctx)
+	require.ErrorIs(t, err, context.Canceled)
+	assert.Zero(t, removed)
+	assert.FileExists(t, stage)
+	require.NoError(t, lock.Close())
+	removed, err = purgeDownloadsDirContext(t.Context())
+	require.NoError(t, err)
+	assert.Equal(t, 1, removed)
+	assert.NoFileExists(t, stage)
+}
 
 func TestPurgeDownloadsDirRemovesAll(t *testing.T) {
 	home := t.TempDir()

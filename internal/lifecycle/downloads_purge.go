@@ -1,6 +1,7 @@
 package lifecycle
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -18,10 +19,29 @@ import (
 const purgeDownloadsMaxPasses = 3
 
 func purgeDownloadsDir() (int, error) {
+	return purgeDownloadsDirContext(context.Background())
+}
+
+func purgeDownloadsDirContext(ctx context.Context) (int, error) {
 	dir, err := config.DownloadsDir()
 	if err != nil {
 		return 0, err
 	}
+	if _, err := os.Stat(dir); errors.Is(err, os.ErrNotExist) {
+		return 0, nil
+	} else if err != nil {
+		return 0, err
+	}
+	home, err := config.Home()
+	if err != nil {
+		return 0, err
+	}
+	// A sweep must never delete a live SDK/component download or private stage.
+	lock, err := fsops.LockFile(ctx, filepath.Join(home, ".install.lock"))
+	if err != nil {
+		return 0, err
+	}
+	defer lock.Close() //nolint:errcheck
 	removed := 0
 
 	for range purgeDownloadsMaxPasses {

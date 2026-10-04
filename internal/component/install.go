@@ -105,6 +105,29 @@ func InstallFromArchive(ctx context.Context, roots Roots, name Name, archivePath
 	return stageAndInstall(ctx, roots, spec, name, archivePath, force, alreadyInstalled)
 }
 
+// InstallPrepared publishes a component already downloaded and extracted into
+// private roots. The caller holds the home lock and has rechecked its selected
+// SDK and component state. Replacement uses the same ownership and rollback
+// rules as archive installs and local links.
+func InstallPrepared(roots, prepared Roots, name Name, force bool) error {
+	spec, err := SpecFor(name)
+	if err != nil {
+		return err
+	}
+	alreadyInstalled := IsInstalled(roots.TcDir, name)
+	if alreadyInstalled && !force {
+		return &cjverr.ComponentAlreadyInstalledError{Toolchain: filepath.Base(roots.TcDir), Component: string(name)}
+	}
+	paths, err := ReadManifest(prepared.TcDir, name)
+	if err != nil {
+		return err
+	}
+	return replaceComponent(roots, name, alreadyInstalled && force, paths, func() error {
+		_, err := fsops.MoveTree(spec.InstallRoot(prepared), spec.InstallRoot(roots))
+		return err
+	})
+}
+
 // stageAndInstall extracts archivePath into the component's install root, moves
 // the files into place, and writes the manifest through the same replacement
 // operation as local linking. It is the shared tail of Install and InstallFromArchive.
