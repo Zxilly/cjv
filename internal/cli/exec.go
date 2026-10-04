@@ -28,6 +28,9 @@ func (app *application) execRun(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
+	if tcOverride == "" {
+		tcOverride = app.selector
+	}
 	if app.output.IsJSON() {
 		return &cjverr.UnsupportedForJSONError{Command: "exec"}
 	}

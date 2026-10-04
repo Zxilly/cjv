@@ -265,15 +265,19 @@ func TestIntegrationDefaultCommand(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, stdout, "Active toolchain: lts ")
 
-	// Set default to a different name (even if not installed, the command just saves it)
-	stdout, _, err = runCJV(t, binary, cjvHome, "default", "nightly-20250101")
+	// A missing official toolchain is installed before changing the default.
+	stdout, _, err = runCJV(t, binary, cjvHome, "default", "sts")
 	require.NoError(t, err)
-	assert.Contains(t, stdout, "nightly-20250101")
+	assert.Contains(t, stdout, "sts")
+	assert.DirExists(t, filepath.Join(cjvHome, "toolchains", "sts"))
 
-	// Show active should now report nightly-20250101
+	// A failed acquisition must keep the installed default.
+	_, _, err = runCJV(t, binary, cjvHome, "default", "nightly-20250101")
+	require.Error(t, err)
+	// Show active should still report sts.
 	stdout, _, err = runCJV(t, binary, cjvHome, "show", "active")
 	require.NoError(t, err)
-	assert.Contains(t, stdout, "nightly-20250101")
+	assert.Contains(t, stdout, "Active toolchain: sts ")
 }
 
 // TestIntegrationInstallAlreadyInstalled tests that re-installing

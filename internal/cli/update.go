@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -10,6 +11,7 @@ import (
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/i18n"
 	"github.com/Zxilly/cjv/internal/lifecycle"
+	"github.com/Zxilly/cjv/internal/selfupdate"
 	"github.com/Zxilly/cjv/internal/toolchain"
 	"github.com/spf13/cobra"
 )
@@ -67,16 +69,26 @@ func (app *application) runUpdate(cmd *cobra.Command, args []string) error {
 		slog.Warn("failed to recover install transaction", "error", err)
 	}
 
-	if len(args) == 1 {
-		name, err := toolchain.ParseToolchainName(args[0])
-		if err != nil {
-			return err
+	if len(args) == 0 && app.selector != "" {
+		args = []string{app.selector}
+	}
+	if len(args) > 0 {
+		var outcomes []lifecycle.UpdateOutcome
+		var errs []error
+		for _, input := range args {
+			name, err := toolchain.ParseToolchainName(input)
+			if err != nil {
+				errs = append(errs, err)
+				continue
+			}
+			outcome, err := lifecycle.UpdateInstalled(ctx, name, app.lifecycleOptions())
+			if err != nil {
+				errs = append(errs, err)
+				continue
+			}
+			outcomes = append(outcomes, outcome)
 		}
-		outcome, err := lifecycle.UpdateInstalled(ctx, name, app.lifecycleOptions())
-		if err != nil {
-			return err
-		}
-		return app.output.RenderTo(cmdOutput(cmd), updateResult{Updates: updateEntries([]lifecycle.UpdateOutcome{outcome})})
+		return app.output.RenderOutcome(cmdOutput(cmd), updateResult{Updates: updateEntries(outcomes)}, errors.Join(errs...))
 	}
 
 	report, err := lifecycle.UpdateAll(ctx, app.lifecycleOptions())
@@ -113,19 +125,31 @@ func (app *application) autoSelfUpdate(ctx context.Context, result *updateResult
 			slog.Warn("unknown auto_self_update value, treating as check", "value", settings.AutoSelfUpdate)
 		}
 		result.checkedVersion = app.version
+		checked, checkErr := selfupdate.Check(ctx, app.updateURL, app.version)
+		if checkErr != nil {
+			slog.Warn("self-update check failed", "error", checkErr)
+			return
+		}
+		result.SelfUpdate = &selfmgmt.UpdateResult{Version: checked.Version, Status: checked.Status}
+		if checked.Status == selfupdate.StatusAvailable {
+			result.selfUpdateText = fmt.Sprintf("  cjv %s → %s", app.version, checked.Version)
+			result.checkedVersion = ""
+		}
 	}
 }
 
 func (app *application) initUpdateCommands() {
 	app.updateCmd = &cobra.Command{
-		Use:   "update [toolchain]",
+		Use:   "update [toolchain]...",
 		Short: i18n.T("UpdateCmdShort", nil),
 		Long:  i18n.T("UpdateCmdLong", nil),
-		Args:  cobra.MaximumNArgs(1),
+		Args:  cobra.ArbitraryArgs,
 		RunE:  app.runUpdate,
 	}
 
 	app.updateCmd.Flags().BoolVar(&app.noSelfUpdate, "no-self-update", false, i18n.T("UpdateFlagNoSelfUpdate", nil))
+	app.updateCmd.Flags().BoolVar(&app.forceUpdate, "force", false, "Update even when optional components or targets are unavailable")
+	app.updateCmd.Flags().BoolVar(&app.allowDowngrade, "allow-downgrade", false, "Allow an older compatible nightly")
 	app.rootCmd.AddCommand(app.updateCmd)
 
 }

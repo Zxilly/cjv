@@ -138,8 +138,63 @@ func resolveToolchainArg(flagValue string) (string, toolchain.ToolchainName, err
 	return dir, parsed, nil
 }
 
+func (app *application) resolveComponentToolchain() (string, toolchain.ToolchainName, error) {
+	dir, release, err := resolveToolchainArg(app.componentToolchain)
+	if err == nil {
+		managed, rootErr := config.ToolchainDirFor(filepath.Base(dir))
+		if rootErr != nil {
+			return "", release, rootErr
+		}
+		if config.NormalizePath(managed) != config.NormalizePath(dir) {
+			return "", release, fmt.Errorf("components of external toolchain %s must be managed by its owner", dir)
+		}
+	}
+	if err != nil || app.componentTarget == "" {
+		return dir, release, err
+	}
+	environment, err := sdktarget.Normalize(app.componentTarget)
+	if err != nil {
+		return "", release, err
+	}
+	record, err := toolchain.ReadInstallation(dir)
+	if err != nil {
+		return "", release, err
+	}
+	host := record.Tuple
+	if host == "" {
+		d, err := lifecycle.OpenDistribution(app.lifecycleOptions())
+		if err != nil {
+			return "", release, err
+		}
+		host = d.HostTuple
+	}
+	id, err := sdktarget.ParseIdentity(host)
+	if err != nil {
+		return "", release, err
+	}
+	target, err := id.WithEnvironment(environment)
+	if err != nil {
+		return "", release, err
+	}
+	identity, err := toolchain.ParseToolchainName(filepath.Base(dir))
+	if err != nil {
+		return "", release, err
+	}
+	identity.Host = ""
+	identity.Target = target.Tuple()
+	dir, err = toolchain.FindInstalled(identity)
+	if err != nil {
+		return "", release, err
+	}
+	actual, err := toolchain.InstalledRelease(dir)
+	if err == nil && actual.Version != release.Version {
+		return "", actual, fmt.Errorf("target %s does not match host release %s", identity.String(), release.String())
+	}
+	return dir, actual, err
+}
+
 func (app *application) runComponentAdd(cmd *cobra.Command, args []string) error {
-	tcDir, tcName, err := resolveToolchainArg(app.componentToolchain)
+	tcDir, tcName, err := app.resolveComponentToolchain()
 	if err != nil {
 		return err
 	}
@@ -166,7 +221,7 @@ func (app *application) runComponentRemove(cmd *cobra.Command, args []string) er
 		return errors.Join(parseErrs...)
 	}
 
-	tcDir, _, err := resolveToolchainArg(app.componentToolchain)
+	tcDir, _, err := app.resolveComponentToolchain()
 	if err != nil {
 		return err
 	}
@@ -219,7 +274,7 @@ func (app *application) runComponentLink(cmd *cobra.Command, args []string) erro
 		return err
 	}
 
-	tcDir, _, err := resolveToolchainArg(app.componentToolchain)
+	tcDir, _, err := app.resolveComponentToolchain()
 	if err != nil {
 		return err
 	}
@@ -254,7 +309,7 @@ func (app *application) runComponentLink(cmd *cobra.Command, args []string) erro
 }
 
 func (app *application) runComponentList(cmd *cobra.Command, args []string) error {
-	tcDir, tcName, err := resolveToolchainArg(app.componentToolchain)
+	tcDir, tcName, err := app.resolveComponentToolchain()
 	if err != nil {
 		return err
 	}
@@ -267,6 +322,13 @@ func (app *application) runComponentList(cmd *cobra.Command, args []string) erro
 	var available []componentlib.Name
 	if !tcName.IsCustom() {
 		tuple := tcName.Target
+		if tuple == "" {
+			record, err := toolchain.ReadInstallation(tcDir)
+			if err != nil {
+				return err
+			}
+			tuple = record.Tuple
+		}
 		if tuple == "" {
 			_, settings, err := config.LoadDefaultSettings()
 			if err != nil {
@@ -363,6 +425,7 @@ func (app *application) initComponentCommands() {
 	}
 
 	app.componentCmd.PersistentFlags().StringVar(&app.componentToolchain, "toolchain", "", i18n.T("ComponentFlagToolchain", nil))
+	app.componentCmd.PersistentFlags().StringVar(&app.componentTarget, "target", "", "Cross SDK environment whose components to manage")
 	app.componentAddCmd.Flags().BoolVar(&app.componentAddForce, "force", false, i18n.T("InstallFlagForce", nil))
 	app.componentListCmd.Flags().BoolVar(&app.componentListInstalledOnly, "installed", false, i18n.T("ComponentFlagInstalled", nil))
 	app.componentListCmd.Flags().BoolVarP(&app.componentListQuiet, "quiet", "q", false, i18n.T("ComponentFlagQuiet", nil))

@@ -35,6 +35,16 @@ func SplitPlusSelector(args []string) (name string, rest []string, present bool)
 // the configured-but-unusable toolchain. parsed is the parsed name (zero on a
 // parse error) so callers can branch on e.g. IsCustom.
 func FindActiveDir(rawName string) (dir, displayName string, parsed ToolchainName, err error) {
+	if filepath.IsAbs(rawName) {
+		info, err := os.Stat(rawName)
+		if err != nil {
+			return "", rawName, ToolchainName{Custom: rawName}, err
+		}
+		if !info.IsDir() {
+			return "", rawName, ToolchainName{}, fmt.Errorf("toolchain path %s is not a directory", rawName)
+		}
+		return filepath.Clean(rawName), rawName, ToolchainName{Custom: rawName}, nil
+	}
 	parsed, err = ParseToolchainName(rawName)
 	if err != nil {
 		return "", rawName, ToolchainName{}, err

@@ -104,6 +104,9 @@ func ResolveToolchainConfig(settings *Settings, cwd string) (ToolchainConfig, er
 			return ToolchainConfig{}, fmt.Errorf("failed to parse %s: %w", candidate, parseErr)
 		}
 		if parseErr == nil {
+			if tc.Toolchain.Path != "" {
+				return ToolchainConfig{Name: filepath.Clean(tc.Toolchain.Path), Source: SourceToolchainFile}, nil
+			}
 			if tc.Toolchain.Channel != "" {
 				targets, err := sdktarget.NormalizeList(tc.Toolchain.Targets)
 				if err != nil {

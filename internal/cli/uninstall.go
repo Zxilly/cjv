@@ -1,18 +1,36 @@
 package cli
 
 import (
+	"errors"
 	"github.com/Zxilly/cjv/internal/i18n"
 	"github.com/Zxilly/cjv/internal/lifecycle"
 	"github.com/charmbracelet/huh"
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
+	"strings"
 )
 
 func (app *application) runUninstall(cmd *cobra.Command, args []string) error {
-	name := args[0]
+	var errs []error
+	var removed []uninstallResult
+	for _, name := range args {
+		result, err := app.runUninstallOne(cmd, name)
+		if err != nil {
+			errs = append(errs, err)
+		} else if result != nil {
+			removed = append(removed, *result)
+		}
+	}
+	if len(args) == 1 && len(removed) == 1 {
+		return app.output.RenderOutcome(cmdOutput(cmd), removed[0], errors.Join(errs...))
+	}
+	return app.output.RenderOutcome(cmdOutput(cmd), uninstallBatchResult{Removed: removed}, errors.Join(errs...))
+}
+
+func (app *application) runUninstallOne(cmd *cobra.Command, name string) (*uninstallResult, error) {
 
 	if err := lifecycle.PrepareToolchainRemoval(name); err != nil {
-		return err
+		return nil, err
 	}
 
 	// Confirm before destroying the toolchain and its components. Skipped with
@@ -24,18 +42,31 @@ func (app *application) runUninstall(cmd *cobra.Command, args []string) error {
 			Title(i18n.T("ToolchainUninstallConfirm", i18n.MsgData{"Name": name})).
 			Value(&confirm).
 			Run(); err != nil {
-			return err
+			return nil, err
 		}
 		if !confirm {
-			return nil
+			return nil, nil
 		}
 	}
 
 	if err := lifecycle.RemoveToolchain(name); err != nil {
-		return err
+		return nil, err
 	}
 
-	return app.output.RenderTo(cmdOutput(cmd), uninstallResult{Name: name})
+	return &uninstallResult{Name: name}, nil
+}
+
+type uninstallBatchResult struct {
+	Removed []uninstallResult `json:"removed"`
+}
+
+func (r uninstallBatchResult) Text() string {
+	var b strings.Builder
+	for _, result := range r.Removed {
+		b.WriteString(result.Text())
+		b.WriteByte('\n')
+	}
+	return b.String()
 }
 
 type uninstallResult struct {
@@ -48,9 +79,9 @@ func (r uninstallResult) Text() string {
 
 func (app *application) initUninstallCommands() {
 	app.uninstallCmd = &cobra.Command{
-		Use:   "uninstall <toolchain>",
+		Use:   "uninstall <toolchain>...",
 		Short: i18n.T("UninstallCmdShort", nil),
-		Args:  cobra.ExactArgs(1),
+		Args:  cobra.MinimumNArgs(1),
 		RunE:  app.runUninstall,
 	}
 

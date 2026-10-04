@@ -49,6 +49,16 @@ func Execute(ver, updURL string) error {
 }
 
 func (app *application) execute(args []string) error {
+	previousLogger := slog.Default()
+	defer slog.SetDefault(previousLogger)
+	if selector, rest, present := toolchain.SplitPlusSelector(args); present {
+		if selector == "" {
+			return app.output.RenderErrorTo(app.rootCmd.OutOrStdout(), app.rootCmd.ErrOrStderr(), fmt.Errorf("toolchain name cannot be empty after '+'"))
+		}
+		app.selector = selector
+		app.componentToolchain, app.docToolchain, app.whichToolchain = selector, selector, selector
+		args = rest
+	}
 	// Unknown commands fail during Cobra's lookup, before flag parsing. Honor
 	// leading output flags for those errors without interpreting child arguments.
 	for _, arg := range args {
@@ -67,6 +77,16 @@ func (app *application) configureRoot() {
 	app.rootCmd.Version = app.version
 	app.rootCmd.SetVersionTemplate(color.CyanString("cjv {{.Version}}") + "\n")
 	app.rootCmd.PersistentFlags().BoolVar(&app.output.JSON, "json", false, i18n.T("RootFlagJSON", nil))
+	app.rootCmd.PersistentFlags().BoolVarP(&app.quiet, "quiet", "q", false, "Disable progress output")
+	app.rootCmd.PersistentFlags().BoolVar(&app.verbose, "verbose", false, "Enable debug logging")
+	app.rootCmd.MarkFlagsMutuallyExclusive("quiet", "verbose")
+	app.rootCmd.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
+		app.output.Quiet = app.quiet
+		if os.Getenv("CJV_LOG") == "" && app.verbose {
+			slog.SetDefault(slog.New(slog.NewTextHandler(cmd.ErrOrStderr(), &slog.HandlerOptions{Level: slog.LevelDebug})))
+		}
+		return nil
+	}
 	settings.RegisterCommands(app.rootCmd)
 	app.rootCmd.AddCommand(selfmgmt.NewSelfCommand(app.version, app.updateURL, app.output))
 	configureCobraHelp(app.rootCmd)
@@ -80,11 +100,15 @@ func (app *application) initRootCommands() {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			active, resolveErr := app.gatherActive()
 			installed, err := toolchain.ListInstalled()
 			if err != nil {
 				return err
 			}
-			_, activeName, _, resolveErr := toolchain.ResolveActiveToolchain()
+			activeName := ""
+			if active != nil {
+				activeName = active.Name
+			}
 			// Only ignore "no toolchain configured" — propagate real errors
 			if resolveErr != nil && !errors.As(resolveErr, new(*cjverr.NoToolchainConfiguredError)) {
 				slog.Warn("failed to resolve active toolchain", "error", resolveErr)

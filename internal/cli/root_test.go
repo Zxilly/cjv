@@ -54,11 +54,12 @@ func TestExecuteInvocationsDoNotShareJSONMode(t *testing.T) {
 }
 
 func TestExecuteArgumentFailureDoesNotAffectNextInvocation(t *testing.T) {
+	config.IsolateForTest(t, t.TempDir())
 	failed := newApplication("dev", "")
 	var failureOutput, failureErrors bytes.Buffer
 	failed.rootCmd.SetOut(&failureOutput)
 	failed.rootCmd.SetErr(&failureErrors)
-	require.Error(t, failed.execute([]string{"--json", "install"}))
+	require.Error(t, failed.execute([]string{"--json", "install", "+invalid"}))
 	assert.True(t, json.Valid(failureOutput.Bytes()), failureOutput.String())
 	assert.Empty(t, failureErrors.String())
 

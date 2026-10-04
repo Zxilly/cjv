@@ -114,6 +114,9 @@ func ActiveTarget(ctx context.Context, tcOverride, target string) (ActiveToolcha
 	if err != nil {
 		return ActiveToolchain{}, err
 	}
+	if filepath.IsAbs(host.Name) {
+		return ActiveToolchain{}, fmt.Errorf("custom toolchain %s has no published targets", host.Name)
+	}
 
 	parsed, err := toolchain.InstalledRelease(host.Dir)
 	if err != nil {
@@ -127,7 +130,7 @@ func ActiveTarget(ctx context.Context, tcOverride, target string) (ActiveToolcha
 	if settingsErr != nil {
 		slog.Warn("failed to load settings", "error", settingsErr)
 	}
-	tuple, err := targetPlatformKey(settings, target)
+	tuple, err := targetPlatformForInstallation(host.Dir, settings, target)
 	if err != nil {
 		return ActiveToolchain{}, err
 	}
@@ -193,7 +196,7 @@ func ensureTargets(ctx context.Context, tcInput, tcDir string, settings *config.
 	var missingTargets []string
 	var missingNames []string
 	for _, target := range targets {
-		tuple, err := targetPlatformKey(settings, target)
+		tuple, err := targetPlatformForInstallation(tcDir, settings, target)
 		if err != nil {
 			return err
 		}
@@ -337,12 +340,29 @@ func targetPlatformKey(settings *config.Settings, target string) (string, error)
 	return sdktarget.CurrentTargetTuple(defaultHost, target)
 }
 
+func targetPlatformForInstallation(dir string, settings *config.Settings, environment string) (string, error) {
+	record, err := toolchain.ReadInstallation(dir)
+	if err != nil {
+		return "", err
+	}
+	if record.Tuple == "" {
+		return targetPlatformKey(settings, environment)
+	}
+	id, err := sdktarget.ParseIdentity(record.Tuple)
+	if err != nil {
+		return "", err
+	}
+	cross, err := id.WithEnvironment(environment)
+	return cross.Tuple(), err
+}
+
 func targetIdentity(hostIdentity string, release toolchain.ToolchainName, tuple string) toolchain.ToolchainName {
 	identity, _ := toolchain.ParseToolchainName(hostIdentity)
 	if identity.Version == "" {
 		release.Version = ""
 	}
 	release.Target = tuple
+	release.Host = ""
 	return release
 }
 

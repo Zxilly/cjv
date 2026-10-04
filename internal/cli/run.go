@@ -61,14 +61,9 @@ flagLoop:
 	if err := toolchain.RecoverHomeContext(cmd.Context()); err != nil {
 		return err
 	}
-	parsed, err := toolchain.ParseToolchainName(tcInput)
-	if err != nil {
-		return err
-	}
-
-	tcDir, findErr := toolchain.FindInstalled(parsed)
+	tcDir, _, parsed, findErr := toolchain.FindActiveDir(tcInput)
 	if findErr != nil {
-		if install {
+		if install && !parsed.IsCustom() {
 			if installErr := lifecycle.Install(ctx, lifecycle.InstallRequest{Toolchain: tcInput}, app.lifecycleOptions()); installErr != nil {
 				return installErr
 			}

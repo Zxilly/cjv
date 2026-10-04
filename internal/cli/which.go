@@ -17,7 +17,7 @@ type whichResult struct {
 func (r whichResult) Text() string { return r.Path }
 
 func (app *application) runWhich(cmd *cobra.Command, args []string) error {
-	active, err := resolve.Active(cmd.Context(), "")
+	active, err := resolve.Active(cmd.Context(), app.whichToolchain)
 	if err != nil {
 		return err
 	}
@@ -54,5 +54,6 @@ func (app *application) initWhichCommands() {
 	}
 
 	app.rootCmd.AddCommand(app.whichCmd)
+	app.whichCmd.Flags().StringVar(&app.whichToolchain, "toolchain", "", "Select the toolchain")
 
 }

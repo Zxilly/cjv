@@ -64,6 +64,7 @@ func TestResolveToolchainArgValidationAndActiveFallback(t *testing.T) {
 	settings := config.DefaultSettings()
 	settings.DefaultToolchain = tcName
 	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
+	config.ResetDefaultSettingsFileCache()
 
 	gotDir, gotName, err := resolveToolchainArg("")
 

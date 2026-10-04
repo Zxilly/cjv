@@ -21,6 +21,7 @@ type application struct {
 	componentListQuiet              bool
 	componentRemoveCmd              *cobra.Command
 	componentToolchain              string
+	componentTarget                 string
 	docCmd                          *cobra.Command
 	docPath                         bool
 	docToolchain                    string
@@ -60,6 +61,13 @@ type application struct {
 	updateURL                       string
 	version                         string
 	whichCmd                        *cobra.Command
+	whichToolchain                  string
+	selector                        string
+	quiet                           bool
+	verbose                         bool
+	noUpdate                        bool
+	allowDowngrade                  bool
+	forceUpdate                     bool
 }
 
 func newApplication(ver, updURL string) *application {
@@ -79,6 +87,7 @@ func newApplication(ver, updURL string) *application {
 	app.initUninstallCommands()
 	app.initUpdateCommands()
 	app.initWhichCommands()
+	app.initTargetCommands()
 	app.configureRoot()
 	return app
 }

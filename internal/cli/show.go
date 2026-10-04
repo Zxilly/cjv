@@ -111,6 +111,23 @@ func gatherActive() (*showActiveResult, error) {
 	return &showActiveResult{Name: name, Source: source.String(), Installed: true}, nil
 }
 
+func (app *application) gatherActive() (*showActiveResult, error) {
+	if err := toolchain.RecoverHome(); err != nil {
+		return nil, err
+	}
+	if app.selector == "" {
+		return gatherActive()
+	}
+	_, name, _, err := toolchain.FindActiveDir(app.selector)
+	if err != nil {
+		if errors.As(err, new(*cjverr.ToolchainNotInstalledError)) {
+			return &showActiveResult{Name: app.selector, Source: "command line"}, nil
+		}
+		return nil, err
+	}
+	return &showActiveResult{Name: name, Source: "command line", Installed: true}, nil
+}
+
 func gatherInstalled() (showInstalledResult, error) {
 	if err := toolchain.RecoverHome(); err != nil {
 		return showInstalledResult{}, err
@@ -142,7 +159,7 @@ func gatherInstalled() (showInstalledResult, error) {
 }
 
 func (app *application) runShowDefault(cmd *cobra.Command, args []string) error {
-	active, activeErr := gatherActive()
+	active, activeErr := app.gatherActive()
 	if activeErr != nil {
 		if _, ok := errors.AsType[*cjverr.NoToolchainConfiguredError](activeErr); ok {
 			// Surface the informative message on stderr for humans, but do
@@ -175,7 +192,7 @@ func (app *application) runShowDefault(cmd *cobra.Command, args []string) error 
 }
 
 func (app *application) runShowActive(cmd *cobra.Command, args []string) error {
-	active, err := gatherActive()
+	active, err := app.gatherActive()
 	if err != nil {
 		return err
 	}

@@ -95,6 +95,9 @@ func (app *application) envsetupRun(cmd *cobra.Command, args []string) error {
 	if app.output.IsJSON() {
 		return app.envsetupRunJSON(cmd, args, targetFlag)
 	}
+	if selected, _ := extractPlusToolchainFromArgs(args); selected == "" && app.selector != "" {
+		args = append([]string{"+" + app.selector}, args...)
+	}
 	return envsetupRunWithShell(cmd, args, shellFlag, targetFlag)
 }
 
@@ -236,6 +239,9 @@ func (app *application) envsetupRunJSON(cmd *cobra.Command, args []string, targe
 		ctx = context.Background()
 	}
 	tcOverride, _ := extractPlusToolchainFromArgs(args)
+	if tcOverride == "" {
+		tcOverride = app.selector
+	}
 
 	data, err := loadEnvsetupData(ctx, tcOverride, target)
 	if err != nil {

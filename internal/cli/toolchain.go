@@ -126,9 +126,9 @@ func (app *application) initToolchainCommands() {
 		},
 	}
 	app.toolchainUninstallCmd = &cobra.Command{
-		Use:   "uninstall <name>",
+		Use:   "uninstall <name>...",
 		Short: i18n.T("ToolchainUninstallShort", nil),
-		Args:  cobra.ExactArgs(1),
+		Args:  cobra.MinimumNArgs(1),
 		RunE:  app.runUninstall,
 	}
 

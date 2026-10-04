@@ -21,7 +21,8 @@ import (
 
 // Renderer owns the output mode of one command invocation.
 type Renderer struct {
-	JSON bool
+	JSON  bool
+	Quiet bool
 }
 
 // SetJSONMode enables or disables JSON output for this invocation.
@@ -57,7 +58,7 @@ func (ProgressDriven) Text() string { return "" }
 // mode: messages on out and the download bar on stderr for humans, nothing
 // in JSON mode so stdout stays a single document.
 func (renderer *Renderer) Progress(out io.Writer) progress.Sink {
-	if renderer.JSON {
+	if renderer.JSON || renderer.Quiet {
 		return progress.Discard
 	}
 	return progress.NewText(out, os.Stderr)
@@ -66,7 +67,7 @@ func (renderer *Renderer) Progress(out io.Writer) progress.Sink {
 // Note writes a human-facing aside to stderr in text mode. JSON consumers
 // read the document on stdout and get no aside, so JSON mode writes nothing.
 func (renderer *Renderer) Note(stderr io.Writer, msg string) {
-	if renderer.JSON {
+	if renderer.JSON || renderer.Quiet {
 		return
 	}
 	_, _ = fmt.Fprintln(stderr, msg)
