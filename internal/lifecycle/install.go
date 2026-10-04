@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/Zxilly/cjv/internal/component"
 	"github.com/Zxilly/cjv/internal/i18n"
 	"github.com/Zxilly/cjv/internal/progress"
 	sdktarget "github.com/Zxilly/cjv/internal/target"
@@ -26,10 +27,13 @@ type Options struct {
 	// has already handled PATH itself, and proxy auto-install leaves PATH
 	// alone because cjv is evidently reachable.
 	ConfigurePath bool
-	// tracking is the identity being advanced by an update. It is internal
-	// because only install/update resolution may choose ownership semantics.
-	tracking  string
-	selection string
+	// Internal placement state captures an installation identity and the
+	// snapshot that must still match when its prepared roots are published.
+	selection          string
+	expectedSet        bool
+	expected           *toolchain.Installation
+	expectedComponents string
+	prepare            func(context.Context, component.Roots) error
 }
 
 // sink returns the progress adapter to emit to, never nil.
@@ -85,11 +89,8 @@ func Install(ctx context.Context, req InstallRequest, opts Options) error {
 	if err != nil {
 		return err
 	}
-	if err := recordLegacyInstallations(ctx, d, false); err != nil {
-		return err
-	}
 	// A fixed version already on disk needs no remote manifest to remain
-	// installed. This also records an explicit pin when sharing a channel SDK.
+	// installed. The directory itself is its installation identity.
 	if name.Version != "" && !req.Force && len(targets) == 0 && len(req.Components) == 0 {
 		if dir, err := toolchain.FindInstalled(name); err == nil {
 			opts.selection = filepath.Base(dir)
@@ -102,7 +103,7 @@ func Install(ctx context.Context, req InstallRequest, opts Options) error {
 	if err != nil {
 		return err
 	}
-	if err := installSelected(ctx, d, resolved, name.IsChannelOnly(), req.Force, name.Target == "", opts); err != nil {
+	if err := installSelected(ctx, d, resolved, name.Version == "", req.Force, name.Target == "", opts); err != nil {
 		return err
 	}
 
@@ -113,7 +114,7 @@ func Install(ctx context.Context, req InstallRequest, opts Options) error {
 		return err
 	}
 	targetBase := toolchain.ToolchainName{Channel: hostResolved.Channel, Version: hostResolved.Version}
-	installed := []string{resolved.Name}
+	installed := []string{selectedIdentity(resolved, name.Version == "")}
 	if len(targets) > 0 {
 		installed = nil
 	}
@@ -126,10 +127,10 @@ func Install(ctx context.Context, req InstallRequest, opts Options) error {
 		if err != nil {
 			return err
 		}
-		if err := installSelected(ctx, d, resolvedTarget, name.IsChannelOnly(), req.Force, false, opts); err != nil {
+		if err := installSelected(ctx, d, resolvedTarget, name.Version == "", req.Force, false, opts); err != nil {
 			return err
 		}
-		installed = append(installed, resolvedTarget.Name)
+		installed = append(installed, selectedIdentity(resolvedTarget, name.Version == ""))
 	}
 
 	if len(req.Components) == 0 {

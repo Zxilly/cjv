@@ -109,6 +109,9 @@ func (r componentLinkResult) Text() string {
 
 // resolveToolchainArg falls back to the active toolchain when flagValue is empty.
 func resolveToolchainArg(flagValue string) (string, toolchain.ToolchainName, error) {
+	if err := toolchain.RecoverHome(); err != nil {
+		return "", toolchain.ToolchainName{}, err
+	}
 	if flagValue != "" {
 		parsed, err := toolchain.ParseToolchainName(flagValue)
 		if err != nil {
@@ -118,17 +121,17 @@ func resolveToolchainArg(flagValue string) (string, toolchain.ToolchainName, err
 		if err != nil {
 			return "", toolchain.ToolchainName{}, err
 		}
-		actual, err := toolchain.ParseToolchainName(filepath.Base(dir))
+		actual, err := toolchain.InstalledRelease(dir)
 		if err != nil {
 			return "", toolchain.ToolchainName{}, err
 		}
 		return dir, actual, nil
 	}
-	dir, name, _, err := toolchain.ResolveActiveToolchain()
+	dir, _, _, err := toolchain.ResolveActiveToolchain()
 	if err != nil {
 		return "", toolchain.ToolchainName{}, err
 	}
-	parsed, err := toolchain.ParseToolchainName(name)
+	parsed, err := toolchain.InstalledRelease(dir)
 	if err != nil {
 		return "", toolchain.ToolchainName{}, err
 	}
@@ -163,11 +166,20 @@ func (app *application) runComponentRemove(cmd *cobra.Command, args []string) er
 		return errors.Join(parseErrs...)
 	}
 
-	tcDir, tcName, err := resolveToolchainArg(app.componentToolchain)
+	tcDir, _, err := resolveToolchainArg(app.componentToolchain)
 	if err != nil {
 		return err
 	}
-	toolchainName := tcName.String()
+	toolchainName := filepath.Base(tcDir)
+
+	lock, err := toolchain.LockHome(cmd.Context())
+	if err != nil {
+		return err
+	}
+	defer lock.Close() //nolint:errcheck
+	if err := lock.Recover(); err != nil {
+		return err
+	}
 
 	roots, err := componentlib.RootsFor(toolchainName)
 	if err != nil {
@@ -212,6 +224,15 @@ func (app *application) runComponentLink(cmd *cobra.Command, args []string) erro
 		return err
 	}
 	toolchainName := filepath.Base(tcDir)
+
+	lock, err := toolchain.LockHome(cmd.Context())
+	if err != nil {
+		return err
+	}
+	defer lock.Close() //nolint:errcheck
+	if err := lock.Recover(); err != nil {
+		return err
+	}
 
 	roots, err := componentlib.RootsFor(toolchainName)
 	if err != nil {
@@ -261,7 +282,7 @@ func (app *application) runComponentList(cmd *cobra.Command, args []string) erro
 
 	// Initialize Components to a non-nil empty slice so `--json` emits [] rather
 	// than null for the empty state, keeping the array field's shape stable.
-	result := componentListResult{Toolchain: tcName.String(), Components: []componentEntry{}}
+	result := componentListResult{Toolchain: filepath.Base(tcDir), Components: []componentEntry{}}
 	for _, n := range installed {
 		result.Components = append(result.Components, componentEntry{Name: string(n), Installed: true})
 	}

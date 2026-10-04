@@ -6,9 +6,12 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"testing"
@@ -16,7 +19,7 @@ import (
 	"github.com/Zxilly/cjv/internal/component"
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/dist"
-	"github.com/Zxilly/cjv/internal/fstx"
+	"github.com/Zxilly/cjv/internal/fsops"
 	"github.com/Zxilly/cjv/internal/lifecycle"
 	sdktarget "github.com/Zxilly/cjv/internal/target"
 	"github.com/Zxilly/cjv/internal/testutil"
@@ -124,45 +127,6 @@ func newUpgradeFixture(t *testing.T, targetVariant, missingComponent bool) upgra
 	return upgradeFixture{home, oldName, newName, sf, d, resolved, oldRoots, newRoots, initialDefault}
 }
 
-func (f upgradeFixture) upgrade(t *testing.T, opts lifecycle.Options) (bool, error) {
-	t.Helper()
-	return lifecycle.UpgradeToolchain(t.Context(), f.oldName, f.resolved, f.dist, opts)
-}
-
-func TestUpgradeMigratesComponentsAndRetiresAllOldRoots(t *testing.T) {
-	for _, targetVariant := range []bool{false, true} {
-		name := "host"
-		if targetVariant {
-			name = "target"
-		}
-		t.Run(name, func(t *testing.T) {
-			f := newUpgradeFixture(t, targetVariant, false)
-			updated, err := f.upgrade(t, lifecycle.Options{})
-			require.NoError(t, err)
-			assert.True(t, updated)
-			for _, path := range []string{f.oldRoots.TcDir, f.oldRoots.StdxDir, f.oldRoots.DocsDir} {
-				assert.NoDirExists(t, path)
-			}
-			components, err := component.ListInstalled(f.newRoots.TcDir)
-			require.NoError(t, err)
-			assert.ElementsMatch(t, component.KnownComponents(), components)
-			for _, path := range []string{filepath.Join(f.newRoots.StdxDir, "dynamic", "version.txt"), filepath.Join(f.newRoots.DocsDir, "main", "index.html"), filepath.Join(f.newRoots.DocsDir, "stdx", "index.html")} {
-				data, err := os.ReadFile(path)
-				require.NoError(t, err)
-				assert.Equal(t, "2.0.0", string(data))
-			}
-			settings, err := f.sf.Load()
-			require.NoError(t, err)
-			expectedDefault := f.newName
-			if targetVariant {
-				expectedDefault = f.initialDefault
-			}
-			assert.Equal(t, expectedDefault, settings.DefaultToolchain)
-			assert.Equal(t, expectedDefault, settings.Overrides[filepath.Join(f.home, "project")])
-		})
-	}
-}
-
 func linkUpgradeStdx(t *testing.T, roots component.Roots, content string) string {
 	t.Helper()
 	source := t.TempDir()
@@ -173,173 +137,6 @@ func linkUpgradeStdx(t *testing.T, roots component.Roots, content string) string
 	_, err := component.Link(roots, component.Stdx, source, true)
 	require.NoError(t, err)
 	return source
-}
-
-func TestUpgradePreservesLinkedSourceAndExistingReplacementChoices(t *testing.T) {
-	for _, existing := range []bool{false, true} {
-		t.Run(map[bool]string{false: "new", true: "existing"}[existing], func(t *testing.T) {
-			f := newUpgradeFixture(t, false, false)
-			oldSource := linkUpgradeStdx(t, f.oldRoots, "old user source")
-			selectedSource := oldSource
-			if existing {
-				require.NoError(t, lifecycle.Install(t.Context(), lifecycle.InstallRequest{Toolchain: f.newName}, lifecycle.Options{}))
-				selectedSource = linkUpgradeStdx(t, f.newRoots, "new user choice")
-			}
-			_, err := f.upgrade(t, lifecycle.Options{})
-			require.NoError(t, err)
-			intents, err := component.InstalledIntents(f.newRoots)
-			require.NoError(t, err)
-			assert.Contains(t, intents, component.Intent{Name: component.Stdx, Source: selectedSource})
-			assert.FileExists(t, filepath.Join(oldSource, "dynamic", "user.txt"))
-			require.NoError(t, lifecycle.RemoveToolchain(f.newName))
-			assert.FileExists(t, filepath.Join(oldSource, "dynamic", "user.txt"))
-			assert.FileExists(t, filepath.Join(selectedSource, "static", "user.txt"))
-			assert.NoDirExists(t, f.newRoots.StdxDir)
-			assert.NoDirExists(t, f.newRoots.DocsDir)
-		})
-	}
-}
-
-func TestUpgradeMissingComponentLeavesOldVersionUsable(t *testing.T) {
-	f := newUpgradeFixture(t, false, true)
-	before, err := os.ReadFile(f.sf.Path())
-	require.NoError(t, err)
-	updated, err := f.upgrade(t, lifecycle.Options{})
-	require.Error(t, err)
-	assert.False(t, updated)
-	for _, path := range []string{f.oldRoots.TcDir, f.oldRoots.StdxDir, f.oldRoots.DocsDir} {
-		assert.DirExists(t, path)
-	}
-	components, err := component.ListInstalled(f.newRoots.TcDir)
-	require.NoError(t, err)
-	assert.Empty(t, components, "partially added replacement components must be undone")
-	assert.NoDirExists(t, f.newRoots.TcDir, "channel resolution must keep selecting the old usable version")
-	selected, err := toolchain.FindInstalled(toolchain.ToolchainName{Channel: toolchain.LTS, Version: "1.0.0"})
-	require.NoError(t, err)
-	assert.Equal(t, f.oldRoots.TcDir, selected)
-	after, err := os.ReadFile(f.sf.Path())
-	require.NoError(t, err)
-	assert.Equal(t, before, after)
-}
-
-func TestTrackingUpdateFailureKeepsChannelAndComponents(t *testing.T) {
-	f := newUpgradeFixture(t, false, true)
-	channel := "lts"
-	_, err := f.sf.Update(config.SettingsUpdate{Installations: map[string]string{channel: f.oldName}, DefaultToolchain: &channel, Overrides: map[string]string{filepath.Join(f.home, "project"): channel}})
-	require.NoError(t, err)
-	_, err = lifecycle.UpdateInstalled(t.Context(), toolchain.ToolchainName{Channel: toolchain.LTS}, lifecycle.Options{})
-	require.Error(t, err)
-	f.sf.Invalidate()
-	settings, err := f.sf.Load()
-	require.NoError(t, err)
-	assert.Equal(t, f.oldName, settings.Installations[channel])
-	assert.Equal(t, channel, settings.DefaultToolchain)
-	selected, err := toolchain.FindInstalled(toolchain.ToolchainName{Channel: toolchain.LTS})
-	require.NoError(t, err)
-	assert.Equal(t, f.oldRoots.TcDir, selected)
-	assert.NoDirExists(t, f.newRoots.TcDir)
-	for _, path := range []string{f.oldRoots.TcDir, f.oldRoots.StdxDir, f.oldRoots.DocsDir} {
-		assert.DirExists(t, path)
-	}
-}
-
-func TestFailedUpgradePreservesExistingReplacementChoices(t *testing.T) {
-	f := newUpgradeFixture(t, false, true)
-	require.NoError(t, lifecycle.Install(t.Context(), lifecycle.InstallRequest{Toolchain: f.newName}, lifecycle.Options{}))
-	source := linkUpgradeStdx(t, f.newRoots, "existing destination choice")
-	_, err := f.upgrade(t, lifecycle.Options{})
-	require.Error(t, err)
-	assert.DirExists(t, f.oldRoots.TcDir)
-	assert.DirExists(t, f.newRoots.TcDir)
-	intents, err := component.InstalledIntents(f.newRoots)
-	require.NoError(t, err)
-	assert.Equal(t, []component.Intent{{Name: component.Stdx, Source: source}}, intents)
-	assert.FileExists(t, filepath.Join(source, "dynamic", "user.txt"))
-	settings, err := f.sf.Load()
-	require.NoError(t, err)
-	assert.Equal(t, f.oldName, settings.DefaultToolchain)
-}
-
-func TestUpgradeReportsIncompleteReplacementCleanupFailure(t *testing.T) {
-	if runtime.GOOS != "windows" {
-		t.Skip("Windows working-directory handle prevents replacement cleanup")
-	}
-	f := newUpgradeFixture(t, false, true)
-	lifecycle.SetAfterFinalizeHook(t, func() error {
-		t.Chdir(f.newRoots.TcDir)
-		return nil
-	})
-	_, err := f.upgrade(t, lifecycle.Options{})
-	require.Error(t, err)
-	assert.ErrorContains(t, err, "remove incomplete replacement")
-	assert.ErrorContains(t, err, "stdx-docs")
-	installed, err := toolchain.ListInstalled()
-	require.NoError(t, err)
-	assert.Contains(t, installed, f.oldName)
-	assert.Contains(t, installed, f.newName, "obstructed replacement must remain discoverable")
-	for _, path := range []string{f.oldRoots.TcDir, f.oldRoots.StdxDir, f.oldRoots.DocsDir} {
-		assert.DirExists(t, path)
-	}
-}
-
-func TestUpgradeSettingsFailureRestoresOldContent(t *testing.T) {
-	f := newUpgradeFixture(t, false, false)
-	before, err := os.ReadFile(f.sf.Path())
-	require.NoError(t, err)
-	lifecycle.SetAfterFinalizeHook(t, func() error {
-		// Block the real settings write after materializing the replacement.
-		require.NoError(t, os.Rename(f.sf.Path(), f.sf.Path()+".saved"))
-		require.NoError(t, os.Mkdir(f.sf.Path(), 0o755))
-		require.NoError(t, os.WriteFile(filepath.Join(f.sf.Path(), "obstruction"), []byte("keep"), 0o644))
-		return nil
-	})
-	_, err = f.upgrade(t, lifecycle.Options{})
-	require.Error(t, err)
-	for _, path := range []string{f.oldRoots.TcDir, f.oldRoots.StdxDir, f.oldRoots.DocsDir} {
-		assert.DirExists(t, path)
-	}
-	data, err := os.ReadFile(filepath.Join(f.oldRoots.StdxDir, "dynamic", "version.txt"))
-	require.NoError(t, err)
-	assert.Equal(t, "1.0.0", string(data))
-	unchanged, err := os.ReadFile(f.sf.Path() + ".saved")
-	require.NoError(t, err)
-	assert.Equal(t, before, unchanged)
-	components, err := component.ListInstalled(f.newRoots.TcDir)
-	require.NoError(t, err)
-	assert.ElementsMatch(t, component.KnownComponents(), components,
-		"unreadable settings must retain the complete usable replacement")
-}
-
-func TestRemovalAndUpgradeRecoverBeforeInspectingOldContent(t *testing.T) {
-	for _, operation := range []string{"remove", "upgrade"} {
-		t.Run(operation, func(t *testing.T) {
-			f := newUpgradeFixture(t, false, false)
-			tx, err := fstx.NewToolchainTransaction(f.home, f.oldName)
-			require.NoError(t, err)
-			for _, path := range []string{f.oldRoots.DocsDir, f.oldRoots.StdxDir, f.oldRoots.TcDir} {
-				require.NoError(t, tx.RemoveDir(path))
-			}
-			// Discard the unfinished transaction as an interrupted process
-			// would. The production operation must recover before inspecting.
-			assert.NoDirExists(t, f.oldRoots.TcDir)
-			if operation == "remove" {
-				require.NoError(t, lifecycle.PrepareToolchainRemoval(f.oldName))
-				for _, path := range []string{f.oldRoots.TcDir, f.oldRoots.StdxDir, f.oldRoots.DocsDir} {
-					assert.DirExists(t, path, "source must be inspectable before confirmation")
-				}
-				require.NoError(t, lifecycle.RemoveToolchain(f.oldName))
-			} else {
-				_, err := f.upgrade(t, lifecycle.Options{})
-				require.NoError(t, err)
-				components, err := component.ListInstalled(f.newRoots.TcDir)
-				require.NoError(t, err)
-				assert.ElementsMatch(t, component.KnownComponents(), components)
-			}
-			for _, path := range []string{f.oldRoots.TcDir, f.oldRoots.StdxDir, f.oldRoots.DocsDir} {
-				assert.NoDirExists(t, path)
-			}
-		})
-	}
 }
 
 func TestRemoveFailureRestoresComponentRootsAndReferences(t *testing.T) {
@@ -372,4 +169,110 @@ func TestForceReinstallKeepsExternalComponentsManaged(t *testing.T) {
 	assert.NoDirExists(t, f.oldRoots.DocsDir)
 	assert.NoDirExists(t, f.oldRoots.StdxDir)
 	assert.FileExists(t, filepath.Join(source, "dynamic", "user.txt"))
+}
+
+func fixtureChannel(t *testing.T, f upgradeFixture) component.Roots {
+	t.Helper()
+	name, err := toolchain.ParseToolchainName(f.oldName)
+	require.NoError(t, err)
+	name.Version = ""
+	roots, err := component.RootsFor(name.String())
+	require.NoError(t, err)
+	for _, pair := range [][2]string{{f.oldRoots.TcDir, roots.TcDir}, {f.oldRoots.DocsDir, roots.DocsDir}, {f.oldRoots.StdxDir, roots.StdxDir}} {
+		require.NoError(t, fsops.CopyTree(pair[0], pair[1]))
+	}
+	return roots
+}
+func TestChannelUpgradePublishesAllRootsAndKeepsFixedVersion(t *testing.T) {
+	for _, target := range []bool{false, true} {
+		t.Run(fmt.Sprint(target), func(t *testing.T) {
+			f := newUpgradeFixture(t, target, false)
+			channel := fixtureChannel(t, f)
+			_, err := lifecycle.UpgradeToolchain(t.Context(), filepath.Base(channel.TcDir), f.resolved, f.dist, lifecycle.Options{})
+			require.NoError(t, err)
+			installed, err := toolchain.ReadInstallation(channel.TcDir)
+			require.NoError(t, err)
+			assert.Equal(t, f.newName, installed.Release)
+			for _, path := range []string{filepath.Join(channel.StdxDir, "dynamic", "version.txt"), filepath.Join(channel.DocsDir, "main", "index.html"), filepath.Join(channel.DocsDir, "stdx", "index.html")} {
+				data, err := os.ReadFile(path)
+				require.NoError(t, err)
+				assert.Equal(t, "2.0.0", string(data))
+			}
+			old, err := os.ReadFile(filepath.Join(f.oldRoots.StdxDir, "dynamic", "version.txt"))
+			require.NoError(t, err)
+			assert.Equal(t, "1.0.0", string(old))
+			settings, err := f.sf.Load()
+			require.NoError(t, err)
+			assert.Equal(t, f.initialDefault, settings.DefaultToolchain)
+		})
+	}
+}
+func TestChannelUpgradeFailureRetainsCompleteOldInstallation(t *testing.T) {
+	for _, fail := range []string{"component", "finalize"} {
+		t.Run(fail, func(t *testing.T) {
+			f := newUpgradeFixture(t, false, fail == "component")
+			channel := fixtureChannel(t, f)
+			if fail == "finalize" {
+				lifecycle.SetAfterFinalizeHook(t, func() error { return errors.New("finalize failed") })
+			}
+			_, err := lifecycle.UpgradeToolchain(t.Context(), "lts", f.resolved, f.dist, lifecycle.Options{})
+			require.Error(t, err)
+			installed, err := toolchain.ReadInstallation(channel.TcDir)
+			require.NoError(t, err)
+			assert.Equal(t, f.oldName, installed.Release)
+			for _, path := range []string{filepath.Join(channel.StdxDir, "dynamic", "version.txt"), filepath.Join(channel.DocsDir, "stdx", "index.html")} {
+				data, err := os.ReadFile(path)
+				require.NoError(t, err)
+				assert.Equal(t, "1.0.0", string(data))
+			}
+			assert.NoDirExists(t, f.newRoots.TcDir)
+		})
+	}
+}
+func TestChannelComponentChoicesDoNotAffectFixedInstall(t *testing.T) {
+	f := newUpgradeFixture(t, false, false)
+	channel := fixtureChannel(t, f)
+	require.NoError(t, component.Remove(channel, component.Docs))
+	assert.True(t, component.IsInstalled(f.oldRoots.TcDir, component.Docs))
+	assert.False(t, component.IsInstalled(channel.TcDir, component.Docs))
+	source := linkUpgradeStdx(t, channel, "user libraries")
+	_, err := lifecycle.UpgradeToolchain(t.Context(), "lts", f.resolved, f.dist, lifecycle.Options{})
+	require.NoError(t, err)
+	intents, err := component.InstalledIntents(channel)
+	require.NoError(t, err)
+	assert.Contains(t, intents, component.Intent{Name: component.Stdx, Source: source})
+	assert.False(t, component.IsInstalled(channel.TcDir, component.Docs))
+	require.NoError(t, lifecycle.RemoveToolchain("lts"))
+	assert.FileExists(t, filepath.Join(source, "dynamic", "user.txt"))
+	assert.DirExists(t, f.oldRoots.TcDir)
+}
+
+func TestChannelUpgradeRecoversRealCrashWithAllComponents(t *testing.T) {
+	if os.Getenv("CJV_TEST_CHANNEL_CRASH") == "1" {
+		config.IsolateForTest(t, os.Getenv(config.EnvHome))
+		lifecycle.SetAfterFinalizeHook(t, func() error { os.Exit(73); return nil })
+		_, err := lifecycle.UpdateInstalled(t.Context(), toolchain.ToolchainName{Channel: toolchain.LTS}, lifecycle.Options{})
+		t.Fatalf("expected interruption, got %v", err)
+	}
+	f := newUpgradeFixture(t, false, false)
+	channel := fixtureChannel(t, f)
+	cmd := exec.CommandContext(t.Context(), os.Args[0], "-test.run=^TestChannelUpgradeRecoversRealCrashWithAllComponents$")
+	cmd.Env = append(os.Environ(), "CJV_TEST_CHANNEL_CRASH=1")
+	output, err := cmd.CombinedOutput()
+	var exitErr *exec.ExitError
+	require.ErrorAs(t, err, &exitErr, "%s", output)
+	require.Equal(t, 73, exitErr.ExitCode(), "%s", output)
+	record, err := toolchain.ReadInstallation(channel.TcDir)
+	require.NoError(t, err)
+	assert.Equal(t, f.newName, record.Release, "crash occurs after every new root has been placed")
+	require.NoError(t, toolchain.RecoverHome())
+	record, err = toolchain.ReadInstallation(channel.TcDir)
+	require.NoError(t, err)
+	assert.Equal(t, f.oldName, record.Release)
+	for _, path := range []string{filepath.Join(channel.StdxDir, "dynamic", "version.txt"), filepath.Join(channel.DocsDir, "main", "index.html"), filepath.Join(channel.DocsDir, "stdx", "index.html")} {
+		data, err := os.ReadFile(path)
+		require.NoError(t, err)
+		assert.Equal(t, "1.0.0", string(data))
+	}
+	assert.FileExists(t, compilerPath(f.oldRoots.TcDir))
 }

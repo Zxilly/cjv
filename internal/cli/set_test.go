@@ -7,6 +7,7 @@ import (
 
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/lifecycle"
+	"github.com/Zxilly/cjv/internal/toolchain"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -18,6 +19,7 @@ import (
 func TestUpdateSettingsAfterUninstall_RemovesOverrides(t *testing.T) {
 	home := t.TempDir()
 	config.IsolateForTest(t, home)
+	require.NoError(t, toolchain.RecoverHome())
 	require.NoError(t, os.MkdirAll(filepath.Join(home, "toolchains", "lts-1.0.5"), 0o755))
 
 	// Create settings with overrides, some pointing to the uninstalled toolchain
@@ -41,6 +43,7 @@ func TestUpdateSettingsAfterUninstall_RemovesOverrides(t *testing.T) {
 func TestUpdateSettingsAfterUninstall_SelectsNewDefault(t *testing.T) {
 	home := t.TempDir()
 	config.IsolateForTest(t, home)
+	require.NoError(t, toolchain.RecoverHome())
 	require.NoError(t, os.MkdirAll(filepath.Join(home, "toolchains", "lts-1.0.5"), 0o755))
 
 	// Create a remaining toolchain
@@ -61,6 +64,7 @@ func TestUpdateSettingsAfterUninstall_SelectsNewDefault(t *testing.T) {
 func TestUpdateSettingsAfterUninstall_ClearsDefaultWhenNoneRemain(t *testing.T) {
 	home := t.TempDir()
 	config.IsolateForTest(t, home)
+	require.NoError(t, toolchain.RecoverHome())
 	require.NoError(t, os.MkdirAll(filepath.Join(home, "toolchains", "lts-1.0.5"), 0o755))
 
 	// No other toolchains installed
@@ -80,6 +84,7 @@ func TestUpdateSettingsAfterUninstall_ClearsDefaultWhenNoneRemain(t *testing.T) 
 func TestUpdateSettingsAfterUninstall_NoChangeWhenUnrelated(t *testing.T) {
 	home := t.TempDir()
 	config.IsolateForTest(t, home)
+	require.NoError(t, toolchain.RecoverHome())
 	require.NoError(t, os.MkdirAll(filepath.Join(home, "toolchains", "lts-1.0.5"), 0o755))
 
 	settings := config.DefaultSettings()

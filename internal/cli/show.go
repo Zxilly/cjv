@@ -112,6 +112,9 @@ func gatherActive() (*showActiveResult, error) {
 }
 
 func gatherInstalled() (showInstalledResult, error) {
+	if err := toolchain.RecoverHome(); err != nil {
+		return showInstalledResult{}, err
+	}
 	installed, err := toolchain.ListInstalled()
 	if err != nil {
 		return showInstalledResult{}, err

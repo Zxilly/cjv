@@ -30,7 +30,7 @@ func installVia(t *testing.T, source, serverURL string, force bool, opts lifecyc
 	url := serverURL + "/download/cangjie-sdk-1.0.5.zip"
 	switch source {
 	case "manifest":
-		return lifecycle.Install(t.Context(), lifecycle.InstallRequest{Toolchain: "lts", Force: force}, opts)
+		return lifecycle.Install(t.Context(), lifecycle.InstallRequest{Toolchain: "lts-1.0.5", Force: force}, opts)
 	case "url":
 		return lifecycle.InstallToolchainFromURL(t.Context(), "custom-sdk", url, "", force, true, opts)
 	default:
@@ -59,6 +59,7 @@ func prepareInstallTest(t *testing.T) (string, *config.SettingsFile, string) {
 	home := t.TempDir()
 	config.IsolateForTest(t, home)
 	t.Setenv(config.EnvDistServer, "")
+	require.NoError(t, toolchain.RecoverHome())
 	server := testutil.MockDistServer(t)
 	settings := config.DefaultSettings()
 	settings.ManifestURL = server.URL + "/sdk-versions.json"
@@ -163,10 +164,10 @@ func TestInstallPreservesFinalizeAndRollbackErrors(t *testing.T) {
 		require.NoError(t, os.WriteFile(filepath.Join(staging, "occupied"), []byte("occupied"), 0o644))
 		return finalizeErr
 	})
-	err := lifecycle.Install(t.Context(), lifecycle.InstallRequest{Toolchain: "lts"}, lifecycle.Options{})
+	err := lifecycle.Install(t.Context(), lifecycle.InstallRequest{Toolchain: "lts-1.0.5"}, lifecycle.Options{})
 
 	require.ErrorIs(t, err, finalizeErr)
-	assert.ErrorContains(t, err, "rollback after failed install also failed")
+	assert.ErrorContains(t, err, "recovery incomplete")
 	var renameErr *os.LinkError
 	require.ErrorAs(t, err, &renameErr)
 	assert.Equal(t, dest, renameErr.Old)
@@ -252,8 +253,8 @@ func TestFirstInstallDefaultSurvivesInterruptionAfterPublication(t *testing.T) {
 	settings, err := sf.Load()
 	require.NoError(t, err)
 	require.Equal(t, "lts", settings.DefaultToolchain)
-	require.Equal(t, "lts-1.0.5", settings.Installations["lts"])
-	dest := filepath.Join(home, "toolchains", settings.Installations["lts"])
+
+	dest := filepath.Join(home, "toolchains", "lts")
 	assert.FileExists(t, compilerPath(dest))
 	journals, err := filepath.Glob(filepath.Join(home, "toolchains", ".fstx-*", "journal.json"))
 	require.NoError(t, err)

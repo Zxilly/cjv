@@ -61,6 +61,9 @@ func FindActiveDir(rawName string) (dir, displayName string, parsed ToolchainNam
 // error, tcName may still contain the configured (but uninstalled) toolchain
 // name. resolve.Active is the auto-installing counterpart for the proxy path.
 func ResolveActiveToolchain() (tcDir string, tcName string, source config.OverrideSource, err error) {
+	if err := RecoverHome(); err != nil {
+		return "", "", 0, err
+	}
 	cwd, err := os.Getwd()
 	if err != nil {
 		return "", "", 0, fmt.Errorf("failed to get working directory: %w", err)

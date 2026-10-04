@@ -27,7 +27,6 @@ func TestUpdateExistingLatestAcrossRenderModes(t *testing.T) {
 			server := testutil.ValidMockServer(t)
 			settings := config.DefaultSettings()
 			settings.ManifestURL = server.URL + "/sdk-versions.json"
-			settings.Installations = map[string]string{"lts": "lts-1.0.0"}
 			settings.DefaultToolchain = "lts"
 			settings.Overrides[filepath.Join(home, "project")] = "lts"
 			settingsPath := filepath.Join(home, ".cjv", "settings.toml")
@@ -41,8 +40,7 @@ func TestUpdateExistingLatestAcrossRenderModes(t *testing.T) {
 			t.Logf("json=%v err=%v default=%s oldExists=%v", jsonMode, err, loaded.DefaultToolchain, oldErr == nil)
 			require.NoError(t, err, "render mode must not decide whether update succeeds")
 			require.Equal(t, "lts", loaded.DefaultToolchain)
-			require.Equal(t, "lts-1.0.5", loaded.Installations["lts"])
-			require.True(t, os.IsNotExist(oldErr))
+			require.NoError(t, oldErr, "legacy fixed installation survives the channel update")
 		})
 	}
 }

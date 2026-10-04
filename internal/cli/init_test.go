@@ -230,7 +230,7 @@ func TestRunInitPassesConfiguredComponentsToDefaultToolchainInstall(t *testing.T
 
 	require.NoError(t, app.runInit(&cobra.Command{}, nil))
 
-	const name = "nightly-1.2.0-alpha.20260822010101"
+	const name = "nightly"
 	assert.DirExists(t, filepath.Join(home, "toolchains", name))
 	assert.FileExists(t, filepath.Join(home, "docs", name, "main", "index.html"),
 		"the configured component is installed into the default toolchain")

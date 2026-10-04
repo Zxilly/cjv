@@ -14,61 +14,35 @@ import (
 	"github.com/Zxilly/cjv/internal/component"
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/lifecycle"
+	"github.com/Zxilly/cjv/internal/toolchain"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sys/windows"
 )
 
-func TestUpgradeKeepsPublishedReplacementWhenSettingsRestoreFails(t *testing.T) {
-	f := newUpgradeFixture(t, false, false)
-	// Prevent retiring the old SDK. The settings publication still succeeds,
-	// then we lock its real file against replacement before rollback starts.
-	t.Chdir(f.oldRoots.TcDir)
-	completed := make(chan error, 1)
-	go func() {
-		_, err := f.upgrade(t, lifecycle.Options{})
-		completed <- err
-	}()
-	deadline := time.Now().Add(10 * time.Second)
-	for {
-		settings, err := config.LoadSettings(f.sf.Path())
-		if err == nil && settings.DefaultToolchain == f.newName {
-			break
-		}
-		select {
-		case err := <-completed:
-			t.Fatalf("upgrade ended before publishing references: %v", err)
-		default:
-		}
-		if time.Now().After(deadline) {
-			t.Fatal("upgrade did not publish references")
-		}
-		time.Sleep(time.Millisecond)
-	}
-	path, err := windows.UTF16PtrFromString(f.sf.Path())
-	require.NoError(t, err)
-	handle, err := windows.CreateFile(path, windows.GENERIC_READ, windows.FILE_SHARE_READ, nil, windows.OPEN_EXISTING, 0, 0)
-	require.NoError(t, err)
-	t.Cleanup(func() { require.NoError(t, windows.CloseHandle(handle)) })
-	select {
-	case err = <-completed:
-	case <-time.After(10 * time.Second):
-		t.Fatal("upgrade did not report blocked settings restoration")
-	}
-	require.Error(t, err)
-	assert.ErrorContains(t, err, "restore toolchain settings")
-	f.sf.Invalidate()
-	settings, err := f.sf.Load()
-	require.NoError(t, err)
-	assert.Equal(t, f.newName, settings.DefaultToolchain)
-	assert.Equal(t, f.newName, settings.Overrides[filepath.Join(f.home, "project")])
-	assert.FileExists(t, compilerPath(f.newRoots.TcDir))
-	components, err := component.ListInstalled(f.newRoots.TcDir)
-	require.NoError(t, err)
-	assert.ElementsMatch(t, component.KnownComponents(), components,
-		"retaining the replacement must also retain its migrated components")
-	for _, path := range []string{f.oldRoots.TcDir, f.oldRoots.StdxDir, f.oldRoots.DocsDir} {
-		assert.DirExists(t, path)
+func TestFirstInstallKeepsSDKWhenPublishedSettingsCannotBeRestored(t *testing.T) {
+	for _, name := range []string{"lts", "lts-1.0.5"} {
+		t.Run(name, func(t *testing.T) {
+			home, sf, _ := prepareInstallTest(t)
+			failure := errors.New("failed after publishing default")
+			lifecycle.SetAfterPublishHook(t, func() error {
+				path, err := windows.UTF16PtrFromString(sf.Path())
+				require.NoError(t, err)
+				handle, err := windows.CreateFile(path, windows.GENERIC_READ, windows.FILE_SHARE_READ, nil, windows.OPEN_EXISTING, 0, 0)
+				require.NoError(t, err)
+				t.Cleanup(func() { require.NoError(t, windows.CloseHandle(handle)) })
+				return failure
+			})
+			err := lifecycle.Install(t.Context(), lifecycle.InstallRequest{Toolchain: name}, lifecycle.Options{})
+			require.ErrorIs(t, err, failure)
+			require.ErrorContains(t, err, "restore toolchain settings")
+			settings, err := config.LoadSettings(sf.Path())
+			require.NoError(t, err)
+			assert.Equal(t, name, settings.DefaultToolchain)
+			assert.FileExists(t, compilerPath(filepath.Join(home, "toolchains", name)))
+			require.NoError(t, toolchain.RecoverHome())
+			assert.FileExists(t, compilerPath(filepath.Join(home, "toolchains", name)))
+		})
 	}
 }
 
@@ -114,7 +88,7 @@ func TestRemovalRecoversRealCrashAfterReferencePublication(t *testing.T) {
 	assert.NoDirExists(t, f.oldRoots.DocsDir)
 	settings, err := config.LoadSettings(f.sf.Path())
 	require.NoError(t, err)
-	assert.Empty(t, settings.DefaultToolchain, "references must be cleared before any content moves")
+	assert.NotEqual(t, f.oldName, settings.DefaultToolchain, "removed identity must no longer be selected")
 	// The direct production retry recovers before checking whether the source
 	// exists. Its preparation step restores inspectable original content.
 	require.NoError(t, lifecycle.PrepareToolchainRemoval(f.oldName))

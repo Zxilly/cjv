@@ -120,7 +120,6 @@ func TestRunUpdateRendersJSONResult(t *testing.T) {
 	require.NoError(t, os.MkdirAll(filepath.Join(home, "toolchains", "lts-1.0.0"), 0o755))
 	server := testutil.ValidMockServer(t)
 	settings := config.DefaultSettings()
-	settings.Installations = map[string]string{"lts": "lts-1.0.0"}
 	settings.ManifestURL = server.URL + "/sdk-versions.json"
 	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 
@@ -134,7 +133,7 @@ func TestRunUpdateRendersJSONResult(t *testing.T) {
 		NoneInstalled bool          `json:"none_installed"`
 	}
 	require.NoError(t, json.Unmarshal(out.Bytes(), &result), out.String())
-	assert.Equal(t, []updateEntry{{From: "lts-1.0.0", To: "lts-1.0.5"}}, result.Updates)
+	assert.Equal(t, []updateEntry{{From: "lts", To: "lts-1.0.5"}}, result.Updates)
 	assert.False(t, result.NoneInstalled)
 }
 

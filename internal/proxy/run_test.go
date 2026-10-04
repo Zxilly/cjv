@@ -260,8 +260,14 @@ targets = ["ohos", "android"]
 		for _, target := range targets {
 			key, err := sdktarget.CurrentTargetTuple(settings.DefaultHost, target)
 			require.NoError(t, err)
-			name := toolchain.ToolchainName{Channel: toolchain.STS, Version: "2.0.0", Target: key}.String()
+			name := toolchain.ToolchainName{Channel: toolchain.STS, Target: key}.String()
 			require.NoError(t, os.MkdirAll(filepath.Join(home, "toolchains", name), 0o755))
+			parsedName, err := toolchain.ParseToolchainName(name)
+			require.NoError(t, err)
+			if parsedName.Version == "" && parsedName.Target != "" {
+				parsedName.Version = "2.0.0"
+				require.NoError(t, toolchain.WriteInstallation(filepath.Join(home, "toolchains", name), toolchain.Installation{Release: parsedName.String(), Tuple: parsedName.Target}))
+			}
 		}
 		return nil
 	}
@@ -269,7 +275,7 @@ targets = ["ohos", "android"]
 
 	_ = Run(context.Background(), "cjc", nil)
 
-	assert.Equal(t, "sts-2.0.0", gotInput)
+	assert.Equal(t, "sts", gotInput)
 	assert.Equal(t, []string{"ohos", "android"}, gotTargets)
 }
 
@@ -296,5 +302,5 @@ targets = ["ohos"]
 
 	err := Run(context.Background(), "cjc", nil)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "sts-2.0.0-")
+	assert.Contains(t, err.Error(), "sts-")
 }

@@ -4,164 +4,121 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"maps"
 	"os"
+	"path/filepath"
 
-	"github.com/Zxilly/cjv/internal/cjverr"
 	"github.com/Zxilly/cjv/internal/component"
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/progress"
 	"github.com/Zxilly/cjv/internal/toolchain"
 )
 
-// upgradeToolchain installs a replacement and the old toolchain's component
-// choices before moving references and retiring the old content. An existing
-// replacement keeps its own component choices; only missing ones are added.
-// UpdateInstalled and UpdateAll resolve the replacement and run this step.
-func upgradeToolchain(ctx context.Context, currentName string, resolved ResolvedToolchain, d *Distribution, opts Options) (updated bool, retErr error) {
-	if _, err := toolchain.ParseToolchainName(currentName); err != nil {
-		return false, err
-	}
-	parsed, err := toolchain.ParseToolchainName(resolved.Name)
+// upgradeToolchain prepares every component before atomically replacing the
+// channel's independent SDK, docs and stdx roots. Fixed versions are untouched.
+func upgradeToolchain(ctx context.Context, identity string, rt ResolvedToolchain, d *Distribution, opts Options) (bool, error) {
+	name, err := toolchain.ParseToolchainName(identity)
 	if err != nil {
 		return false, err
 	}
-	oldRoots, err := component.RootsFor(currentName)
+	if name.IsCustom() || name.Version != "" {
+		return false, fmt.Errorf("toolchain %s is not a tracking installation", identity)
+	}
+	if err := toolchain.RecoverHomeContext(ctx); err != nil {
+		return false, err
+	}
+	lock, err := toolchain.LockHome(ctx)
 	if err != nil {
 		return false, err
 	}
-	if err := toolchain.RecoverHome(); err != nil {
+	roots, err := component.RootsFor(identity)
+	if err != nil {
+		_ = lock.Close()
 		return false, err
 	}
-	if _, err := os.Lstat(oldRoots.TcDir); err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return false, &cjverr.ToolchainNotInstalledError{Name: currentName}
+	current, err := toolchain.ReadInstallation(roots.TcDir)
+	if err != nil {
+		_ = lock.Close()
+		return false, err
+	}
+	if expected, ok := d.installed[identity]; ok && expected != current {
+		_ = lock.Close()
+		return false, fmt.Errorf("toolchain %s changed during update; retry", identity)
+	}
+	intents, err := component.InstalledIntents(roots)
+	if err == nil {
+		opts.expectedComponents, err = installationComponentState(roots.TcDir)
+	}
+	if closeErr := lock.Close(); err == nil {
+		err = closeErr
+	}
+	if err != nil {
+		return false, err
+	}
+	opts.selection, opts.expectedSet, opts.expected = identity, true, &current
+	opts.prepare = func(ctx context.Context, staged component.Roots) error {
+		release, err := toolchain.ParseToolchainName(rt.Name)
+		if err != nil {
+			return err
 		}
-		return false, err
-	}
-	if currentName == resolved.Name {
-		opts.emit(progress.Event{Kind: progress.AlreadyUpToDate, Toolchain: currentName})
-		return false, nil
-	}
-	intents, err := component.InstalledIntents(oldRoots)
-	if err != nil {
-		return false, err
-	}
-	// Reload: a previous upgrade in the same operation may have moved the
-	// default and overrides.
-	sf := d.File
-	settings, err := sf.Load()
-	if err != nil {
-		return false, err
-	}
-	newRoots, err := component.RootsFor(resolved.Name)
-	if err != nil {
-		return false, err
-	}
-	_, existsErr := os.Lstat(newRoots.TcDir)
-	if existsErr != nil && !errors.Is(existsErr, os.ErrNotExist) {
-		return false, existsErr
-	}
-	newlyInstalled := errors.Is(existsErr, os.ErrNotExist)
-	opts.emit(progress.Event{Kind: progress.UpdateFound, Toolchain: currentName, Replacement: resolved.Name})
-	// Keep the old default until the replacement and all desired components
-	// are ready. Remove a newly created replacement on failure so resolving a
-	// channel cannot select the incomplete higher version on the next attempt.
-	if err := installResolved(ctx, d, resolved, false, false, opts); err != nil {
-		return false, err
-	}
-	keepReplacement := false
-	defer func() {
-		if retErr != nil && newlyInstalled && !keepReplacement {
-			// A failed publication/restore may have changed the persisted
-			// settings even when the cached snapshot still names the old SDK.
-			// Preserve a replacement if live references require it, or their
-			// state cannot be read safely.
-			required, err := replacementRequired(sf, resolved.Name)
-			if err != nil {
-				retErr = errors.Join(retErr, fmt.Errorf("retain replacement %s: cannot verify settings: %w", resolved.Name, err))
-				return
-			}
-			if required {
-				return
-			}
-			if err := retireToolchain(newRoots, sf, settings, config.SettingsUpdate{}); err != nil {
-				retErr = errors.Join(retErr, fmt.Errorf("remove incomplete replacement %s: %w", resolved.Name, err))
-			}
+		downloads, err := config.DownloadsDir()
+		if err != nil {
+			return err
 		}
-	}()
-	var missing []component.Intent
-	var names []component.Name
-	for _, intent := range intents {
-		if !component.IsInstalled(newRoots.TcDir, intent.Name) {
-			missing = append(missing, intent)
-			names = append(names, intent.Name)
-		}
-	}
-	var retirementErr error
-	err = component.ApplyChanges(newRoots, names, func() error {
-		for _, intent := range missing {
+		for _, intent := range intents {
 			if intent.Source != "" {
-				if _, err := component.Link(newRoots, intent.Name, intent.Source, false); err != nil {
-					return err
-				}
-			} else if err := installComponents(ctx, d, resolved.Name, []string{string(intent.Name)}, false, opts); err != nil {
+				_, err = component.Link(staged, intent.Name, intent.Source, false)
+			} else {
+				err = component.InstallFromSource(ctx, staged, release, intent.Name, rt.Tuple, downloads, false, d.Source, opts.sink())
+			}
+			if err != nil {
 				return err
 			}
 		}
-		update := config.SettingsUpdate{}
-		if opts.tracking != "" {
-			retirementErr = advanceTracking(ctx, oldRoots, d, opts.tracking, currentName, resolved.Name)
-		} else {
-			if parsed.Target == "" && opts.tracking == "" {
-				if settings.DefaultToolchain == currentName || !defaultToolchainExists(settings.DefaultToolchain) {
-					update.DefaultToolchain = &resolved.Name
-				}
-				for dir, name := range settings.Overrides {
-					if name == currentName {
-						if update.Overrides == nil {
-							update.Overrides = maps.Clone(settings.Overrides)
-						}
-						update.Overrides[dir] = resolved.Name
-					}
-				}
-			}
-			retirementErr = retireToolchain(oldRoots, sf, settings, update)
-		}
-		var partial *retirementError
-		if errors.As(retirementErr, &partial) && partial.KeepReplacement {
-			// Commit the already working component set when recovery must
-			// preserve the new SDK. Returning the error from this callback
-			// would otherwise silently remove components selected by settings.
-			keepReplacement = true
-			return nil
-		}
-		return retirementErr
-	})
-	if err == nil {
-		err = retirementErr
+		return nil
 	}
-	return err == nil, err
+	opts.emit(progress.Event{Kind: progress.UpdateFound, Toolchain: identity, Replacement: rt.Name})
+	if err := installResolved(ctx, d, rt, true, false, opts); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+func componentState(dir string) (string, error) {
+	var state string
+	entries, err := os.ReadDir(dir)
+	if errors.Is(err, os.ErrNotExist) {
+		return "", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		data, err := os.ReadFile(filepath.Join(dir, entry.Name()))
+		if err != nil {
+			return "", err
+		}
+		state += entry.Name() + "\x00" + string(data) + "\x00"
+	}
+	return state, nil
 }
 
-func replacementRequired(sf *config.SettingsFile, name string) (bool, error) {
-	sf.Invalidate()
-	settings, err := sf.Load()
+func installationComponentState(dir string) (string, error) {
+	state, err := componentState(filepath.Join(dir, component.MetaDir))
 	if err != nil {
-		return true, err
+		return "", err
 	}
-	if settings.DefaultToolchain == name {
-		return true, nil
+	roots, err := component.RootsFor(filepath.Base(dir))
+	if err != nil {
+		return "", err
 	}
-	for _, concrete := range settings.Installations {
-		if concrete == name {
-			return true, nil
-		}
+	intents, err := component.InstalledIntents(roots)
+	if err != nil {
+		return "", err
 	}
-	for _, selected := range settings.Overrides {
-		if selected == name {
-			return true, nil
-		}
+	for _, intent := range intents {
+		state += string(intent.Name) + "\x00" + intent.Source + "\x00"
 	}
-	return false, nil
+	return state, nil
 }

@@ -22,6 +22,7 @@ func TestRunUninstall_RemovesToolchain(t *testing.T) {
 	app := newApplication("dev", "")
 	home := t.TempDir()
 	config.IsolateForTest(t, home)
+	require.NoError(t, toolchain.RecoverHome())
 	require.NoError(t, config.EnsureDirs())
 
 	// Install first using mock server
@@ -48,6 +49,7 @@ func TestRunUninstall_NotInstalled(t *testing.T) {
 	app := newApplication("dev", "")
 	home := t.TempDir()
 	config.IsolateForTest(t, home)
+	require.NoError(t, toolchain.RecoverHome())
 	require.NoError(t, os.MkdirAll(filepath.Join(home, "toolchains"), 0o755))
 
 	err := app.runUninstall(nil, []string{"nonexistent-99.99"})
@@ -58,6 +60,7 @@ func TestRunUninstallRecoversBeforeCheckingInstallation(t *testing.T) {
 	app := newApplication("dev", "")
 	home := t.TempDir()
 	config.IsolateForTest(t, home)
+	require.NoError(t, toolchain.RecoverHome())
 	require.NoError(t, config.EnsureDirs())
 	name := "lts-1.0.5"
 	dir := filepath.Join(home, "toolchains", name)
@@ -84,6 +87,7 @@ func TestRunUninstall_PreservesSettingsWhenRemoveFails(t *testing.T) {
 
 	home := t.TempDir()
 	config.IsolateForTest(t, home)
+	require.NoError(t, toolchain.RecoverHome())
 	require.NoError(t, config.EnsureDirs())
 
 	name := "lts-1.0.5"
@@ -117,6 +121,7 @@ func TestRunUninstall_PreservesSettingsWhenRemoveFails(t *testing.T) {
 func TestUpdateSettingsAfterUninstallDoesNotPromoteTargetVariantToDefault(t *testing.T) {
 	home := t.TempDir()
 	config.IsolateForTest(t, home)
+	require.NoError(t, toolchain.RecoverHome())
 	config.ResetDefaultSettingsFileCache()
 	t.Cleanup(config.ResetDefaultSettingsFileCache)
 	require.NoError(t, config.EnsureDirs())
@@ -141,6 +146,7 @@ func TestRunUninstall_MultipleInstalled(t *testing.T) {
 	app := newApplication("dev", "")
 	home := t.TempDir()
 	config.IsolateForTest(t, home)
+	require.NoError(t, toolchain.RecoverHome())
 	require.NoError(t, config.EnsureDirs())
 
 	server := testutil.ValidMockServer(t)
@@ -162,5 +168,5 @@ func TestRunUninstall_MultipleInstalled(t *testing.T) {
 
 	remaining, _ := toolchain.ListInstalled()
 	assert.Len(t, remaining, 1)
-	assert.Contains(t, remaining, "lts-1.0.5")
+	assert.Contains(t, remaining, "lts")
 }

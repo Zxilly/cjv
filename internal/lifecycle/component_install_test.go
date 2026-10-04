@@ -182,7 +182,10 @@ func TestInstallComponentsForToolchainResolvesInstalledToolchain(t *testing.T) {
 	// to whatever sink the caller supplied.
 	recorder := &testutil.ProgressRecorder{}
 	require.NoError(t, InstallComponentsForToolchain(context.Background(), "lts", []string{"docs"}, Options{Progress: recorder}))
-	assert.True(t, component.IsInstalled(tcDir, component.Docs))
+	channelDir, err := config.ToolchainDirFor("lts")
+	require.NoError(t, err)
+	assert.True(t, component.IsInstalled(channelDir, component.Docs))
+	assert.False(t, component.IsInstalled(tcDir, component.Docs))
 	assert.Contains(t, recorder.Kinds, progress.ComponentInstalled)
 
 	require.NoError(t, InstallComponentsForToolchain(context.Background(), "lts", nil, quietLifecycleOptions()), "no components is a no-op")

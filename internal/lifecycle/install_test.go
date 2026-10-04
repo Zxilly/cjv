@@ -20,6 +20,7 @@ import (
 	"github.com/Zxilly/cjv/internal/dist"
 	"github.com/Zxilly/cjv/internal/lifecycle"
 	"github.com/Zxilly/cjv/internal/progress"
+	"github.com/Zxilly/cjv/internal/resolve"
 	"github.com/Zxilly/cjv/internal/sdktools"
 	sdktarget "github.com/Zxilly/cjv/internal/target"
 	"github.com/Zxilly/cjv/internal/testutil"
@@ -77,8 +78,8 @@ func TestInstall_ResolvesChannelsAndVersions(t *testing.T) {
 		input string
 		want  string
 	}{
-		{"lts channel", "lts", "lts-1.0.5"},
-		{"sts channel", "sts", "sts-2.0.0"},
+		{"lts channel", "lts", "lts"},
+		{"sts channel", "sts", "sts"},
 		{"specific version", "lts-1.0.5", "lts-1.0.5"},
 		// A bare version discovers its channel from the manifest.
 		{"bare version lts", "1.0.5", "lts-1.0.5"},
@@ -115,27 +116,27 @@ func TestInstall_BothChannels(t *testing.T) {
 	require.NoError(t, install(t, lifecycle.InstallRequest{Toolchain: "sts"}))
 	installed := installedNames(t)
 	assert.Len(t, installed, 2)
-	assert.Contains(t, installed, "lts-1.0.5")
-	assert.Contains(t, installed, "sts-2.0.0")
+	assert.Contains(t, installed, "lts")
+	assert.Contains(t, installed, "sts")
 }
 
 func TestInstall_NightlyFromUnifiedDistServer(t *testing.T) {
 	distServerHome(t, testutil.SplitNightlyMockServer(t).URL+"/corp/cjv")
 	require.NoError(t, install(t, lifecycle.InstallRequest{Toolchain: "nightly"}))
-	assert.Contains(t, installedNames(t), "nightly-1.2.0-alpha.20260822010101")
+	assert.Contains(t, installedNames(t), "nightly")
 }
 
 func TestInstall_DefaultManifestInstallsNightly(t *testing.T) {
 	// nightly.json is found beside versions.json without dist_server.
 	installHome(t, testutil.SplitNightlyMockServer(t).URL+"/corp/cjv/versions.json")
 	require.NoError(t, install(t, lifecycle.InstallRequest{Toolchain: "nightly"}))
-	assert.Contains(t, installedNames(t), "nightly-1.2.0-alpha.20260822010101")
+	assert.Contains(t, installedNames(t), "nightly")
 }
 
 func TestInstall_NightlyComponentFromUnifiedDistServer(t *testing.T) {
 	home := distServerHome(t, testutil.SplitNightlyMockServer(t).URL+"/corp/cjv")
 	require.NoError(t, install(t, lifecycle.InstallRequest{Toolchain: "nightly", Components: []string{"docs"}}))
-	assert.FileExists(t, filepath.Join(home, "docs", "nightly-1.2.0-alpha.20260822010101", "main", "index.html"))
+	assert.FileExists(t, filepath.Join(home, "docs", "nightly", "main", "index.html"))
 }
 
 func TestInstall_AlreadyInstalledAndForce(t *testing.T) {
@@ -147,7 +148,7 @@ func TestInstall_AlreadyInstalledAndForce(t *testing.T) {
 	// Second install without force reports "already installed" and returns nil.
 	assert.NoError(t, lifecycle.Install(context.Background(), lifecycle.InstallRequest{Toolchain: "lts"}, opts),
 		"already-installed is an informational no-op, not an error")
-	assert.Equal(t, []progress.Kind{progress.FetchingManifest, progress.ToolchainAlreadyInstalled}, recorder.Kinds)
+	assert.Equal(t, []progress.Kind{progress.FetchingManifest, progress.AlreadyUpToDate}, recorder.Kinds)
 
 	assert.NoError(t, install(t, lifecycle.InstallRequest{Toolchain: "lts", Force: true}),
 		"force install should succeed even when already installed")
@@ -199,10 +200,10 @@ func TestInstall_HostAndTargets(t *testing.T) {
 	require.NoError(t, err)
 
 	installed := installedNames(t)
-	assert.Contains(t, installed, "sts-2.0.0")
-	assert.NotContains(t, installed, "sts-2.0.0-"+hostKey)
-	assert.Contains(t, installed, "sts-2.0.0-"+ohosKey)
-	assert.Contains(t, installed, "sts-2.0.0-"+androidKey)
+	assert.Contains(t, installed, "sts")
+	assert.NotContains(t, installed, "sts-"+hostKey)
+	assert.Contains(t, installed, "sts-"+ohosKey)
+	assert.Contains(t, installed, "sts-"+androidKey)
 
 	reloaded, err := config.LoadSettings(filepath.Join(home, ".cjv", "settings.toml"))
 	require.NoError(t, err)
@@ -318,11 +319,11 @@ func TestInstall_TargetStdxLandsUnderTargetToolchain(t *testing.T) {
 
 	require.NoError(t, install(t, lifecycle.InstallRequest{Toolchain: "sts", Targets: []string{"ohos"}, Components: []string{"stdx"}}))
 
-	targetName := "sts-" + version + "-" + ohosKey
+	targetName := "sts-" + ohosKey
 	roots, err := component.RootsFor(targetName)
 	require.NoError(t, err)
 	assert.True(t, component.IsInstalled(roots.TcDir, component.Stdx), "stdx manifest should exist under the target toolchain dir")
-	hostRoots, err := component.RootsFor("sts-" + version)
+	hostRoots, err := component.RootsFor("sts")
 	require.NoError(t, err)
 	assert.False(t, component.IsInstalled(hostRoots.TcDir, component.Stdx), "stdx must NOT be installed against the host toolchain when cross-compiling")
 	assert.FileExists(t, filepath.Join(roots.StdxDir, "dynamic", "libfoo.so"))
@@ -360,8 +361,62 @@ func TestInstall_PinsTargetToHostVersion(t *testing.T) {
 	require.Error(t, err, "install must fail when the target SDK lacks the host's resolved version")
 	installed := installedNames(t)
 	// The host must have been installed first, proving the target-pin code ran.
-	assert.Contains(t, installed, "sts-2.1.0", "host toolchain should have installed before the target failure")
-	assert.NotContains(t, installed, "sts-2.0.0-"+ohosKey, "must not install a version-skewed target SDK")
+	assert.Contains(t, installed, "sts", "host toolchain should have installed before the target failure")
+	assert.NotContains(t, installed, "sts-"+ohosKey, "must not install a version-skewed target SDK")
+}
+
+func TestMissingTrackingTargetUsesInstalledHostRelease(t *testing.T) {
+	for _, operation := range []string{"auto-install", "update"} {
+		t.Run(operation, func(t *testing.T) {
+			hostTuple, err := sdktarget.CurrentHostTuple("")
+			require.NoError(t, err)
+			tuple, err := sdktarget.CurrentTargetTuple("", "ohos")
+			require.NoError(t, err)
+			server, _ := manifestServer(t, nil, func(base, sha string) dist.Manifest {
+				var manifest dist.Manifest
+				manifest.Channels.LTS = dist.ChannelInfo{Latest: "1.0.5", Versions: map[string]map[string]dist.DownloadInfo{
+					"1.0.5": {hostTuple: download(base, sha, "lts.zip")},
+				}}
+				manifest.Channels.STS = dist.ChannelInfo{Latest: "2.0.0", Versions: map[string]map[string]dist.DownloadInfo{
+					"1.0.0": {hostTuple: download(base, sha, "old.zip"), tuple: download(base, sha, "old-target.zip")},
+					"2.0.0": {hostTuple: download(base, sha, "new.zip"), tuple: download(base, sha, "new-target.zip")},
+				}}
+				return manifest
+			})
+			home := installHome(t, server.URL+"/sdk-versions.json")
+			require.NoError(t, install(t, lifecycle.InstallRequest{Toolchain: "sts-1.0.0"}))
+			hostDir := filepath.Join(home, "toolchains", "sts")
+			require.NoError(t, os.Rename(filepath.Join(home, "toolchains", "sts-1.0.0"), hostDir))
+			before, err := toolchain.ReadInstallation(hostDir)
+			require.NoError(t, err)
+			sf, err := config.DefaultSettingsFile()
+			require.NoError(t, err)
+			empty := ""
+			_, err = sf.Update(config.SettingsUpdate{DefaultToolchain: &empty})
+			require.NoError(t, err)
+			if operation == "auto-install" {
+				project := t.TempDir()
+				require.NoError(t, os.WriteFile(filepath.Join(project, "cangjie-sdk.toml"), []byte("[toolchain]\nchannel = \"sts\"\ntargets = [\"ohos\"]\n"), 0o644))
+				t.Chdir(project)
+				_, err = resolve.Active(t.Context(), "")
+				require.NoError(t, err)
+			} else {
+				name, err := toolchain.ParseToolchainName("sts-" + tuple)
+				require.NoError(t, err)
+				_, err = lifecycle.UpdateInstalled(t.Context(), name, lifecycle.Options{Progress: progress.Discard})
+				require.NoError(t, err)
+			}
+			after, err := toolchain.ReadInstallation(hostDir)
+			require.NoError(t, err)
+			assert.Equal(t, before, after)
+			target, err := toolchain.ReadInstallation(filepath.Join(home, "toolchains", "sts-"+tuple))
+			require.NoError(t, err)
+			assert.Equal(t, "sts-1.0.0-"+tuple, target.Release)
+			settings, err := config.LoadSettings(sf.Path())
+			require.NoError(t, err)
+			assert.Empty(t, settings.DefaultToolchain)
+		})
+	}
 }
 
 func TestInstall_FetchesManifestOnce(t *testing.T) {

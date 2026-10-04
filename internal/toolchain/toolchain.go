@@ -39,58 +39,8 @@ func FindInstalled(name ToolchainName) (string, error) {
 		return "", err
 	}
 
-	// For known channels with a specific version, look up directly
-	if name.Channel != UnknownChannel && name.Version != "" {
-		dir := filepath.Join(tcDir, name.String())
-		if _, err := os.Stat(dir); err != nil {
-			return "", err
-		}
-		return dir, nil
-	}
-
-	// For channel-only names (e.g. "lts"), find the latest installed version for that channel
-	if name.Channel != UnknownChannel && name.Version == "" {
-		_, settings, err := config.LoadDefaultSettings()
-		if err != nil {
-			return "", err
-		}
-		if installed := settings.Installations[name.Channel.String()]; installed != "" {
-			parsed, err := ParseToolchainName(installed)
-			if err != nil || parsed.Channel != name.Channel || parsed.Version == "" || parsed.Target != "" {
-				return "", errors.New("invalid installed channel mapping: " + installed)
-			}
-			return FindInstalled(parsed)
-		}
-		if settings.Installations != nil {
-			return "", os.ErrNotExist
-		}
-		prefix := name.Channel.String() + "-"
-		entries, err := os.ReadDir(tcDir)
-		if err != nil {
-			return "", err
-		}
-		var candidates []string
-		for _, e := range entries {
-			if (e.IsDir() || e.Type()&os.ModeSymlink != 0) && strings.HasPrefix(e.Name(), prefix) {
-				// Skip staging and backup directories (same filter as ListInstalled)
-				if config.IsScratchName(e.Name()) {
-					continue
-				}
-				parsed, err := ParseToolchainName(e.Name())
-				if err != nil || parsed.Target != "" {
-					continue
-				}
-				candidates = append(candidates, e.Name())
-			}
-		}
-		if len(candidates) == 0 {
-			return "", os.ErrNotExist
-		}
-		// Sort by semantic version (descending) and return the latest
-		slices.SortFunc(candidates, func(a, b string) int {
-			return compareSemVer(strings.TrimPrefix(b, prefix), strings.TrimPrefix(a, prefix))
-		})
-		return filepath.Join(tcDir, candidates[0]), nil
+	if name.Channel != UnknownChannel {
+		return FindInstalledByName(name.String())
 	}
 
 	// For bare version numbers (UnknownChannel), search across all channels

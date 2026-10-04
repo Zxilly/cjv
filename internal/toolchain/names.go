@@ -64,7 +64,11 @@ func (n ToolchainName) String() string {
 		return n.Version
 	}
 	if n.Version == "" {
-		return n.Channel.String()
+		name := n.Channel.String()
+		if n.Target != "" {
+			name += "-" + n.Target
+		}
+		return name
 	}
 	name := n.Channel.String() + "-" + n.Version
 	if n.Target != "" {
@@ -112,6 +116,9 @@ func ParseToolchainName(input string) (ToolchainName, error) {
 			version := input[len(prefix)+1:]
 			if version == "" {
 				return ToolchainName{}, fmt.Errorf("empty version in toolchain name '%s'", input)
+			}
+			if _, err := target.ParseIdentity(version); err == nil {
+				return ToolchainName{Channel: ch, Target: version}, nil
 			}
 			version, tuple := target.SplitVariantSuffix(version)
 			return ToolchainName{Channel: ch, Version: version, Target: tuple}, nil

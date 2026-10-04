@@ -75,6 +75,12 @@ func TestActiveRejectsTargetVariantAsActiveToolchain(t *testing.T) {
 		Target:  key,
 	}.String()
 	require.NoError(t, os.MkdirAll(filepath.Join(home, "toolchains", name), 0o755))
+	parsedName, err := toolchain.ParseToolchainName(name)
+	require.NoError(t, err)
+	if parsedName.Version == "" && parsedName.Target != "" {
+		parsedName.Version = "2.0.0"
+		require.NoError(t, toolchain.WriteInstallation(filepath.Join(home, "toolchains", name), toolchain.Installation{Release: parsedName.String(), Tuple: parsedName.Target}))
+	}
 	require.NoError(t, config.SaveSettings(&config.Settings{
 		Version:          1,
 		DefaultToolchain: name,
@@ -159,13 +165,17 @@ components = ["docs"]
 		gotTargets = append([]string(nil), targets...)
 		key, err := sdktarget.CurrentTargetTuple(settings.DefaultHost, "ohos")
 		require.NoError(t, err)
-		targetName := toolchain.ToolchainName{Channel: toolchain.STS, Version: "2.0.0", Target: key}.String()
-		return os.MkdirAll(filepath.Join(home, "toolchains", targetName), 0o755)
+		targetName := toolchain.ToolchainName{Channel: toolchain.STS, Target: key}.String()
+		dir := filepath.Join(home, "toolchains", targetName)
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			return err
+		}
+		return toolchain.WriteInstallation(dir, toolchain.Installation{Release: "sts-2.0.0-" + key, Tuple: key})
 	}
 	AutoInstallComponentsFunc = func(ctx context.Context, input string, components []string) error {
 		gotComponentInput = input
 		gotComponents = append([]string(nil), components...)
-		return component.WriteManifest(hostDir, component.Docs, []string{"index.html"})
+		return component.WriteManifest(filepath.Join(home, "toolchains", "sts"), component.Docs, []string{"index.html"})
 	}
 	t.Cleanup(func() {
 		AutoInstallFunc = oldInstall
@@ -175,13 +185,13 @@ components = ["docs"]
 	active, err := Active(context.Background(), "")
 
 	require.NoError(t, err)
-	assert.Equal(t, hostName, active.Name)
+	assert.Equal(t, "sts", active.Name)
 	assert.Equal(t, config.SourceToolchainFile, active.Source)
 	assert.Equal(t, []string{"ohos"}, active.Targets)
 	assert.Equal(t, []string{"docs"}, active.Components)
-	assert.Equal(t, hostName, gotInput)
+	assert.Equal(t, "sts", gotInput)
 	assert.Equal(t, []string{"ohos"}, gotTargets)
-	assert.Equal(t, hostName, gotComponentInput)
+	assert.Equal(t, "sts", gotComponentInput)
 	assert.Equal(t, []string{"docs"}, gotComponents)
 }
 
@@ -250,7 +260,7 @@ func TestActiveAutoInstallCreatesManagedBinaryAndProxyLinks(t *testing.T) {
 	active, err := Active(context.Background(), "")
 
 	require.NoError(t, err)
-	assert.Equal(t, "lts-1.0.5", active.Name)
+	assert.Equal(t, "lts", active.Name)
 	assert.FileExists(t, filepath.Join(home, "bin", sdktools.CjvBinaryName()))
 	for _, tool := range sdktools.AllProxyTools() {
 		assert.FileExists(t, filepath.Join(home, "bin", sdktools.PlatformBinaryName(tool)),
@@ -276,7 +286,7 @@ func TestActiveRunsToolchainRecoveryBeforeResolving(t *testing.T) {
 	active, err := Active(context.Background(), "")
 
 	require.NoError(t, err)
-	assert.Equal(t, "lts-1.0.5", active.Name)
+	assert.Equal(t, "lts", active.Name)
 	assert.FileExists(t, filepath.Join(home, "toolchains", "lts-1.0.5", "release.txt"))
 }
 

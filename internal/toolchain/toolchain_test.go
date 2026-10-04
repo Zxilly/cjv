@@ -97,7 +97,7 @@ func TestFindInstalled_DirectLookupByChannelAndVersion(t *testing.T) {
 	name := ToolchainName{Channel: LTS, Version: "1.0.5"}
 	dir, err := FindInstalled(name)
 	require.NoError(t, err)
-	assert.Contains(t, dir, "lts-1.0.5")
+	assert.Equal(t, filepath.Join(tcDir, "lts-1.0.5"), dir)
 }
 
 func TestFindInstalled_DirectLookupMissing(t *testing.T) {
@@ -121,10 +121,14 @@ func TestFindInstalled_IgnoresStagingDuringChannelSearch(t *testing.T) {
 	require.NoError(t, os.MkdirAll(filepath.Join(tcDir, "lts-1.0.5"), 0o755))
 	require.NoError(t, os.MkdirAll(filepath.Join(tcDir, "lts-1.0.6.staging"), 0o755))
 
+	require.NoError(t, RecoverHome())
 	name := ToolchainName{Channel: LTS}
 	dir, err := FindInstalled(name)
 	require.NoError(t, err)
-	assert.Contains(t, dir, "lts-1.0.5")
+	assert.Equal(t, filepath.Join(tcDir, "lts"), dir)
+	release, err := ReadInstallation(dir)
+	require.NoError(t, err)
+	assert.Equal(t, "lts-1.0.5", release.Release)
 }
 
 // --- FindInstalledByName tests ---
@@ -186,7 +190,11 @@ func TestFindInstalledUsesSemVerOrdering(t *testing.T) {
 	require.NoError(t, os.MkdirAll(filepath.Join(tcDir, "sts-1.8.0-beta.2"), 0o755))
 	require.NoError(t, os.MkdirAll(filepath.Join(tcDir, "sts-1.8.0"), 0o755))
 
+	require.NoError(t, RecoverHome())
 	dir, err := FindInstalled(ToolchainName{Channel: STS})
 	require.NoError(t, err)
-	assert.Equal(t, filepath.Join(tcDir, "sts-1.8.0"), dir)
+	assert.Equal(t, filepath.Join(tcDir, "sts"), dir)
+	release, err := ReadInstallation(dir)
+	require.NoError(t, err)
+	assert.Equal(t, "sts-1.8.0", release.Release)
 }

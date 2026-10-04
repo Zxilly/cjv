@@ -24,7 +24,6 @@ func TestRunCheckUsesLatestVersionAvailableForInstalledTarget(t *testing.T) {
 
 	server := testutil.ManifestOnlyServer(t, testutil.ManifestWithPlatformGap())
 	settings := config.DefaultSettings()
-	settings.Installations = map[string]string{"lts/linux-x64-ohos": "lts-1.0.0-linux-x64-ohos"}
 	settings.ManifestURL = server.URL + "/sdk-versions.json"
 	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 
@@ -38,7 +37,10 @@ func TestRunCheckUsesLatestVersionAvailableForInstalledTarget(t *testing.T) {
 
 	var got checkResult
 	require.NoError(t, json.Unmarshal(buf.Bytes(), &got))
-	require.Len(t, got.Toolchains, 1)
+	require.Len(t, got.Toolchains, 2)
+	if got.Toolchains[0].Name != "lts-linux-x64-ohos" {
+		got.Toolchains[0], got.Toolchains[1] = got.Toolchains[1], got.Toolchains[0]
+	}
 	assert.Equal(t, "lts-1.5.0-linux-x64-ohos", got.Toolchains[0].Latest)
 	assert.True(t, got.Toolchains[0].UpdateAvailable)
 	assert.False(t, got.Toolchains[0].NotForTarget)

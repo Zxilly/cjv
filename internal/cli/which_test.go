@@ -89,8 +89,14 @@ targets = ["ohos"]
 		gotTargets = append([]string(nil), targets...)
 		key, err := sdktarget.CurrentTargetTuple(settings.DefaultHost, "ohos")
 		require.NoError(t, err)
-		name := toolchain.ToolchainName{Channel: toolchain.STS, Version: "2.0.0", Target: key}.String()
+		name := toolchain.ToolchainName{Channel: toolchain.STS, Target: key}.String()
 		require.NoError(t, os.MkdirAll(filepath.Join(home, "toolchains", name), 0o755))
+		parsedName, err := toolchain.ParseToolchainName(name)
+		require.NoError(t, err)
+		if parsedName.Version == "" && parsedName.Target != "" {
+			parsedName.Version = "2.0.0"
+			require.NoError(t, toolchain.WriteInstallation(filepath.Join(home, "toolchains", name), toolchain.Installation{Release: parsedName.String(), Tuple: parsedName.Target}))
+		}
 		return nil
 	}
 	t.Cleanup(func() { resolve.AutoInstallFunc = oldAutoInstall })
@@ -98,6 +104,6 @@ targets = ["ohos"]
 	cmd := &cobra.Command{}
 	err := app.runWhich(cmd, []string{"cjc"})
 	require.NoError(t, err)
-	assert.Equal(t, "sts-2.0.0", gotInput)
+	assert.Equal(t, "sts", gotInput)
 	assert.Equal(t, []string{"ohos"}, gotTargets)
 }

@@ -25,7 +25,7 @@ func setupComponentOutputTest(t *testing.T) (string, string) {
 	settings := config.DefaultSettings()
 	settings.DistServer = server.URL + "/corp/cjv"
 	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
-	return home, "nightly-1.2.0-alpha.20260822010101"
+	return home, "nightly"
 }
 
 func TestInstallWithComponentsEmitsSingleJSON(t *testing.T) {

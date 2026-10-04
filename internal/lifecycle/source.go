@@ -23,15 +23,18 @@ type Distribution struct {
 	Source    *dist.Source
 	HostTuple string
 
-	progress   progress.Sink
-	noteOnce   sync.Once
-	legacyPins map[string]string
+	progress  progress.Sink
+	noteOnce  sync.Once
+	installed map[string]toolchain.Installation
 }
 
 // OpenDistribution loads the user settings and resolves the distribution
 // source and host tuple they select. opts carries the progress sink the
 // operation's manifest note and checksum warning go to.
 func OpenDistribution(opts Options) (*Distribution, error) {
+	if err := toolchain.RecoverHome(); err != nil {
+		return nil, err
+	}
 	sf, settings, err := config.LoadDefaultSettings()
 	if err != nil {
 		return nil, err
@@ -44,7 +47,29 @@ func OpenDistribution(opts Options) (*Distribution, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Distribution{File: sf, Settings: settings, Source: source, HostTuple: hostTuple, progress: opts.sink()}, nil
+	lock, err := toolchain.LockHome(context.Background())
+	if err != nil {
+		return nil, err
+	}
+	defer lock.Close() //nolint:errcheck
+	if err := lock.Recover(); err != nil {
+		return nil, err
+	}
+	names, err := toolchain.ListInstalled()
+	if err != nil {
+		return nil, err
+	}
+	installed := make(map[string]toolchain.Installation)
+	for _, name := range names {
+		dir, err := config.ToolchainDirFor(name)
+		if err != nil {
+			return nil, err
+		}
+		if record, err := toolchain.ReadInstallation(dir); err == nil {
+			installed[name] = record
+		}
+	}
+	return &Distribution{File: sf, Settings: settings, Source: source, HostTuple: hostTuple, progress: opts.sink(), installed: installed}, nil
 }
 
 // TargetTuple composes the host tuple with a cross-compile environment such

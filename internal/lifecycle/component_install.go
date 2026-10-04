@@ -23,6 +23,9 @@ func InstallComponentsForToolchain(ctx context.Context, tcInput string, componen
 	if ctx == nil {
 		ctx = context.Background()
 	}
+	if err := toolchain.RecoverHomeContext(ctx); err != nil {
+		return err
+	}
 	name, err := toolchain.ParseToolchainName(tcInput)
 	if err != nil {
 		return err
@@ -55,7 +58,19 @@ func InstallComponents(ctx context.Context, resolvedName string, components []st
 }
 
 func installComponents(ctx context.Context, d *Distribution, resolvedName string, components []string, force bool, opts Options) error {
-	resolvedTC, err := toolchain.ParseToolchainName(resolvedName)
+	lock, err := toolchain.LockHome(ctx)
+	if err != nil {
+		return err
+	}
+	defer lock.Close() //nolint:errcheck
+	if err := lock.Recover(); err != nil {
+		return err
+	}
+	roots, err := component.RootsFor(resolvedName)
+	if err != nil {
+		return err
+	}
+	resolvedTC, err := toolchain.InstalledRelease(roots.TcDir)
 	if err != nil {
 		return err
 	}
@@ -66,15 +81,18 @@ func installComponents(ctx context.Context, d *Distribution, resolvedName string
 	if err != nil {
 		return err
 	}
-	tuple := resolvedTC.Target
+	record, err := toolchain.ReadInstallation(roots.TcDir)
+	if err != nil {
+		return err
+	}
+	tuple := record.Tuple
+	if tuple == "" {
+		tuple = resolvedTC.Target
+	}
 	if tuple == "" {
 		tuple = d.HostTuple
 	}
 	downloadsDir, err := config.DownloadsDir()
-	if err != nil {
-		return err
-	}
-	roots, err := component.RootsFor(resolvedName)
 	if err != nil {
 		return err
 	}

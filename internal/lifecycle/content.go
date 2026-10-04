@@ -8,7 +8,6 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
-	"strings"
 
 	"github.com/Zxilly/cjv/internal/cjverr"
 	"github.com/Zxilly/cjv/internal/component"
@@ -51,32 +50,25 @@ func RemoveToolchain(name string) error {
 	if err != nil {
 		return err
 	}
-	concrete := filepath.Base(dir)
-	if parsed.Version != "" {
-		name = concrete
-	}
+	name = filepath.Base(dir)
 	if parsed.IsChannelOnly() {
-		_, settings, err := config.LoadDefaultSettings()
+		installed, err := toolchain.ListInstalled()
 		if err != nil {
 			return err
 		}
-		var variants []string
-		for identity := range settings.Installations {
-			if strings.HasPrefix(identity, name+"/") {
-				variants = append(variants, identity)
-			}
-		}
-		slices.Sort(variants)
-		for _, identity := range variants {
-			if err := removeInstallation(identity, settings.Installations[identity]); err != nil {
-				return err
+		for _, variant := range installed {
+			p, err := toolchain.ParseToolchainName(variant)
+			if err == nil && !p.IsCustom() && p.Channel == parsed.Channel && p.Version == "" && p.Target != "" {
+				if err := removeInstallation(variant); err != nil {
+					return err
+				}
 			}
 		}
 	}
-	return removeInstallation(name, concrete)
+	return removeInstallation(name)
 }
 
-func removeInstallation(name, concrete string) error {
+func removeInstallation(name string) error {
 	lock, err := toolchain.LockHome(context.Background())
 	if err != nil {
 		return err
@@ -85,8 +77,11 @@ func removeInstallation(name, concrete string) error {
 	if err := lock.Recover(); err != nil {
 		return err
 	}
-	roots, err := component.RootsFor(concrete)
+	roots, err := component.RootsFor(name)
 	if err != nil {
+		return err
+	}
+	if _, err := os.Lstat(roots.TcDir); err != nil {
 		return err
 	}
 	sf, _, err := config.LoadDefaultSettings()
@@ -98,43 +93,9 @@ func removeInstallation(name, concrete string) error {
 	if err != nil {
 		return err
 	}
-	if current := settings.Installations[name]; current != "" && current != concrete {
-		return fmt.Errorf("toolchain %s changed during removal; retry", name)
-	}
 	update, err := referencesAfterRemoval(settings, name)
 	if err != nil {
 		return err
-	}
-	update.Installations = maps.Clone(settings.Installations)
-	if update.Installations == nil {
-		update.Installations = make(map[string]string)
-	}
-	delete(update.Installations, name)
-	// Uninstalling one identity must not destroy a shared fixed/channel SDK.
-	shared := false
-	for identity, installed := range update.Installations {
-		if installed == concrete && identity != name {
-			shared = true
-		}
-	}
-	if shared {
-		if settings.Installations[name] == "" {
-			return &cjverr.ToolchainNotInstalledError{Name: name}
-		}
-		_, err = sf.Update(update)
-		return err
-	}
-	for identity, installed := range update.Installations {
-		if installed == concrete {
-			delete(update.Installations, identity)
-		}
-	}
-	if update.DefaultToolchain != nil && *update.DefaultToolchain == concrete {
-		next, err := nextDefaultAfterRemoval(concrete)
-		if err != nil {
-			return err
-		}
-		update.DefaultToolchain = &next
 	}
 	return retireLocked(roots, sf, settings, update)
 }
@@ -179,21 +140,6 @@ func removalDir(name toolchain.ToolchainName) (string, error) {
 	return toolchain.FindInstalled(name)
 }
 
-// retireToolchain removes all managed content in one journal. Failed staging or
-// settings writes restore the old installation; failed recovery retains its
-// journal so normal startup can retry without losing its ownership records.
-func retireToolchain(roots component.Roots, sf *config.SettingsFile, before *config.Settings, update config.SettingsUpdate) (retErr error) {
-	lock, err := toolchain.LockHome(context.Background())
-	if err != nil {
-		return err
-	}
-	defer lock.Close() //nolint:errcheck // release after commit or rollback
-	if err := lock.Recover(); err != nil {
-		return err
-	}
-	return retireLocked(roots, sf, before, update)
-}
-
 // retireLocked requires the home lock to stay held through settings publication
 // and transaction cleanup.
 func retireLocked(roots component.Roots, sf *config.SettingsFile, before *config.Settings, update config.SettingsUpdate) (retErr error) {
@@ -213,18 +159,17 @@ func retireLocked(roots component.Roots, sf *config.SettingsFile, before *config
 		if err := tx.Rollback(); err != nil {
 			// The old content may still be in its journal. Never repoint
 			// settings to it until recovery has put every root back.
-			retErr = &retirementError{Err: errors.Join(retErr, err), KeepReplacement: settingsAttempted}
+			retErr = errors.Join(retErr, err)
 			return
 		}
 		if settingsAttempted {
 			if err := sf.Save(before); err != nil {
-				retErr = &retirementError{Err: errors.Join(retErr, fmt.Errorf("restore toolchain settings: %w", err)), KeepReplacement: true}
+				retErr = errors.Join(retErr, fmt.Errorf("restore toolchain settings: %w", err))
 			}
 		}
 	}()
-	// Publish references while both versions are still usable. Interrupted
-	// retirement can then restore old content without ever removing the SDK
-	// selected by settings. The journal owns content recovery, not settings.
+	// Clear or repoint references before moving content into the journal. An
+	// interrupted removal can then restore content without dangling references.
 	settingsAttempted = true
 	if _, err := sf.Update(update); err != nil {
 		return err
@@ -245,16 +190,6 @@ func retireLocked(roots component.Roots, sf *config.SettingsFile, before *config
 	committed = true
 	return nil
 }
-
-// retirementError keeps a usable replacement when settings or content could
-// not be restored. Callers must not undo its components or delete its SDK.
-type retirementError struct {
-	Err             error
-	KeepReplacement bool
-}
-
-func (e *retirementError) Error() string { return e.Err.Error() }
-func (e *retirementError) Unwrap() error { return e.Err }
 
 func referencesAfterRemoval(settings *config.Settings, name string) (config.SettingsUpdate, error) {
 	update := config.SettingsUpdate{}

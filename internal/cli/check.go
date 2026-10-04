@@ -62,6 +62,9 @@ func (r checkResult) Text() string {
 
 func (app *application) runCheck(cmd *cobra.Command, args []string) error {
 	ctx := cmd.Context()
+	if err := toolchain.RecoverHomeContext(ctx); err != nil {
+		return err
+	}
 	installed, err := toolchain.ListInstalled()
 	if err != nil {
 		return err
@@ -83,12 +86,17 @@ func (app *application) runCheck(cmd *cobra.Command, args []string) error {
 		if err != nil || parsed.IsCustom() || parsed.Channel == toolchain.UnknownChannel {
 			continue
 		}
-		identity := parsed.Channel.String()
-		if parsed.Target != "" {
-			identity += "/" + parsed.Target
-		}
-		if d.Settings.Installations[identity] != name {
+		if parsed.Version != "" {
 			result.Toolchains = append(result.Toolchains, checkEntry{Name: name})
+			continue
+		}
+		dir, err := toolchain.FindInstalled(parsed)
+		if err != nil {
+			return err
+		}
+		current, err := toolchain.InstalledRelease(dir)
+		if err != nil {
+			result.Toolchains = append(result.Toolchains, checkEntry{Name: name, Error: err.Error()})
 			continue
 		}
 
@@ -118,7 +126,7 @@ func (app *application) runCheck(cmd *cobra.Command, args []string) error {
 
 		latestName := toolchain.ToolchainName{Channel: parsed.Channel, Version: latest, Target: target}.String()
 		entry := checkEntry{Name: name, Latest: latestName}
-		if latestName != name {
+		if latestName != current.String() {
 			entry.UpdateAvailable = true
 			result.HasUpdates = true
 		}

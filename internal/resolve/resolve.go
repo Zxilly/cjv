@@ -48,7 +48,7 @@ func Active(ctx context.Context, tcOverride string) (ActiveToolchain, error) {
 		if ctx.Err() != nil {
 			return ActiveToolchain{}, ctx.Err()
 		}
-		slog.Warn("failed to recover install transaction", "error", err)
+		return ActiveToolchain{}, err
 	}
 
 	_, settings, settingsErr := config.LoadDefaultSettings()
@@ -115,7 +115,7 @@ func ActiveTarget(ctx context.Context, tcOverride, target string) (ActiveToolcha
 		return ActiveToolchain{}, err
 	}
 
-	parsed, err := toolchain.ParseToolchainName(host.Name)
+	parsed, err := toolchain.InstalledRelease(host.Dir)
 	if err != nil {
 		return ActiveToolchain{}, err
 	}
@@ -132,11 +132,7 @@ func ActiveTarget(ctx context.Context, tcOverride, target string) (ActiveToolcha
 		return ActiveToolchain{}, err
 	}
 
-	name := toolchain.ToolchainName{
-		Channel: parsed.Channel,
-		Version: parsed.Version,
-		Target:  tuple,
-	}
+	name := targetIdentity(host.Name, parsed, tuple)
 	tcDir, err := toolchain.FindInstalled(name)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
@@ -145,6 +141,9 @@ func ActiveTarget(ctx context.Context, tcOverride, target string) (ActiveToolcha
 		return ActiveToolchain{}, err
 	}
 
+	if err := targetMatchesRelease(tcDir, parsed); err != nil {
+		return ActiveToolchain{}, err
+	}
 	return ActiveToolchain{
 		Dir:    tcDir,
 		Name:   host.Name,
@@ -183,7 +182,7 @@ func ensureTargets(ctx context.Context, tcInput, tcDir string, settings *config.
 		return nil
 	}
 
-	host, err := toolchain.ParseToolchainName(filepath.Base(tcDir))
+	host, err := toolchain.InstalledRelease(tcDir)
 	if err != nil {
 		return err
 	}
@@ -198,14 +197,17 @@ func ensureTargets(ctx context.Context, tcInput, tcDir string, settings *config.
 		if err != nil {
 			return err
 		}
-		name := toolchain.ToolchainName{
-			Channel: host.Channel,
-			Version: host.Version,
-			Target:  tuple,
+		name := targetIdentity(filepath.Base(tcDir), host, tuple)
+		dir, findErr := toolchain.FindInstalled(name)
+		if findErr == nil {
+			findErr = targetMatchesRelease(dir, host)
 		}
-		if _, err := toolchain.FindInstalled(name); err != nil {
+		if err := findErr; err != nil {
 			if !errors.Is(err, os.ErrNotExist) {
-				return err
+				var missing *cjverr.ToolchainNotInstalledError
+				if !errors.As(err, &missing) {
+					return err
+				}
 			}
 			missingTargets = append(missingTargets, target)
 			missingNames = append(missingNames, name.String())
@@ -215,7 +217,7 @@ func ensureTargets(ctx context.Context, tcInput, tcDir string, settings *config.
 		return nil
 	}
 
-	installFunc := autoInstallFunc(sink)
+	installFunc := autoInstallTargetsFunc(sink)
 	if !shouldAutoInstall(settings) || installFunc == nil {
 		return &cjverr.ToolchainNotInstalledError{Name: missingNames[0]}
 	}
@@ -232,8 +234,12 @@ func ensureTargets(ctx context.Context, tcInput, tcDir string, settings *config.
 		if err != nil {
 			return err
 		}
-		if _, err := toolchain.FindInstalled(parsed); err != nil {
+		dir, err := toolchain.FindInstalled(parsed)
+		if err != nil {
 			return &cjverr.ToolchainNotInstalledError{Name: missingName}
+		}
+		if err := targetMatchesRelease(dir, host); err != nil {
+			return err
 		}
 	}
 	return nil
@@ -249,6 +255,15 @@ func autoInstallFunc(sink progress.Sink) func(context.Context, string, []string)
 	}
 	return func(ctx context.Context, input string, targets []string) error {
 		return lifecycle.Install(ctx, lifecycle.InstallRequest{Toolchain: input, Targets: targets}, lifecycle.Options{Progress: sink})
+	}
+}
+
+func autoInstallTargetsFunc(sink progress.Sink) func(context.Context, string, []string) error {
+	if AutoInstallFunc != nil {
+		return AutoInstallFunc
+	}
+	return func(ctx context.Context, input string, targets []string) error {
+		return lifecycle.InstallTargetsForToolchain(ctx, input, targets, lifecycle.Options{Progress: sink})
 	}
 }
 
@@ -320,4 +335,24 @@ func targetPlatformKey(settings *config.Settings, target string) (string, error)
 		defaultHost = settings.DefaultHost
 	}
 	return sdktarget.CurrentTargetTuple(defaultHost, target)
+}
+
+func targetIdentity(hostIdentity string, release toolchain.ToolchainName, tuple string) toolchain.ToolchainName {
+	identity, _ := toolchain.ParseToolchainName(hostIdentity)
+	if identity.Version == "" {
+		release.Version = ""
+	}
+	release.Target = tuple
+	return release
+}
+
+func targetMatchesRelease(dir string, host toolchain.ToolchainName) error {
+	target, err := toolchain.InstalledRelease(dir)
+	if err != nil {
+		return err
+	}
+	if target.Channel != host.Channel || target.Version != host.Version {
+		return &cjverr.ToolchainNotInstalledError{Name: filepath.Base(dir)}
+	}
+	return nil
 }

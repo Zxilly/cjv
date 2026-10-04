@@ -38,13 +38,11 @@ type Settings struct {
 	DistServer       string `toml:"dist_server,omitempty"`
 	AutoSelfUpdate   string `toml:"auto_self_update"`
 	AutoInstall      bool   `toml:"auto_install"`
+	LinkMode         string `toml:"link_mode,omitempty"`
 	DefaultHost      string `toml:"default_host,omitempty"`
 	// GitCodeAPIKey preserves settings v1 files created by earlier cjv releases.
 	GitCodeAPIKey string            `toml:"gitcode_api_key,omitempty"`
 	Overrides     map[string]string `toml:"overrides,omitempty"`
-	// Installations maps user identities to concrete SDK names. Channel keys
-	// track releases; concrete keys retain explicitly installed versions.
-	Installations map[string]string `toml:"installations,omitempty"`
 
 	// snapshot retains the user-defined fields and the effective values read
 	// by SettingsFile. It is immutable and shared by copies for safe rollback.
@@ -57,6 +55,7 @@ func DefaultSettings() Settings {
 		ManifestURL:    DefaultManifestURL,
 		AutoSelfUpdate: AutoSelfUpdateCheck,
 		AutoInstall:    true,
+		LinkMode:       "hardlink",
 		Overrides:      make(map[string]string),
 	}
 }
@@ -118,6 +117,12 @@ func applyDecodedSettings(s *Settings, md toml.MetaData) error {
 	// Restore default if ManifestURL was set to empty string in config file
 	if s.ManifestURL == "" {
 		s.ManifestURL = DefaultManifestURL
+	}
+	if s.LinkMode == "" {
+		s.LinkMode = "hardlink"
+	}
+	if s.LinkMode != "hardlink" && s.LinkMode != "copy" {
+		return fmt.Errorf("invalid link_mode %q: expected hardlink or copy", s.LinkMode)
 	}
 	// in memory only; missing version field defaults to v1 without a disk write
 	if s.Version == 0 {

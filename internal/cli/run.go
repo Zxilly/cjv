@@ -58,6 +58,9 @@ flagLoop:
 	toolName := args[1]
 	toolArgs := args[2:]
 
+	if err := toolchain.RecoverHomeContext(cmd.Context()); err != nil {
+		return err
+	}
 	parsed, err := toolchain.ParseToolchainName(tcInput)
 	if err != nil {
 		return err

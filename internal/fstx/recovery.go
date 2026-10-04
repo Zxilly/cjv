@@ -164,7 +164,7 @@ func scopedPath(state journal, path string) bool {
 				return true
 			}
 			staging := config.StagingDir(owned)
-			if base == config.ToolchainsSubdir && (path == staging || strings.HasPrefix(path, staging+string(filepath.Separator))) {
+			if path == staging || strings.HasPrefix(path, staging+string(filepath.Separator)) {
 				return true
 			}
 		}

@@ -17,9 +17,9 @@ type SettingsUpdate struct {
 	DistServer       *string
 	AutoSelfUpdate   *string
 	AutoInstall      *bool
+	LinkMode         *string
 	DefaultHost      *string
 	Overrides        map[string]string
-	Installations    map[string]string
 }
 
 type settingsSnapshot struct {
@@ -35,15 +35,13 @@ func (u SettingsUpdate) apply(values map[string]any) {
 	setSettingValue(values, "auto_self_update", u.AutoSelfUpdate)
 	setSettingValue(values, "auto_install", u.AutoInstall)
 	setSettingValue(values, "default_host", u.DefaultHost)
+	setSettingValue(values, "link_mode", u.LinkMode)
 	if u.Overrides != nil {
 		if len(u.Overrides) == 0 {
 			delete(values, "overrides")
 		} else {
 			values["overrides"] = maps.Clone(u.Overrides)
 		}
-	}
-	if u.Installations != nil {
-		values["installations"] = maps.Clone(u.Installations)
 	}
 }
 
@@ -63,8 +61,8 @@ func settingsValues(s *Settings) map[string]any {
 		"auto_self_update":  s.AutoSelfUpdate,
 		"auto_install":      s.AutoInstall,
 		"default_host":      s.DefaultHost,
+		"link_mode":         s.LinkMode,
 		"overrides":         maps.Clone(s.Overrides),
-		"installations":     maps.Clone(s.Installations),
 	}
 }
 

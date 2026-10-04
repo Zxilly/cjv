@@ -31,7 +31,10 @@ func RecoverHomeContext(ctx context.Context) error {
 		return err
 	}
 	defer lock.Close() //nolint:errcheck // closing releases the OS lock
-	return lock.Recover()
+	if err := lock.Recover(); err != nil {
+		return err
+	}
+	return lock.MigrateLegacy()
 }
 
 // Recover repairs interrupted changes while the caller holds the home lock.
@@ -64,6 +67,23 @@ func (lock *HomeLock) Recover() error {
 				}
 			} else {
 				slog.Warn("legacy toolchain backup retained", "path", fullPath, "error", err)
+			}
+		}
+	}
+	for _, subdir := range []string{config.DocsSubdir, config.StdxSubdir} {
+		root := filepath.Join(filepath.Dir(tcDir), subdir)
+		entries, err := os.ReadDir(root)
+		if errors.Is(err, os.ErrNotExist) {
+			continue
+		}
+		if err != nil {
+			return err
+		}
+		for _, entry := range entries {
+			if strings.HasSuffix(entry.Name(), config.StagingSuffix) {
+				if err := fsops.RemoveAllRetry(filepath.Join(root, entry.Name())); err != nil {
+					return err
+				}
 			}
 		}
 	}

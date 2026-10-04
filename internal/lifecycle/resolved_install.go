@@ -4,12 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"maps"
 	"net/url"
 	"os"
 	"path/filepath"
 
 	"github.com/Zxilly/cjv/internal/cjverr"
+	"github.com/Zxilly/cjv/internal/component"
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/dist"
 	"github.com/Zxilly/cjv/internal/fsops"
@@ -40,95 +40,45 @@ type acquisition struct {
 	fetch func(ctx context.Context, downloadsDir string) (archivePath string, owned bool, err error)
 	// extract materializes the SDK tree at stagingDir from archivePath.
 	extract func(ctx context.Context, archivePath, stagingDir string) error
+	prepare func(context.Context, component.Roots) error
 }
 
 // installResolved places one manifest release. setDefault allows the first
 // host toolchain to become the default; target variants pass false. An
 // already installed release without force is reported and kept.
 func installResolved(ctx context.Context, d *Distribution, rt ResolvedToolchain, force, setDefault bool, opts Options) error {
-	resolvedName := rt.Name
+	identity := rt.Name
+	if opts.selection != "" {
+		identity = opts.selection
+	}
 	acq := acquisition{
 		fetch: func(ctx context.Context, downloadsDir string) (string, bool, error) {
 			if u, err := url.Parse(rt.URL); err != nil || u.Path == "" {
 				return "", false, fmt.Errorf("invalid toolchain download URL: %s", rt.URL)
 			}
-			archivePath, err := dist.DownloadCachedWithName(ctx, rt.URL, rt.SHA256, downloadsDir, rt.ArchiveName, opts.sink())
-			return archivePath, true, err
+			path, err := dist.DownloadCachedWithName(ctx, rt.URL, rt.SHA256, downloadsDir, rt.ArchiveName, opts.sink())
+			return path, true, err
 		},
 		extract: dist.InstallSDK,
-	}
-	var publishDefault func() error
-	if opts.selection != "" || setDefault && (d.Settings.DefaultToolchain == "" || !defaultToolchainExists(d.Settings.DefaultToolchain)) {
-		publishDefault = func() error {
-			d.File.Invalidate()
-			settings, err := d.File.Load()
-			if err != nil {
+		prepare: func(ctx context.Context, roots component.Roots) error {
+			if err := toolchain.WriteInstallation(roots.TcDir, toolchain.Installation{Release: rt.Name, Tuple: rt.Tuple, SHA256: rt.SHA256}); err != nil {
 				return err
 			}
-			update := config.SettingsUpdate{}
-			if opts.selection != "" {
-				if isTrackingIdentity(opts.selection, resolvedName) {
-					expected, current := d.Settings.Installations[opts.selection], settings.Installations[opts.selection]
-					if current != expected && current != resolvedName {
-						return fmt.Errorf("toolchain %s changed during installation; retry", opts.selection)
-					}
-				}
-				update.Installations = maps.Clone(settings.Installations)
-				if update.Installations == nil {
-					update.Installations = make(map[string]string)
-				}
-				for identity, concrete := range d.legacyPins {
-					// Only preserve legacy fixed SDKs still on disk. A stale
-					// distribution snapshot must not recreate an uninstalled channel.
-					if identity != concrete {
-						continue
-					}
-					path, err := config.ToolchainDirFor(concrete)
-					if err != nil {
-						return err
-					}
-					if _, err := os.Lstat(path); errors.Is(err, os.ErrNotExist) {
-						continue
-					} else if err != nil {
-						return err
-					}
-					if _, exists := update.Installations[identity]; !exists {
-						update.Installations[identity] = concrete
-					}
-				}
-				update.Installations[opts.selection] = resolvedName
-			}
-			defaultName := resolvedName
-			if opts.selection != "" {
-				defaultName = opts.selection
-			}
-			publishFirstDefault := setDefault && (settings.DefaultToolchain == "" || !defaultToolchainExists(settings.DefaultToolchain))
-			if publishFirstDefault {
-				update.DefaultToolchain = &defaultName
-			}
-			if _, err := d.File.Update(update); err != nil {
-				return err
-			}
-			d.Settings, err = d.File.Load()
-			if err != nil {
-				return err
-			}
-			if publishFirstDefault && opts.ConfigurePath {
-				reachable.ConfigurePath()
-			}
-			if afterPublishHook != nil {
-				if err := afterPublishHook(); err != nil {
-					return errors.Join(err, d.File.Save(settings))
-				}
+			if opts.prepare != nil {
+				return opts.prepare(ctx, roots)
 			}
 			return nil
-		}
+		},
 	}
-	err := placeToolchain(ctx, resolvedName, force, rt.Tuple, acq, publishDefault, opts)
+	var publish func() error
+	if setDefault {
+		publish = func() error { return publishFirstDefault(d, identity, opts) }
+	}
+	err := placeToolchain(ctx, identity, force, rt.Tuple, acq, publish, opts)
 	var already *cjverr.ToolchainAlreadyInstalledError
 	if errors.As(err, &already) {
-		opts.emit(progress.Event{Kind: progress.ToolchainAlreadyInstalled, Toolchain: resolvedName})
-		if publishDefault != nil {
+		opts.emit(progress.Event{Kind: progress.ToolchainAlreadyInstalled, Toolchain: identity})
+		if publish != nil {
 			lock, err := toolchain.LockHome(ctx)
 			if err != nil {
 				return err
@@ -137,14 +87,14 @@ func installResolved(ctx context.Context, d *Distribution, rt ResolvedToolchain,
 			if err := lock.Recover(); err != nil {
 				return err
 			}
-			path, err := config.ToolchainDirFor(rt.Name)
+			path, err := config.ToolchainDirFor(identity)
 			if err != nil {
 				return err
 			}
 			if _, err := os.Stat(path); err != nil {
 				return err
 			}
-			return publishDefault()
+			return publish()
 		}
 		return nil
 	}
@@ -213,12 +163,31 @@ func placeToolchain(ctx context.Context, name string, force bool, tuple string, 
 	if err := validateInstallation(preparedDir, tuple); err != nil {
 		return err
 	}
+	preparedRoots := component.Roots{TcDir: preparedDir, DocsDir: filepath.Join(preparedRoot, "docs"), StdxDir: filepath.Join(preparedRoot, "stdx")}
+	if acq.prepare != nil {
+		if err := acq.prepare(ctx, preparedRoots); err != nil {
+			return err
+		}
+	}
 
 	lock, isReinstall, err := lockPlacement(ctx, destDir, force)
 	if err != nil {
 		return err
 	}
 	defer lock.Close() //nolint:errcheck // release after staging and transaction cleanup
+	if opts.expectedSet {
+		current, err := toolchain.ReadInstallation(destDir)
+		if opts.expected == nil {
+			if _, err := os.Lstat(destDir); !errors.Is(err, os.ErrNotExist) {
+				return fmt.Errorf("toolchain %s changed during installation; retry", name)
+			}
+		} else if state, stateErr := installationComponentState(destDir); err != nil || current != *opts.expected || stateErr != nil || state != opts.expectedComponents {
+			return fmt.Errorf("toolchain %s changed during installation; retry", name)
+		}
+	}
+	if acq.prepare != nil {
+		return publishOfficial(preparedRoots, name, isReinstall, publish, opts)
+	}
 	stagingDir := config.StagingDir(destDir)
 	defer func() {
 		var recoveryErr *fstx.RecoveryError
@@ -356,13 +325,37 @@ func swapInstalledToolchain(stagingDir, destDir string, isReinstall bool, afterS
 	if err := afterSwap(); err != nil {
 		return fmt.Errorf("failed to finalize installation: %w", err)
 	}
-	commit := tx.Commit
-	if publish != nil {
-		commit = func() error { return tx.CommitWith(publish) }
-	}
-	if err := commit(); err != nil {
+	publicationErr, err := commitInstallation(tx, publish)
+	if err != nil {
 		return err
 	}
 	committed = true
+	return publicationErr
+}
+
+// publishFirstDefault runs under the home lock and restores its settings if
+// publication fails. It also serves already-installed SDKs without downloads.
+func publishFirstDefault(d *Distribution, identity string, opts Options) error {
+	d.File.Invalidate()
+	before, err := d.File.Load()
+	if err != nil {
+		return err
+	}
+	if before.DefaultToolchain == "" || !defaultToolchainExists(before.DefaultToolchain) {
+		if _, err := d.File.Update(config.SettingsUpdate{DefaultToolchain: &identity}); err != nil {
+			return err
+		}
+		if opts.ConfigurePath {
+			reachable.ConfigurePath()
+		}
+	}
+	if afterPublishHook != nil {
+		if err := afterPublishHook(); err != nil {
+			if restoreErr := d.File.Save(before); restoreErr != nil {
+				return &publishedSettingsError{errors.Join(err, fmt.Errorf("restore toolchain settings: %w", restoreErr))}
+			}
+			return err
+		}
+	}
 	return nil
 }
