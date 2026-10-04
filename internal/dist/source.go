@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"os"
 	pathpkg "path"
+	"slices"
 	"strings"
 	"sync"
 
@@ -89,6 +90,30 @@ type ToolchainRelease struct {
 	Download DownloadInfo
 }
 
+// AvailableTargets lists cross SDK environments published for this exact host release.
+func (s *Source) AvailableTargets(ctx context.Context, channel toolchain.Channel, version, host string) ([]string, error) {
+	m, err := s.manifestForChannel(ctx, channel)
+	if err != nil {
+		return nil, err
+	}
+	ch, err := m.getChannel(channel)
+	if err != nil {
+		return nil, err
+	}
+	platforms, ok := ch.Versions[version]
+	if !ok {
+		return nil, &cjverr.VersionNotFoundError{Version: version}
+	}
+	var result []string
+	for tuple := range platforms {
+		if strings.HasPrefix(tuple, host+"-") {
+			result = append(result, strings.TrimPrefix(tuple, host+"-"))
+		}
+	}
+	slices.Sort(result)
+	return result, nil
+}
+
 // Manifest fetches and validates the source manifest at most once.
 func (s *Source) Manifest(ctx context.Context) (*Manifest, error) {
 	if s == nil {
@@ -129,6 +154,34 @@ func (s *Source) ResolveToolchain(ctx context.Context, channel toolchain.Channel
 	manifest, err := s.manifestForChannel(ctx, channel)
 	if err != nil {
 		return ToolchainRelease{}, err
+	}
+	if toolchain.IsVersionSelector(version) {
+		channels := []toolchain.Channel{channel}
+		if channel == toolchain.UnknownChannel {
+			channels = []toolchain.Channel{toolchain.STS, toolchain.LTS, toolchain.Nightly}
+		}
+		found := false
+		for _, candidate := range channels {
+			candidateManifest,err:=s.manifestForChannel(ctx,candidate)
+			if err!=nil { return ToolchainRelease{},err }
+			versions, listErr := candidateManifest.ListVersions(candidate, tuple)
+			if listErr != nil {
+				continue
+			}
+			for _, concrete := range versions {
+				if toolchain.MatchesVersionSelector(version, concrete) {
+					manifest=candidateManifest
+					channel, version, found = candidate, concrete, true
+					break
+				}
+			}
+			if found {
+				break
+			}
+		}
+		if !found {
+			return ToolchainRelease{}, &cjverr.VersionNotFoundError{Version: version}
+		}
 	}
 	if channel == toolchain.UnknownChannel {
 		channel, err = manifest.FindVersionChannel(version)

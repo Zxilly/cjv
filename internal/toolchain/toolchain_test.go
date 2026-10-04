@@ -10,10 +10,12 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestTrackingTargetNameRequiresCrossTargetTuple(t *testing.T) {
+func TestTrackingHostAndTargetNames(t *testing.T) {
 	for _, tuple := range []string{"win32-x64", "linux-x64", "darwin-arm64"} {
-		_, err := ParseToolchainName("sts-" + tuple)
-		require.ErrorContains(t, err, "requires a version or a cross-target tuple")
+		parsed, err := ParseToolchainName("sts-" + tuple)
+		require.NoError(t, err)
+		assert.Equal(t, tuple, parsed.Host)
+		assert.Empty(t, parsed.Target)
 	}
 	parsed, err := ParseToolchainName("sts-linux-x64-ohos")
 	require.NoError(t, err)

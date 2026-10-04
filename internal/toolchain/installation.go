@@ -53,13 +53,17 @@ func ReadInstallation(dir string) (Installation, error) {
 	var installed Installation
 	_, err = toml.DecodeFile(filepath.Join(dir, installationFile), &installed)
 	if errors.Is(err, os.ErrNotExist) && (identity.Version != "" || identity.IsCustom()) {
-		return Installation{Release: identity.String(), Tuple: identity.Target}, nil
+		tuple := identity.Target
+		if tuple == "" {
+			tuple = identity.Host
+		}
+		return Installation{Release: identity.String(), Tuple: tuple}, nil
 	}
 	if err != nil {
 		return Installation{}, err
 	}
 	release, err := ParseToolchainName(installed.Release)
-	if err != nil || release.IsCustom() || release.Version == "" || release.Channel != identity.Channel || release.Target != identity.Target || identity.Version != "" && identity.Version != release.Version {
+	if err != nil || release.IsCustom() || release.Version == "" || release.Channel != identity.Channel || release.Target != identity.Target || release.Host != identity.Host || identity.Version != "" && identity.Version != release.Version {
 		return Installation{}, fmt.Errorf("invalid release record for toolchain %s", identity.String())
 	}
 	return installed, nil

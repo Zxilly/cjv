@@ -47,6 +47,7 @@ func ParseChannel(s string) (Channel, bool) {
 type ToolchainName struct {
 	Channel Channel
 	Version string // empty means "latest"
+	Host    string // explicit host tuple, independent of cross-target SDK variants
 	Target  string // non-empty for installed target SDK variants (e.g. linux-x64-ohos)
 	Custom  string // non-empty for custom/linked toolchain names (e.g. "my-sdk")
 }
@@ -61,18 +62,28 @@ func (n ToolchainName) String() string {
 		return n.Custom
 	}
 	if n.Channel == UnknownChannel {
-		return n.Version
+		name := n.Version
+		if n.Target != "" {
+			name += "-" + n.Target
+		} else if n.Host != "" {
+			name += "-" + n.Host
+		}
+		return name
 	}
 	if n.Version == "" {
 		name := n.Channel.String()
 		if n.Target != "" {
 			name += "-" + n.Target
+		} else if n.Host != "" {
+			name += "-" + n.Host
 		}
 		return name
 	}
 	name := n.Channel.String() + "-" + n.Version
 	if n.Target != "" {
 		name += "-" + n.Target
+	} else if n.Host != "" {
+		name += "-" + n.Host
 	}
 	return name
 }
@@ -119,17 +130,40 @@ func ParseToolchainName(input string) (ToolchainName, error) {
 			}
 			if id, err := target.ParseIdentity(version); err == nil {
 				if !id.IsTargetVariant() {
-					return ToolchainName{}, fmt.Errorf("toolchain name %q requires a version or a cross-target tuple", input)
+					return ToolchainName{Channel: ch, Host: version}, nil
 				}
 				return ToolchainName{Channel: ch, Target: version}, nil
 			}
 			version, tuple := target.SplitVariantSuffix(version)
+			if tuple != "" {
+				if id, err := target.ParseIdentity(tuple); err == nil && !id.IsTargetVariant() {
+					return ToolchainName{Channel: ch, Version: version, Host: tuple}, nil
+				}
+			}
+			if tuple == "" {
+				for i := range version {
+					if version[i] != '-' {
+						continue
+					}
+					if id, err := target.ParseIdentity(version[i+1:]); err == nil && !id.IsTargetVariant() {
+						return ToolchainName{Channel: ch, Version: version[:i], Host: version[i+1:]}, nil
+					}
+				}
+			}
 			return ToolchainName{Channel: ch, Version: version, Target: tuple}, nil
 		}
 	}
 
 	// Bare version number (starts with digit)
 	if len(input) > 0 && input[0] >= '0' && input[0] <= '9' {
+		version, tuple := target.SplitVariantSuffix(input)
+		if tuple != "" {
+			id, _ := target.ParseIdentity(tuple)
+			if !id.IsTargetVariant() {
+				return ToolchainName{Channel: UnknownChannel, Version: version, Host: tuple}, nil
+			}
+			return ToolchainName{Channel: UnknownChannel, Version: version, Target: tuple}, nil
+		}
 		return ToolchainName{Channel: UnknownChannel, Version: input}, nil
 	}
 

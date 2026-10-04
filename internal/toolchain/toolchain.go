@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/Zxilly/cjv/internal/config"
+	"github.com/Zxilly/cjv/internal/target"
 	goversion "github.com/hashicorp/go-version"
 )
 
@@ -34,26 +35,145 @@ func FindInstalled(name ToolchainName) (string, error) {
 		return FindInstalledByName(name.Custom)
 	}
 
-	tcDir, err := config.ToolchainsDir()
-	if err != nil {
-		return "", err
-	}
-
 	if name.Channel != UnknownChannel {
-		return FindInstalledByName(name.String())
+		if IsVersionSelector(name.Version) {
+			return findInstalledSelector(name)
+		}
+		dir, err := FindInstalledByName(name.String())
+		if !errors.Is(err, os.ErrNotExist) || name.Target != "" {
+			return dir, err
+		}
+		_, settings, err := config.LoadDefaultSettings()
+		if err != nil {
+			return "", err
+		}
+		host, err := target.CurrentHostTuple(settings.DefaultHost)
+		if err != nil {
+			return "", err
+		}
+		alias := name
+		if name.Host != "" {
+			alias.Host = ""
+		} else {
+			alias.Host = host
+		}
+		dir, err = FindInstalledByName(alias.String())
+		if err != nil {
+			return "", err
+		}
+		record, err := ReadInstallation(dir)
+		if err != nil {
+			return "", err
+		}
+		tuple := record.Tuple
+		if tuple == "" {
+			tuple = host
+		}
+		if name.Host != "" && name.Host != tuple || name.Host == "" && host != tuple {
+			return "", os.ErrNotExist
+		}
+		return dir, nil
 	}
 
 	// For bare version numbers (UnknownChannel), search across all channels
 	if name.Version != "" {
+		if IsVersionSelector(name.Version) {
+			return findInstalledSelector(name)
+		}
 		for _, ch := range []Channel{LTS, STS, Nightly} {
-			candidate := filepath.Join(tcDir, ch.String()+"-"+name.Version)
-			if _, err := os.Stat(candidate); err == nil {
+			candidateName := name
+			candidateName.Channel = ch
+			candidate, err := FindInstalled(candidateName)
+			if err == nil {
 				return candidate, nil
+			}
+			if !errors.Is(err, os.ErrNotExist) {
+				return "", err
 			}
 		}
 	}
 
 	return "", os.ErrNotExist
+}
+
+// CanonicalHostName preserves the legacy unsuffixed directory and gives an
+// explicit spelling of that same platform a single owner for cross SDKs.
+func CanonicalHostName(name ToolchainName, host string) (ToolchainName, error) {
+	if name.IsCustom() || name.Target != "" || name.Channel == UnknownChannel {
+		return name, nil
+	}
+	if dir, err := FindInstalled(name); err == nil {
+		actual, err := ParseToolchainName(filepath.Base(dir))
+		if err != nil {
+			return name, err
+		}
+		name.Host = actual.Host
+		return name, nil
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return name, err
+	}
+	if name.Host == host {
+		plain := name
+		plain.Host = ""
+		if _, err := FindInstalledByName(plain.String()); errors.Is(err, os.ErrNotExist) {
+			return plain, nil
+		} else if err != nil {
+			return name, err
+		}
+	}
+	return name, nil
+}
+
+func findInstalledSelector(name ToolchainName) (string, error) {
+	names, err := ListInstalled()
+	if err != nil {
+		return "", err
+	}
+	var best ToolchainName
+	for _, identity := range names {
+		candidate, err := ParseToolchainName(identity)
+		if err != nil || candidate.IsCustom() || candidate.Target != name.Target || name.Channel != UnknownChannel && candidate.Channel != name.Channel || !MatchesVersionSelector(name.Version, candidate.Version) {
+			continue
+		}
+		if candidate.Host != name.Host {
+			_, settings, err := config.LoadDefaultSettings()
+			if err != nil {
+				return "", err
+			}
+			wanted := name.Host
+			if wanted == "" {
+				wanted, err = target.CurrentHostTuple(settings.DefaultHost)
+				if err != nil {
+					return "", err
+				}
+			}
+			dir, err := FindInstalledByName(identity)
+			if err != nil {
+				return "", err
+			}
+			record, err := ReadInstallation(dir)
+			if err != nil {
+				return "", err
+			}
+			actual := record.Tuple
+			if actual == "" {
+				actual, err = target.CurrentHostTuple(settings.DefaultHost)
+				if err != nil {
+					return "", err
+				}
+			}
+			if actual != wanted {
+				continue
+			}
+		}
+		if best.Version == "" || compareSemVer(candidate.Version, best.Version) > 0 {
+			best = candidate
+		}
+	}
+	if best.Version == "" {
+		return "", os.ErrNotExist
+	}
+	return FindInstalledByName(best.String())
 }
 
 // FindInstalledByName looks up a toolchain by its exact directory name

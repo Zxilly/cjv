@@ -90,15 +90,31 @@ func (d *Distribution) note() {
 func (d *Distribution) Resolve(ctx context.Context, name toolchain.ToolchainName, tuple string) (ResolvedToolchain, error) {
 	if tuple == "" {
 		tuple = d.HostTuple
+		if name.Host != "" {
+			tuple = name.Host
+		}
 	}
+	canonical, err := toolchain.CanonicalHostName(name, d.HostTuple)
+	if err != nil {
+		return ResolvedToolchain{}, err
+	}
+	name = canonical
 	d.note()
 	release, err := d.Source.ResolveToolchain(ctx, name.Channel, name.Version, tuple)
 	if err != nil {
 		return ResolvedToolchain{}, err
 	}
 	resolved := toolchain.ToolchainName{Channel: release.Channel, Version: release.Version}
+	if name.Host != "" {
+		resolved.Host = name.Host
+	}
 	if id, parseErr := sdktarget.ParseIdentity(tuple); parseErr == nil && id.IsTargetVariant() {
+		resolved.Host = ""
 		resolved.Target = tuple
+	}
+	resolved, err = toolchain.CanonicalHostName(resolved, d.HostTuple)
+	if err != nil {
+		return ResolvedToolchain{}, err
 	}
 	if release.Channel == toolchain.Nightly && release.Download.SHA256 == "" {
 		d.progress.Report(progress.Event{Kind: progress.NightlyNoChecksum})
