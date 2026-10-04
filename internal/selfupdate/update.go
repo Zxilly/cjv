@@ -14,6 +14,7 @@ const (
 	StatusDevelopment Status = "dev"
 	StatusUpToDate    Status = "up-to-date"
 	StatusUpdated     Status = "updated"
+	StatusAvailable   Status = "available"
 )
 
 // Result records the running version and the version installed after Update.
@@ -22,6 +23,31 @@ type Result struct {
 	CurrentVersion string
 	Version        string
 	Status         Status
+}
+
+// Check only fetches release metadata; it never downloads or replaces an executable.
+func Check(ctx context.Context, updateURL, currentVersion string) (Result, error) {
+	if updateURL == "" {
+		return Result{CurrentVersion: currentVersion, Version: currentVersion, Status: StatusSkipped}, nil
+	}
+	if currentVersion == "dev" || currentVersion == "" {
+		return Result{CurrentVersion: currentVersion, Version: currentVersion, Status: StatusDevelopment}, nil
+	}
+	tag, err := latestTag(ctx, updateURL)
+	if err != nil {
+		return Result{}, err
+	}
+	latest, newer, err := newerReleaseVersion(currentVersion, tag)
+	if err != nil {
+		return Result{}, err
+	}
+	status := StatusUpToDate
+	if newer {
+		status = StatusAvailable
+	} else {
+		latest = currentVersion
+	}
+	return Result{CurrentVersion: currentVersion, Version: latest, Status: status}, nil
 }
 
 // Update checks for and applies a self-update. The actual flow (GitHub vs

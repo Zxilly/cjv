@@ -3,11 +3,13 @@ package cli
 import (
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/Zxilly/cjv/internal/cjverr"
 	"github.com/Zxilly/cjv/internal/i18n"
 	"github.com/Zxilly/cjv/internal/lifecycle"
+	"github.com/Zxilly/cjv/internal/selfupdate"
 	"github.com/Zxilly/cjv/internal/toolchain"
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
@@ -23,14 +25,16 @@ type checkEntry struct {
 }
 
 type checkResult struct {
-	Toolchains    []checkEntry `json:"toolchains"`
-	CjvVersion    string       `json:"cjv_version"`
-	HasUpdates    bool         `json:"has_updates"`
-	NoneInstalled bool         `json:"none_installed,omitempty"`
+	LatestCjvVersion string       `json:"latest_cjv_version,omitempty"`
+	SelfUpdateError  string       `json:"self_update_error,omitempty"`
+	Toolchains       []checkEntry `json:"toolchains"`
+	CjvVersion       string       `json:"cjv_version"`
+	HasUpdates       bool         `json:"has_updates"`
+	NoneInstalled    bool         `json:"none_installed,omitempty"`
 }
 
 func (r checkResult) Text() string {
-	if r.NoneInstalled {
+	if r.NoneInstalled && r.LatestCjvVersion == "" && r.SelfUpdateError == "" {
 		return i18n.T("NoToolchainsInstalled", nil)
 	}
 	var b strings.Builder
@@ -53,7 +57,13 @@ func (r checkResult) Text() string {
 		}
 	}
 	fmt.Fprintf(&b, "\n  cjv %s\n", r.CjvVersion)
-	if !r.HasUpdates {
+	if r.LatestCjvVersion != "" && r.LatestCjvVersion != r.CjvVersion {
+		fmt.Fprintf(&b, "  cjv %s → %s\n", r.CjvVersion, r.LatestCjvVersion)
+	}
+	if r.SelfUpdateError != "" {
+		fmt.Fprintf(&b, "  cjv: %s\n", r.SelfUpdateError)
+	}
+	if !r.HasUpdates && r.SelfUpdateError == "" && !slices.ContainsFunc(r.Toolchains, func(e checkEntry) bool { return e.Error != "" || e.NotForTarget }) {
 		b.WriteString(color.GreenString(i18n.T("AllUpToDate", nil)))
 		b.WriteByte('\n')
 	}
@@ -69,8 +79,16 @@ func (app *application) runCheck(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
+	result := checkResult{CjvVersion: app.version, NoneInstalled: len(installed) == 0}
+	checked, checkErr := selfupdate.Check(ctx, app.updateURL, app.version)
+	if checkErr != nil {
+		result.SelfUpdateError = checkErr.Error()
+	} else if checked.Status == selfupdate.StatusAvailable || checked.Status == selfupdate.StatusUpToDate {
+		result.LatestCjvVersion = checked.Version
+		result.HasUpdates = checked.Status == selfupdate.StatusAvailable
+	}
 	if len(installed) == 0 {
-		return app.output.RenderTo(cmdOutput(cmd), checkResult{NoneInstalled: true, CjvVersion: app.version})
+		return app.output.RenderTo(cmdOutput(cmd), result)
 	}
 
 	d, err := lifecycle.OpenDistribution(app.lifecycleOptions())
@@ -78,8 +96,6 @@ func (app *application) runCheck(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	source, tuple := d.Source, d.HostTuple
-
-	result := checkResult{CjvVersion: app.version}
 
 	for _, name := range installed {
 		parsed, err := toolchain.ParseToolchainName(name)
@@ -101,6 +117,9 @@ func (app *application) runCheck(cmd *cobra.Command, args []string) error {
 		}
 
 		infoTuple := tuple
+		if parsed.Host != "" {
+			infoTuple = parsed.Host
+		}
 		target := ""
 		if parsed.Target != "" {
 			infoTuple = parsed.Target
@@ -124,7 +143,7 @@ func (app *application) runCheck(cmd *cobra.Command, args []string) error {
 			continue
 		}
 
-		latestName := toolchain.ToolchainName{Channel: parsed.Channel, Version: latest, Target: target}.String()
+		latestName := toolchain.ToolchainName{Channel: parsed.Channel, Version: latest, Target: target, Host: parsed.Host}.String()
 		entry := checkEntry{Name: name, Latest: latestName}
 		if latestName != current.String() {
 			entry.UpdateAvailable = true

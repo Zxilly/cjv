@@ -16,6 +16,14 @@ import (
 
 const mirrorBinaryName = "cjv-mirror"
 
+func latestTag(ctx context.Context, updateURL string) (string, error) {
+	base, err := gitCodeReleasesBase(updateURL)
+	if err != nil {
+		return "", err
+	}
+	return fetchGitCodeLatestTag(ctx, base+"/latest")
+}
+
 func runUpdate(ctx context.Context, updateURL, currentVersion string, sink progress.Sink) (Result, error) {
 	base, err := gitCodeReleasesBase(updateURL)
 	if err != nil {

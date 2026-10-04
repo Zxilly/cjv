@@ -21,6 +21,23 @@ type githubRelease struct {
 	} `json:"assets"`
 }
 
+func latestTag(ctx context.Context, updateURL string) (string, error) {
+	slug := extractSlug(updateURL)
+	parts := strings.Split(slug, "/")
+	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
+		return "", fmt.Errorf("invalid GitHub repository %q", slug)
+	}
+	data, err := fetchReleaseFile(ctx, fmt.Sprintf("https://api.github.com/repos/%s/releases/latest", slug))
+	if err != nil {
+		return "", fmt.Errorf("failed to check for updates: %w", err)
+	}
+	var release githubRelease
+	if err := json.Unmarshal(data, &release); err != nil {
+		return "", err
+	}
+	return release.TagName, nil
+}
+
 func runUpdate(ctx context.Context, updateURL, currentVersion string, sink progress.Sink) (Result, error) {
 	slug := extractSlug(updateURL)
 	parts := strings.Split(slug, "/")
