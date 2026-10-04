@@ -175,6 +175,9 @@ func placeToolchain(ctx context.Context, name string, force bool, tuple string, 
 		return err
 	}
 	defer lock.Close() //nolint:errcheck // release after staging and transaction cleanup
+	if err := validateDependencies(opts); err != nil {
+		return err
+	}
 	if opts.expectedSet {
 		current, err := toolchain.ReadInstallation(destDir)
 		if opts.expected == nil {

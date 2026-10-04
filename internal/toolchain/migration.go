@@ -29,14 +29,33 @@ func (lock *HomeLock) MigrateLegacy() error {
 		return err
 	}
 	latest := make(map[string]ToolchainName)
+	versions := make(map[string]ToolchainName)
 	for _, name := range installed {
 		parsed, err := ParseToolchainName(name)
 		if err != nil || parsed.IsCustom() || parsed.Channel == UnknownChannel || parsed.Version == "" {
 			continue
 		}
 		key := ToolchainName{Channel: parsed.Channel, Target: parsed.Target}.String()
+		versions[parsed.String()] = parsed
 		if old, ok := latest[key]; !ok || compareSemVer(parsed.Version, old.Version) > 0 {
 			latest[key] = parsed
+		}
+	}
+	// Legacy target selection followed the selected host's version. A newer
+	// orphan target must remain fixed rather than replace that usable selection.
+	for key, candidate := range latest {
+		if candidate.Target == "" {
+			continue
+		}
+		host, ok := latest[candidate.Channel.String()]
+		if !ok {
+			continue
+		}
+		candidate.Version = host.Version
+		if matching, ok := versions[candidate.String()]; ok {
+			latest[key] = matching
+		} else {
+			delete(latest, key)
 		}
 	}
 	keys := make([]string, 0, len(latest))

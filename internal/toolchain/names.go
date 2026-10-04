@@ -117,7 +117,10 @@ func ParseToolchainName(input string) (ToolchainName, error) {
 			if version == "" {
 				return ToolchainName{}, fmt.Errorf("empty version in toolchain name '%s'", input)
 			}
-			if _, err := target.ParseIdentity(version); err == nil {
+			if id, err := target.ParseIdentity(version); err == nil {
+				if !id.IsTargetVariant() {
+					return ToolchainName{}, fmt.Errorf("toolchain name %q requires a version or a cross-target tuple", input)
+				}
 				return ToolchainName{Channel: ch, Target: version}, nil
 			}
 			version, tuple := target.SplitVariantSuffix(version)

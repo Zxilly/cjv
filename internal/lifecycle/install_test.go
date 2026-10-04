@@ -366,7 +366,7 @@ func TestInstall_PinsTargetToHostVersion(t *testing.T) {
 }
 
 func TestMissingTrackingTargetUsesInstalledHostRelease(t *testing.T) {
-	for _, operation := range []string{"auto-install", "update"} {
+	for _, operation := range []string{"auto-install", "update", "direct-install"} {
 		t.Run(operation, func(t *testing.T) {
 			hostTuple, err := sdktarget.CurrentHostTuple("")
 			require.NoError(t, err)
@@ -394,13 +394,17 @@ func TestMissingTrackingTargetUsesInstalledHostRelease(t *testing.T) {
 			empty := ""
 			_, err = sf.Update(config.SettingsUpdate{DefaultToolchain: &empty})
 			require.NoError(t, err)
-			if operation == "auto-install" {
+			switch operation {
+			case "auto-install":
 				project := t.TempDir()
 				require.NoError(t, os.WriteFile(filepath.Join(project, "cangjie-sdk.toml"), []byte("[toolchain]\nchannel = \"sts\"\ntargets = [\"ohos\"]\n"), 0o644))
 				t.Chdir(project)
 				_, err = resolve.Active(t.Context(), "")
 				require.NoError(t, err)
-			} else {
+			case "direct-install":
+				err = install(t, lifecycle.InstallRequest{Toolchain: "sts-" + tuple})
+				require.NoError(t, err)
+			default:
 				name, err := toolchain.ParseToolchainName("sts-" + tuple)
 				require.NoError(t, err)
 				_, err = lifecycle.UpdateInstalled(t.Context(), name, lifecycle.Options{Progress: progress.Discard})

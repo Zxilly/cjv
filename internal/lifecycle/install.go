@@ -33,6 +33,7 @@ type Options struct {
 	expectedSet        bool
 	expected           *toolchain.Installation
 	expectedComponents string
+	dependencies       map[string]toolchain.Installation
 	prepare            func(context.Context, component.Roots) error
 }
 
@@ -99,7 +100,14 @@ func Install(ctx context.Context, req InstallRequest, opts Options) error {
 			return err
 		}
 	}
-	resolved, err := d.Resolve(ctx, name, name.Target)
+	selector := name
+	if name.Target != "" && name.Version == "" {
+		selector, opts, err = selectTargetHost(ctx, name, opts)
+		if err != nil {
+			return err
+		}
+	}
+	resolved, err := d.Resolve(ctx, selector, name.Target)
 	if err != nil {
 		return err
 	}
@@ -117,6 +125,14 @@ func Install(ctx context.Context, req InstallRequest, opts Options) error {
 	installed := []string{selectedIdentity(resolved, name.Version == "")}
 	if len(targets) > 0 {
 		installed = nil
+		record, nextOpts, err := captureDependency(ctx, selectedIdentity(resolved, name.Version == ""), opts)
+		if err != nil {
+			return err
+		}
+		if record.Release != resolved.Name || record.Tuple != "" && record.Tuple != resolved.Tuple || record.SHA256 != "" && record.SHA256 != resolved.SHA256 {
+			return fmt.Errorf("toolchain %s changed during target installation; retry", req.Toolchain)
+		}
+		opts = nextOpts
 	}
 	for _, target := range targets {
 		tuple, err := d.TargetTuple(target)

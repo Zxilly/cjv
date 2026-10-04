@@ -44,8 +44,7 @@ func installSelected(ctx context.Context, d *Distribution, rt ResolvedToolchain,
 		return err
 	}
 	if installed.Release == rt.Name && installed.Tuple == rt.Tuple && installed.SHA256 == rt.SHA256 && !force {
-		opts.emit(progress.Event{Kind: progress.AlreadyUpToDate, Toolchain: opts.selection})
-		if setDefault {
+		if setDefault || len(opts.dependencies) > 0 {
 			lock, err := toolchain.LockHome(ctx)
 			if err != nil {
 				return err
@@ -57,8 +56,16 @@ func installSelected(ctx context.Context, d *Distribution, rt ResolvedToolchain,
 			if _, err := os.Stat(roots.TcDir); err != nil {
 				return err
 			}
-			return publishFirstDefault(d, opts.selection, opts)
+			if err := validateDependencies(opts); err != nil {
+				return err
+			}
+			if setDefault {
+				if err := publishFirstDefault(d, opts.selection, opts); err != nil {
+					return err
+				}
+			}
 		}
+		opts.emit(progress.Event{Kind: progress.AlreadyUpToDate, Toolchain: opts.selection})
 		return nil
 	}
 	_, err = upgradeToolchain(ctx, opts.selection, rt, d, opts)

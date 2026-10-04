@@ -29,6 +29,38 @@ func TestShouldAutoInstall_RespectsExplicitSetting(t *testing.T) {
 	assert.False(t, shouldAutoInstall(&s), "should not auto-install when explicitly disabled")
 }
 
+func TestLegacyMigrationKeepsTargetsAlignedWithSelectedHost(t *testing.T) {
+	for _, matching := range []bool{false, true} {
+		t.Run(map[bool]string{false: "missing", true: "installed"}[matching], func(t *testing.T) {
+			home := t.TempDir()
+			config.IsolateForTest(t, home)
+			require.NoError(t, config.EnsureDirs())
+			tuple, err := sdktarget.CurrentTargetTuple("", "ohos")
+			require.NoError(t, err)
+			names := []string{"sts-2.0.0", "sts-3.0.0-" + tuple}
+			if matching {
+				names = append(names, "sts-2.0.0-"+tuple)
+			}
+			for _, name := range names {
+				require.NoError(t, os.MkdirAll(filepath.Join(home, "toolchains", name), 0o755))
+			}
+			active, err := ActiveTarget(t.Context(), "sts", "ohos")
+			if matching {
+				require.NoError(t, err)
+				record, err := toolchain.ReadInstallation(active.Dir)
+				require.NoError(t, err)
+				assert.Equal(t, "sts-2.0.0-"+tuple, record.Release)
+			} else {
+				require.Error(t, err)
+				assert.NoDirExists(t, filepath.Join(home, "toolchains", "sts-"+tuple))
+			}
+			for _, name := range names {
+				assert.DirExists(t, filepath.Join(home, "toolchains", name), "all fixed versions must remain intact")
+			}
+		})
+	}
+}
+
 func TestShouldAutoInstall_NilSettingsReturnsFalse(t *testing.T) {
 	assert.False(t, shouldAutoInstall(nil), "should return false when settings is nil")
 }

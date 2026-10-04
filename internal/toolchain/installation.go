@@ -39,6 +39,13 @@ func WriteInstallation(dir string, installed Installation) error {
 // ReadInstallation accepts old version directories without metadata. Tracking
 // installations always need a record: their names do not identify a release.
 func ReadInstallation(dir string) (Installation, error) {
+	info, err := os.Stat(dir)
+	if err != nil {
+		return Installation{}, err
+	}
+	if !info.IsDir() {
+		return Installation{}, fmt.Errorf("toolchain %s is not a directory", filepath.Base(dir))
+	}
 	identity, err := ParseToolchainName(filepath.Base(dir))
 	if err != nil {
 		return Installation{}, err

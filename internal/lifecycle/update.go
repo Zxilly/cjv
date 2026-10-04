@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"log/slog"
-	"os"
 
 	"github.com/Zxilly/cjv/internal/i18n"
 	"github.com/Zxilly/cjv/internal/progress"
@@ -68,15 +67,9 @@ func UpdateInstalled(ctx context.Context, name toolchain.ToolchainName, opts Opt
 		}
 		selector := name
 		if name.Target != "" {
-			hostDir, findErr := toolchain.FindInstalled(toolchain.ToolchainName{Channel: name.Channel})
-			if findErr == nil {
-				host, err := toolchain.InstalledRelease(hostDir)
-				if err != nil {
-					return UpdateOutcome{}, err
-				}
-				selector.Version = host.Version
-			} else if !errors.Is(findErr, os.ErrNotExist) {
-				return UpdateOutcome{}, findErr
+			selector, opts, err = selectTargetHost(ctx, name, opts)
+			if err != nil {
+				return UpdateOutcome{}, err
 			}
 		}
 		resolved, err := d.Resolve(ctx, selector, name.Target)
@@ -170,14 +163,9 @@ func UpdateAll(ctx context.Context, opts Options) (UpdateReport, error) {
 func upgradeChannelToolchain(ctx context.Context, d *Distribution, channel toolchain.Channel, currentName, tuple string, opts Options) (UpdateOutcome, error) {
 	selector := toolchain.ToolchainName{Channel: channel}
 	if tuple != "" {
-		hostDir, err := toolchain.FindInstalled(selector)
-		if err == nil {
-			host, err := toolchain.InstalledRelease(hostDir)
-			if err != nil {
-				return UpdateOutcome{}, err
-			}
-			selector.Version = host.Version
-		} else if !errors.Is(err, os.ErrNotExist) {
+		var err error
+		selector, opts, err = selectTargetHost(ctx, selector, opts)
+		if err != nil {
 			return UpdateOutcome{}, err
 		}
 	}

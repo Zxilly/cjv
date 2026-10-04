@@ -10,6 +10,22 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestTrackingTargetNameRequiresCrossTargetTuple(t *testing.T) {
+	for _, tuple := range []string{"win32-x64", "linux-x64", "darwin-arm64"} {
+		_, err := ParseToolchainName("sts-" + tuple)
+		require.ErrorContains(t, err, "requires a version or a cross-target tuple")
+	}
+	parsed, err := ParseToolchainName("sts-linux-x64-ohos")
+	require.NoError(t, err)
+	assert.Equal(t, "linux-x64-ohos", parsed.Target)
+	assert.Empty(t, parsed.Version)
+}
+
+func TestReadInstallationDoesNotInferMissingLegacyDirectory(t *testing.T) {
+	_, err := ReadInstallation(filepath.Join(t.TempDir(), "sts-1.0.0"))
+	require.ErrorIs(t, err, os.ErrNotExist)
+}
+
 // --- ListInstalled behavioral tests ---
 
 func TestListInstalled_ReturnsSortedNames(t *testing.T) {
