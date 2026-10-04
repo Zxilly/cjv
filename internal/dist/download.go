@@ -69,8 +69,24 @@ func DownloadCached(ctx context.Context, url, sha256Hex, cacheDir string, sink p
 // transfer in progress events. The staged filename remains hash-keyed.
 func DownloadCachedWithName(ctx context.Context, url, sha256Hex, cacheDir, displayName string, sink progress.Sink) (string, error) {
 	sha256Hex = strings.ToLower(sha256Hex)
+	if sha256Hex != "" {
+		digest, err := hex.DecodeString(sha256Hex)
+		if err != nil || len(digest) != sha256.Size {
+			return "", fmt.Errorf("invalid SHA256 checksum %q", sha256Hex)
+		}
+	}
 	key := cacheKey(url, sha256Hex)
 	stagedPath := filepath.Join(cacheDir, key)
+	if err := os.MkdirAll(cacheDir+".locks", 0o755); err != nil {
+		return "", err
+	}
+	// Keep lock inodes outside the purged staging directory. Never unlink a
+	// lock file: another process may already be waiting on the same inode.
+	lock, err := fsops.LockFile(ctx, filepath.Join(cacheDir+".locks", key))
+	if err != nil {
+		return "", err
+	}
+	defer lock.Close() //nolint:errcheck
 
 	if reused, err := tryReuseStaged(stagedPath, sha256Hex); err != nil {
 		return "", err
@@ -81,14 +97,29 @@ func DownloadCachedWithName(ctx context.Context, url, sha256Hex, cacheDir, displ
 	if err := os.MkdirAll(cacheDir, 0o755); err != nil {
 		return "", err
 	}
-	// Old cjv versions wrote partials at "<key>.partial"; sweep them so a
-	// stale fixed-name partial cannot be mistaken for a valid staged file.
-	if err := removeLegacyPartial(stagedPath + ".partial"); err != nil {
+	partialPath := stagedPath + ".partial"
+	if sha256Hex == "" {
+		if err := removeLegacyPartial(partialPath); err != nil {
+			return "", err
+		}
+		partialPath, err = newDownloadTempPath(stagedPath)
+		if err != nil {
+			return "", err
+		}
+	} else if info, err := os.Lstat(partialPath); err == nil {
+		if !info.Mode().IsRegular() {
+			return "", fmt.Errorf("partial download %s is not a regular file", partialPath)
+		}
+	} else if !errors.Is(err, os.ErrNotExist) {
 		return "", err
 	}
-	partialPath, err := newDownloadTempPath(stagedPath)
-	if err != nil {
-		return "", err
+	if sha256Hex != "" {
+		if err := verifyStagedFile(partialPath, sha256Hex); err == nil {
+			if err := fsops.RenameRetry(partialPath, stagedPath); err != nil {
+				return "", err
+			}
+			return stagedPath, nil
+		}
 	}
 
 	var lastErr error
@@ -118,7 +149,9 @@ func DownloadCachedWithName(ctx context.Context, url, sha256Hex, cacheDir, displ
 		}
 		// Retriable error: keep .partial-* on disk for the next attempt.
 	}
-	cleanupDownloadTemp(partialPath)
+	if sha256Hex == "" {
+		cleanupDownloadTemp(partialPath)
+	}
 	return "", lastErr
 }
 
