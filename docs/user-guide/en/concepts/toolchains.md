@@ -19,14 +19,14 @@ A toolchain name can take one of the following forms. The first few are recogniz
 
 |Form|Example|Description|
 |----|-------|-----------|
-|Channel name|`lts`, `sts`, `nightly`|Resolves to the current latest version of that [channel](channels.md)|
+|Channel name|`lts`, `sts`, `nightly`|Uses that [channel](channels.md)'s independent installation; install and update fetch the latest release|
 |Channel name + version|`lts-1.0.5`, `sts-1.1.0-beta.23`|A specific version within that channel|
 |Bare version number|`1.0.5`|A version number without a channel prefix, looked up across all channels|
 |custom|`my-sdk`, `local-build`|Created with `cjv toolchain link`, see below|
 
 ### Channel name
 
-`lts`, `sts`, and `nightly` are three channels. Used on their own, a channel name is resolved by cjv to that channel's current latest version. Channel names are case-insensitive, so `LTS`, `Lts`, and `lts` are equivalent.
+`lts`, `sts`, and `nightly` are three channels. Install and update fetch the channel's latest release; running a tool uses the release already installed in its channel directory. Channel names are case-insensitive, so `LTS`, `Lts`, and `lts` are equivalent.
 
 ```bash
 cjv install lts      # Install the latest LTS

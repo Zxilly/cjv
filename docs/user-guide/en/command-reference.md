@@ -104,7 +104,7 @@ Flags:
 |-----|-----------|
 |`--no-self-update`|Skip the cjv self-update check|
 
-A channel name (such as `lts`) updates that tracking channel, installing it if missing. Explicit host and target versions are installed when missing and otherwise remain fixed. Custom or linked toolchains are skipped or rejected. Defaults, directory overrides and project files selecting a channel follow its updates; explicit version selectors remain fixed. Old SDK and component content is removed only when no fixed version or other installation identity needs it. Legacy installations are retained as fixed versions because their original intent is unknown; `install <channel>` or `update <channel>` establishes tracking. Self-update behavior follows `auto-self-update` and can be disabled with `--no-self-update`.
+A channel name (such as `lts`) updates that tracking channel, installing it if missing. Explicit host and target versions are installed when missing and otherwise remain fixed. Custom or linked toolchains are skipped or rejected. Defaults, directory overrides and project files selecting a channel follow its updates; explicit version selectors remain fixed. The channel's SDK and component roots are replaced together; independent fixed installations are retained. On first use, old version directories remain fixed while their implicit channel selections are copied into independent channel directories offline. Defaults, overrides and project files are unchanged. Self-update behavior follows `auto-self-update` and can be disabled with `--no-self-update`.
 
 ```bash
 # Update all tracking channels

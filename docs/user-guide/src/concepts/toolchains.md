@@ -19,14 +19,14 @@ cjv uninstall lts        # 卸载 lts
 
 | 形式 | 示例 | 说明 |
 | ---- | ---- | ---- |
-| 通道名 | `lts`、`sts`、`nightly` | 解析为该 [通道](channels.md) 当前的最新版本 |
+| 通道名 | `lts`、`sts`、`nightly` | 使用该 [通道](channels.md) 的独立安装，安装或更新时获取最新版本 |
 | 通道名 + 版本 | `lts-1.0.5`、`sts-1.1.0-beta.23` | 该通道下的一个具体版本 |
 | 裸版本号 | `1.0.5` | 不带通道前缀的版本号，跨所有通道查找 |
 | custom(自定义) | `my-sdk`、`local-build` | 由 `cjv toolchain link` 创建，见下文 |
 
 ### 通道名
 
-`lts`、`sts`、`nightly` 是三个通道。单独使用通道名时，cjv 把它解析为该通道当前的最新版本。通道名不区分大小写，`LTS`、`Lts`、`lts` 等价。
+`lts`、`sts`、`nightly` 是三个通道。安装或更新时，cjv 获取该通道当前的最新版本；运行工具时使用渠道目录中已经安装的版本。通道名不区分大小写，`LTS`、`Lts`、`lts` 等价。
 
 ```bash
 cjv install lts      # 安装最新 LTS

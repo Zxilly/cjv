@@ -22,7 +22,7 @@ cjv install nightly
 
 ## Channels and version names
 
-Passing a channel to `cjv install` installs its latest version and stores it as `<channel>-<version>`. You can also pin a concrete version:
+Passing a channel to `cjv install` installs its latest version in an independent directory such as `toolchains/sts`. Fixed releases have separate directories such as `toolchains/sts-1.2.0`, with their own component choices. You can also pin a concrete version:
 
 ```bash
 cjv install lts-1.0.5
@@ -72,13 +72,13 @@ channel = "lts"
 
 ## Checking for updates
 
-Installing a channel records a tracking identity. Both `cjv install sts` and `cjv update sts` advance it to the latest STS release; `update sts` also installs a missing channel. Plain `cjv update` updates installed tracking channels and their cross-compilation SDKs. Selected components are preserved, and obsolete SDK, stdx and documentation content is removed after a successful update.
+Installing a channel creates an independent tracking directory such as `toolchains/sts`. Its release record lives in `.cjv/toolchain.toml` inside that directory. Both `cjv install sts` and `cjv update sts` advance it to the latest STS release; `update sts` also installs a missing channel. Plain `cjv update` updates installed tracking channels and their cross-compilation SDKs. Selected components are preserved, and obsolete SDK, stdx and documentation content is removed after a successful update.
 
-An explicit installation such as `cjv install sts-1.2.0` retains that fixed version. Plain `update` does not replace it. A fixed version and a channel can share one SDK: updating the channel preserves the fixed installation. `cjv uninstall sts` removes the channel identity, while `cjv uninstall sts-1.2.0` removes the fixed identity. Shared content is deleted only when the last installation identity is removed.
+An explicit installation such as `cjv install sts-1.2.0` creates a separate fixed directory. Plain `update` does not replace it. Channels and fixed versions own independent SDK, stdx, documentation and component records. `cjv uninstall sts` removes the channel and its tracking cross SDKs, while `cjv uninstall sts-1.2.0` removes only the fixed installation.
 
 The first channel installation records a channel name as the default. Defaults, directory overrides and project files selecting `sts` follow its installed channel release; explicit versions remain fixed. Updates do not rewrite project files.
 
-Older cjv installations did not record intent. Existing SDKs are conservatively retained as fixed versions. Run `cjv install sts` or `cjv update sts` to establish channel tracking, and explicitly uninstall old versions when no longer needed. `cjv check` reports available updates for tracking channels only.
+The first use of the new layout performs an offline migration. All old version directories remain fixed installations. Each channel's previously implicit highest installed release is copied into an independent channel directory, including its cross SDKs, documentation, stdx and component records. Defaults, overrides and project files are unchanged. A completed migration never recreates a deliberately uninstalled channel. Explicitly uninstall old versions when no longer needed. Identical SDK payloads can use hardlinks to reduce disk usage; metadata remains independent. See [configuration](../configuration.md). `cjv check` reports available updates for tracking channels only.
 
 `cjv check` queries the manifest and compares installed channel toolchains with each channel's latest version:
 

@@ -33,6 +33,7 @@ Field overview:
 |`auto_install`|bool|`cjv set auto-install`|Whether to automatically install missing toolchains in proxy mode|
 |`home`|string|`cjv set home`|Persisted `CJV_HOME` data directory path|
 |`default_host`|string|`cjv set default-host`|Default host platform identity (`goos-goarch` form)|
+|`link_mode`|string|Manual edit / system fallback|`hardlink` (default) or `copy`, controlling identical SDK payload sharing|
 |`overrides`|table|`cjv override`|Directory-to-toolchain override mapping; see [Targets and Overrides](concepts/targets-overrides.md)|
 
  >
@@ -137,3 +138,9 @@ All of cjv's data is kept under `CJV_HOME` (`~/.cjv` by default), with each subd
  > `cjv toolchain uninstall <tc>` also cleans up `stdx/<tc>/` and `docs/<tc>/`, leaving no orphaned component data behind.
 
 If a custom `CJV_HOME` is set or persisted, the `bin/`, `toolchains/`, `stdx/`, `docs/`, and `downloads/` directories above all fall under the new path; only `settings.toml` always stays in the user's home directory at `~/.cjv/` (see [settings.toml](#settingstoml) above).
+
+## SDK file sharing
+
+The default `link_mode = "hardlink"` attempts hardlinks for regular SDK files from the same release, platform and SHA-256. cjv compares file contents first and skips modified files. Installation and component metadata under `.cjv` always remain independent. Unsupported hardlinks leave the copied files in place without failing the install. Legacy migration copies existing files to avoid sharing user-modified SDKs.
+
+Updates, forced reinstalls and removals replace or unlink directories rather than editing another SDK in place. Hardlinks still share file contents: manual in-place edits affect every installation linked to that file. Set `link_mode = "copy"` in `settings.toml` for independent file contents in subsequent installs. This does not detach existing hardlinks. Component stdx and documentation directories are installed independently and are outside this SDK deduplication optimization.

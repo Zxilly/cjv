@@ -33,6 +33,7 @@ manifest_url = "https://raw.githubusercontent.com/Zxilly/cangjie-version-manifes
 | `auto_install`      | bool   | `cjv set auto-install`     | 代理模式下是否自动安装缺失的工具链                                    |
 | `home`              | string | `cjv set home`             | 持久化的 `CJV_HOME` 数据目录路径                                     |
 | `default_host`      | string | `cjv set default-host`     | 默认主机平台标识（`goos-goarch` 形式）                                |
+| `link_mode` | string | 手动编辑 / 系统后备配置 | `hardlink`（默认）或 `copy`，控制同发行包 SDK 文件的空间复用 |
 | `overrides`         | table  | `cjv override`             | 目录到工具链的覆盖映射，见 [目标与覆盖](concepts/targets-overrides.md) |
 
 > 文件中无法识别的键（例如拼写错误）会以 warn 级别日志提示，但不会阻止 cjv 启动。把 `version` 设成超过当前二进制支持的值则会报错。
@@ -135,3 +136,9 @@ cjv 的全部数据都放在 `CJV_HOME`（默认 `~/.cjv`）下，各子目录�
 > `cjv toolchain uninstall <tc>` 会连带清理 `stdx/<tc>/` 与 `docs/<tc>/`，不会留下孤立的组件数据。
 
 如果设置或持久化了自定义 `CJV_HOME`，上述 `bin/`、`toolchains/`、`stdx/`、`docs/`、`downloads/` 都会落在新路径下；唯独 `settings.toml` 始终留在用户主目录的 `~/.cjv/`（见上文 [settings.toml](#settingstoml)）。
+
+## SDK 文件复用
+
+`link_mode = "hardlink"` 默认对相同发行版本、平台和 SHA-256 的 SDK 普通文件尝试硬链接。cjv 会先比较文件内容，跳过被修改的文件；`.cjv` 安装及组件元数据始终独立。硬链接不可用时保留复制的文件，不影响安装成功。迁移旧布局时直接复制，避免共享用户修改过的旧 SDK。
+
+升级、强制重装和卸载通过替换或移除目录生效，不会原地写入另一份 SDK。硬链接仍共享文件内容：手工原地编辑 SDK 文件会影响所有链接到该文件的安装。需要独立文件内容时，在 `settings.toml` 中设置 `link_mode = "copy"`；该设置控制后续安装，不会拆开已经存在的硬链接。组件的 stdx 和文档目录独立安装，不参与 SDK 硬链接优化。
