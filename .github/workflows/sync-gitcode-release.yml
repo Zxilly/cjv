@@ -1,6 +1,15 @@
 name: Sync GitCode Release
 
 on:
+  workflow_call:
+    inputs:
+      tag:
+        description: Stable release tag to synchronize
+        required: true
+        type: string
+    secrets:
+      GITCODE_TOKEN:
+        required: true
   workflow_dispatch:
     inputs:
       tag:
@@ -11,9 +20,51 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: gitcode-release-${{ inputs.tag }}
+  cancel-in-progress: false
+
 jobs:
+  prepare:
+    name: Validate release and sync tag
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Ensure stable tag
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          if ! [[ "${RELEASE_TAG}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Only stable tags can be synchronized"
+            exit 1
+          fi
+      - name: Checkout release tag
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ inputs.tag }}
+          fetch-depth: 0
+      - name: Ensure published GitHub artifacts exist
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          gh release view "${RELEASE_TAG}" --json isDraft,isPrerelease,assets > "${RUNNER_TEMP}/release.json"
+          jq -e '.isDraft == false and .isPrerelease == false' "${RUNNER_TEMP}/release.json" > /dev/null
+          for asset in cjv-mirror_darwin_amd64.tar.gz cjv-mirror_darwin_arm64.tar.gz \
+            cjv-mirror_linux_amd64.tar.gz cjv-mirror_linux_arm64.tar.gz \
+            cjv-mirror_windows_amd64.zip checksums.txt; do
+            jq -e --arg name "${asset}" '.assets | any(.name == $name)' "${RUNNER_TEMP}/release.json" > /dev/null
+          done
+      - name: Push release tag and commit to GitCode
+        env:
+          GITCODE_TOKEN: ${{ secrets.GITCODE_TOKEN }}
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          git remote add gitcode "https://Zxilly:${GITCODE_TOKEN}@gitcode.com/Zxilly/cjv.git"
+          git push gitcode "refs/tags/${RELEASE_TAG}"
   sync:
     name: Sync ${{ matrix.asset }}
+    needs: prepare
     runs-on: ubuntu-latest
     timeout-minutes: 15
     strategy:
@@ -45,6 +96,12 @@ jobs:
           gh release download "${RELEASE_TAG}" \
             --dir dist \
             --pattern "${RELEASE_ASSET}"
+          if [[ "${RELEASE_ASSET}" != checksums.txt ]]; then
+            gh release download "${RELEASE_TAG}" --dir dist --pattern checksums.txt
+            checksum=$(awk -v name="${RELEASE_ASSET}" '$2 == name { print }' dist/checksums.txt)
+            test -n "${checksum}"
+            (cd dist && printf '%s\n' "${checksum}" | sha256sum --check --strict)
+          fi
       - name: Upload mirror binaries to GitCode
         uses: Zxilly/upload-gitcode-release@4ecd2bfd44008dd4f2b2487eda7a2e7bbbf12a1b # v1.0.0
         with:
@@ -54,3 +111,12 @@ jobs:
           target-commitish: ${{ inputs.tag }}
           body: "See https://github.com/Zxilly/cjv/releases/tag/${{ inputs.tag }} for the full changelog."
           files: dist/${{ matrix.asset }}
+      - name: Verify published GitCode artifact
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+          RELEASE_ASSET: ${{ matrix.asset }}
+        run: |
+          curl --fail --location --retry 3 --retry-all-errors --connect-timeout 30 --max-time 120 \
+            "https://gitcode.com/Zxilly/cjv/releases/download/${RELEASE_TAG}/${RELEASE_ASSET}" \
+            --output "${RUNNER_TEMP}/${RELEASE_ASSET}"
+          cmp "dist/${RELEASE_ASSET}" "${RUNNER_TEMP}/${RELEASE_ASSET}"

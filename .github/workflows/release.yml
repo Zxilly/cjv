@@ -32,7 +32,6 @@ jobs:
           GITCODE_TOKEN: ${{ secrets.GITCODE_TOKEN }}
         run: |
           git remote add gitcode "https://Zxilly:${GITCODE_TOKEN}@gitcode.com/Zxilly/cjv.git"
-          git push gitcode "HEAD:refs/heads/master"
           git push gitcode "${GITHUB_REF}"
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@1a80836c5c9d9e5755a25cb59ec6f45a3b5f41a8 # v7.2.1
@@ -40,22 +39,21 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - name: Upload mirror binaries to GitCode
-        uses: Zxilly/upload-gitcode-release@4ecd2bfd44008dd4f2b2487eda7a2e7bbbf12a1b # v1.0.0
-        with:
-          gitcode-token: ${{ secrets.GITCODE_TOKEN }}
-          target-repo: Zxilly/cjv
-          tag: ${{ github.ref_name }}
-          target-commitish: ${{ github.sha }}
-          body: "See https://github.com/Zxilly/cjv/releases/tag/${{ github.ref_name }} for the full changelog."
-          files: |
-            dist/cjv-mirror_*.tar.gz
-            dist/cjv-mirror_*.zip
-            dist/checksums.txt
+
+  gitcode:
+    name: Sync GitCode Release
+    needs: release
+    permissions:
+      contents: read
+    uses: ./.github/workflows/sync-gitcode-release.yml
+    with:
+      tag: ${{ github.ref_name }}
+    secrets:
+      GITCODE_TOKEN: ${{ secrets.GITCODE_TOKEN }}
 
   pages:
     name: Deploy to GitHub Pages
-    needs: release
+    needs: [release, gitcode]
     permissions:
       contents: read
       pages: write

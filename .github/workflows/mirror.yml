@@ -3,6 +3,7 @@ name: Sync GitCode
 on:
   push:
     branches: [master]
+    tags: ["**"]
   workflow_dispatch:
 
 permissions:
@@ -14,16 +15,17 @@ concurrency:
 
 jobs:
   sync:
-    name: Sync master
+    name: Sync master and tags
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
+          ref: master
           fetch-depth: 0
-      - name: Push master to GitCode
+      - name: Push master and tags to GitCode
         env:
           GITCODE_TOKEN: ${{ secrets.GITCODE_TOKEN }}
         run: |
           git remote add gitcode "https://Zxilly:${GITCODE_TOKEN}@gitcode.com/Zxilly/cjv.git"
-          git push gitcode "HEAD:refs/heads/master"
+          git push gitcode "HEAD:refs/heads/master" --tags
