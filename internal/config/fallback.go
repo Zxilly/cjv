@@ -88,6 +88,9 @@ func mergeFromFallback(user, fallback *Settings, meta toml.MetaData) {
 	if !meta.IsDefined("auto_install") {
 		user.AutoInstall = fallback.AutoInstall
 	}
+	if !meta.IsDefined("link_mode") {
+		user.LinkMode = fallback.LinkMode
+	}
 	if !meta.IsDefined("default_host") && fallback.DefaultHost != "" {
 		user.DefaultHost = fallback.DefaultHost
 	}

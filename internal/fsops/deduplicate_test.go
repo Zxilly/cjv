@@ -36,6 +36,30 @@ func TestDeduplicationLinksOnlyIdenticalPayloadAndCopiesMetadata(t *testing.T) {
 	assert.Equal(t, "same", string(data))
 }
 
+func TestDeduplicationSkipsModifiedSourceDirectoryLinks(t *testing.T) {
+	base := t.TempDir()
+	source, staged, outside := filepath.Join(base, "source"), filepath.Join(base, "staged"), filepath.Join(base, "outside")
+	for _, dir := range []string{source, staged, outside} {
+		require.NoError(t, os.Mkdir(dir, 0o755))
+	}
+	require.NoError(t, os.Mkdir(filepath.Join(staged, "lib"), 0o755))
+	stagedFile, outsideFile := filepath.Join(staged, "lib", "payload"), filepath.Join(outside, "payload")
+	require.NoError(t, os.WriteFile(stagedFile, []byte("original"), 0o644))
+	require.NoError(t, os.WriteFile(outsideFile, []byte("edited"), 0o644))
+	if err := SymlinkOrJunction(outside, filepath.Join(source, "lib")); err != nil {
+		t.Skipf("directory links unavailable: %v", err)
+	}
+	require.NoError(t, HardlinkIdenticalTree(source, staged))
+	data, err := os.ReadFile(stagedFile)
+	require.NoError(t, err)
+	assert.Equal(t, "original", string(data))
+	a, err := os.Stat(stagedFile)
+	require.NoError(t, err)
+	b, err := os.Stat(outsideFile)
+	require.NoError(t, err)
+	assert.False(t, os.SameFile(a, b))
+}
+
 func TestUnsupportedHardlinksRetainIndependentCopies(t *testing.T) {
 	root := t.TempDir()
 	source, dest := filepath.Join(root, "source"), filepath.Join(root, "dest")

@@ -34,18 +34,29 @@ func hardlinkIdenticalTree(source, staged string, linkFile func(string, string) 
 		if rel == ".cjv" && entry.IsDir() {
 			return filepath.SkipDir
 		}
-		if !entry.Type().IsRegular() {
-			return nil
-		}
-		candidate := filepath.Join(source, rel)
 		// OpenRoot rejects parent symlinks escaping the source tree.
 		info, err := root.Lstat(rel)
 		if errors.Is(err, os.ErrNotExist) {
+			if entry.IsDir() {
+				return filepath.SkipDir
+			}
 			return nil
 		}
 		if err != nil {
 			return err
 		}
+		if entry.IsDir() {
+			// Inspect parents before visiting their children. A modified source
+			// directory link loses deduplication, but never contaminates staging.
+			if !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if !entry.Type().IsRegular() {
+			return nil
+		}
+		candidate := filepath.Join(source, rel)
 		if !info.Mode().IsRegular() {
 			return nil
 		}
