@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"sync/atomic"
 	"testing"
 
 	"github.com/Zxilly/cjv/internal/config"
@@ -333,4 +334,71 @@ func applied(r UpdateReport) []UpdateOutcome {
 		}
 	}
 	return out
+}
+
+func TestNightlyFallbackReportsActualInstalledRelease(t *testing.T) {
+	home := updateHome(t)
+	sdk, sdkSHA := testutil.CreateMockSDKZip("1.0.5")
+	docs, docsSHA := testutil.MockTarGz(t, map[string]string{"index.html": "docs"})
+	tuple, err := sdktarget.CurrentHostTuple("")
+	require.NoError(t, err)
+	old, newer := "1.0.0-alpha.20260101", "1.0.0-alpha.20260102"
+	var latest atomic.Value
+	latest.Store(old)
+	var server *httptest.Server
+	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/sdk.zip":
+			_, _ = w.Write(sdk)
+		case "/docs.tar.gz":
+			_, _ = w.Write(docs)
+		case "/nightly.json":
+			channel := dist.ChannelInfo{Latest: latest.Load().(string),
+				Versions: map[string]map[string]dist.DownloadInfo{
+					old:   {tuple: {Name: "sdk.zip", URL: server.URL + "/sdk.zip", SHA256: sdkSHA}},
+					newer: {tuple: {Name: "sdk.zip", URL: server.URL + "/sdk.zip", SHA256: sdkSHA}}},
+				Components: map[string]dist.ComponentSet{old: {Docs: &dist.ComponentInfo{URL: server.URL + "/docs.tar.gz", SHA256: docsSHA}}}}
+			require.NoError(t, json.NewEncoder(w).Encode(channel))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(server.Close)
+	sf, err := config.DefaultSettingsFile()
+	require.NoError(t, err)
+	manifestURL := server.URL + "/versions.json"
+	_, err = sf.Update(config.SettingsUpdate{ManifestURL: &manifestURL})
+	require.NoError(t, err)
+	require.NoError(t, Install(t.Context(), InstallRequest{Toolchain: "nightly", Components: []string{"docs"}}, Options{}))
+	latest.Store(newer)
+	outcome, err := UpdateInstalled(t.Context(), parse(t, "nightly"), Options{})
+	require.NoError(t, err)
+	installed := readRelease(t, home, "nightly")
+	t.Logf("outcome=%+v actual=%s", outcome, installed.Release)
+	require.Equal(t, UpdateUpToDate, outcome.Status, "fallback to existing release did not install an update")
+	require.Equal(t, installed.Release, outcome.Replacement)
+	outcome, err = UpdateInstalled(t.Context(), parse(t, "nightly"), Options{AllowMissing: true})
+	require.NoError(t, err)
+	require.Equal(t, UpdateApplied, outcome.Status)
+	require.Equal(t, "nightly-"+newer, readRelease(t, home, "nightly").Release)
+	err = Install(t.Context(), InstallRequest{Toolchain: "nightly", Components: []string{"docs"}}, Options{})
+	require.Error(t, err)
+	require.Equal(t, "nightly-"+newer, readRelease(t, home, "nightly").Release)
+	require.NoError(t, Install(t.Context(), InstallRequest{Toolchain: "nightly", Components: []string{"docs"}}, Options{AllowDowngrade: true}))
+	require.Equal(t, "nightly-"+old, readRelease(t, home, "nightly").Release)
+}
+func TestNoUpdateKeepsInstalledSDKWithoutManifest(t *testing.T) {
+	home := updateHome(t)
+	selectRelease(t, "1.0.0")
+	require.NoError(t, Install(t.Context(), InstallRequest{Toolchain: "sts"}, Options{}))
+	unavailable := httptest.NewServer(http.NotFoundHandler())
+	t.Cleanup(unavailable.Close)
+	sf, err := config.DefaultSettingsFile()
+	require.NoError(t, err)
+	manifestURL := unavailable.URL + "/versions.json"
+	_, err = sf.Update(config.SettingsUpdate{ManifestURL: &manifestURL})
+	require.NoError(t, err)
+	err = Install(t.Context(), InstallRequest{Toolchain: "sts", NoUpdate: true}, Options{})
+	require.NoError(t, err, "existing SDK with no requested changes should not require a manifest")
+	require.Equal(t, "sts-1.0.0", readRelease(t, home, "sts").Release)
 }

@@ -360,8 +360,7 @@ func TestInstall_PinsTargetToHostVersion(t *testing.T) {
 	err = install(t, lifecycle.InstallRequest{Toolchain: "sts", Targets: []string{"ohos"}})
 	require.Error(t, err, "install must fail when the target SDK lacks the host's resolved version")
 	installed := installedNames(t)
-	// The host must have been installed first, proving the target-pin code ran.
-	assert.Contains(t, installed, "sts", "host toolchain should have installed before the target failure")
+	assert.NotContains(t, installed, "sts", "a missing target must abort the whole installation")
 	assert.NotContains(t, installed, "sts-"+ohosKey, "must not install a version-skewed target SDK")
 }
 

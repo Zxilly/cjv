@@ -7,6 +7,7 @@ import (
 
 	"github.com/Zxilly/cjv/internal/i18n"
 	"github.com/Zxilly/cjv/internal/progress"
+	sdktarget "github.com/Zxilly/cjv/internal/target"
 	"github.com/Zxilly/cjv/internal/toolchain"
 )
 
@@ -84,7 +85,25 @@ func UpdateInstalled(ctx context.Context, name toolchain.ToolchainName, opts Opt
 			}
 			old = record
 		}
-		if err := installSelected(ctx, d, resolved, true, false, name.Target == "", opts); err != nil {
+		if name.Target == "" {
+			changed, err := installGroup(ctx, d, name, resolved, InstallRequest{Toolchain: name.String()}, opts)
+			if err != nil {
+				return UpdateOutcome{}, err
+			}
+			dir, err := toolchain.FindInstalled(name)
+			if err != nil {
+				return UpdateOutcome{}, err
+			}
+			record, err := toolchain.ReadInstallation(dir)
+			if err != nil {
+				return UpdateOutcome{}, err
+			}
+			status := UpdateUpToDate
+			if changed {
+				status = UpdateApplied
+			}
+			return UpdateOutcome{Name: name.String(), Replacement: record.Release, Status: status}, nil
+		} else if err := installSelected(ctx, d, resolved, true, false, false, opts); err != nil {
 			return UpdateOutcome{}, err
 		}
 		outcome := UpdateOutcome{Name: name.String(), Replacement: resolved.Name, Status: UpdateApplied}
@@ -95,7 +114,7 @@ func UpdateInstalled(ctx context.Context, name toolchain.ToolchainName, opts Opt
 		if name.Target != "" {
 			return outcome, nil
 		}
-		return outcome, updateTrackedTargets(ctx, d, name.Channel, opts)
+		return outcome, nil
 	default:
 		// Specific version: install it (already installed is a no-op).
 		if err := Install(ctx, InstallRequest{Toolchain: name.String()}, opts); err != nil {
@@ -107,10 +126,12 @@ func UpdateInstalled(ctx context.Context, name toolchain.ToolchainName, opts Opt
 
 // UpdateAll updates recorded tracking identities, retaining explicit and legacy
 // versions and skipping custom/linked SDKs. A failure does not stop the loop: the
-// joined error is returned with the report, and the downloads staging area is
-// purged either way.
-func UpdateAll(ctx context.Context, opts Options) (UpdateReport, error) {
+// joined error is returned with the report. Failed downloads remain resumable.
+func UpdateAll(ctx context.Context, opts Options) (_ UpdateReport, updateErr error) {
 	defer func() {
+		if updateErr != nil {
+			return
+		}
 		if n, purgeErr := purgeDownloadsDirContext(ctx); purgeErr != nil {
 			slog.Warn("failed to purge downloads dir", "removed", n, "error", purgeErr)
 		} else if n > 0 {
@@ -137,6 +158,18 @@ func UpdateAll(ctx context.Context, opts Options) (UpdateReport, error) {
 	}
 	var report UpdateReport
 	var errs []error
+	// A host owns the publication of its tracking cross SDKs. Do not process
+	// those targets again using the pre-publication distribution snapshot.
+	grouped := make(map[string]bool)
+	for _, identity := range installed {
+		p, err := toolchain.ParseToolchainName(identity)
+		if err != nil || p.IsCustom() || p.Version != "" || p.Target != "" {
+			continue
+		}
+		if record, ok := d.installed[identity]; ok && record.Tuple != "" {
+			grouped[p.Channel.String()+"-"+record.Tuple] = true
+		}
+	}
 	for _, identity := range installed {
 		parsed, err := toolchain.ParseToolchainName(identity)
 		if err != nil {
@@ -151,6 +184,16 @@ func UpdateAll(ctx context.Context, opts Options) (UpdateReport, error) {
 			report.Outcomes = append(report.Outcomes, UpdateOutcome{Name: identity, Status: UpdatePinned})
 			continue
 		}
+		if parsed.Target != "" {
+			parts, err := sdktarget.ParseTuple(parsed.Target)
+			if err != nil {
+				errs = append(errs, err)
+				continue
+			}
+			if grouped[parsed.Channel.String()+"-"+parts.Host] {
+				continue
+			}
+		}
 		outcome, err := upgradeChannelToolchain(ctx, d, parsed.Channel, identity, parsed.Target, opts)
 		report.Outcomes = append(report.Outcomes, outcome)
 		if err != nil {
@@ -162,8 +205,12 @@ func UpdateAll(ctx context.Context, opts Options) (UpdateReport, error) {
 
 func upgradeChannelToolchain(ctx context.Context, d *Distribution, channel toolchain.Channel, currentName, tuple string, opts Options) (UpdateOutcome, error) {
 	selector := toolchain.ToolchainName{Channel: channel}
+	if installedName, err := toolchain.ParseToolchainName(currentName); err == nil {
+		selector.Host = installedName.Host
+	}
 	if tuple != "" {
 		var err error
+		selector.Target = tuple
 		selector, opts, err = selectTargetHost(ctx, selector, opts)
 		if err != nil {
 			return UpdateOutcome{}, err
@@ -174,7 +221,11 @@ func upgradeChannelToolchain(ctx context.Context, d *Distribution, channel toolc
 		return UpdateOutcome{Name: currentName, Status: UpdateFailed, Err: err}, err
 	}
 	outcome := UpdateOutcome{Name: currentName, Replacement: resolved.Name, Status: UpdateUpToDate}
-	dir, err := toolchain.FindInstalled(toolchain.ToolchainName{Channel: channel, Target: tuple})
+	currentIdentity, err := toolchain.ParseToolchainName(currentName)
+	if err != nil {
+		return outcome, err
+	}
+	dir, err := toolchain.FindInstalled(currentIdentity)
 	if err != nil {
 		return outcome, err
 	}
@@ -182,16 +233,28 @@ func upgradeChannelToolchain(ctx context.Context, d *Distribution, channel toolc
 	if err != nil {
 		return outcome, err
 	}
-	if current.Release == resolved.Name && current.Tuple == resolved.Tuple && current.SHA256 == resolved.SHA256 {
+	if tuple != "" && current.Release == resolved.Name && current.Tuple == resolved.Tuple && current.SHA256 == resolved.SHA256 {
 		return outcome, nil
 	}
-	updated, err := upgradeToolchain(ctx, currentName, resolved, d, opts)
+	var updated bool
+	if tuple == "" {
+		updated, err = installGroup(ctx, d, selector, resolved, InstallRequest{Toolchain: currentName}, opts)
+	} else {
+		updated, err = upgradeToolchain(ctx, currentName, resolved, d, opts)
+	}
 	if err != nil {
 		outcome.Status, outcome.Err = UpdateFailed, err
 		return outcome, err
 	}
 	if updated {
 		outcome.Status = UpdateApplied
+	}
+	if tuple == "" {
+		record, err := toolchain.ReadInstallation(dir)
+		if err != nil {
+			return outcome, err
+		}
+		outcome.Replacement = record.Release
 	}
 	return outcome, nil
 }

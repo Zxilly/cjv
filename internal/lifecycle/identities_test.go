@@ -182,3 +182,44 @@ func TestAlreadyInstalledSDKCanBecomeFirstDefault(t *testing.T) {
 		})
 	}
 }
+
+func TestGroupKeepsLegacyFixedPayloadWithoutForce(t *testing.T) {
+	home := updateHome(t)
+	selectRelease(t, "1.0.0", "ohos")
+	require.NoError(t, Install(t.Context(), InstallRequest{Toolchain: "sts-1.0.0"}, quietLifecycleOptions()))
+	fixed := filepath.Join(home, "toolchains", "sts-1.0.0")
+	require.NoError(t, os.Remove(filepath.Join(fixed, ".cjv", "toolchain.toml")))
+	marker := filepath.Join(fixed, "user-preserved.txt")
+	require.NoError(t, os.WriteFile(marker, []byte("legacy custom content"), 0644))
+	require.NoError(t, Install(t.Context(), InstallRequest{Toolchain: "sts-1.0.0", Targets: []string{"ohos"}}, quietLifecycleOptions()))
+	require.FileExists(t, marker, "non-force target addition must preserve existing fixed SDK")
+}
+
+func TestUpdateAllFindsExplicitHostAlias(t *testing.T) {
+	home := updateHome(t)
+	tuple, err := sdktarget.CurrentHostTuple("")
+	require.NoError(t, err)
+	identity := "sts-" + tuple
+	selectRelease(t, "1.0.0")
+	require.NoError(t, Install(t.Context(), InstallRequest{Toolchain: identity}, quietLifecycleOptions()))
+	selectRelease(t, "2.0.0")
+	_, err = UpdateAll(t.Context(), quietLifecycleOptions())
+	require.NoError(t, err)
+	dir, err := toolchain.FindInstalled(parse(t, identity))
+	require.NoError(t, err)
+	require.Equal(t, filepath.Join(home, "toolchains", "sts"), dir)
+	require.Equal(t, "sts-2.0.0", readRelease(t, home, "sts").Release)
+}
+func TestUpdateAllAllowMissingSkipsDroppedGroupTarget(t *testing.T) {
+	home := updateHome(t)
+	selectRelease(t, "1.0.0", "ohos")
+	require.NoError(t, Install(t.Context(), InstallRequest{Toolchain: "sts", Targets: []string{"ohos"}}, Options{}))
+	tuple, err := sdktarget.CurrentTargetTuple("", "ohos")
+	require.NoError(t, err)
+	selectRelease(t, "2.0.0")
+	report, err := UpdateAll(t.Context(), Options{AllowMissing: true})
+	t.Logf("report=%+v error=%v", report, err)
+	require.Equal(t, "sts-2.0.0", readRelease(t, home, "sts").Release)
+	require.NoDirExists(t, filepath.Join(home, "toolchains", "sts-"+tuple))
+	require.NoError(t, err, "group dropped unavailable target as requested; must not process its stale list entry")
+}

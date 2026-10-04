@@ -27,6 +27,9 @@ type Options struct {
 	// has already handled PATH itself, and proxy auto-install leaves PATH
 	// alone because cjv is evidently reachable.
 	ConfigurePath bool
+	// AllowMissing explicitly permits dropping unavailable components/targets.
+	AllowMissing   bool
+	AllowDowngrade bool
 	// Internal placement state captures an installation identity and the
 	// snapshot that must still match when its prepared roots are published.
 	selection          string
@@ -34,6 +37,7 @@ type Options struct {
 	expected           *toolchain.Installation
 	expectedComponents string
 	dependencies       map[string]toolchain.Installation
+	preserveDefault    bool
 	prepare            func(context.Context, component.Roots) error
 }
 
@@ -59,7 +63,8 @@ type InstallRequest struct {
 	// the target variants when Targets is set, otherwise the host toolchain.
 	Components []string
 	// Force replaces an already installed toolchain instead of keeping it.
-	Force bool
+	Force    bool
+	NoUpdate bool
 }
 
 // Install resolves the request against the configured distribution source
@@ -68,6 +73,9 @@ type InstallRequest struct {
 // never do. An already installed toolchain is reported and kept unless Force
 // is set.
 func Install(ctx context.Context, req InstallRequest, opts Options) error {
+	if req.NoUpdate && req.Force {
+		return fmt.Errorf("cannot combine force with no-update")
+	}
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -90,9 +98,29 @@ func Install(ctx context.Context, req InstallRequest, opts Options) error {
 	if err != nil {
 		return err
 	}
+	req.Targets = targets
+	if req.NoUpdate && !req.Force && name.Target == "" {
+		if dir, err := toolchain.FindInstalled(name); err == nil {
+			record, err := toolchain.ReadInstallation(dir)
+			if err != nil {
+				return err
+			}
+			tuple := record.Tuple
+			if tuple == "" {
+				tuple = d.HostTuple
+				if name.Host != "" {
+					tuple = name.Host
+				}
+			}
+			_, err = installGroup(ctx, d, name, ResolvedToolchain{Name: record.Release, Tuple: tuple, SHA256: record.SHA256}, req, opts)
+			return err
+		} else if !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
+	}
 	// A fixed version already on disk needs no remote manifest to remain
 	// installed. The directory itself is its installation identity.
-	if name.Version != "" && !req.Force && len(targets) == 0 && len(req.Components) == 0 {
+	if name.Version != "" && !toolchain.IsVersionSelector(name.Version) && !req.Force && len(targets) == 0 && len(req.Components) == 0 {
 		if dir, err := toolchain.FindInstalled(name); err == nil {
 			opts.selection = filepath.Base(dir)
 			return installResolved(ctx, d, ResolvedToolchain{Name: opts.selection}, false, name.Target == "", opts)
@@ -111,57 +139,16 @@ func Install(ctx context.Context, req InstallRequest, opts Options) error {
 	if err != nil {
 		return err
 	}
+	if name.Target == "" {
+		_, err := installGroup(ctx, d, name, resolved, req, opts)
+		return err
+	}
 	if err := installSelected(ctx, d, resolved, name.Version == "", req.Force, name.Target == "", opts); err != nil {
 		return err
 	}
 
-	// Target variants are pinned to the host's resolved version so
-	// `envsetup --target` never sees a version skew.
-	hostResolved, err := toolchain.ParseToolchainName(resolved.Name)
-	if err != nil {
-		return err
-	}
-	targetBase := toolchain.ToolchainName{Channel: hostResolved.Channel, Version: hostResolved.Version}
-	installed := []string{selectedIdentity(resolved, name.Version == "")}
-	if len(targets) > 0 {
-		installed = nil
-		record, nextOpts, err := captureDependency(ctx, selectedIdentity(resolved, name.Version == ""), opts)
-		if err != nil {
-			return err
-		}
-		if record.Release != resolved.Name || record.Tuple != "" && record.Tuple != resolved.Tuple || record.SHA256 != "" && record.SHA256 != resolved.SHA256 {
-			return fmt.Errorf("toolchain %s changed during target installation; retry", req.Toolchain)
-		}
-		opts = nextOpts
-	}
-	for _, target := range targets {
-		tuple, err := d.TargetTuple(target)
-		if err != nil {
-			return err
-		}
-		resolvedTarget, err := d.Resolve(ctx, targetBase, tuple)
-		if err != nil {
-			return err
-		}
-		if err := installSelected(ctx, d, resolvedTarget, name.Version == "", req.Force, false, opts); err != nil {
-			return err
-		}
-		installed = append(installed, selectedIdentity(resolvedTarget, name.Version == ""))
-	}
-
 	if len(req.Components) == 0 {
-		if name.IsChannelOnly() {
-			return updateTrackedTargets(ctx, d, name.Channel, opts)
-		}
 		return nil
 	}
-	for _, tcName := range installed {
-		if err := installComponents(ctx, d, tcName, req.Components, req.Force, opts); err != nil {
-			return err
-		}
-	}
-	if name.IsChannelOnly() {
-		return updateTrackedTargets(ctx, d, name.Channel, opts)
-	}
-	return nil
+	return installComponents(ctx, d, selectedIdentity(resolved, name.Version == ""), req.Components, req.Force, opts)
 }

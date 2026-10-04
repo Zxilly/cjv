@@ -121,6 +121,18 @@ func validateJournal(state journal) error {
 	if state.Scope != "" && state.Scope != "toolchain" {
 		return errors.New("fstx: invalid transaction scope")
 	}
+	if len(state.Targets) > 0 {
+		if state.Scope != "toolchain" || state.Targets[0] != state.Target {
+			return errors.New("fstx: invalid toolchain group")
+		}
+		seen := make(map[string]bool)
+		for _, name := range state.Targets {
+			if !validTarget(name) || seen[name] {
+				return errors.New("fstx: invalid toolchain group member")
+			}
+			seen[name] = true
+		}
+	}
 	if state.State != stateActive && state.State != stateRollback && state.State != statePrepared && state.State != stateCommitted {
 		return fmt.Errorf("fstx: invalid transaction state %q", state.State)
 	}
@@ -158,14 +170,20 @@ func scopedPath(state journal, path string) bool {
 		return false
 	}
 	if state.Scope == "toolchain" {
-		for _, base := range []string{config.ToolchainsSubdir, config.StdxSubdir, config.DocsSubdir} {
-			owned := filepath.Join(base, state.Target)
-			if path == owned || strings.HasPrefix(path, owned+string(filepath.Separator)) {
-				return true
-			}
-			staging := config.StagingDir(owned)
-			if path == staging || strings.HasPrefix(path, staging+string(filepath.Separator)) {
-				return true
+		names := state.Targets
+		if len(names) == 0 {
+			names = []string{state.Target}
+		}
+		for _, name := range names {
+			for _, base := range []string{config.ToolchainsSubdir, config.StdxSubdir, config.DocsSubdir} {
+				owned := filepath.Join(base, name)
+				if path == owned || strings.HasPrefix(path, owned+string(filepath.Separator)) {
+					return true
+				}
+				staging := config.StagingDir(owned)
+				if path == staging || strings.HasPrefix(path, staging+string(filepath.Separator)) {
+					return true
+				}
 			}
 		}
 		return false

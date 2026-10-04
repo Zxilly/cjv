@@ -31,9 +31,12 @@ func InstallTargetsForToolchain(ctx context.Context, input string, targets []str
 	if err != nil {
 		return err
 	}
-	dir, _, _, err := toolchain.FindActiveDir(input)
+	dir, _, selected, err := toolchain.FindActiveDir(input)
 	if err != nil {
 		return err
+	}
+	if selected.IsCustom() {
+		return fmt.Errorf("custom toolchain %s has no published targets", input)
 	}
 	record, opts, err := captureDependency(ctx, filepath.Base(dir), opts)
 	if err != nil {
@@ -50,20 +53,14 @@ func InstallTargetsForToolchain(ctx context.Context, input string, targets []str
 	if err != nil {
 		return err
 	}
-	for _, target := range targets {
-		tuple, err := d.TargetTuple(target)
-		if err != nil {
-			return err
-		}
-		rt, err := d.Resolve(ctx, host, tuple)
-		if err != nil {
-			return err
-		}
-		if err := installSelected(ctx, d, rt, identity.Version == "", false, false, opts); err != nil {
-			return err
-		}
+	hostTuple := record.Tuple
+	if hostTuple == "" {
+		hostTuple = d.HostTuple
 	}
-	return nil
+	d.note()
+	opts.preserveDefault = true
+	_, err = installGroup(ctx, d, identity, ResolvedToolchain{Name: record.Release, Tuple: hostTuple, SHA256: record.SHA256}, InstallRequest{Toolchain: filepath.Base(dir), Targets: targets, NoUpdate: true}, opts)
+	return err
 }
 
 // Capture the dependency while holding home, then recheck it during publication.
@@ -94,11 +91,39 @@ func captureDependency(ctx context.Context, identity string, opts Options) (tool
 }
 
 func selectTargetHost(ctx context.Context, selector toolchain.ToolchainName, opts Options) (toolchain.ToolchainName, Options, error) {
-	record, opts, err := captureDependency(ctx, selector.Channel.String(), opts)
+	hostIdentity := toolchain.ToolchainName{Channel: selector.Channel, Host: selector.Host}
+	if selector.Target != "" {
+		parts, err := sdktarget.ParseTuple(selector.Target)
+		if err != nil {
+			return selector, opts, err
+		}
+		// Explicit host installations coexist with the legacy unsuffixed host.
+		roots, rootErr := component.RootsFor(selector.Channel.String())
+		if rootErr != nil {
+			return selector, opts, rootErr
+		}
+		current, readErr := toolchain.ReadInstallation(roots.TcDir)
+		if readErr == nil && current.Tuple != "" && current.Tuple != parts.Host {
+			hostIdentity.Host = parts.Host
+		} else if errors.Is(readErr, os.ErrNotExist) {
+			candidate := toolchain.ToolchainName{Channel: selector.Channel, Host: parts.Host}
+			if _, err := toolchain.FindInstalled(candidate); err == nil {
+				hostIdentity = candidate
+			}
+		}
+	}
+	record, opts, err := captureDependency(ctx, hostIdentity.String(), opts)
 	if err != nil {
 		return selector, opts, err
 	}
 	if record.Release != "" {
+		parts, err := sdktarget.ParseTuple(selector.Target)
+		if err != nil {
+			return selector, opts, err
+		}
+		if record.Tuple != "" && record.Tuple != parts.Host {
+			return selector, opts, fmt.Errorf("toolchain %s host changed during target resolution; retry", hostIdentity.String())
+		}
 		host, err := toolchain.ParseToolchainName(record.Release)
 		if err != nil {
 			return selector, opts, err

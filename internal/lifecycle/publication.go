@@ -52,6 +52,12 @@ func publishOfficial(prepared component.Roots, identity string, reinstall bool, 
 		}
 	}
 	pairs := [][2]string{{prepared.TcDir, dest.TcDir}, {prepared.DocsDir, dest.DocsDir}, {prepared.StdxDir, dest.StdxDir}}
+	return publishPrepared(home, []string{identity}, pairs, publish, opts)
+}
+
+// publishPrepared runs with the home lock, after all members have been staged
+// and revalidated. Every root shares the same commit and recovery decision.
+func publishPrepared(home string, identities []string, pairs [][2]string, publish func() error, opts Options) (retErr error) {
 	defer func() {
 		var recovery *fstx.RecoveryError
 		if !errors.As(retErr, &recovery) {
@@ -80,7 +86,7 @@ func publishOfficial(prepared component.Roots, identity string, reinstall bool, 
 			return err
 		}
 	}
-	tx, err := fstx.NewToolchainTransaction(home, identity)
+	tx, err := fstx.NewToolchainGroupTransaction(home, identities)
 	if err != nil {
 		return err
 	}
@@ -115,7 +121,11 @@ func publishOfficial(prepared component.Roots, identity string, reinstall bool, 
 		return err
 	}
 	committed = true
-	opts.emit(progress.Event{Kind: progress.ToolchainInstalled, Toolchain: identity})
+	for i, identity := range identities {
+		if pairs[i*3][0] != "" {
+			opts.emit(progress.Event{Kind: progress.ToolchainInstalled, Toolchain: identity})
+		}
+	}
 	return publicationErr
 }
 

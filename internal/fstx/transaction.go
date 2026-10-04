@@ -32,6 +32,7 @@ type journal struct {
 	Version int      `json:"version"`
 	Target  string   `json:"target"`
 	Scope   string   `json:"scope,omitempty"`
+	Targets []string `json:"targets,omitempty"`
 	State   string   `json:"state"`
 	Changes []change `json:"changes"`
 }
@@ -84,6 +85,31 @@ func NewToolchainTransaction(home, name string) (*Transaction, error) {
 		return nil, err
 	}
 	return newTransaction(abs, name, "toolchain")
+}
+
+// NewToolchainGroupTransaction gives a host and its cross SDKs one durable
+// journal. Recovery is restricted to the explicitly recorded installation names.
+func NewToolchainGroupTransaction(home string, names []string) (*Transaction, error) {
+	if len(names) == 0 {
+		return nil, errors.New("fstx: empty toolchain group")
+	}
+	seen := make(map[string]bool)
+	for _, name := range names {
+		if !validTarget(name) || seen[name] {
+			return nil, fmt.Errorf("fstx: invalid or duplicate toolchain name %q", name)
+		}
+		seen[name] = true
+	}
+	tx, err := NewToolchainTransaction(home, names[0])
+	if err != nil {
+		return nil, err
+	}
+	next := tx.journal
+	next.Targets = append([]string(nil), names...)
+	if err := tx.save(next); err != nil {
+		return nil, errors.Join(err, tx.Rollback())
+	}
+	return tx, nil
 }
 
 func newTransaction(rootDir, target, scope string) (*Transaction, error) {

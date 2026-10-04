@@ -82,21 +82,3 @@ func installSelected(ctx context.Context, d *Distribution, rt ResolvedToolchain,
 	}
 	return publishFirstDefault(d, opts.selection, opts)
 }
-func updateTrackedTargets(ctx context.Context, d *Distribution, channel toolchain.Channel, opts Options) error {
-	installed, err := toolchain.ListInstalled()
-	if err != nil {
-		return err
-	}
-	var errs []error
-	for _, identity := range installed {
-		name, err := toolchain.ParseToolchainName(identity)
-		if err != nil || name.IsCustom() || name.Channel != channel || name.Version != "" || name.Target == "" {
-			continue
-		}
-		_, err = upgradeChannelToolchain(ctx, d, channel, identity, name.Target, opts)
-		if err != nil {
-			errs = append(errs, err)
-		}
-	}
-	return errors.Join(errs...)
-}

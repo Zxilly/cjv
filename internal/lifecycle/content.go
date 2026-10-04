@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 
 	"github.com/Zxilly/cjv/internal/cjverr"
 	"github.com/Zxilly/cjv/internal/component"
@@ -52,13 +53,25 @@ func RemoveToolchain(name string) error {
 	}
 	name = filepath.Base(dir)
 	if parsed.IsChannelOnly() {
+		record, err := toolchain.ReadInstallation(dir)
+		if err != nil {
+			return err
+		}
+		hostTuple := record.Tuple
+		if hostTuple == "" {
+			d, err := OpenDistribution(Options{})
+			if err != nil {
+				return err
+			}
+			hostTuple = d.HostTuple
+		}
 		installed, err := toolchain.ListInstalled()
 		if err != nil {
 			return err
 		}
 		for _, variant := range installed {
 			p, err := toolchain.ParseToolchainName(variant)
-			if err == nil && !p.IsCustom() && p.Channel == parsed.Channel && p.Version == "" && p.Target != "" {
+			if err == nil && !p.IsCustom() && p.Channel == parsed.Channel && p.Version == "" && p.Target != "" && strings.HasPrefix(p.Target, hostTuple+"-") {
 				if err := removeInstallation(variant); err != nil {
 					return err
 				}
@@ -134,7 +147,7 @@ func PrepareToolchainRemoval(name string) error {
 
 func removalDir(name toolchain.ToolchainName) (string, error) {
 	// Lstat below must still permit unlinking a broken custom SDK link.
-	if name.IsCustom() || name.Channel != toolchain.UnknownChannel && name.Version != "" {
+	if name.IsCustom() || name.Channel != toolchain.UnknownChannel && name.Version != "" && name.Host == "" && !toolchain.IsVersionSelector(name.Version) {
 		return config.ToolchainDirFor(name.String())
 	}
 	return toolchain.FindInstalled(name)
