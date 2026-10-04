@@ -95,23 +95,22 @@ checksum:
 
 ## release workflow
 
-`.github/workflows/release.yml` 在 `push` 带 `v*` tag 时触发，只有一个 `release` job 跑在 `ubuntu-latest`，权限是 `contents: write`。流程依次是：
+`.github/workflows/release.yml` 在推送 `v*` tag 时触发。正式发布只接受稳定版本 `vX.Y.Z`，整个流程由 CI 自动执行：
 
-1. 校验 tag 是稳定版(见上)。
-2. 启用 TCP BBR(`Zxilly/actions-bbr`)，提升后续拉取/上传的吞吐。
-3. `actions/checkout`，`fetch-depth: 0` 拉全部历史，供 goreleaser 生成 changelog。
-4. `actions/setup-go`，`go-version: stable`。
-5. 把发布提交与 tag 显式推送到 GitCode，确保 Release 的目标提交已经存在。
-6. 跑 goreleaser：`goreleaser/goreleaser-action`，参数 `release --clean`，用 `GITHUB_TOKEN` 创建 GitHub Release 并上传全部 10 个归档和 `checksums.txt`。
-7. 把镜像版产物上传到 GitCode Release：`Zxilly/upload-gitcode-release` 只挑 `dist/cjv-mirror_*.tar.gz`、`dist/cjv-mirror_*.zip` 和 `dist/checksums.txt`，正文指回 GitHub Release 看完整 changelog。
+1. `release` job 校验 tag，启用 TCP BBR，拉取完整历史并设置 Go。
+2. 推送发布 tag 到 GitCode，同时传输它指向的提交；不会把旧发布提交推成 GitCode 的 `master`。
+3. GoReleaser 创建 GitHub Release，上传官方版和镜像版的全部 10 个归档及 `checksums.txt`。
+4. `gitcode` job 通过 `workflow_call` 自动调用 `sync-gitcode-release.yml`，明确传入 tag 和 GitCode secret。它先检查 GitHub Release 已发布且六个所需资产完整，再确保 GitCode tag 存在。
+5. 六个资产分别上传，每个 job 启用 BBR、限时 15 分钟，最多两路并行。五个镜像归档上传前用 GitHub 的 `checksums.txt` 校验 SHA-256；上传后重新下载 GitCode 上的资产，与 GitHub 原件逐字节比对。
+6. `pages` job 等待 `release` 和 `gitcode` 都成功后，再复用 `pages.yml` 部署站点。
 
-GitHub Release 上挂的是全部产物(官方版 + 镜像版)，GitCode Release 上只挂镜像版加校验和。官方版不上 GitCode 是有意的：走 GitCode 的用户用的就是镜像版。
+GitHub Release 上挂全部产物（官方版和镜像版），GitCode Release 上只挂五个镜像版归档及校验和。GitCode 的正文指向 GitHub Release 的完整 changelog。
 
-普通 `master` 提交由独立的 `mirror.yml` 推送到 GitCode；发布工作流负责 tag 和 Release 资产，因此两条同步链路均由 CI 显式执行。
+独立的 `mirror.yml` 在 `master` 提交或任何 tag 推送时自动同步当前 `master` 和全部 tags。它始终检出 `master`，因此同步旧 tag 不会把镜像分支退回旧发布提交。
 
-GitCode Release 上传遇到临时故障时，手动运行 `sync-gitcode-release.yml` 并填写稳定版 tag。该工作流从已发布的 GitHub Release 下载 mirror 归档与 `checksums.txt`，按资产拆成独立 job、最多两路并行同步到 GitCode 的同名 tag；单个平台失败时可独立重跑。
+正常发布无需手动运行同步工作流。`sync-gitcode-release.yml` 的 `workflow_dispatch` 仅用于故障恢复或历史版本补传，填写稳定版 tag 后复用同一套校验及上传流程。失败的资产 job 可以独立重跑，无需重建二进制。
 
-`release` job 完成后，workflow 通过 `needs: release` 调起 `pages` job，它复用 `./.github/workflows/pages.yml` 重新部署站点(见 [持续集成](ci.md) 和 [落地页](web.md))。
+发布流程直接调用同步工作流，不依赖 GitHub Release 事件再次触发工作流，因为使用 `GITHUB_TOKEN` 创建的 Release 不会触发这类后续事件，详见 [GitHub 触发规则](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/trigger-a-workflow)。
 
 ## cjv-init 如何落地
 
@@ -146,7 +145,7 @@ web/dist/dl/{official,mirror}/{os}_{arch}/cjv-init[.exe]
 
 官方版归档里的 `cjv`(`cjv.exe`)被改名成 `cjv-init`(`cjv-init.exe`)放进 `official/`，镜像版归档里的 `cjv-mirror` 改名成同样的 `cjv-init` 放进 `mirror/`。这些文件随 Pages 一起发布，落地页的下载链接直接指向它们，形如 `/dl/official/windows_amd64/cjv-init.exe`、`/dl/mirror/darwin_arm64/cjv-init`(URL 在 `web/src/hooks/use-platform.ts` 里拼)。用户下载下来双击，二进制识别出自己叫 `cjv-init` 就进入安装流程。
 
-这里有个时序前提：`pages.yml` 用 `gh release download ... releases/latest` 取的是最新 Release。在 `release.yml` 里 `pages` job `needs: release`，所以总是先发完 Release 再部署页面，下载到的就是这次新发的版本。
+这里有个时序前提：`pages.yml` 用 `gh release download ... releases/latest` 取的是最新 Release。在 `release.yml` 里 `pages` job `needs: [release, gitcode]`，所以总是先发完 Release 再部署页面，下载到的就是这次新发的版本。
 
 ## 安装脚本走的另一条路
 

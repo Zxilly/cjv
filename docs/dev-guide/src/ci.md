@@ -1,11 +1,13 @@
 # 持续集成
 
-cjv 的所有自动化都放在 `.github/workflows/` 下，一共四个工作流：
+cjv 的所有自动化都放在 `.github/workflows/` 下，一共六个工作流：
 
 - `ci.yml`：每次 push 到 `master` 和每个 pull request 都跑，是日常开发的主关卡。
 - `pages.yml`：把落地页和两本 book 部署到 GitHub Pages。
 - `release.yml`：打 `v*` tag 时触发，跑 GoReleaser 并镜像到 GitCode。
 - `smoke.yml`：每天定时跑一次，验证真实的组件下载没有挂掉。
+- `mirror.yml`：提交和 tag 推送时自动同步 GitCode 的 `master` 与 tags。
+- `sync-gitcode-release.yml`：正式发布自动调用的 GitCode 资产同步流程，也提供故障恢复入口。
 
 下面逐个说明，以仓库里的实际文件为准。
 
@@ -40,6 +42,10 @@ go vet -tags=mirror ./...
 ### lint
 
 在 `ubuntu-24.04` 上跑 `golangci-lint`，用官方的 `golangci/golangci-lint-action`，`version: latest`。lint 规则由仓库根目录的配置文件决定，具体见 [代码检查与格式化](linting.md)。
+
+### workflow-lint
+
+在 `ubuntu-24.04` 上运行 `go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12`，校验工作流语法、可复用工作流的参数与 secret，以及 shell 脚本。
 
 ### markdown-lint
 
@@ -159,16 +165,13 @@ book 必须在 `pnpm build` 之后再构建，因为 `pnpm build` 会清空 `web
 
 打 `v*` tag 时触发，做正式发布。第一步 `Ensure stable tag` 用正则把 tag 限制为 `vX.Y.Z` 这样的稳定版本，带后缀的预发布 tag 会直接退出。权限是 `contents: write`，用于创建 GitHub Release。
 
-`release` job 依次：
+`release` job 校验稳定 tag，拉取完整历史并设置 Go，然后先向 GitCode 推送发布 tag 和它指向的提交，最后由 GoReleaser 构建并发布 GitHub Release。
 
-1. 用 `Zxilly/actions-bbr` 打开 TCP BBR，提升上传带宽。
-2. `actions/checkout` 带 `fetch-depth: 0` 拿全部历史，GoReleaser 需要完整 tag 历史生成 changelog。
-3. 跑 GoReleaser(`args: release --clean`)，配置见仓库根目录的 `.goreleaser.yml`，它负责交叉编译、打包、生成 checksum、创建 GitHub Release。
-4. 先把发布提交与 tag 显式推送到 GitCode，再用 `Zxilly/upload-gitcode-release` 把 mirror 变体的产物(`dist/cjv-mirror_*` 和 `dist/checksums.txt`)单独传到 GitCode release。代码、tag 或 Release 任一同步失败都会阻断发布。
+随后 `gitcode` job 通过 `workflow_call` 自动调用 `sync-gitcode-release.yml`。该流程检查发行资产完整、同步 tag，并把五个 mirror 归档和 `checksums.txt` 拆成六个上传 job，最多两路并行。归档在上传前校验 SHA-256，上传后回读 GitCode 资产并与 GitHub 原件比对；每个上传 job 启用 BBR 并限时 15 分钟。常规发布不需要手动触发；手动入口只用于故障恢复，执行相同流程。
 
-此外，`mirror.yml` 在每次 push 到 `master` 时把该提交显式推送到 GitCode，使普通提交同步不依赖发布 tag。
+`mirror.yml` 另外在每次 `master` 或 tag 推送时同步当前 `master` 和全部 tags。tag 同步不会把 `master` 移到旧发布提交。
 
-`release` 之后有一个 `pages` job，`needs: release`，通过 `uses: ./.github/workflows/pages.yml` 复用上面的 Pages 工作流，在发布完成后重新部署一次落地页，让它指向最新的 release 产物。发布的完整流程见 [发布流程](releasing.md)。
+`pages` job 使用 `needs: [release, gitcode]`，在 GitHub 发布和 GitCode 同步都成功后复用 `pages.yml` 部署站点。发布或镜像同步失败会阻止该发布链路的 Pages 部署。完整流程见 [发布流程](releasing.md)。
 
 ## smoke.yml
 

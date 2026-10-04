@@ -95,29 +95,22 @@ checksum:
 
 ## release workflow
 
-`.github/workflows/release.yml` triggers on a `push` carrying a `v*` tag. It has a single `release` job running on `ubuntu-latest` with `contents: write` permission. The flow is, in order:
+`.github/workflows/release.yml` triggers when a `v*` tag is pushed. Official releases accept only stable `vX.Y.Z` tags, and CI drives the complete flow automatically:
 
-1. Verify the tag is a stable release (see above).
+1. The `release` job validates the tag, enables TCP BBR, checks out the full history, and sets up Go.
+2. It pushes the release tag to GitCode, transferring the referenced commit without moving GitCode's `master` to an older release commit.
+3. GoReleaser publishes the GitHub Release with all 10 official and mirror archives plus `checksums.txt`.
+4. The `gitcode` job automatically calls `sync-gitcode-release.yml` through `workflow_call`, passing the tag and GitCode secret explicitly. It checks that the GitHub Release is published and has all six required assets, then ensures that the GitCode tag exists.
+5. Each asset has its own upload job with BBR and a 15-minute timeout, with at most two concurrent uploads. The five mirror archives are verified against GitHub's `checksums.txt` before upload. Every published GitCode asset is downloaded again and compared byte for byte with its GitHub original.
+6. The `pages` job waits for both `release` and `gitcode` to succeed before reusing `pages.yml` to deploy the site.
 
-1. Enable TCP BBR (`Zxilly/actions-bbr`) to improve the throughput of subsequent downloads and uploads.
+GitHub carries all official and mirror artifacts. GitCode carries the five mirror archives and checksums, with its release body linking to the full GitHub changelog.
 
-1. `actions/checkout` with `fetch-depth: 0` to pull the full history that goreleaser needs for generating the changelog.
+The independent `mirror.yml` automatically synchronizes the current `master` and all tags when a `master` commit or any tag is pushed. It always checks out `master`, so synchronizing an older tag does not rewind the mirrored branch to that release commit.
 
-1. `actions/setup-go` with `go-version: stable`.
+Normal releases require no manual synchronization. `workflow_dispatch` on `sync-gitcode-release.yml` is only for recovery or historical releases; it accepts a stable tag and reuses the same validation and upload flow. Failed asset jobs can be rerun independently without rebuilding binaries.
 
-1. Explicitly push the release commit and tag to GitCode so the Release target commit already exists.
-
-1. Run goreleaser: `goreleaser/goreleaser-action` with `release --clean`, using `GITHUB_TOKEN` to create the GitHub Release and upload all 10 archives plus `checksums.txt`.
-
-1. Upload the mirror artifacts to the GitCode Release: `Zxilly/upload-gitcode-release` picks only `dist/cjv-mirror_*.tar.gz`, `dist/cjv-mirror_*.zip`, and `dist/checksums.txt`, with the body pointing back to the GitHub Release for the full changelog.
-
-The GitHub Release carries every artifact (official plus mirror), while the GitCode Release carries only the mirror builds plus the checksums. Leaving the official builds off GitCode is intentional: users coming through GitCode use the mirror builds.
-
-An independent `mirror.yml` pushes ordinary `master` commits to GitCode. The release workflow owns tag and Release-asset synchronization, so CI explicitly drives both paths.
-
-If the GitCode Release upload encounters a transient failure, run `sync-gitcode-release.yml` manually with the stable tag. It downloads the mirror archives and `checksums.txt` from the published GitHub Release, then synchronizes them to the matching GitCode tag as isolated per-asset jobs with at most two concurrent uploads. A failed platform can be rerun independently.
-
-Once the `release` job finishes, the workflow invokes the `pages` job via `needs: release`, which reuses `./.github/workflows/pages.yml` to redeploy the site (see [Continuous Integration](ci.md) and [Landing Page](web.md)).
+The release pipeline calls synchronization directly instead of relying on a second GitHub Release event, because releases created using `GITHUB_TOKEN` do not trigger those subsequent workflows. See [GitHub's trigger rules](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/trigger-a-workflow).
 
 ## How cjv-init is produced
 
@@ -152,7 +145,7 @@ web/dist/dl/{official,mirror}/{os}_{arch}/cjv-init[.exe]
 
 The `cjv` (`cjv.exe`) from the official archive is renamed to `cjv-init` (`cjv-init.exe`) and placed in `official/`, and the `cjv-mirror` from the mirror archive is renamed to the same `cjv-init` and placed in `mirror/`. These files are published together with Pages, and the landing page download links point straight at them, in the form `/dl/official/windows_amd64/cjv-init.exe` or `/dl/mirror/darwin_arm64/cjv-init` (the URLs are assembled in `web/src/hooks/use-platform.ts`). The user downloads one and double-clicks it; the binary recognizes that it is named `cjv-init` and enters the install flow.
 
-There is an ordering assumption here: `pages.yml` uses `gh release download ... releases/latest` to fetch the latest Release. In `release.yml` the `pages` job has `needs: release`, so the Release is always published before the page is deployed, and what gets downloaded is the version just released.
+There is an ordering assumption here: `pages.yml` uses `gh release download ... releases/latest` to fetch the latest Release. In `release.yml` the `pages` job has `needs: [release, gitcode]`, so the Release is always published before the page is deployed, and what gets downloaded is the version just released.
 
 ## The install script takes a different path
 

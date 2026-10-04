@@ -1,11 +1,13 @@
 # Continuous Integration
 
-All of cjv's automation lives under `.github/workflows/`, with four workflows in total:
+All of cjv's automation lives under `.github/workflows/`, with six workflows in total:
 
 - `ci.yml`: runs on every push to `master` and on every pull request, the main gate for day-to-day development.
 - `pages.yml`: deploys the landing page and both books to GitHub Pages.
 - `release.yml`: triggered when a `v*` tag is pushed, runs GoReleaser and mirrors to GitCode.
 - `smoke.yml`: runs once daily on a schedule, verifying that real component downloads have not broken.
+- `mirror.yml`: automatically synchronizes GitCode master and tags on commit and tag pushes.
+- `sync-gitcode-release.yml`: automatically called by official releases to synchronize GitCode assets, with a recovery entry point.
 
 Each is described below, with the actual files in the repository as the source of truth.
 
@@ -40,6 +42,10 @@ The `mirror` build tag switches the download source to the mirror aimed at mainl
 ### lint
 
 Runs `golangci-lint` on `ubuntu-24.04`, using the official `golangci/golangci-lint-action` with `version: latest`. The lint rules are determined by the configuration file in the repository root; see [Linting and Formatting](linting.md) for details.
+
+### workflow-lint
+
+Runs `go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12` on `ubuntu-24.04` to check workflow syntax, reusable-workflow inputs and secrets, and shell scripts.
 
 ### markdown-lint
 
@@ -160,16 +166,13 @@ The books must be built after `pnpm build`, because `pnpm build` clears out `web
 
 Triggered when a `v*` tag is pushed, to make an official release. The first step, `Ensure stable tag`, uses a regex to restrict the tag to a stable version like `vX.Y.Z`; a prerelease tag with a suffix exits immediately. The permission is `contents: write`, used to create the GitHub Release.
 
-The `release` job, in order:
+The `release` job validates the stable tag, checks out the full history, and sets up Go. It pushes the release tag and its referenced commit to GitCode before GoReleaser builds and publishes the GitHub Release.
 
-1. Enables TCP BBR with `Zxilly/actions-bbr` to improve upload bandwidth.
-1. `actions/checkout` with `fetch-depth: 0` fetches the full history, since GoReleaser needs the complete tag history to generate the changelog.
-1. Runs GoReleaser (`args: release --clean`); its configuration lives in `.goreleaser.yml` at the repository root, and it handles cross-compilation, packaging, checksum generation, and creating the GitHub Release.
-1. Explicitly pushes the release commit and tag to GitCode, then uploads the mirror-variant artifacts (`dist/cjv-mirror_*` and `dist/checksums.txt`) to the GitCode Release. A code, tag, or Release synchronization failure blocks the release.
+The `gitcode` job then automatically calls `sync-gitcode-release.yml` through `workflow_call`. It checks that the release assets are complete, synchronizes the tag, and uploads the five mirror archives and `checksums.txt` as six jobs with at most two concurrent uploads. Archives are verified against SHA-256 checksums before upload; every published GitCode asset is downloaded again and compared with its GitHub original. Each upload job enables BBR and has a 15-minute timeout. Normal releases need no manual trigger; the recovery entry point runs the same flow.
 
-In addition, `mirror.yml` explicitly pushes every `master` commit to GitCode, so ordinary commit synchronization is independent of release tags.
+Separately, `mirror.yml` synchronizes the current `master` and all tags on every master or tag push. Tag synchronization does not move master to an older release commit.
 
-After `release` there is a `pages` job with `needs: release` that reuses the Pages workflow above via `uses: ./.github/workflows/pages.yml`, redeploying the landing page once the release is complete so that it points to the latest release artifacts. For the full release process, see [Release process](releasing.md).
+The `pages` job uses `needs: [release, gitcode]` to reuse `pages.yml` after both GitHub publication and GitCode synchronization succeed. A release or mirror-sync failure blocks Pages deployment within this release pipeline. See [Release process](releasing.md) for the complete flow.
 
 ## smoke.yml
 
