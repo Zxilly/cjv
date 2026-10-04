@@ -6,6 +6,8 @@ Each time a proxied SDK tool (such as `cjc`, `cjpm`) runs, cjv has to answer two
 
 cjv resolves the active toolchain in the following priority order, from highest to lowest, taking the first source that matches:
 
+An explicit `--toolchain` or command argument takes precedence over global `cjv +name <command>`, which in turn overrides automatic resolution below. The global selector applies to SDK management commands such as component, target, doc, which, and show, and to install/update without name arguments.
+
 1. the `CJV_TOOLCHAIN` environment variable
 1. Directory override (set via `cjv override set`)
 1. Toolchain file (a `cangjie-sdk.toml` in the current directory or some ancestor directory)
@@ -51,7 +53,7 @@ Levels 2 and 3 do not scan all overrides first and then all toolchain files. Ins
 In other words, priority depends on both source type and distance. If a directory override is set on `~/work` while `~/work/proj` has a `cangjie-sdk.toml`, then when working under `~/work/proj` the closer toolchain file wins; the override only takes effect when some level has no closer file and matches the override. This way a project's own declaration is not accidentally shadowed by a broad override on an ancestor directory.
 
  >
- > Tip: when `cangjie-sdk.toml` exists but `channel` is empty, cjv does not silently fall back; it reports an error to remind you to complete the declaration. Only when the file does not exist at all does the search continue upward.
+ > Tip: when `cangjie-sdk.toml` exists but both `channel` and `path` are empty, cjv does not silently fall back; it reports an error to remind you to complete the declaration. Only when the file does not exist at all does the search continue upward.
 
 ## Managing directory overrides
 

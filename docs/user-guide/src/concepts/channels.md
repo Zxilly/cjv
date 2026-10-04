@@ -95,3 +95,11 @@ cjv update
 ```bash
 cjv check
 ```
+
+## 更新策略
+
+`cjv install`、`cjv update` 和 `cjv uninstall` 可一次接收多个工具链名称。通道主机与其跟踪 targets、组件先全部准备，再在同一事务内替换；下载、校验或发布失败不会留下版本错配的组合。
+
+nightly 默认选择 manifest 已发布历史中满足所需组件和 targets、且不低于当前安装的最新版本。`--allow-downgrade` 允许较旧的兼容 nightly。install/update 的 `--force` 统一允许跳过并移除不可用的组件或 targets，不强制重装未变化的 SDK。`install --no-update` 保留已装发行版，只补齐新增需求。
+
+`cjv default sts` 先安装缺失的官方工具链，再保存默认选择，失败时保留旧默认值。`cjv check` 也会查询 cjv 自身的新版本，只获取发布信息，不安装更新。

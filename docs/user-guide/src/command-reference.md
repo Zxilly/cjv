@@ -4,11 +4,13 @@
 
 ## 全局约定
 
+全局 `--quiet` / `-q` 隐藏进度，`--verbose` 在未设置 `CJV_LOG` 时开启 debug 日志，两者互斥。`component list --quiet` 使用该子命令原有的单列输出。
+
 几乎所有命令都接受全局标志 `--json`，它把结果以稳定的 JSON 结构输出到标准输出，便于脚本消费。`cjv run`、`cjv exec`、`cjv init` 不支持 JSON 输出，传入 `--json` 会报错。
 
 未显式指定工具链的命令会按统一优先级解析活跃工具链：`CJV_TOOLCHAIN` 环境变量、目录覆盖、`cangjie-sdk.toml` 工具链文件、默认工具链，按此顺序取第一个生效的。详见 [目标与覆盖](concepts/targets-overrides.md)。
 
-标准通道名为 `lts`、`sts`、`nightly`，也可写成具体版本（如 `lts-1.0.0`）。通过 `cjv toolchain link` 链接的自定义工具链使用任意自定义名，但不得与保留通道名冲突。所有管理命令支持在命令之前使用全局 `+name` 选择器，例如 `cjv +sts component list`、`cjv +sts show active`。显式 `--toolchain` 参数优先。`cjv exec` 和 `cjv envsetup` 也接受子命令之后的 `+name`。
+标准通道名为 `lts`、`sts`、`nightly`，也可写成具体版本（如 `lts-1.0.0`）。通过 `cjv toolchain link` 链接的自定义工具链使用任意自定义名，但不得与保留通道名冲突。需要选择 SDK 的管理命令支持在命令之前使用全局 `+name` 选择器，例如 `cjv +sts component list`、`cjv +sts show active`。显式 `--toolchain` 参数优先。`cjv exec` 和 `cjv envsetup` 也接受子命令之后的 `+name`。
 
 被代理或被执行的子命令以其原始退出码退出，这适用于 `cjv run` 与 `cjv exec`。
 
@@ -26,7 +28,7 @@ cjv install [toolchain]... [-t target]... [-c component]... [--force | --no-upda
 
 参数：
 
-- `[toolchain]...`（可选）：要安装的一个或多个工具链；省略时安装当前选中的工具链。可以使用，如 `lts`、`sts`、`nightly` 或具体版本。它不能用于安装自定义工具链，那种情况请用 `cjv toolchain link`。
+- `[toolchain]...`（可选）：要安装的一个或多个工具链；省略时安装当前选中的工具链。名称可以使用 `lts`、`sts`、`nightly` 或具体版本。它不能用于安装自定义工具链，那种情况请用 `cjv toolchain link`。
 
 标志：
 
@@ -34,7 +36,9 @@ cjv install [toolchain]... [-t target]... [-c component]... [--force | --no-upda
 | --- | --- |
 | `-t`, `--target <suffix>` | 需要附加安装的交叉编译目标后缀（可重复或逗号分隔），如 `ohos`、`android`、`ohos-arm32` |
 | `-c`, `--component <name>` | 需要附加安装的组件（可重复或逗号分隔），如 `stdx`、`docs`、`stdx-docs` |
-| `--force` | 强制重新下载并重装，即使已安装 |
+| `--force` | 允许跳过并移除目标发行版未发布的组件或 targets；不强制重装同版本 SDK |
+| `--no-update` | 保留已安装的 SDK 发行版，只补齐 targets 或组件；与 `--force` 互斥 |
+| `--allow-downgrade` | 允许选择较旧的 nightly，以满足组件和 target 需求 |
 
 示例：
 
@@ -52,8 +56,14 @@ cjv install sts --target ohos,android
 # 安装时顺带装上组件
 cjv install nightly -c stdx,docs
 
-# 强制重装
-cjv install lts --force
+# 即使部分组件或目标尚未发布，也安装最新 nightly
+cjv install nightly --force
+
+# 保留现有版本，只补齐交叉 SDK
+cjv install sts --no-update --target ohos
+
+# 一次安装多个工具链
+cjv install lts sts
 ```
 
 target 只填目标后缀，不要写完整平台 key（如 `linux-x64-ohos`）。交叉编译目标是宿主工具链的附加安装项，不改变活跃工具链。详见 [交叉编译](cross-compilation.md)与 [组件](concepts/components.md)。
@@ -68,7 +78,7 @@ cjv uninstall <toolchain>... [-y]
 
 参数：
 
-- `<toolchain>`（必填）：要卸载的工具链名称。
+- `<toolchain>...`（必填）：要卸载的一个或多个工具链名称。
 
 标志：
 
@@ -95,15 +105,17 @@ cjv update [toolchain]... [--no-self-update] [--force] [--allow-downgrade]
 
 参数：
 
-- `[toolchain]`（可选）：更新指定通道及其交叉 SDK；明确版本等同于安装该版本。省略时更新所有已跟踪通道。
+- `[toolchain]...`（可选）：更新一个或多个通道及其交叉 SDK；明确版本等同于安装并保留该版本。未指定名字时，全局 `+name` 选择更新该工具链，否则更新所有已跟踪通道。
 
 标志：
 
 | 标志 | 说明 |
 | --- | --- |
 | `--no-self-update` | 跳过 cjv 自更新检查 |
+| `--force` | 与 install 相同：允许跳过并移除缺失的组件或 targets，不强制重装同版本 SDK |
+| `--allow-downgrade` | 允许选择较旧的兼容 nightly |
 
-传入通道名（如 `lts`）时更新该通道，尚未安装则安装最新版本。传入具体版本（包括交叉 SDK 版本）时，等同于安装并保留该固定版本，已安装则跳过。自定义（链接）工具链无法更新，会被跳过或报错。默认工具链、目录 override 和项目文件选择通道名时会跟随通道更新；明确的版本选择保持固定。升级在同一事务内替换渠道自身的 SDK、stdx 和文档目录，固定版本安装独立保留。首次使用新布局时，旧版本目录继续固定，并离线复制原先隐含的渠道选择为独立安装；默认工具链、override 和项目文件保持原样。更新结束后根据 `auto-self-update` 设置决定是否自更新 cjv，可用 `--no-self-update` 关闭。
+传入通道名（如 `lts`）时更新该通道，尚未安装则安装最新版本。传入具体版本（包括交叉 SDK 版本）时，等同于安装并保留该固定版本，已安装则跳过。自定义（链接）工具链无法更新，会被跳过或报错。默认工具链、目录 override 和项目文件选择通道名时会跟随通道更新；明确的版本选择保持固定。升级在同一事务内替换渠道自身的 SDK、stdx 和文档目录，固定版本安装独立保留。首次使用新布局时，旧版本目录继续固定，并离线复制原先隐含的渠道选择为独立安装；默认工具链、override 和项目文件保持原样。无名称参数且未指定全局 `+toolchain` 的全量更新结束后，根据 `auto-self-update` 设置检查或升级 cjv，可用 `--no-self-update` 关闭。指定单个或多个工具链时只处理 SDK。
 
 ```bash
 # 更新所有已跟踪通道
@@ -118,13 +130,13 @@ cjv update --no-self-update
 
 ### `cjv check`
 
-检查已安装工具链是否有可用更新，但不执行安装。
+检查已安装的跟踪通道与 cjv 自身是否有可用更新，只查询发布信息，不执行安装。
 
 ```text
 cjv check
 ```
 
-逐个列出已安装工具链：有更新显示 `当前 → 最新`，已是最新显示 `✓`，并在末尾显示 cjv 自身版本。`--json` 模式输出结构化结果，含 `update_available`、`latest` 等字段。
+逐个列出已安装工具链：有更新显示 `当前 → 最新`，已是最新显示 `✓`，并报告 cjv 当前版本及可用的新版本。`--json` 包含 `update_available`、`latest`、`latest_cjv_version` 与查询失败时的 `self_update_error`。开发构建 `dev` 跳过自身版本比较。
 
 ```bash
 cjv check
@@ -260,7 +272,7 @@ cjv envsetup --target=ohos
 显示活跃工具链中某个 SDK 工具的路径；不带参数时打印工具链根目录。
 
 ```text
-cjv which [command]
+cjv which [command] [--toolchain <tc>]
 ```
 
 参数：
@@ -273,6 +285,8 @@ cjv which
 
 # 打印 cjc 的绝对路径
 cjv which cjc
+cjv which cjc --toolchain sts
+cjv +sts which cjc
 ```
 
 `cjv which` 与 `cjv run` 使用一致的工具解析逻辑：除固定代理工具外，也能解析 `bin/` 与 `tools/bin/` 下的二进制。
@@ -380,16 +394,55 @@ cjv toolchain uninstall <name> [-y]
 
 ---
 
+## 目标管理
+
+`cjv target` 管理所选宿主工具链的交叉 SDK。所有子命令支持 `--toolchain <tc>`，省略时使用全局 `+name` 或当前活跃工具链。
+
+### `cjv target list`
+
+```text
+cjv target list [--toolchain <tc>] [--installed]
+```
+
+列出宿主已安装版本的 manifest 可用目标，并标记已安装项。`--installed` 只读本地安装，可离线使用。
+
+### `cjv target add`
+
+```text
+cjv target add <suffix>... [--toolchain <tc>]
+```
+
+为宿主当前已安装的具体版本补齐一个或多个目标，不升级宿主。后缀使用 `ohos`、`android` 等；不要填写完整平台 key。
+
+### `cjv target remove`
+
+```text
+cjv target remove <suffix>... [--toolchain <tc>]
+```
+
+只移除指定交叉 SDK 及其组件，保留宿主安装。
+
+```bash
+cjv +sts target list
+cjv target list --toolchain sts --installed
+cjv +sts target add ohos android
+cjv +sts target remove ohos
+```
+
+---
+
 ## 组件管理
 
 `cjv component` 的子命令统一支持持久标志 `--toolchain <tc>` 指定目标工具链；省略时使用当前活跃工具链。
+
+`--target <suffix>` 选择该宿主相同发行版的交叉 SDK，用于 add、remove、link 和 list；它不会安装缺失的 SDK。组件命令中的 `--force` 仍用于替换组件或链接，与 install/update 的缺失项策略不同。
 
 ### `cjv component add`
 
 为工具链安装一个或多个组件（如 `stdx`、`docs`、`stdx-docs`）。
 
 ```text
-cjv component add <name>... [--toolchain <tc>] [--force]
+cjv component add <name>... [--toolchain <tc>] [--target <suffix>] [--force]
 ```
 
 | 标志 | 说明 |
@@ -410,7 +463,7 @@ cjv component add stdx --force
 将本地组件目录链接到工具链，而非通过下载安装。当前用于 `stdx`。
 
 ```text
-cjv component link <name> <path> [--toolchain <tc>] [--force]
+cjv component link <name> <path> [--toolchain <tc>] [--target <suffix>] [--force]
 ```
 
 | 标志 | 说明 |
@@ -434,7 +487,7 @@ cjv component link stdx /path/to/local/stdx --toolchain lts --force
 从工具链卸载一个或多个组件。
 
 ```text
-cjv component remove <name>... [--toolchain <tc>]
+cjv component remove <name>... [--toolchain <tc>] [--target <suffix>]
 ```
 
 `<name>` 可重复或逗号分隔。别名：`uninstall`、`rm`、`delete`、`del`。
@@ -449,7 +502,7 @@ cjv component remove stdx,docs --toolchain nightly
 列出组件的已安装与可安装情况。
 
 ```text
-cjv component list [--toolchain <tc>] [--installed] [-q]
+cjv component list [--toolchain <tc>] [--target <suffix>] [--installed] [-q]
 ```
 
 | 标志 | 说明 |
@@ -482,7 +535,7 @@ cjv default [toolchain]
 
 - `[toolchain]`（可选）：要设为默认的工具链。省略时显示当前默认。传入 `none` 清除默认设置。
 
-交叉编译目标变体（如 `lts-1.0.0-ohos`）不能设为活跃或默认工具链，请用宿主工具链并通过 targets 配置。若工具链尚未安装，会先完成安装；安装失败时保持原默认选择。
+交叉编译目标变体（如 `lts-1.0.0-linux-x64-ohos`）不能设为活跃或默认工具链，请用宿主工具链并通过 targets 配置。若工具链尚未安装，会先完成安装；安装失败时保持原默认选择。
 
 ```bash
 # 显示当前默认
@@ -638,24 +691,11 @@ cjv init -y --default-toolchain none --no-modify-path
 
 安装方式详见 [安装 cjv](installation/index.md)。
 
-## 目标管理与安装策略
-
-```bash
-cjv +sts target list
-cjv target list --toolchain sts --installed
-cjv +sts target add ohos android
-cjv +sts target remove ohos
-cjv +sts component add stdx --target android
-cjv which cjc --toolchain sts
-cjv install lts sts
-cjv uninstall lts-1.0.0 sts-1.1.0 --yes
-```
-
-`target add` 使用所选主机已安装的具体版本，不会更新主机。`target list --installed` 可离线使用。`install --target` 保留为同时安装主机与交叉 SDK 的快捷方式；这个参数也存在于 rustup 的工具链安装命令中。
+## 安装与更新策略
 
 通道安装和更新会先准备主机、所有已跟踪交叉 SDK 与组件，再统一发布。任何下载、校验、解压或发布失败都会保留原安装；中断后恢复也使用同一个事务决策。明确版本独立保留。
 
-nightly 会在 manifest 已发布的历史版本中寻找能提供所需目标和组件的最新版本，默认不降级。`--allow-downgrade` 允许选择较旧的兼容 nightly。`--force` 允许跳过并删除缺失的可选组件和目标；在 `install` 中还会重新提取 SDK。`--no-update` 保留已有 SDK 的发行版，只添加目标或组件，不能与 `--force` 同用；没有新增需求时可离线完成。
+nightly 会在 manifest 已发布的历史版本中寻找能提供所需目标和组件的最新版本，默认不降级。`--allow-downgrade` 允许选择较旧的兼容 nightly。`--force` 允许跳过并删除缺失的可选组件和目标；install 和 update 使用相同策略，不重新下载或替换未变化的 SDK。`--no-update` 保留已有 SDK 的发行版，只添加目标或组件，不能与 `--force` 同用；没有新增需求时可离线完成。
 
 全局 `--quiet` / `-q` 隐藏进度，`--verbose` 开启调试日志，两者互斥。`component list --quiet` 保留原有的单列输出含义。`cjv check` 同时检查工具链与 cjv 自身的发行版，仅查询元数据，不安装更新。
 

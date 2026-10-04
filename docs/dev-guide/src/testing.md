@@ -159,3 +159,9 @@ go test -v -tags smoke -run TestSmokeRealComponentDownloads_LTSSTS -count=1 -tim
 ## 改了什么，跑什么
 
 日常改 Go 代码，先跑 `go test -race -count=1 ./...`；碰了 `*_mirror.go` 就再带 `-tags=mirror` 跑一遍；改了命令行端到端行为或 PATH/proxy link 逻辑，跑一遍 `-tags integration` 的集成测试；动了 `install.sh` 或 `install.ps1`，在本地至少用一种 shell 跑对应的安装脚本测试；改了落地页，进 `web/` 跑 `pnpm test`，涉及平台探测再跑 `pnpm test:integration`，加了逻辑顺手 `pnpm coverage` 看阈值。CI 会把所有层在完整的平台矩阵上替你再跑一遍，但本地先过一遍能省下来回等 CI 的时间。各 job 与触发条件的全貌见 [持续集成](ci.md)。
+
+## 安装与更新策略回归
+
+`cli/force_test.go` 对 install/update 使用真实本地分发源，验证 `--force` 保留同版本主机与交叉 SDK 的内容，允许升级时移除未发布 targets，并覆盖直接目标安装跳过未发布组件、保持 SDK 文件身份及不发布默认选择。`--no-update` 的直接目标无变更路径也验证离线执行。
+
+`group_regression_test.go` 覆盖真实子进程在全部 SDK 放置后退出、恢复时一起回滚；`multihost_test.go` 覆盖多平台安装、更新和卸载隔离。版本选择器、目标命令、默认工具链自动安装、批量 JSON、绝对路径 SDK 的所有权边界和跨命令续传分别由 toolchain、cli、config 与 dist 的测试覆盖。

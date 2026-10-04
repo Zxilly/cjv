@@ -56,6 +56,22 @@ channel = "lts-1.0.5"
 
 When `path` is not set, `channel` must not be empty. A toolchain file that is found but whose `channel` is empty (an empty file, `channel = ""`, or only unrecognized keys) is treated as an incomplete configuration and reports an error directly; cjv does not skip it and continue resolving the next level. See [Empty file and empty channel](#empty-file-and-empty-channel) below.
 
+### `path`
+
+|Item|Value|
+|----|-----|
+|Type|string (absolute path)|
+|Required|Yes, unless `channel` is set|
+
+Use an absolute `path` instead of `channel`; the two fields are mutually exclusive:
+
+```toml
+[toolchain]
+path = '/opt/cangjie'
+```
+
+A path selection ignores `components` and `targets` for automatic installation. `CJV_TOOLCHAIN` also accepts an absolute SDK path. Components of external SDKs remain managed by their owner.
+
 ### `components`
 
 |Item|Value|
@@ -172,14 +188,3 @@ cjpm build        # missing toolchains / targets / components are auto-installed
 - [Cross-compilation](cross-compilation.md): the meaning of `targets` and the target SDK model
 - [Configuration](configuration.md) and [Proxies](concepts/proxies.md): the setting and behavior of `auto_install`
 - [Environment variables](environment-variables.md): `CJV_TOOLCHAIN`, `CJV_LOG`, and others
-
-## Local SDK paths
-
-Use an absolute `path` instead of `channel`; the two fields are mutually exclusive:
-
-```toml
-[toolchain]
-path = '/opt/cangjie'
-```
-
-A path selection ignores `components` and `targets` for automatic installation. `CJV_TOOLCHAIN` also accepts an absolute SDK path. Components of external SDKs remain managed by their owner.

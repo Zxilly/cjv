@@ -41,7 +41,19 @@ target SDK 可以和[组件](concepts/components.md)在同一条命令里一起�
 cjv install sts -t ohos -c stdx
 ```
 
-> target SDK 是附加的：你随时可以对一条已安装的工具链再跑一次 `cjv install <tc> -t <新后缀>` 来补装新的目标，已装好的部分不受影响。
+对已安装的宿主，使用 `target add` 或 `install --no-update --target` 补齐目标，可保持当前发行版；普通 `install sts --target` 会同时检查并更新 STS 通道。
+
+```bash
+cjv +sts target list
+cjv target list --toolchain sts --installed
+cjv target add ohos android --toolchain sts
+cjv install sts --no-update --target ohos
+cjv +sts component add stdx --target ohos
+```
+
+`target add` 安装宿主已装版本的配套目标，`target list --installed` 可离线使用。组件的 `--target` 选择该版本已安装的交叉 SDK。
+
+主机更新会将所有跟踪目标与组件一起准备并在同一事务内发布。缺失目标或组件时，默认保留旧安装；nightly 会尝试 manifest 中较新的兼容历史版本，`--allow-downgrade` 才允许回退到更旧版本。install/update 的 `--force` 允许跳过并移除不可用项，不重装未变化的 SDK。
 
 ## 在工具链文件中声明 targets
 
@@ -93,7 +105,7 @@ cjpm build             # 产物面向 OHOS 平台
 
 ## 卸载
 
-target SDK 随宿主工具链一同清理。卸载宿主工具链时，挂在它上面的 target SDK 会一并移除：
+卸载跟踪渠道（如 `sts`）时，同平台的跟踪 target SDK 会一并移除。明确版本的宿主和 target SDK 独立保留，需要分别卸载：
 
 ```bash
 cjv toolchain uninstall sts

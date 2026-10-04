@@ -55,6 +55,22 @@ channel = "lts-1.0.5"
 
 未设置 `path` 时，`channel` 不能为空。一个被找到但 `channel` 为空的工具链文件（空文件、`channel = ""`、或只写了无法识别的键）会被视为配置不完整并直接报错，cjv 不会跳过它去继续解析下一级。详见下文[空文件与空 channel](#空文件与空-channel)。
 
+### `path`
+
+| 项目 | 值 |
+| --- | --- |
+| 类型 | string（绝对路径） |
+| 是否必填 | 未设置 `channel` 时必填 |
+
+`path` 与 `channel` 互斥，必须使用绝对路径：
+
+```toml
+[toolchain]
+path = 'C:\SDKs\cangjie'
+```
+
+直接使用该目录时，`components` 和 `targets` 不参与自动安装。`CJV_TOOLCHAIN` 也可以设置为绝对 SDK 路径。外部 SDK 的组件由其所有者维护；cjv 不会通过目录同名关系修改其他安装。
+
 ### `components`
 
 | 项目     | 值          |
@@ -170,14 +186,3 @@ cjpm build        # 缺失的工具链 / 目标 / 组件会被自动补齐
 - [交叉编译](cross-compilation.md)：`targets` 的语义与目标 SDK 模型
 - [配置](configuration.md) 与[代理](concepts/proxies.md)：`auto_install` 的设置与行为
 - [环境变量](environment-variables.md)：`CJV_TOOLCHAIN`、`CJV_LOG` 等
-
-## 本地 SDK 路径
-
-`path` 与 `channel` 互斥，必须使用绝对路径：
-
-```toml
-[toolchain]
-path = 'C:\SDKs\cangjie'
-```
-
-直接使用该目录时，`components` 和 `targets` 不参与自动安装。`CJV_TOOLCHAIN` 也可以设置为绝对 SDK 路径。外部 SDK 的组件由其所有者维护；cjv 不会通过目录同名关系修改其他安装。

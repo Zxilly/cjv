@@ -57,11 +57,11 @@ cjv component remove stdx-docs
 
 `cjv component add` 在组件已安装时会跳过。如需强制重新下载安装，加 `--force`。
 
-重复执行 `cjv install` 安装已有 SDK 同样会成功跳过，文本与 `--json` 模式的行为一致。`cjv --json component add stdx` 会输出组件操作的 JSON 结果，便于脚本检查。
+重复执行 `cjv install` 时，发行包未变化的 SDK 会成功跳过；渠道发布新版本时则执行升级，文本与 `--json` 模式的行为一致。`cjv --json component add stdx` 会输出组件操作的 JSON 结果，便于脚本检查。
 
 `cjv update` 先准备渠道的新 SDK 与已选组件，再以同一个事务替换渠道的 SDK、stdx 和文档目录。固定版本安装及其组件不受影响。下载组件使用新版本的发行包，本地链接组件继续指向用户原来的源目录。组件准备或发布失败时恢复旧渠道；恢复受阻时保留事务和备份供下次重试。渠道与固定版本即使处于同一版本，组件的添加、移除、链接也分别生效。
 
-仅用 `--force` 重装同名 SDK 会保留已有组件及其管理记录。[URL 安装](../install-from-url.md)中附带的 stdx 在 SDK 安装后处理：stdx 失败时，已成功安装的 SDK 仍会保留。
+`install/update --force` 允许跳过并移除发行版未发布的组件或目标，不会重装未变化的 SDK。组件自己的 `component add --force` 仍表示重新安装所选组件。[URL 安装](../install-from-url.md)中附带的 stdx 在 SDK 安装后处理：stdx 失败时，已成功安装的 SDK 仍会保留。
 
 ## 查看组件
 

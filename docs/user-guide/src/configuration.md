@@ -61,7 +61,7 @@ cjv set auto-self-update disable
 cjv set auto-self-update check
 ```
 
-`enable` 会在 `cjv update` 完成后自动升级 cjv；`disable` 会跳过自更新；`check`（默认）只打印当前 cjv 版本，不自动升级。
+`enable` 会在无名称参数、无全局 `+toolchain` 选择器的全量 `cjv update` 完成后自动升级 cjv；`disable` 会跳过自更新；`check`（默认）检查发行元数据并提示可用的 cjv 更新，不自动安装。开发版本跳过这项发行检查。
 
 无论此设置如何，你都可以随时用 `cjv self update` 手动升级 cjv。
 
@@ -119,7 +119,7 @@ cjv 的全部数据都放在 `CJV_HOME`（默认 `~/.cjv`）下，各子目录�
     <tc>/
       main/                    # docs component（dev-guide / libs/std / tools 入口）
       stdx/                    # stdx-docs component（libs_stdx 入口）
-  downloads/      # 下载暂存区（安装成功后即清空，仅用于中断恢复）
+  downloads/      # 下载暂存区和可续传的部分文件
   settings.toml   # 用户设置
 ```
 
@@ -131,7 +131,7 @@ cjv 的全部数据都放在 `CJV_HOME`（默认 `~/.cjv`）下，各子目录�
 
 `docs/<tc>/` 是离线文档，与工具链目录解耦。`main/` 放 `docs` 组件（dev-guide、libs/std、tools），`stdx/` 放 `stdx-docs` 组件。用 `cjv doc` 在浏览器中打开。
 
-`downloads/` 是下载暂存区，安装成功后即清空，只在安装中断时保留以便恢复。`settings.toml` 是本章描述的用户设置文件。
+`downloads/` 保存下载归档和带 SHA-256 发行包的可续传部分文件。操作成功后删除所用归档；带 SHA-256 的下载失败或中断时保留部分文件，下一次调用可以继续下载。全部工具链更新成功后还会清理残留下载。`settings.toml` 是本章描述的用户设置文件。
 
 > `cjv toolchain uninstall <tc>` 会连带清理 `stdx/<tc>/` 与 `docs/<tc>/`，不会留下孤立的组件数据。
 
@@ -141,4 +141,4 @@ cjv 的全部数据都放在 `CJV_HOME`（默认 `~/.cjv`）下，各子目录�
 
 `link_mode = "hardlink"` 默认对相同发行版本、平台和 SHA-256 的 SDK 普通文件尝试硬链接。cjv 会先比较文件内容，跳过被修改的文件；`.cjv` 安装及组件元数据始终独立。硬链接不可用时保留复制的文件，不影响安装成功。迁移旧布局时直接复制，避免共享用户修改过的旧 SDK。
 
-升级、强制重装和卸载通过替换或移除目录生效，不会原地写入另一份 SDK。硬链接仍共享文件内容：手工原地编辑 SDK 文件会影响所有链接到该文件的安装。需要独立文件内容时，在 `settings.toml` 中设置 `link_mode = "copy"`；该设置控制后续安装，不会拆开已经存在的硬链接。组件的 stdx 和文档目录独立安装，不参与 SDK 硬链接优化。
+升级和卸载通过替换或移除目录生效，不会原地写入另一份 SDK。硬链接仍共享文件内容：手工原地编辑 SDK 文件会影响所有链接到该文件的安装。需要独立文件内容时，在 `settings.toml` 中设置 `link_mode = "copy"`；该设置控制后续安装，不会拆开已经存在的硬链接。组件的 stdx 和文档目录独立安装，不参与 SDK 硬链接优化。

@@ -6,6 +6,8 @@
 
 cjv 按以下优先级从高到低解析当前活跃的工具链，取第一个命中的来源：
 
+显式 `--toolchain` 或命令参数优先于全局 `cjv +name <command>`；全局选择器优先于下面的自动解析来源。它适用于组件、目标、文档、which 和 show 等需要 SDK 的管理命令，也用于无名称参数的 install/update。
+
 1. `CJV_TOOLCHAIN` 环境变量
 2. 目录覆盖(通过 `cjv override set` 设置)
 3. 工具链文件(当前目录或某级父目录中的 `cangjie-sdk.toml`)
@@ -50,7 +52,7 @@ cjv default lts
 
 也就是说，优先级既看来源类型也看距离。若在 `~/work` 上设置了目录覆盖，而 `~/work/proj` 里有 `cangjie-sdk.toml`，那么在 `~/work/proj` 下工作时，更近的工具链文件胜出；只有当某一级既无更近的文件也命中了覆盖时，覆盖才生效。这样项目自带的声明就不会被祖先目录上一个宽泛的覆盖意外盖掉。
 
-> 提示：`cangjie-sdk.toml` 存在但 `channel` 为空时，cjv 不会静默回退，而是直接报错，提醒你补全声明。只有文件根本不存在时才会继续向上查找。
+> 提示：`cangjie-sdk.toml` 存在但 `channel` 和 `path` 都为空时，cjv 不会静默回退，而是直接报错，提醒你补全声明。只有文件根本不存在时才会继续向上查找。
 
 ## 管理目录覆盖
 

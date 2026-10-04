@@ -85,3 +85,11 @@ The first use of the new layout performs an offline migration. All old version d
 ```bash
 cjv check
 ```
+
+## Update policies
+
+`cjv install`, `cjv update`, and `cjv uninstall` accept multiple toolchain names. A tracking host, its targets, and components are prepared before replacement in one transaction; failed downloads, verification, or publication do not leave mismatched releases.
+
+Nightly selects the newest published historical release meeting component and target requirements without going below the installed release. `--allow-downgrade` permits an older compatible nightly. Install/update share a `--force` policy allowing unavailable components or targets to be skipped and removed; unchanged SDKs are retained. `install --no-update` keeps the installed release and only adds missing requirements.
+
+`cjv default sts` installs a missing official toolchain before saving the default, retaining the previous choice on failure. `cjv check` also checks cjv's own releases, fetching metadata without installing an update.

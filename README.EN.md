@@ -69,6 +69,8 @@ cjv run sts cjc --version
 
 After setting a default toolchain, you can call `cjc`, `cjpm`, and other SDK tools directly. cjv resolves the active toolchain from environment variables, directory overrides, `cangjie-sdk.toml`, and the default configuration.
 
+Batch commands accept multiple names: `cjv install lts sts`, `cjv update lts sts`, and `cjv uninstall lts sts`. Select an SDK with `cjv +sts component list`, `cjv +sts target list`, or `cjv which cjc --toolchain sts`. `default` installs missing toolchains immediately; `check` checks SDK and cjv releases. Install/update share a `--force` policy that skips unavailable entries without reinstalling unchanged SDKs. `install --no-update` keeps an existing release, and `--allow-downgrade` permits older compatible nightly releases. Global `--quiet/-q` and `--verbose` control progress and logging.
+
 See the [user guide](https://cjv.zxilly.dev/book/user-guide/en/) for the full command reference, toolchain resolution, components, cross-compilation, runtime environment, and configuration.
 
 ## Agent Skill

@@ -69,6 +69,8 @@ cjv run sts cjc --version
 
 设置默认工具链后，可以直接调用 `cjc`、`cjpm` 等命令；cjv 会根据环境变量、目录覆盖、`cangjie-sdk.toml` 和默认配置解析应使用的工具链。
 
+批量管理可使用 `cjv install lts sts`、`cjv update lts sts` 和 `cjv uninstall lts sts`。`cjv +sts component list`、`cjv +sts target list`、`cjv which cjc --toolchain sts` 可指定管理操作的 SDK。`default` 会立即安装缺失工具链，`check` 同时检查 SDK 和 cjv 新版本。install/update 的 `--force` 允许跳过缺失项而不重装未变化的 SDK；`install --no-update` 保留现有发行版，nightly 可通过 `--allow-downgrade` 选择较旧的兼容版本。全局 `--quiet/-q` 和 `--verbose` 控制进度及日志。
+
 完整命令参考、工具链解析、组件、交叉编译、运行时环境和配置说明见[用户手册](https://cjv.zxilly.dev/book/user-guide/zh-CN/)。
 
 ## Agent Skill

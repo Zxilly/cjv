@@ -62,7 +62,7 @@ cjv set auto-self-update disable
 cjv set auto-self-update check
 ```
 
-`enable` upgrades cjv after `cjv update` finishes; `disable` skips self-update; `check` (the default) only prints the current cjv version and does not upgrade it.
+`enable` upgrades cjv after a full `cjv update` without name arguments or a global `+toolchain` selector; `disable` skips self-update; `check` (the default) checks release metadata and reports available cjv updates without installing them. Development builds skip this release check.
 
 Regardless of this setting, you can upgrade cjv manually at any time with `cjv self update`.
 
@@ -120,7 +120,7 @@ All of cjv's data is kept under `CJV_HOME` (`~/.cjv` by default), with each subd
     <tc>/
       main/                    # docs component (dev-guide / libs/std / tools entry)
       stdx/                    # stdx-docs component (libs_stdx entry)
-  downloads/      # download staging (cleared after a successful install; only for resume)
+  downloads/      # download staging and resumable partial files
   settings.toml   # user settings
 ```
 
@@ -132,7 +132,7 @@ All of cjv's data is kept under `CJV_HOME` (`~/.cjv` by default), with each subd
 
 `docs/<tc>/` is offline documentation, decoupled from the toolchain directory. `main/` holds the `docs` component (dev-guide, libs/std, tools), and `stdx/` holds the `stdx-docs` component. Open them in a browser with `cjv doc`.
 
-`downloads/` is the download staging area, cleared after a successful install and kept only when an install is interrupted, to allow recovery. `settings.toml` is the user settings file described in this chapter.
+`downloads/` holds downloaded archives and resumable partial files for artifacts with SHA-256 checksums. Successful operations remove their archives; failed or interrupted checksum-backed transfers retain partial files so the next invocation can resume them. A successful update of all toolchains also purges leftover downloads. `settings.toml` is the user settings file described in this chapter.
 
  >
  > `cjv toolchain uninstall <tc>` also cleans up `stdx/<tc>/` and `docs/<tc>/`, leaving no orphaned component data behind.
@@ -143,4 +143,4 @@ If a custom `CJV_HOME` is set or persisted, the `bin/`, `toolchains/`, `stdx/`, 
 
 The default `link_mode = "hardlink"` attempts hardlinks for regular SDK files from the same release, platform and SHA-256. cjv compares file contents first and skips modified files. Installation and component metadata under `.cjv` always remain independent. Unsupported hardlinks leave the copied files in place without failing the install. Legacy migration copies existing files to avoid sharing user-modified SDKs.
 
-Updates, forced reinstalls and removals replace or unlink directories rather than editing another SDK in place. Hardlinks still share file contents: manual in-place edits affect every installation linked to that file. Set `link_mode = "copy"` in `settings.toml` for independent file contents in subsequent installs. This does not detach existing hardlinks. Component stdx and documentation directories are installed independently and are outside this SDK deduplication optimization.
+Updates and removals replace or unlink directories rather than editing another SDK in place. Hardlinks still share file contents: manual in-place edits affect every installation linked to that file. Set `link_mode = "copy"` in `settings.toml` for independent file contents in subsequent installs. This does not detach existing hardlinks. Component stdx and documentation directories are installed independently and are outside this SDK deduplication optimization.

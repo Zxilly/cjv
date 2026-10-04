@@ -37,7 +37,7 @@ docs/           两本 mdBook（见“文档站”一章）
 
 ### `cli`：命令定义
 
-`internal/cli` 是 cobra 命令树。每次 `Execute` 都创建一个新的 `application`，由它持有本次调用的命令树、标志值、版本与更新地址、`output.Renderer`。`root.go` 注册根级 `--json` 标志并挂上各子命令，不复用上次调用的命令或输出模式。每个子命令一个文件，`install.go`、`uninstall.go`、`toolchain.go`、`run.go`、`exec.go`、`which.go`、`show.go`、`check.go`、`update.go`、`component.go` 等，文件名基本能对上命令名。
+`internal/cli` 是 cobra 命令树。每次 `Execute` 都创建一个新的 `application`，由它持有本次调用的命令树、标志值、版本与更新地址、`output.Renderer`。`root.go` 注册全局 `--json`、`--quiet/-q`、`--verbose` 标志，并提取开头的 `+toolchain` 选择器，再挂上各子命令，不复用上次调用的命令或输出模式。每个子命令一个文件，`install.go`、`uninstall.go`、`toolchain.go`、`run.go`、`exec.go`、`which.go`、`show.go`、`check.go`、`update.go`、`component.go` 等，文件名基本能对上命令名。
 
 `cli` 自己不实现业务逻辑，它做的是参数解析、调用下层包、把结果交给渲染层。命令不自己加载设置、构造分发源或计算 host tuple：`install.go` 把标志装进 `lifecycle.InstallRequest` 交给 `lifecycle.Install`；`check.go`、`toolchain_list_remote.go` 通过 `lifecycle.OpenDistribution` 拿到同一份设置、分发源和 host tuple；`component.go` 的 `add` 调 `lifecycle.InstallComponents`；`toolchain.go` 的 `link` 按参数是 URL、归档文件还是目录，分别调 `InstallToolchainFromURL`、`InstallToolchainFromZip`、`LinkToolchainDir`，自己只做名字校验、标志互斥和结果渲染。读设置的唯一入口是 `config.LoadDefaultSettings`。几个子包分担横切关注点：
 
@@ -47,11 +47,13 @@ docs/           两本 mdBook（见“文档站”一章）
 
 ### `lifecycle`：安装与内容生命周期
 
-`internal/lifecycle` 把下载、解压、校验、组件、可达性和事务替换串成一条安装流程。对外的安装入口只有一个：`Install(ctx, InstallRequest{Toolchain, Targets, Components, Force}, opts)`，设置、分发源和 host tuple 都在里面解析；`InstallComponents` 给已装工具链加组件；`InstallToolchainFromURL`、`InstallToolchainFromZip`、`LinkToolchainDir` 是 `toolchain link` 的三种形式；`UpdateInstalled`、`UpdateAll`、`RemoveToolchain` 管更新与卸载。一次操作要读的"设置 + 分发源 + host tuple"由 `OpenDistribution` 一次性打开成 `Distribution`，`check`、`list-remote` 也用它，所以各命令看到的 manifest、`dist_server` 根和平台一致；`Distribution.Resolve` 把通道/版本请求解析成 `ResolvedToolchain`，manifest 进度提示每次操作只报一次。校验由它直接调用；工具链落盘后经 `reachable.Ensure` 建立受管二进制和代理链接，首次发布默认工具链时按 `Options.ConfigurePath` 决定是否再调 `reachable.ConfigurePath`。`Options` 只有 `Progress` 与 `ConfigurePath`：`Progress` 是一个 `progress.Sink`，操作的每个进度事件（manifest 提示、解压、已安装、组件阶段、下载字节数）都发到这里，未设置时保持静默；`ConfigurePath` 是个普通布尔值，`cjv install` 置为真，`cjv init` 与代理自动安装置为假，没有函数字段承载 PATH 策略。谁调用操作谁选择适配器，`lifecycle` 自己不再决定何时静默，也没有测试专用的选项字段；测试走 `testutil` 的 mock 服务器这条生产路径。依赖方向从 `cli` 指向 `lifecycle`，再从 `lifecycle` 指向 `reachable` 与 `sdktools`。同一流程服务 `cli install` 与代理自动安装：两者装出的工具链都带受管二进制和代理链接。已有 SDK 的重复安装在文本与 JSON 模式下都成功，`component add` 的 JSON 结果也由 CLI 统一渲染。
+`internal/lifecycle` 管理官方 SDK、交叉 SDK、组件、自定义安装及卸载。`OpenDistribution` 一次读取设置、主机平台和分发源；`Distribution.Resolve` 解析通道、具体版本、minor 和日期选择器。`Install(ctx, InstallRequest{Toolchain, Targets, Components, Force, NoUpdate}, opts)` 服务 CLI 与代理自动安装。`Force` 统一映射为 `Options.AllowMissing`，不再触发同版本重装；`Options.AllowDowngrade` 控制 nightly 降级，`Progress` 和 `ConfigurePath` 分别控制展示和首次安装的 PATH 配置。
 
-包内按职责分文件：`install.go` 是 `Install` 的编排（host 工具链、目标平台变体、组件），`source.go` 是 `Distribution`（打开设置与分发源、解析 `ResolvedToolchain`），`component_install.go` 编排组件批量安装并交给 `component.ApplyChanges` 负责回滚，`resolved_install.go` 是落盘流水线 `placeToolchain`：恢复、staging、校验、事务替换、`finalizeInstalledToolchain`，只有 SDK 归档怎么到达 staging 这一步（`acquisition` 的 `fetch`/`extract`）随来源变化——manifest 发布版下载后解包，URL 或本地归档先解开 CI 外层包再定位内层 SDK/stdx；`link.go` 是这三种链接形式，其中目录链接不经 staging 和事务（它只是一个符号链接项），但同样先恢复、校验编译器、走同一个 finalize，finalize 失败则撤掉链接；`update.go` 编排更新流程，`upgrade.go` 是它替换单个工具链的步骤，`downloads_purge.go` 在全量更新结束后清空下载暂存区。工具链替换的回归测试直接调用这些生产安装入口，对三种来源验证最终步骤失败后的旧安装恢复和回滚错误传播。
+`group_install.go` 在安装锁下先取得安装记录、组件选择及宿主依赖的快照，准备期间释放 home 锁。主机操作准备自身及所有同平台跟踪 targets；直接指定交叉 SDK 时使用相同流程且不发布默认工具链。未变化的 SDK 复用原内容，只准备新增组件。nightly 根据已发布历史解析完整的组件和目标集合，缺失项默认阻止升级或触发兼容版本回溯；AllowMissing 允许跳过并移除缺失项，校验或网络错误仍使操作失败。
 
-`UpdateInstalled` 与 `UpdateAll` 是更新入口：`UpdateInstalled` 接收一个已解析的工具链名，通道名更新该通道最新的已安装宿主版本，目标平台变体名更新该变体，明确版本缺失时安装、已存在时不动；`UpdateAll` 遍历所有已安装工具链，跳过自定义和链接的，逐个失败不中断，最后清空下载暂存区。两者都在包内查找已安装版本、加载设置、构建分发源并解析通道头，再交给包内的升级步骤，结果以 `UpdateOutcome`（已更新、已是最新、已跳过、固定版本、失败）返回，由 CLI 渲染为文本或 JSON。升级步骤与 `RemoveToolchain` 统一处理 SDK、外置的 stdx/docs 内容及默认工具链、目录 override 引用。升级会为下载组件获取新版本对应的制品，为链接组件保留原始来源；替代工具链已存在时保留其组件选择，只补齐缺少的组件。失败时撤回本次新建且未被引用的替代安装，恢复受阻时保留仍需使用的内容并报告错误。同名强制重装保留已有组件清单和外置内容。URL 安装中的附带 stdx 仍在 SDK 安装后处理，可能出现 SDK 成功、stdx 失败的部分成功。
+准备完成后重新获取 home 锁，检查依赖和快照，再由 `publication.go` 通过 `fstx.NewToolchainGroupTransaction` 一起替换 SDK、stdx 与文档根。事务包含所有成员的路径约束；失败及进程中断恢复使用同一提交或回滚决策。固定版本与其他主机独立保留，SDK 去重仅作用于符合来源与内容要求的文件。代理补齐目标保留宿主版本和默认选择。
+
+`UpdateInstalled` 更新指定通道，`UpdateAll` 遍历跟踪通道、跳过固定和自定义安装，交叉 SDK 由对应主机更新。独立目标入口也使用 group 策略。批量更新继续处理单项失败并返回聚合错误，仅全部成功时清理下载暂存区，失败时保留可续传分段。`InstallComponents`、目录链接、URL 和本地归档安装维持各自的组件替换或同名覆盖参数；自定义安装仍由 `resolved_install.go` 的放置流程负责。随包 stdx 可能在 SDK 安装后失败，单独记录部分成功。
 
 ### `resolve`：活动工具链解析
 
@@ -59,7 +61,7 @@ docs/           两本 mdBook（见“文档站”一章）
 
 ### `toolchain` 与 `component`：已装内容的模型
 
-`internal/toolchain` 管已安装的 SDK：列出已装工具链（`ListInstalled`）、解析活动工具链目录，以及工具链名字的解析与版本比较。`RecoverHome` 是 CJV_HOME 唯一的恢复入口：先让 `fstx` 恢复 `toolchains/` 下未完成的事务，再删除废弃的 staging 树、把原目录已缺失的旧式备份放回去。恢复受阻时它原样返回 `fstx.RecoveryError`，不碰任何残留；需要恢复的备份不会作为普通残留直接删除。安装、升级、删除在改动文件前调用它，代理解析与 `update` 在启动时调用它并把受阻的恢复记为警告。
+`internal/toolchain` 管已安装的 SDK：列出已装工具链（`ListInstalled`）、解析活动工具链目录，以及工具链名字的解析与版本比较。`RecoverHome` 是 CJV_HOME 唯一的恢复入口：先让 `fstx` 恢复 `toolchains/` 下未完成的事务，再删除废弃的 staging 树、把原目录已缺失的旧式备份放回去。恢复受阻时它原样返回 `fstx.RecoveryError`，不碰任何残留；需要恢复的备份不会作为普通残留直接删除。安装、升级、删除在改动文件前调用它；代理解析也先完成恢复，恢复失败会阻止使用不完整安装。`update` 启动时记录恢复警告，但后续分发源初始化仍会返回未解决的恢复错误。
 
 `internal/component` 管工具链的附加组件：`stdx`、`docs`、`stdx-docs`。每个组件是单独下载的归档，解压后的文件通过逐组件的清单（manifest）记录，从而能独立卸载。`component` 还定义了组件装到哪（`InstallLocation`：有的落进工具链目录树，有的作为纯数据放到 `<CJV_HOME>/docs/<tc>/`）以及组件要注入哪些环境变量。
 
@@ -101,6 +103,8 @@ docs/           两本 mdBook（见“文档站”一章）
 
 ### `selfupdate`：自我更新
 
+`Check` 只获取发布信息并返回 `available` 等状态，不下载或替换二进制，供 `cjv check` 和 auto-self-update 的 check 模式使用。
+
 `internal/selfupdate` 负责发现、校验和安装 cjv 更新。具体走 GitHub 还是 GitCode 由 `mirror` 构建标记在编译期选定（`update_default.go` / `update_mirror.go`）。`Update` 返回状态（`skipped`、`dev`、`up-to-date`、`updated`）及版本，供 `cli/selfmgmt` 渲染，不自行向 stdout 打印结果。它还管理把当前二进制确立为受管可执行文件（`EnsureManagedExecutable`、`ForceUpdateManagedExecutable`，由 `reachable.Ensure` 调用）、以及更新时替换正在运行的二进制（Windows 与其他平台分 `replace_windows.go` / `replace_other.go`）。受管二进制的文件名取自 `sdktools`。
 
 ### 支撑包
@@ -122,8 +126,8 @@ docs/           两本 mdBook（见“文档站”一章）
 
 进程从 `cmd/cjv/main.go` 的 `run` 起步：`logging.Init` 配好日志，程序名是 `cjv` 不是某个工具名，于是走 `cli.Execute`。cobra 把 `install` 子命令路由到 `internal/cli/install.go` 的 `runInstall`。`runInstall` 把 `--target`、`--component`、`--force` 装进 `lifecycle.InstallRequest`，组好 `lifecycle.Options`（renderer 按输出模式选出的进度适配器，以及首次安装时配置 PATH 的选择），调 `lifecycle.Install`。
 
-`lifecycle` 编排其余步骤：`OpenDistribution` 读设置、选分发源、定 host tuple，`Distribution.Resolve` 让 `dist.Source` 从 manifest 解析通道、版本和平台，`placeToolchain` 把归档下载、解包到 staging 目录并校验，最后由 `fstx` 事务替换、`reachable` 建立受管二进制与代理链接、`component` 装上请求的组件。所有通道共用这条安装路径。进度事件一路发到 CLI 选好的适配器（文本模式下消息写到命令输出、下载进度条画在 stderr），命令结果由本次调用的 renderer 渲染；错误由 `cli.Execute` 经同一个 renderer 输出，再由 `main` 翻译成退出码。
+`lifecycle` 编排其余步骤：`OpenDistribution` 读设置、选分发源、定 host tuple，`Distribution.Resolve` 让 `dist.Source` 从 manifest 解析通道、版本和平台，`installGroup` 在私有暂存目录下载、解压 SDK，准备全部所需组件并校验整个安装组，再由 `fstx` 一起发布所有根目录；`reachable` 在最终确认阶段建立托管二进制和代理链接。所有通道共用这条安装路径。进度事件一路发到 CLI 选好的适配器（文本模式下消息写到命令输出、下载进度条画在 stderr），命令结果由本次调用的 renderer 渲染；错误由 `cli.Execute` 经同一个 renderer 输出，再由 `main` 翻译成退出码。
 
 代理路径是另一条主线。运行 `cjc build` 时，被调用的其实是名为 `cjc` 的 cjv 链接，`main` 认出工具名走 `proxy.Run`：`proxy` 经 `env.ResolveRuntime` 让 `resolve` 定出活动工具链、经 `sdktools` 在工具链目录里找到真正的 `cjc`、组装好运行环境，然后按平台替换当前进程或运行子进程。这条线绕过 cobra 命令树，保留工具的标准流和退出语义。
 
-想深入某一块，从这几处入手最快：命令定义看 `internal/cli/root.go`，安装编排看 `internal/lifecycle/install.go`，分发源看 `internal/dist/source.go`，落盘事务看 `internal/lifecycle/resolved_install.go`，代理看 `internal/proxy/proxy.go`。测试怎么组织见[测试](testing.md)。
+想深入某一块，从这几处入手最快：命令定义看 `internal/cli/root.go`，安装编排看 `internal/lifecycle/install.go`，分发源看 `internal/dist/source.go`，官方 SDK 落盘事务看 `internal/lifecycle/group_install.go` 和 `publication.go`，代理看 `internal/proxy/proxy.go`。测试怎么组织见[测试](testing.md)。

@@ -41,8 +41,19 @@ A target SDK can be installed together with [components](concepts/components.md)
 cjv install sts -t ohos -c stdx
 ```
 
- >
- > A target SDK is additive: you can run `cjv install <tc> -t <new-suffix>` again on an already installed toolchain at any time to add new targets, and the parts already installed are unaffected.
+For an installed host, use `target add` or `install --no-update --target` to add targets while keeping its installed release. Plain `install sts --target` also checks for and updates the STS channel.
+
+```bash
+cjv +sts target list
+cjv target list --toolchain sts --installed
+cjv target add ohos android --toolchain sts
+cjv install sts --no-update --target ohos
+cjv +sts component add stdx --target ohos
+```
+
+`target add` installs matching SDKs for the host's installed release. `target list --installed` works offline. Component `--target` selects an already installed cross SDK at that release.
+
+Host updates prepare all tracking targets and components before publishing them in one transaction. Missing targets or components preserve the old installation by default. Nightly searches published history for a compatible release without downgrading; `--allow-downgrade` permits an older release. Both install and update use `--force` to skip and remove unavailable entries, without reinstalling unchanged SDKs.
 
 ## Declaring targets in the toolchain file
 
@@ -95,7 +106,7 @@ For environment variable injection, the syntax for different shells, and the tra
 
 ## Uninstalling
 
-A target SDK is cleaned up together with its host toolchain. When you uninstall the host toolchain, the target SDKs attached to it are removed along with it:
+Uninstalling a tracking channel such as `sts` also removes its tracking target SDKs for that platform. Explicit host and target versions remain independent and must be uninstalled separately:
 
 ```bash
 cjv toolchain uninstall sts

@@ -4,11 +4,13 @@ This chapter lists cjv's commands one by one, giving their usage, arguments, fla
 
 ## Global Conventions
 
+Global `--quiet` / `-q` hides progress. `--verbose` enables debug logging unless `CJV_LOG` is set; the flags conflict. `component list --quiet` retains its single-column output.
+
 Almost all commands accept the global flag `--json`, which outputs the result as a stable JSON structure on standard output for scripts to consume. `cjv run`, `cjv exec`, and `cjv init` do not support JSON output, and passing `--json` to them is an error.
 
 Commands that do not specify a toolchain explicitly resolve the active toolchain by a uniform priority order: the `CJV_TOOLCHAIN` environment variable, directory overrides, the `cangjie-sdk.toml` toolchain file, and the default toolchain, taking the first one that applies in that order. See [Targets and overrides](concepts/targets-overrides.md).
 
-The standard channel names are `lts`, `sts`, and `nightly`, and can also be written as a specific version (such as `lts-1.0.0`). Custom toolchains linked with `cjv toolchain link` use any custom name, but it must not conflict with a reserved channel name. `cjv exec` and `cjv envsetup` also support a `+name` prefix to select a toolchain temporarily, overriding the default resolution.
+The standard channel names are `lts`, `sts`, and `nightly`, and can also be written as a specific version (such as `lts-1.0.0`). Custom toolchains linked with `cjv toolchain link` use any custom name, but it must not conflict with a reserved channel name. Management commands selecting an SDK accept a leading global `+name`, such as `cjv +sts component list` or `cjv +sts show active`. An explicit `--toolchain` flag takes precedence. `exec` and `envsetup` also accept `+name` after the subcommand.
 
 A proxied or executed subcommand exits with its original exit code; this applies to `cjv run` and `cjv exec`.
 
@@ -26,7 +28,7 @@ cjv install [toolchain]... [-t target]... [-c component]... [--force | --no-upda
 
 Arguments:
 
-- `<toolchain>` (optional, repeatable): the toolchain to install, such as `lts`, `sts`, `nightly`, or a specific version. It cannot install a custom toolchain; use `cjv toolchain link` for that.
+- `[toolchain]...` (optional): one or more toolchains to install; without names, install the selected toolchain. Names include, such as `lts`, `sts`, `nightly`, or a specific version. It cannot install a custom toolchain; use `cjv toolchain link` for that.
 
 Flags:
 
@@ -34,7 +36,9 @@ Flags:
 |-----|-----------|
 |`-t`, `--target <suffix>`|Cross-compilation target suffixes to additionally install (repeatable or comma-separated), such as `ohos`, `android`, `ohos-arm32`|
 |`-c`, `--component <name>`|Components to additionally install (repeatable or comma-separated), such as `stdx`, `docs`, `stdx-docs`|
-|`--force`|Force a re-download and reinstall, even if already installed|
+|`--force`|Allow skipping and removing components or targets absent from the selected release; do not reinstall an unchanged SDK|
+|`--no-update`|Keep an installed SDK release while adding targets or components; conflicts with `--force`|
+|`--allow-downgrade`|Allow an older nightly satisfying component and target requirements|
 
 Examples:
 
@@ -52,8 +56,14 @@ cjv install sts --target ohos,android
 # Install components along with the toolchain
 cjv install nightly -c stdx,docs
 
-# Force a reinstall
-cjv install lts --force
+# Install the latest nightly even when some components or targets are unavailable
+cjv install nightly --force
+
+# Add a cross SDK while keeping the existing release
+cjv install sts --no-update --target ohos
+
+# Install multiple toolchains
+cjv install lts sts
 ```
 
 For target, give only the target suffix, not the full platform key (such as `linux-x64-ohos`). A cross-compilation target is an add-on to the host toolchain and does not change the active toolchain. See [Cross-compilation](cross-compilation.md) and [Components](concepts/components.md).
@@ -68,7 +78,7 @@ cjv uninstall <toolchain>... [-y]
 
 Arguments:
 
-- `<toolchain>` (required): the name of the toolchain to uninstall.
+- `<toolchain>...` (required): one or more toolchain names to uninstall.
 
 Flags:
 
@@ -96,15 +106,17 @@ cjv update [toolchain]... [--no-self-update] [--force] [--allow-downgrade]
 
 Arguments:
 
-- `[toolchain]` (optional): update the specified channel and its cross SDKs, or install and retain an explicit version. When omitted, all installed tracking channels are updated.
+- `[toolchain]...` (optional): update one or more channels and their cross SDKs, or install and retain explicit versions. Without names, a global `+name` selects that toolchain; otherwise all installed tracking channels are updated.
 
 Flags:
 
 |Flags|Description|
 |-----|-----------|
 |`--no-self-update`|Skip the cjv self-update check|
+|`--force`|Same policy as install: allow skipping and removing unavailable components or targets; do not reinstall an unchanged SDK|
+|`--allow-downgrade`|Allow an older compatible nightly|
 
-A channel name (such as `lts`) updates that tracking channel, installing it if missing. Explicit host and target versions are installed when missing and otherwise remain fixed. Custom or linked toolchains are skipped or rejected. Defaults, directory overrides and project files selecting a channel follow its updates; explicit version selectors remain fixed. The channel's SDK and component roots are replaced together; independent fixed installations are retained. On first use, old version directories remain fixed while their implicit channel selections are copied into independent channel directories offline. Defaults, overrides and project files are unchanged. Self-update behavior follows `auto-self-update` and can be disabled with `--no-self-update`.
+A channel name (such as `lts`) updates that tracking channel, installing it if missing. Explicit host and target versions are installed when missing and otherwise remain fixed. Custom or linked toolchains are skipped or rejected. Defaults, directory overrides and project files selecting a channel follow its updates; explicit version selectors remain fixed. The channel's SDK and component roots are replaced together; independent fixed installations are retained. On first use, old version directories remain fixed while their implicit channel selections are copied into independent channel directories offline. Defaults, overrides and project files are unchanged. A full update without name arguments or a global `+toolchain` selector checks or upgrades cjv according to `auto-self-update`; `--no-self-update` disables this step. Updates naming one or more toolchains process only SDKs.
 
 ```bash
 # Update all tracking channels
@@ -119,13 +131,13 @@ cjv update --no-self-update
 
 ### `cjv check`
 
-Checks whether updates are available for installed toolchains, but does not perform the install.
+Check installed tracking channels and cjv itself for available updates, fetching release metadata without installing anything.
 
 ```text
 cjv check
 ```
 
-Lists installed toolchains one by one: `current → latest` if an update is available, `✓` if already up to date, and shows cjv's own version at the end. `--json` mode outputs structured results with fields such as `update_available` and `latest`.
+Lists installed toolchains one by one: `current → latest` if an update is available, `✓` if already up to date, and reports the running cjv version and any newer release. JSON includes `update_available`, `latest`, `latest_cjv_version`, and `self_update_error` when the release query fails. Development builds stamped `dev` skip self-version comparisons.
 
 ```bash
 cjv check
@@ -261,7 +273,7 @@ cjv envsetup --target=ohos
 Show the path of an SDK tool in the active toolchain; with no argument, print the toolchain root directory.
 
 ```text
-cjv which [command]
+cjv which [command] [--toolchain <tc>]
 ```
 
 Arguments:
@@ -274,6 +286,8 @@ cjv which
 
 # Print the absolute path of cjc
 cjv which cjc
+cjv which cjc --toolchain sts
+cjv +sts which cjc
 ```
 
 `cjv which` uses the same tool resolution logic as `cjv run`: besides the fixed proxied tools, it can also resolve binaries under `bin/` and `tools/bin/`.
@@ -381,16 +395,55 @@ cjv toolchain uninstall <name> [-y]
 
 ---
 
+## Target management
+
+`cjv target` manages cross SDKs for a selected host installation. Every subcommand accepts `--toolchain <tc>`; otherwise it uses the global `+name` or active toolchain.
+
+### `cjv target list`
+
+```text
+cjv target list [--toolchain <tc>] [--installed]
+```
+
+List targets published for the host's installed release and mark installed entries. `--installed` reads only local state and works offline.
+
+### `cjv target add`
+
+```text
+cjv target add <suffix>... [--toolchain <tc>]
+```
+
+Add one or more targets at the host's installed release without upgrading the host. Use suffixes such as `ohos` or `android`, not full platform keys.
+
+### `cjv target remove`
+
+```text
+cjv target remove <suffix>... [--toolchain <tc>]
+```
+
+Remove the selected cross SDKs and their components while retaining the host installation.
+
+```bash
+cjv +sts target list
+cjv target list --toolchain sts --installed
+cjv +sts target add ohos android
+cjv +sts target remove ohos
+```
+
+---
+
 ## Component management
 
 The subcommands of `cjv component` all support the persistent flag `--toolchain <tc>` to specify the target toolchain; when omitted, the current active toolchain is used.
+
+`--target <suffix>` selects a cross SDK at the host's installed release for add, remove, link, and list; it does not install a missing SDK. Component commands retain their component-replacement `--force` behavior, distinct from the missing-artifact policy of install/update.
 
 ### `cjv component add`
 
 Install one or more components for a toolchain (such as `stdx`, `docs`, `stdx-docs`).
 
 ```text
-cjv component add <name>... [--toolchain <tc>] [--force]
+cjv component add <name>... [--toolchain <tc>] [--target <suffix>] [--force]
 ```
 
 |Flags|Description|
@@ -411,7 +464,7 @@ cjv component add stdx --force
 Link a local component directory to a toolchain instead of installing via download. Currently applies to `stdx`.
 
 ```text
-cjv component link <name> <path> [--toolchain <tc>] [--force]
+cjv component link <name> <path> [--toolchain <tc>] [--target <suffix>] [--force]
 ```
 
 |Flags|Description|
@@ -435,7 +488,7 @@ cjv component link stdx /path/to/local/stdx --toolchain lts --force
 Uninstall one or more components from a toolchain.
 
 ```text
-cjv component remove <name>... [--toolchain <tc>]
+cjv component remove <name>... [--toolchain <tc>] [--target <suffix>]
 ```
 
 `<name>` may be repeated or comma-separated. Aliases: `uninstall`, `rm`, `delete`, `del`.
@@ -450,7 +503,7 @@ cjv component remove stdx,docs --toolchain nightly
 List the installed and installable status of components.
 
 ```text
-cjv component list [--toolchain <tc>] [--installed] [-q]
+cjv component list [--toolchain <tc>] [--target <suffix>] [--installed] [-q]
 ```
 
 |Flags|Description|
@@ -483,7 +536,7 @@ Arguments:
 
 - `[toolchain]` (optional): the toolchain to set as the default. When omitted, show the current default. Pass `none` to clear the default setting.
 
-A cross-compilation target variant (such as `lts-1.0.0-ohos`) cannot be set as the active or default toolchain; use the host toolchain and configure it through targets. Setting an official toolchain that is not yet installed installs it first. An installation failure preserves the previous default.
+A cross-compilation target variant (such as `lts-1.0.0-linux-x64-ohos`) cannot be set as the active or default toolchain; use the host toolchain and configure it through targets. Setting an official toolchain that is not yet installed installs it first. An installation failure preserves the previous default.
 
 ```bash
 # Show the current default
@@ -639,26 +692,11 @@ cjv init -y --default-toolchain none --no-modify-path
 
 For installation methods, see [Installing cjv](installation/index.md).
 
-## Target management and installation policy
-
-```bash
-cjv +sts target list
-cjv target list --toolchain sts --installed
-cjv +sts target add ohos android
-cjv +sts target remove ohos
-cjv +sts component add stdx --target android
-cjv which cjc --toolchain sts
-cjv install lts sts
-cjv uninstall lts-1.0.0 sts-1.1.0 --yes
-```
-
-A leading global `+toolchain` selects the toolchain for management commands. An explicit `--toolchain` flag takes precedence. Install, update and uninstall accept multiple toolchains; install without arguments ensures the selected toolchain is installed. Setting a missing default installs it first and preserves the previous default if installation fails.
-
-`target add` uses the selected host's installed release without upgrading the host. `target list --installed` works offline. `install --target` remains the shortcut to install the host and cross SDKs together; rustup also supports this flag on toolchain installation.
+## Install and update policies
 
 Channel installations prepare the host, all tracking cross SDKs and their components before publishing one transaction. Failed preparation or publication preserves the previous installation, and interruption recovery uses the same decision for every member. Explicit versions remain independent.
 
-Nightly chooses the newest published historical release satisfying the required targets and components without downgrading. `--allow-downgrade` permits an older compatible nightly. `--force` skips and removes unavailable optional components or targets; install also re-extracts the SDK. `--no-update` keeps an existing SDK release while adding targets or components, and cannot be combined with `--force`. A request with no additions works offline.
+Nightly chooses the newest published historical release satisfying the required targets and components without downgrading. `--allow-downgrade` permits an older compatible nightly. `--force` skips and removes unavailable optional components or targets; install and update use the same policy and do not re-download or replace unchanged SDKs. `--no-update` keeps an existing SDK release while adding targets or components, and cannot be combined with `--force`. A request with no additions works offline.
 
 Global `--quiet` / `-q` suppresses progress; `--verbose` enables debug logs. They are mutually exclusive. `component list --quiet` keeps its existing names-only behavior. `cjv check` checks both toolchain releases and cjv releases without downloading or replacing executables.
 
