@@ -6,7 +6,7 @@ For its position in the toolchain resolution chain, see [Targets and overrides](
 
 ```toml
 [toolchain]
-channel = "lts"                  # required
+channel = "lts"                  # channel or path is required
 components = ["stdx", "docs"]    # optional
 targets = ["ohos", "android"]    # optional
 ```
@@ -39,7 +39,7 @@ All fields live under the `[toolchain]` table. The table name must be exactly `t
 |Item|Value|
 |----|-----|
 |Type|string|
-|Required|Yes|
+|Required|Yes, unless `path` is set|
 |Default|None|
 
 The toolchain name, that is, the identifier you normally pass to `cjv install`. It can be a channel name (`lts`, `sts`, `nightly`), or a precise name with a version (such as `lts-1.0.5` or `nightly-1.1.0-alpha.20260306010001`). For how channels and versions are written, see [Channels](concepts/channels.md) and [Toolchains](concepts/toolchains.md).
@@ -54,7 +54,7 @@ channel = "lts"
 channel = "lts-1.0.5"
 ```
 
-`channel` must not be empty. A toolchain file that is found but whose `channel` is empty (an empty file, `channel = ""`, or only unrecognized keys) is treated as an incomplete configuration and reports an error directly; cjv does not skip it and continue resolving the next level. See [Empty file and empty channel](#empty-file-and-empty-channel) below.
+When `path` is not set, `channel` must not be empty. A toolchain file that is found but whose `channel` is empty (an empty file, `channel = ""`, or only unrecognized keys) is treated as an incomplete configuration and reports an error directly; cjv does not skip it and continue resolving the next level. See [Empty file and empty channel](#empty-file-and-empty-channel) below.
 
 ### `components`
 
@@ -120,7 +120,7 @@ In the example above no recognized field is read, so `channel` is effectively em
 
 ## Empty file and empty channel
 
-As soon as `cangjie-sdk.toml` is found, cjv assumes you intend to declare a toolchain here. If the file exists but `channel` is empty after parsing, cjv reports an error instead of quietly falling back. All of the following cases count as an empty `channel`:
+As soon as `cangjie-sdk.toml` is found, cjv assumes you intend to declare a toolchain here. If the file exists but both `channel` and `path` are empty after parsing, cjv reports an error instead of quietly falling back. All of the following cases count as an empty `channel`:
 
 - a completely empty file;
 - `channel = ""` is written;
@@ -172,3 +172,14 @@ cjpm build        # missing toolchains / targets / components are auto-installed
 - [Cross-compilation](cross-compilation.md): the meaning of `targets` and the target SDK model
 - [Configuration](configuration.md) and [Proxies](concepts/proxies.md): the setting and behavior of `auto_install`
 - [Environment variables](environment-variables.md): `CJV_TOOLCHAIN`, `CJV_LOG`, and others
+
+## Local SDK paths
+
+Use an absolute `path` instead of `channel`; the two fields are mutually exclusive:
+
+```toml
+[toolchain]
+path = '/opt/cangjie'
+```
+
+A path selection ignores `components` and `targets` for automatic installation. `CJV_TOOLCHAIN` also accepts an absolute SDK path. Components of external SDKs remain managed by their owner.

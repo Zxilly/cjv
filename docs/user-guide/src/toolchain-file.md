@@ -6,7 +6,7 @@
 
 ```toml
 [toolchain]
-channel = "lts"                  # 必填
+channel = "lts"                  # channel 或 path 必填
 components = ["stdx", "docs"]    # 可选
 targets = ["ohos", "android"]    # 可选
 ```
@@ -38,7 +38,7 @@ cjv 从当前工作目录开始，沿目录树逐级向上查找名为 `cangjie-
 | 项目     | 值                                                  |
 | -------- | --------------------------------------------------- |
 | 类型     | string                                              |
-| 是否必填 | 是                                                  |
+| 是否必填 | 未设置 `path` 时必填                                |
 | 默认值   | 无                                                  |
 
 工具链名称，也就是平时传给 `cjv install` 的那个标识符。它可以是通道名（`lts`、`sts`、`nightly`），也可以是带版本的精确名称（如 `lts-1.0.5`、`nightly-1.1.0-alpha.20260306010001`）。通道与版本的写法详见[通道](concepts/channels.md)与[工具链](concepts/toolchains.md)。
@@ -53,7 +53,7 @@ channel = "lts"
 channel = "lts-1.0.5"
 ```
 
-`channel` 不能为空。一个被找到但 `channel` 为空的工具链文件（空文件、`channel = ""`、或只写了无法识别的键）会被视为配置不完整并直接报错，cjv 不会跳过它去继续解析下一级。详见下文[空文件与空 channel](#空文件与空-channel)。
+未设置 `path` 时，`channel` 不能为空。一个被找到但 `channel` 为空的工具链文件（空文件、`channel = ""`、或只写了无法识别的键）会被视为配置不完整并直接报错，cjv 不会跳过它去继续解析下一级。详见下文[空文件与空 channel](#空文件与空-channel)。
 
 ### `components`
 
@@ -118,7 +118,7 @@ channal = "lts"    # 键名拼错，应为 channel
 
 ## 空文件与空 channel
 
-只要 `cangjie-sdk.toml` 被找到，cjv 就认定你打算在此声明工具链。如果该文件存在、但解析后 `channel` 为空，cjv 会报错而不是悄悄回退。以下几种情况都属于空 `channel`：
+只要 `cangjie-sdk.toml` 被找到，cjv 就认定你打算在此声明工具链。如果该文件存在、但解析后 `channel` 和 `path` 都为空，cjv 会报错而不是悄悄回退。以下几种情况都属于空 `channel`：
 
 - 完全空的文件；
 - 写了 `channel = ""`；
@@ -170,3 +170,14 @@ cjpm build        # 缺失的工具链 / 目标 / 组件会被自动补齐
 - [交叉编译](cross-compilation.md)：`targets` 的语义与目标 SDK 模型
 - [配置](configuration.md) 与[代理](concepts/proxies.md)：`auto_install` 的设置与行为
 - [环境变量](environment-variables.md)：`CJV_TOOLCHAIN`、`CJV_LOG` 等
+
+## 本地 SDK 路径
+
+`path` 与 `channel` 互斥，必须使用绝对路径：
+
+```toml
+[toolchain]
+path = 'C:\SDKs\cangjie'
+```
+
+直接使用该目录时，`components` 和 `targets` 不参与自动安装。`CJV_TOOLCHAIN` 也可以设置为绝对 SDK 路径。外部 SDK 的组件由其所有者维护；cjv 不会通过目录同名关系修改其他安装。

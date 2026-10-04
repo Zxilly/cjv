@@ -21,12 +21,12 @@ A proxied or executed subcommand exits with its original exit code; this applies
 Installs a Cangjie SDK toolchain, optionally with cross-compilation targets and components.
 
 ```text
-cjv install <toolchain> [-t target]... [-c component]... [--force]
+cjv install [toolchain]... [-t target]... [-c component]... [--force | --no-update] [--allow-downgrade]
 ```
 
 Arguments:
 
-- `<toolchain>` (required): the toolchain to install, such as `lts`, `sts`, `nightly`, or a specific version. It cannot install a custom toolchain; use `cjv toolchain link` for that.
+- `<toolchain>` (optional, repeatable): the toolchain to install, such as `lts`, `sts`, `nightly`, or a specific version. It cannot install a custom toolchain; use `cjv toolchain link` for that.
 
 Flags:
 
@@ -63,7 +63,7 @@ For target, give only the target suffix, not the full platform key (such as `lin
 Uninstalls a toolchain, also cleaning up its stdx and offline documentation.
 
 ```text
-cjv uninstall <toolchain> [-y]
+cjv uninstall <toolchain>... [-y]
 ```
 
 Arguments:
@@ -91,7 +91,7 @@ cjv uninstall lts-1.0.0 -y
 Updates a specified channel or all installed tracking channels. Explicitly installed versions remain fixed.
 
 ```text
-cjv update [toolchain] [--no-self-update]
+cjv update [toolchain]... [--no-self-update] [--force] [--allow-downgrade]
 ```
 
 Arguments:
@@ -483,7 +483,7 @@ Arguments:
 
 - `[toolchain]` (optional): the toolchain to set as the default. When omitted, show the current default. Pass `none` to clear the default setting.
 
-A cross-compilation target variant (such as `lts-1.0.0-ohos`) cannot be set as the active or default toolchain; use the host toolchain and configure it through targets. Setting a toolchain that is not yet installed gives a warn but is not blocked.
+A cross-compilation target variant (such as `lts-1.0.0-ohos`) cannot be set as the active or default toolchain; use the host toolchain and configure it through targets. Setting an official toolchain that is not yet installed installs it first. An installation failure preserves the previous default.
 
 ```bash
 # Show the current default
@@ -638,3 +638,28 @@ cjv init -y --default-toolchain none --no-modify-path
 ```
 
 For installation methods, see [Installing cjv](installation/index.md).
+
+## Target management and installation policy
+
+```bash
+cjv +sts target list
+cjv target list --toolchain sts --installed
+cjv +sts target add ohos android
+cjv +sts target remove ohos
+cjv +sts component add stdx --target android
+cjv which cjc --toolchain sts
+cjv install lts sts
+cjv uninstall lts-1.0.0 sts-1.1.0 --yes
+```
+
+A leading global `+toolchain` selects the toolchain for management commands. An explicit `--toolchain` flag takes precedence. Install, update and uninstall accept multiple toolchains; install without arguments ensures the selected toolchain is installed. Setting a missing default installs it first and preserves the previous default if installation fails.
+
+`target add` uses the selected host's installed release without upgrading the host. `target list --installed` works offline. `install --target` remains the shortcut to install the host and cross SDKs together; rustup also supports this flag on toolchain installation.
+
+Channel installations prepare the host, all tracking cross SDKs and their components before publishing one transaction. Failed preparation or publication preserves the previous installation, and interruption recovery uses the same decision for every member. Explicit versions remain independent.
+
+Nightly chooses the newest published historical release satisfying the required targets and components without downgrading. `--allow-downgrade` permits an older compatible nightly. `--force` skips and removes unavailable optional components or targets; install also re-extracts the SDK. `--no-update` keeps an existing SDK release while adding targets or components, and cannot be combined with `--force`. A request with no additions works offline.
+
+Global `--quiet` / `-q` suppresses progress; `--verbose` enables debug logs. They are mutually exclusive. `component list --quiet` keeps its existing names-only behavior. `cjv check` checks both toolchain releases and cjv releases without downloading or replacing executables.
+
+Downloads with SHA256 retain partial files across failed or interrupted commands. The next command resumes through HTTP Range and verifies the complete file. Archives without checksums only resume within the same command.

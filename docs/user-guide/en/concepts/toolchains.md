@@ -150,3 +150,9 @@ cjv show active
 ```
 
 Setting the default toolchain, setting a directory override, and selecting a toolchain through an environment variable or `cangjie-sdk.toml` are the mechanisms that decide which toolchain is active in a given context. The priority rules for this are detailed in [Targets and overrides](targets-overrides.md) and [The toolchain file](../toolchain-file.md).
+
+## Hosts and shorthand selectors
+
+Use `sts-linux-x64` or `sts-1.2.0-darwin-arm64` to select a host platform. Different platforms have independent installations. An explicit name for the current default platform and the legacy unsuffixed name resolve to one installation so cross SDKs have one host owner. Existing unsuffixed directories remain compatible.
+
+`sts-1.2` or bare `1.2` chooses the latest published stable patch release. `nightly-2026-10-04` chooses the newest published nightly for that date. Installations use concrete release directories, and running or uninstalling shorthand selectors resolves the concrete installation. Date availability depends on the manifest's retained history; cjv never invents download URLs.
