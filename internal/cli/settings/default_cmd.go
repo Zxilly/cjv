@@ -1,10 +1,9 @@
 package settings
 
 import (
-	"errors"
+	"context"
 	"fmt"
 	"io"
-	"os"
 
 	"github.com/Zxilly/cjv/internal/cli/output"
 	"github.com/Zxilly/cjv/internal/config"
@@ -26,8 +25,10 @@ func newDefaultCommand() *cobra.Command {
 }
 
 func runDefault(cmd *cobra.Command, args []string) error {
-	if err := toolchain.RecoverHomeContext(cmd.Context()); err != nil {
-		return err
+	if len(args) == 0 || args[0] == "none" {
+		if err := toolchain.RecoverHomeContext(cmd.Context()); err != nil {
+			return err
+		}
 	}
 	jsonMode, _ := cmd.Flags().GetBool("json")
 	quiet, _ := cmd.Flags().GetBool("quiet")
@@ -60,26 +61,20 @@ func runDefault(cmd *cobra.Command, args []string) error {
 
 	// Validate and normalize toolchain name.
 	// Accept both standard names (lts, sts-1.0) and custom/linked names (my-sdk).
-	parsed, err := toolchain.ParseToolchainName(name)
+	parsed, err := toolchain.ParseActiveName(name)
 	if err != nil {
-		return err
-	}
-	if err := ensureActiveToolchainName(name, parsed); err != nil {
 		return err
 	}
 	normalizedName := parsed.String()
 
-	if _, findErr := toolchain.FindInstalled(parsed); findErr != nil {
-		if !errors.Is(findErr, os.ErrNotExist) {
-			return findErr
-		}
-		sink := progress.Discard
-		if !jsonMode && !quiet {
-			sink = progress.NewText(cmd.OutOrStdout(), cmd.ErrOrStderr())
-		}
-		if err := lifecycle.Install(cmd.Context(), lifecycle.InstallRequest{Toolchain: normalizedName}, lifecycle.Options{Progress: sink}); err != nil {
-			return err
-		}
+	sink := progress.Discard
+	if !jsonMode && !quiet {
+		sink = progress.NewText(cmd.OutOrStdout(), cmd.ErrOrStderr())
+	}
+	if _, _, err := toolchain.PrepareActive(cmd.Context(), normalizedName, func(ctx context.Context) error {
+		return lifecycle.Install(ctx, lifecycle.InstallRequest{Toolchain: normalizedName}, lifecycle.Options{Progress: sink})
+	}); err != nil {
+		return err
 	}
 
 	if _, err := sf.Update(config.SettingsUpdate{DefaultToolchain: &normalizedName}); err != nil {
@@ -99,17 +94,6 @@ func (r defaultResult) Text() string {
 		return i18n.T("DefaultCleared", nil)
 	}
 	return i18n.T("ToolchainSetDefault", i18n.MsgData{"Name": r.Toolchain})
-}
-
-func ensureActiveToolchainName(input string, parsed toolchain.ToolchainName) error {
-	if parsed.Target == "" {
-		return nil
-	}
-	hostName := toolchain.ToolchainName{
-		Channel: parsed.Channel,
-		Version: parsed.Version,
-	}.String()
-	return fmt.Errorf("target variant %q cannot be used as an active toolchain; use host toolchain %q and configure targets instead", input, hostName)
 }
 
 func showDefault(w io.Writer) error {

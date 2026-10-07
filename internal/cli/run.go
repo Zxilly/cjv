@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -58,22 +59,15 @@ flagLoop:
 	toolName := args[1]
 	toolArgs := args[2:]
 
-	if err := toolchain.RecoverHomeContext(cmd.Context()); err != nil {
-		return err
-	}
-	tcDir, _, parsed, findErr := toolchain.FindActiveDir(tcInput)
-	if findErr != nil {
-		if install && !parsed.IsCustom() {
-			if installErr := lifecycle.Install(ctx, lifecycle.InstallRequest{Toolchain: tcInput}, app.lifecycleOptions()); installErr != nil {
-				return installErr
-			}
-			tcDir, findErr = toolchain.FindInstalled(parsed)
-			if findErr != nil {
-				return &cjverr.ToolchainNotInstalledError{Name: tcInput}
-			}
-		} else {
-			return &cjverr.ToolchainNotInstalledError{Name: tcInput}
+	var installMissing func(context.Context) error
+	if install {
+		installMissing = func(ctx context.Context) error {
+			return lifecycle.Install(ctx, lifecycle.InstallRequest{Toolchain: tcInput}, app.lifecycleOptions())
 		}
+	}
+	tcDir, _, err := toolchain.PrepareActive(ctx, tcInput, installMissing)
+	if err != nil {
+		return err
 	}
 
 	count := proxy.GetRecursionCount()

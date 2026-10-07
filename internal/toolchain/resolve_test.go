@@ -1,14 +1,80 @@
 package toolchain
 
 import (
+	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
 
+	"github.com/Zxilly/cjv/internal/cjverr"
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func TestPrepareActiveRevalidatesInstallerResult(t *testing.T) {
+	for _, installed := range []bool{false, true} {
+		t.Run(map[bool]string{false: "empty-success", true: "published-host"}[installed], func(t *testing.T) {
+			home := t.TempDir()
+			config.IsolateForTest(t, home)
+			calls := 0
+			dir, name, err := PrepareActive(t.Context(), "lts-1.0.5", func(ctx context.Context) error {
+				calls++
+				if installed {
+					return os.MkdirAll(filepath.Join(home, "toolchains", "lts-1.0.5"), 0o755)
+				}
+				return nil
+			})
+			require.Equal(t, 1, calls)
+			require.Equal(t, "lts-1.0.5", name)
+			if installed {
+				require.NoError(t, err)
+				require.Equal(t, filepath.Join(home, "toolchains", name), dir)
+			} else {
+				var missing *cjverr.ToolchainNotInstalledError
+				require.ErrorAs(t, err, &missing, "an installer returning nil is not proof of an installed toolchain")
+				require.Empty(t, dir)
+			}
+		})
+	}
+}
+
+func TestPrepareActivePreservesInstallationAndFilesystemErrors(t *testing.T) {
+	home := t.TempDir()
+	config.IsolateForTest(t, home)
+	expected := errors.New("download failed")
+	_, _, err := PrepareActive(t.Context(), "lts-1.0.5", func(ctx context.Context) error { return expected })
+	require.ErrorIs(t, err, expected)
+
+	missingPath := filepath.Join(home, "missing-absolute-sdk")
+	_, _, err = PrepareActive(t.Context(), missingPath, func(ctx context.Context) error {
+		t.Fatal("a missing custom path must not install an official toolchain")
+		return nil
+	})
+	var pathErr *os.PathError
+	require.ErrorAs(t, err, &pathErr)
+	require.ErrorIs(t, err, os.ErrNotExist)
+}
+
+func TestSelectActivePrefersOverrideThenEnvironment(t *testing.T) {
+	settings := config.DefaultSettings()
+	settings.DefaultToolchain = "lts-1.0.5"
+	t.Setenv(config.EnvToolchain, "nightly-202501010000")
+	selected, err := SelectActive(&settings, nil, "sts-2.0.0")
+	require.NoError(t, err)
+	assert.Equal(t, config.ToolchainConfig{Name: "sts-2.0.0"}, selected)
+	selected, err = SelectActive(&settings, nil, "")
+	require.NoError(t, err)
+	assert.Equal(t, config.ToolchainConfig{Name: "nightly-202501010000", Source: config.SourceEnv}, selected)
+}
+
+func TestSelectActiveReturnsSettingsErrorWhenNoOverride(t *testing.T) {
+	t.Setenv(config.EnvToolchain, "")
+	expected := errors.New("settings failed")
+	_, err := SelectActive(nil, expected, "")
+	assert.ErrorIs(t, err, expected)
+}
 
 // Tests for ResolveActiveToolchain — determines which toolchain the
 // user wants to use based on env var, overrides, toolchain file, or default.

@@ -29,6 +29,28 @@ func TestShouldAutoInstall_RespectsExplicitSetting(t *testing.T) {
 	assert.False(t, shouldAutoInstall(&s), "should not auto-install when explicitly disabled")
 }
 
+func TestActivePreparesHostThroughProductionInstaller(t *testing.T) {
+	home := t.TempDir()
+	config.IsolateForTest(t, home)
+	t.Setenv(config.EnvNoPathSetup, "1")
+	server := testutil.ValidMockServer(t)
+	sf, err := config.DefaultSettingsFile()
+	require.NoError(t, err)
+	url := server.URL + "/sdk-versions.json"
+	autoInstall := true
+	_, err = sf.Update(config.SettingsUpdate{ManifestURL: &url, AutoInstall: &autoInstall})
+	require.NoError(t, err)
+	require.Nil(t, AutoInstallFunc, "exercise the production lifecycle adapter")
+
+	active, err := Active(t.Context(), "lts")
+	require.NoError(t, err)
+	assert.Equal(t, "lts", active.Name)
+	assert.Equal(t, filepath.Join(home, "toolchains", "lts"), active.Dir)
+	installed, err := toolchain.InstalledRelease(active.Dir)
+	require.NoError(t, err)
+	assert.Equal(t, "lts-1.0.5", installed.String())
+}
+
 func TestLegacyMigrationKeepsTargetsAlignedWithSelectedHost(t *testing.T) {
 	for _, matching := range []bool{false, true} {
 		t.Run(map[bool]string{false: "missing", true: "installed"}[matching], func(t *testing.T) {
@@ -63,34 +85,6 @@ func TestLegacyMigrationKeepsTargetsAlignedWithSelectedHost(t *testing.T) {
 
 func TestShouldAutoInstall_NilSettingsReturnsFalse(t *testing.T) {
 	assert.False(t, shouldAutoInstall(nil), "should return false when settings is nil")
-}
-
-func TestResolveNamePrefersOverrideThenEnvironment(t *testing.T) {
-	settings := config.DefaultSettings()
-	settings.DefaultToolchain = "lts-1.0.5"
-
-	name, source, targets, components, err := resolveName(&settings, nil, "sts-2.0.0")
-	require.NoError(t, err)
-	assert.Equal(t, "sts-2.0.0", name)
-	assert.Equal(t, config.SourceUnknown, source)
-	assert.Nil(t, targets)
-	assert.Nil(t, components)
-
-	t.Setenv(config.EnvToolchain, "nightly-202501010000")
-	name, source, targets, components, err = resolveName(&settings, nil, "")
-	require.NoError(t, err)
-	assert.Equal(t, "nightly-202501010000", name)
-	assert.Equal(t, config.SourceEnv, source)
-	assert.Nil(t, targets)
-	assert.Nil(t, components)
-}
-
-func TestResolveNameReturnsSettingsErrorWhenNoOverride(t *testing.T) {
-	expected := errors.New("settings failed")
-
-	_, _, _, _, err := resolveName(nil, expected, "")
-
-	assert.ErrorIs(t, err, expected)
 }
 
 func TestActiveRejectsTargetVariantAsActiveToolchain(t *testing.T) {

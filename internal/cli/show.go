@@ -97,35 +97,22 @@ func (r showDefaultResult) Text() string {
 	return b.String()
 }
 
-func gatherActive() (*showActiveResult, error) {
-	_, name, source, err := toolchain.ResolveActiveToolchain()
+func (app *application) gatherActive() (*showActiveResult, error) {
+	_, name, source, err := toolchain.InspectActive(app.rootCmd.Context(), app.selector)
+	provenance := source.String()
+	if app.selector != "" {
+		provenance = "command line"
+	}
 	if err != nil {
 		if notInstalled, ok := errors.AsType[*cjverr.ToolchainNotInstalledError](err); ok {
 			return &showActiveResult{
 				Name:   notInstalled.Name,
-				Source: source.String(),
+				Source: provenance,
 			}, nil
 		}
 		return nil, err
 	}
-	return &showActiveResult{Name: name, Source: source.String(), Installed: true}, nil
-}
-
-func (app *application) gatherActive() (*showActiveResult, error) {
-	if err := toolchain.RecoverHome(); err != nil {
-		return nil, err
-	}
-	if app.selector == "" {
-		return gatherActive()
-	}
-	_, name, _, err := toolchain.FindActiveDir(app.selector)
-	if err != nil {
-		if errors.As(err, new(*cjverr.ToolchainNotInstalledError)) {
-			return &showActiveResult{Name: app.selector, Source: "command line"}, nil
-		}
-		return nil, err
-	}
-	return &showActiveResult{Name: name, Source: "command line", Installed: true}, nil
+	return &showActiveResult{Name: name, Source: provenance, Installed: true}, nil
 }
 
 func gatherInstalled() (showInstalledResult, error) {

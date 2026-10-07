@@ -1,6 +1,7 @@
 package toolchain
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -45,13 +46,9 @@ func FindActiveDir(rawName string) (dir, displayName string, parsed ToolchainNam
 		}
 		return filepath.Clean(rawName), rawName, ToolchainName{Custom: rawName}, nil
 	}
-	parsed, err = ParseToolchainName(rawName)
+	parsed, err = ParseActiveName(rawName)
 	if err != nil {
-		return "", rawName, ToolchainName{}, err
-	}
-	if parsed.Target != "" {
-		hostName := ToolchainName{Channel: parsed.Channel, Version: parsed.Version}.String()
-		return "", rawName, parsed, fmt.Errorf("target variant %q cannot be used as the active toolchain; use host toolchain %q and configure targets instead", rawName, hostName)
+		return "", rawName, parsed, err
 	}
 
 	found, findErr := FindInstalled(parsed)
@@ -66,29 +63,82 @@ func FindActiveDir(rawName string) (dir, displayName string, parsed ToolchainNam
 	return found, filepath.Base(found), parsed, nil
 }
 
+// ParseActiveName validates a named host toolchain, including names stored in
+// defaults and directory overrides. Target SDKs cannot become active hosts.
+func ParseActiveName(rawName string) (ToolchainName, error) {
+	parsed, err := ParseToolchainName(rawName)
+	if err != nil {
+		return parsed, err
+	}
+	if parsed.Target != "" {
+		hostName := ToolchainName{Channel: parsed.Channel, Version: parsed.Version}.String()
+		return parsed, fmt.Errorf("target variant %q cannot be used as the active toolchain; use host toolchain %q and configure targets instead", rawName, hostName)
+	}
+	return parsed, nil
+}
+
+// PrepareActive recovers installed state and locates a valid active host. A
+// non-nil install permits installation only for a genuinely missing official
+// toolchain; invalid selections and filesystem failures are never retried as
+// installs. Installation must leave a valid host, verified through the same
+// lookup as the initial attempt. Callers own installation policy and progress.
+func PrepareActive(ctx context.Context, rawName string, install func(context.Context) error) (dir, displayName string, err error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if err := RecoverHomeContext(ctx); err != nil {
+		return "", rawName, err
+	}
+	dir, displayName, parsed, err := FindActiveDir(rawName)
+	var missing *cjverr.ToolchainNotInstalledError
+	if install == nil || !errors.As(err, &missing) || parsed.IsCustom() {
+		return dir, displayName, err
+	}
+	if err := install(ctx); err != nil {
+		return "", rawName, err
+	}
+	dir, displayName, _, err = FindActiveDir(rawName)
+	return dir, displayName, err
+}
+
+// SelectActive applies the common selector precedence while retaining project
+// targets and components. An explicit selector or environment selection can
+// still be inspected when unrelated settings are unreadable.
+func SelectActive(settings *config.Settings, settingsErr error, override string) (config.ToolchainConfig, error) {
+	if override != "" {
+		return config.ToolchainConfig{Name: override}, nil
+	}
+	if name := os.Getenv(config.EnvToolchain); name != "" {
+		return config.ToolchainConfig{Name: name, Source: config.SourceEnv}, nil
+	}
+	if settingsErr != nil {
+		return config.ToolchainConfig{}, settingsErr
+	}
+	cwd, err := os.Getwd()
+	if err != nil {
+		return config.ToolchainConfig{}, fmt.Errorf("failed to get working directory: %w", err)
+	}
+	return config.ResolveToolchainConfig(settings, cwd)
+}
+
 // ResolveActiveToolchain resolves the current active toolchain directory, name,
 // and source WITHOUT auto-installing (used by status/management commands). On
 // error, tcName may still contain the configured (but uninstalled) toolchain
 // name. resolve.Active is the auto-installing counterpart for the proxy path.
 func ResolveActiveToolchain() (tcDir string, tcName string, source config.OverrideSource, err error) {
-	if err := RecoverHome(); err != nil {
-		return "", "", 0, err
-	}
-	cwd, err := os.Getwd()
-	if err != nil {
-		return "", "", 0, fmt.Errorf("failed to get working directory: %w", err)
-	}
-	_, settings, err := config.LoadDefaultSettings()
-	if err != nil {
-		return "", "", 0, err
-	}
+	return InspectActive(context.Background(), "")
+}
 
-	rawName, source, err := config.ResolveToolchain(settings, cwd)
+// InspectActive resolves selection and provenance without installing content.
+func InspectActive(ctx context.Context, override string) (tcDir string, tcName string, source config.OverrideSource, err error) {
+	_, settings, settingsErr := config.LoadDefaultSettings()
+	selected, err := SelectActive(settings, settingsErr, override)
 	if err != nil {
 		return "", "", 0, err
 	}
+	rawName, source := selected.Name, selected.Source
 
-	dir, displayName, _, err := FindActiveDir(rawName)
+	dir, displayName, err := PrepareActive(ctx, rawName, nil)
 	if err != nil {
 		var notInstalled *cjverr.ToolchainNotInstalledError
 		if !errors.As(err, &notInstalled) {

@@ -33,11 +33,8 @@ func newOverrideSetCommand() *cobra.Command {
 			tc := args[0]
 
 			// Validate and normalize toolchain name
-			parsed, err := toolchain.ParseToolchainName(tc)
+			parsed, err := toolchain.ParseActiveName(tc)
 			if err != nil {
-				return err
-			}
-			if err := ensureActiveToolchainName(tc, parsed); err != nil {
 				return err
 			}
 			// Normalize standard names; accept custom names as-is

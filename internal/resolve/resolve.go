@@ -44,15 +44,8 @@ func Active(ctx context.Context, tcOverride string) (ActiveToolchain, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	if err := toolchain.RecoverHomeContext(ctx); err != nil {
-		if ctx.Err() != nil {
-			return ActiveToolchain{}, ctx.Err()
-		}
-		return ActiveToolchain{}, err
-	}
-
 	_, settings, settingsErr := config.LoadDefaultSettings()
-	tcName, source, targets, components, err := resolveName(settings, settingsErr, tcOverride)
+	selected, err := toolchain.SelectActive(settings, settingsErr, tcOverride)
 	if err != nil {
 		return ActiveToolchain{}, err
 	}
@@ -60,26 +53,22 @@ func Active(ctx context.Context, tcOverride string) (ActiveToolchain, error) {
 		slog.Warn("failed to load settings", "error", settingsErr)
 	}
 
-	// Share the parse → reject-target → find-installed core with
-	// toolchain.ResolveActiveToolchain; the auto-install retry and the
-	// target/component ensuring below are the deliberate extra behavior of the
-	// proxy path.
+	tcName, source, targets, components := selected.Name, selected.Source, selected.Targets, selected.Components
 	sink := autoInstallProgress()
-	tcDir, displayName, parsed, err := toolchain.FindActiveDir(tcName)
-	if err != nil {
-		var notInstalled *cjverr.ToolchainNotInstalledError
-		installFunc := autoInstallFunc(sink)
-		if errors.As(err, &notInstalled) && !parsed.IsCustom() && shouldAutoInstall(settings) && installFunc != nil {
+	var install func(context.Context) error
+	if installFunc := autoInstallFunc(sink); shouldAutoInstall(settings) && installFunc != nil {
+		install = func(ctx context.Context) error {
 			sink.Report(progress.Event{Kind: progress.AutoInstalling, Subject: tcName})
 			if installErr := installFunc(ctx, tcName, targets); installErr != nil {
 				sink.Report(progress.Event{Kind: progress.AutoInstallFailed, Subject: tcName, Err: installErr})
-				return ActiveToolchain{}, &cjverr.ToolchainNotInstalledError{Name: tcName}
+				return &cjverr.ToolchainNotInstalledError{Name: tcName}
 			}
-			tcDir, displayName, _, err = toolchain.FindActiveDir(tcName)
+			return nil
 		}
-		if err != nil {
-			return ActiveToolchain{}, err
-		}
+	}
+	tcDir, displayName, err := toolchain.PrepareActive(ctx, tcName, install)
+	if err != nil {
+		return ActiveToolchain{}, err
 	}
 
 	if err := ensureTargets(ctx, displayName, tcDir, settings, targets, sink); err != nil {
@@ -157,27 +146,6 @@ func ActiveTarget(ctx context.Context, tcOverride, target string) (ActiveToolcha
 		Targets:    []string{target},
 		Components: nil,
 	}, nil
-}
-
-func resolveName(settings *config.Settings, settingsErr error, tcOverride string) (string, config.OverrideSource, []string, []string, error) {
-	if tcOverride != "" {
-		return tcOverride, config.SourceUnknown, nil, nil, nil
-	}
-	if envTC := os.Getenv(config.EnvToolchain); envTC != "" {
-		return envTC, config.SourceEnv, nil, nil, nil
-	}
-	if settingsErr != nil {
-		return "", config.SourceUnknown, nil, nil, settingsErr
-	}
-	cwd, err := os.Getwd()
-	if err != nil {
-		return "", config.SourceUnknown, nil, nil, fmt.Errorf("failed to get working directory: %w", err)
-	}
-	resolved, err := config.ResolveToolchainConfig(settings, cwd)
-	if err != nil {
-		return "", config.SourceUnknown, nil, nil, err
-	}
-	return resolved.Name, resolved.Source, resolved.Targets, resolved.Components, nil
 }
 
 func ensureTargets(ctx context.Context, tcInput, tcDir string, settings *config.Settings, targets []string, sink progress.Sink) error {
