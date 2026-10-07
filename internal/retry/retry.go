@@ -4,6 +4,7 @@
 package retry
 
 import (
+	"context"
 	"math/rand/v2"
 	"time"
 )
@@ -12,17 +13,35 @@ import (
 // light jitter between attempts. It stops early on the first error for which
 // shouldRetry returns false and returns the last error seen.
 func Do(maxAttempts int, shouldRetry func(error) bool, fn func() error) error {
+	return DoContext(context.Background(), maxAttempts, shouldRetry, fn)
+}
+
+// DoContext also stops before an attempt or during backoff when ctx is canceled.
+// The operation remains responsible for respecting ctx while it is running.
+func DoContext(ctx context.Context, maxAttempts int, shouldRetry func(error) bool, fn func() error) error {
 	var err error
 	for i := range maxAttempts {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		err = fn()
 		if err == nil {
 			return nil
+		}
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return ctxErr
 		}
 		if !shouldRetry(err) {
 			return err
 		}
 		if i < maxAttempts-1 {
-			time.Sleep(delay(i))
+			timer := time.NewTimer(delay(i))
+			select {
+			case <-ctx.Done():
+				timer.Stop()
+				return ctx.Err()
+			case <-timer.C:
+			}
 		}
 	}
 	return err

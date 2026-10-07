@@ -18,31 +18,11 @@ import (
 	"strings"
 
 	"github.com/Zxilly/cjv/internal/cjverr"
-	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/fsops"
 	"github.com/Zxilly/cjv/internal/progress"
 )
 
-// nonRetriableError wraps an error that should not be retried (e.g. permanent HTTP 4xx).
-type nonRetriableError struct {
-	err error
-}
-
-func (e *nonRetriableError) Error() string { return e.err.Error() }
-func (e *nonRetriableError) Unwrap() error { return e.err }
-
 const maxProgressNameWidth = 48
-
-// getMaxDownloadRetries returns the number of download retry attempts.
-// Reads CJV_MAX_RETRIES at call time so tests can override via t.Setenv.
-func getMaxDownloadRetries() int {
-	if s := os.Getenv(config.EnvMaxRetries); s != "" {
-		if n, err := strconv.Atoi(s); err == nil && n >= 0 {
-			return n
-		}
-	}
-	return 3
-}
 
 // cacheKey returns the cache file name for a download.
 // If sha256Hex is provided, it is used directly; otherwise sha256(url) is used.
@@ -68,6 +48,9 @@ func DownloadCached(ctx context.Context, url, sha256Hex, cacheDir string, sink p
 // DownloadCachedWithName is like DownloadCached, but displayName labels the
 // transfer in progress events. The staged filename remains hash-keyed.
 func DownloadCachedWithName(ctx context.Context, url, sha256Hex, cacheDir, displayName string, sink progress.Sink) (string, error) {
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
 	sha256Hex = strings.ToLower(sha256Hex)
 	if sha256Hex != "" {
 		digest, err := hex.DecodeString(sha256Hex)
@@ -122,37 +105,26 @@ func DownloadCachedWithName(ctx context.Context, url, sha256Hex, cacheDir, displ
 		}
 	}
 
-	var lastErr error
-	for attempt := range getMaxDownloadRetries() + 1 {
-		if attempt > 0 {
-			slog.Info("retrying download", "attempt", attempt+1, "max", getMaxDownloadRetries()+1)
-		}
-
-		lastErr = downloadOnce(ctx, url, partialPath, displayName, sha256Hex, progress.Or(sink))
-		if lastErr == nil {
-			if sha256Hex == "" {
-				if err := verifyStagedFile(partialPath, sha256Hex); err != nil {
-					cleanupDownloadTemp(partialPath)
-					return "", fmt.Errorf("downloaded file is not a valid archive: %w", err)
-				}
+	err = retryTransfer(ctx, func() error {
+		return downloadOnce(ctx, url, partialPath, displayName, sha256Hex, progress.Or(sink))
+	})
+	if err == nil {
+		if sha256Hex == "" {
+			if err := verifyStagedFile(partialPath, sha256Hex); err != nil {
+				cleanupDownloadTemp(partialPath)
+				return "", fmt.Errorf("downloaded file is not a valid archive: %w", err)
 			}
-			if err := fsops.RenameRetry(partialPath, stagedPath); err != nil {
-				return "", fmt.Errorf("promote staged file %s: %w", stagedPath, err)
-			}
-			return stagedPath, nil
 		}
-
-		var nre *nonRetriableError
-		if errors.As(lastErr, &nre) {
-			cleanupDownloadTemp(partialPath)
-			break
+		if err := fsops.RenameRetry(partialPath, stagedPath); err != nil {
+			return "", fmt.Errorf("promote staged file %s: %w", stagedPath, err)
 		}
-		// Retriable error: keep .partial-* on disk for the next attempt.
+		return stagedPath, nil
 	}
-	if sha256Hex == "" {
+	var permanent *nonRetriableError
+	if sha256Hex == "" || errors.As(err, &permanent) {
 		cleanupDownloadTemp(partialPath)
 	}
-	return "", lastErr
+	return "", err
 }
 
 func downloadDisplayName(rawURL, explicitName string) string {
@@ -283,33 +255,24 @@ func verifyStagedFile(path, sha256Hex string) error {
 // Retries on transient failures. Transfer progress is reported to sink; nil
 // reports nothing.
 func DownloadFile(ctx context.Context, url, dest, sha256Hex string, sink progress.Sink) error {
-	var lastErr error
-	for attempt := range getMaxDownloadRetries() + 1 {
+	return retryTransfer(ctx, func() error {
 		tmpPath, err := newDownloadTempPath(dest)
 		if err != nil {
-			return err
+			return &nonRetriableError{err: err}
 		}
 
-		if attempt > 0 {
-			slog.Info("retrying download", "attempt", attempt+1, "max", getMaxDownloadRetries()+1)
+		err = downloadOnce(ctx, url, tmpPath, filepath.Base(dest), sha256Hex, progress.Or(sink))
+		if err == nil {
+			err = promoteDownloadedFile(tmpPath, dest)
 		}
-
-		lastErr = downloadOnce(ctx, url, tmpPath, filepath.Base(dest), sha256Hex, progress.Or(sink))
-		if lastErr == nil {
-			lastErr = promoteDownloadedFile(tmpPath, dest)
-		}
-		if lastErr == nil {
+		if err == nil {
 			return nil
 		}
 
 		cleanupDownloadTemp(tmpPath)
 
-		var nre *nonRetriableError
-		if errors.As(lastErr, &nre) {
-			break
-		}
-	}
-	return lastErr
+		return err
+	})
 }
 
 func newDownloadTempPath(dest string) (string, error) {
@@ -354,7 +317,7 @@ func downloadOnce(ctx context.Context, url, tmpPath, displayName, sha256Hex stri
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
-		return fmt.Errorf("create request: %w", err)
+		return &nonRetriableError{err: fmt.Errorf("create request: %w", err)}
 	}
 
 	if existingSize > 0 {
@@ -394,10 +357,7 @@ func downloadOnce(ctx context.Context, url, tmpPath, displayName, sha256Hex stri
 		}
 		return fmt.Errorf("cannot resume download: server rejected range for %s", url)
 	default:
-		if isNonRetriableHTTPStatus(resp.StatusCode) {
-			return &nonRetriableError{err: fmt.Errorf("HTTP %d for %s", resp.StatusCode, url)}
-		}
-		return fmt.Errorf("HTTP %d for %s", resp.StatusCode, url)
+		return transferHTTPError(resp.StatusCode, url)
 	}
 
 	// For SHA256 verification we need to hash the *complete* file, including
@@ -525,16 +485,4 @@ func verifyArchiveMagic(path string) error {
 	}
 
 	return fmt.Errorf("unrecognized archive header: %#x %#x", magic[0], magic[1])
-}
-
-func isNonRetriableHTTPStatus(statusCode int) bool {
-	if statusCode < http.StatusBadRequest || statusCode >= http.StatusInternalServerError {
-		return false
-	}
-	switch statusCode {
-	case http.StatusRequestTimeout, http.StatusTooManyRequests:
-		return false
-	default:
-		return true
-	}
 }

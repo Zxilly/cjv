@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"github.com/Zxilly/cjv/internal/config"
-	"github.com/Zxilly/cjv/internal/retry"
 )
 
 // MaxResponseSize limits HTTP metadata reads.
@@ -87,20 +86,18 @@ var errChecksumSidecarMalformed = errors.New("nightly checksum sidecar is malfor
 // represents an upstream release that relies on TLS transport integrity.
 func FetchNightlySHA256(ctx context.Context, assetURL string) (string, error) {
 	var sha string
-	err := retry.Do(getMaxDownloadRetries()+1,
-		func(e error) bool { return !errors.Is(e, errChecksumSidecarMalformed) },
-		func() error {
-			var fetchErr error
-			sha, fetchErr = fetchNightlySHA256Once(ctx, assetURL)
-			return fetchErr
-		})
+	err := retryTransfer(ctx, func() error {
+		var fetchErr error
+		sha, fetchErr = fetchNightlySHA256Once(ctx, assetURL)
+		return fetchErr
+	})
 	return sha, err
 }
 
 func fetchNightlySHA256Once(ctx context.Context, assetURL string) (string, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, assetURL+".sha256", nil)
 	if err != nil {
-		return "", err
+		return "", &nonRetriableError{err: err}
 	}
 	resp, err := HTTPClient().Do(req)
 	if err != nil {
@@ -112,7 +109,7 @@ func fetchNightlySHA256Once(ctx context.Context, assetURL string) (string, error
 		return "", nil
 	}
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("failed to fetch nightly checksum: HTTP %d", resp.StatusCode)
+		return "", fmt.Errorf("failed to fetch nightly checksum: %w", transferHTTPError(resp.StatusCode, assetURL+".sha256"))
 	}
 	body, err := io.ReadAll(io.LimitReader(resp.Body, MaxResponseSize))
 	if err != nil {
@@ -120,7 +117,7 @@ func fetchNightlySHA256Once(ctx context.Context, assetURL string) (string, error
 	}
 	sha := parseSHA256(string(body))
 	if sha == "" {
-		return "", errChecksumSidecarMalformed
+		return "", &nonRetriableError{err: errChecksumSidecarMalformed}
 	}
 	return sha, nil
 }
