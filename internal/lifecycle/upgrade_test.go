@@ -33,7 +33,7 @@ type upgradeFixture struct {
 	oldName        string
 	newName        string
 	sf             *config.SettingsFile
-	dist           *lifecycle.Distribution
+	dist           *lifecycle.InstallationDistribution
 	resolved       lifecycle.ResolvedToolchain
 	oldRoots       component.Roots
 	newRoots       component.Roots
@@ -116,7 +116,7 @@ func newUpgradeFixture(t *testing.T, targetVariant, missingComponent bool) upgra
 	}
 	_, err = sf.Update(config.SettingsUpdate{DefaultToolchain: &initialDefault, Overrides: map[string]string{filepath.Join(home, "project"): initialDefault}})
 	require.NoError(t, err)
-	d, err := lifecycle.OpenDistribution(lifecycle.Options{})
+	d, err := lifecycle.OpenInstallationDistribution(t.Context(), lifecycle.Options{})
 	require.NoError(t, err)
 	resolved, err := d.Resolve(t.Context(), toolchain.ToolchainName{Channel: toolchain.LTS}, tuple)
 	require.NoError(t, err)

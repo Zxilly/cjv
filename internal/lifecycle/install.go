@@ -88,7 +88,7 @@ func Install(ctx context.Context, req InstallRequest, opts Options) error {
 		return fmt.Errorf("cannot combine target variant toolchain name %q with --target; pass the host toolchain name and --target instead", req.Toolchain)
 	}
 
-	d, err := OpenDistribution(opts)
+	d, err := openInstallationDistribution(ctx, opts)
 	if err != nil {
 		return err
 	}

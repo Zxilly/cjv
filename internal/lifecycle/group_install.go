@@ -35,7 +35,7 @@ type groupMember struct {
 
 // installGroup prepares a host and all its tracking targets before changing any
 // installed root. The home lock is only held for snapshots and publication.
-func installGroup(ctx context.Context, d *Distribution, name toolchain.ToolchainName, rt ResolvedToolchain, req InstallRequest, opts Options) (bool, error) {
+func installGroup(ctx context.Context, d *installationDistribution, name toolchain.ToolchainName, rt ResolvedToolchain, req InstallRequest, opts Options) (bool, error) {
 	tracking := name.Version == ""
 	trackingHost := tracking && name.Target == ""
 	if name.Target != "" {
@@ -167,7 +167,7 @@ func installGroup(ctx context.Context, d *Distribution, name toolchain.Toolchain
 			}
 		}
 	}
-	if err := resolveGroup(ctx, d, name, members, opts); err != nil {
+	if err := resolveGroup(ctx, d.Distribution, name, members, opts); err != nil {
 		return false, err
 	}
 	downloads, err := config.DownloadsDir()
@@ -292,7 +292,7 @@ func installGroup(ctx context.Context, d *Distribution, name toolchain.Toolchain
 		if opts.preserveDefault {
 			return nil
 		}
-		return publishFirstDefault(d, identity, opts)
+		return publishFirstDefault(d.Distribution, identity, opts)
 	}
 	if len(changed) == 0 {
 		if err := publishDefault(); err != nil {

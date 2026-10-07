@@ -155,7 +155,7 @@ func TestStaleDistributionCannotReplaceNewerChannel(t *testing.T) {
 	home := updateHome(t)
 	selectRelease(t, "1.0.0")
 	require.NoError(t, Install(t.Context(), InstallRequest{Toolchain: "sts"}, quietLifecycleOptions()))
-	stale, err := OpenDistribution(quietLifecycleOptions())
+	stale, err := openInstallationDistribution(t.Context(), quietLifecycleOptions())
 	require.NoError(t, err)
 	rt, err := stale.Resolve(t.Context(), parse(t, "sts"), "")
 	require.NoError(t, err)

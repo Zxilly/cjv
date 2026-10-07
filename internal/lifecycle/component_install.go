@@ -90,6 +90,9 @@ func installComponents(ctx context.Context, d *Distribution, resolvedName string
 	if err := lock.Recover(); err != nil {
 		return err
 	}
+	if err := lock.MigrateLegacy(); err != nil {
+		return err
+	}
 	roots, err := component.RootsFor(resolvedName)
 	if err != nil {
 		return err

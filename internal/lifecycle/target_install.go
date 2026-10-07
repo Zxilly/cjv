@@ -27,7 +27,7 @@ func InstallTargetsForToolchain(ctx context.Context, input string, targets []str
 	if err != nil {
 		return err
 	}
-	d, err := OpenDistribution(opts)
+	d, err := openInstallationDistribution(ctx, opts)
 	if err != nil {
 		return err
 	}

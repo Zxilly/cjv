@@ -61,7 +61,7 @@ func UpdateInstalled(ctx context.Context, name toolchain.ToolchainName, opts Opt
 		}
 		return UpdateOutcome{Name: name.String(), Status: UpdatePinned}, nil
 	case name.Version == "":
-		d, err := OpenDistribution(opts)
+		d, err := openInstallationDistribution(ctx, opts)
 		if err != nil {
 			return UpdateOutcome{}, err
 		}
@@ -117,23 +117,15 @@ func UpdateAll(ctx context.Context, opts Options) (_ UpdateReport, updateErr err
 		}
 	}()
 
-	installed, err := toolchain.ListInstalled()
+	d, err := openInstallationDistribution(ctx, opts)
 	if err != nil {
 		return UpdateReport{}, err
 	}
-	if len(installed) == 0 {
+	if len(d.names) == 0 {
 		return UpdateReport{NoneInstalled: true}, nil
 	}
 
-	d, err := OpenDistribution(opts)
-	if err != nil {
-		return UpdateReport{}, err
-	}
-	// OpenDistribution has completed the one-time legacy migration.
-	installed, err = toolchain.ListInstalled()
-	if err != nil {
-		return UpdateReport{}, err
-	}
+	installed := d.names
 	var report UpdateReport
 	var errs []error
 	// A host owns the publication of its tracking cross SDKs. Do not process
@@ -181,7 +173,7 @@ func UpdateAll(ctx context.Context, opts Options) (_ UpdateReport, updateErr err
 	return report, errors.Join(errs...)
 }
 
-func upgradeChannelToolchain(ctx context.Context, d *Distribution, channel toolchain.Channel, currentName, tuple string, opts Options) (UpdateOutcome, error) {
+func upgradeChannelToolchain(ctx context.Context, d *installationDistribution, channel toolchain.Channel, currentName, tuple string, opts Options) (UpdateOutcome, error) {
 	selector := toolchain.ToolchainName{Channel: channel}
 	if installedName, err := toolchain.ParseToolchainName(currentName); err == nil {
 		selector.Host = installedName.Host

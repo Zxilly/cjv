@@ -65,10 +65,6 @@ func (app *application) runUpdate(cmd *cobra.Command, args []string) error {
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	if err := toolchain.RecoverHome(); err != nil {
-		slog.Warn("failed to recover install transaction", "error", err)
-	}
-
 	if len(args) == 0 && app.selector != "" {
 		args = []string{app.selector}
 	}
@@ -93,8 +89,9 @@ func (app *application) runUpdate(cmd *cobra.Command, args []string) error {
 
 	report, err := lifecycle.UpdateAll(ctx, app.lifecycleOptions())
 	result := updateResult{Updates: updateEntries(report.Outcomes), NoneInstalled: report.NoneInstalled}
-	// The self-update decision runs regardless of UpdateAll errors: it may
-	// have partially succeeded, and the original error is returned at the end.
+	// Ordinary update errors can still leave partial success. Cancellation
+	// suppresses self-update as well; it must not bootstrap a managed binary
+	// after the requested operation has already stopped.
 	if !report.NoneInstalled {
 		app.autoSelfUpdate(ctx, &result)
 	}
@@ -105,6 +102,9 @@ func (app *application) runUpdate(cmd *cobra.Command, args []string) error {
 // records the outcome on result: the applied update for the JSON payload and
 // its text, or the current version after a check.
 func (app *application) autoSelfUpdate(ctx context.Context, result *updateResult) {
+	if ctx.Err() != nil {
+		return
+	}
 	_, settings, err := config.LoadDefaultSettings()
 	if err != nil || app.noSelfUpdate || settings.AutoSelfUpdate == config.AutoSelfUpdateDisable {
 		return

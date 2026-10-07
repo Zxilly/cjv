@@ -23,18 +23,15 @@ type Distribution struct {
 	Source    *dist.Source
 	HostTuple string
 
-	progress  progress.Sink
-	noteOnce  sync.Once
-	installed map[string]toolchain.Installation
+	progress progress.Sink
+	noteOnce sync.Once
 }
 
 // OpenDistribution loads the user settings and resolves the distribution
 // source and host tuple they select. opts carries the progress sink the
-// operation's manifest note and checksum warning go to.
+// operation's manifest note and checksum warning go to. Remote catalog reads
+// neither lock nor recover the local installations.
 func OpenDistribution(opts Options) (*Distribution, error) {
-	if err := toolchain.RecoverHome(); err != nil {
-		return nil, err
-	}
 	sf, settings, err := config.LoadDefaultSettings()
 	if err != nil {
 		return nil, err
@@ -47,12 +44,33 @@ func OpenDistribution(opts Options) (*Distribution, error) {
 	if err != nil {
 		return nil, err
 	}
-	lock, err := toolchain.LockHome(context.Background())
+	return &Distribution{File: sf, Settings: settings, Source: source, HostTuple: hostTuple, progress: opts.sink()}, nil
+}
+
+// installationDistribution captures the local state that an installation was
+// resolved against. Publication rechecks these records before replacing roots.
+// Keeping it distinct from Distribution makes recovery and snapshot ownership
+// explicit without burdening remote catalog readers.
+type installationDistribution struct {
+	*Distribution
+	names     []string
+	installed map[string]toolchain.Installation
+}
+
+func openInstallationDistribution(ctx context.Context, opts Options) (*installationDistribution, error) {
+	lock, err := toolchain.LockHome(ctx)
 	if err != nil {
 		return nil, err
 	}
 	defer lock.Close() //nolint:errcheck
 	if err := lock.Recover(); err != nil {
+		return nil, err
+	}
+	if err := lock.MigrateLegacy(); err != nil {
+		return nil, err
+	}
+	d, err := OpenDistribution(opts)
+	if err != nil {
 		return nil, err
 	}
 	names, err := toolchain.ListInstalled()
@@ -69,7 +87,7 @@ func OpenDistribution(opts Options) (*Distribution, error) {
 			installed[name] = record
 		}
 	}
-	return &Distribution{File: sf, Settings: settings, Source: source, HostTuple: hostTuple, progress: opts.sink(), installed: installed}, nil
+	return &installationDistribution{Distribution: d, names: names, installed: installed}, nil
 }
 
 // TargetTuple composes the host tuple with a cross-compile environment such

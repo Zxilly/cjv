@@ -2,13 +2,20 @@ package lifecycle
 
 import (
 	"context"
-	"github.com/Zxilly/cjv/internal/toolchain"
 	"testing"
+
+	"github.com/Zxilly/cjv/internal/toolchain"
 )
+
+type InstallationDistribution = installationDistribution
+
+func OpenInstallationDistribution(ctx context.Context, opts Options) (*InstallationDistribution, error) {
+	return openInstallationDistribution(ctx, opts)
+}
 
 // UpgradeToolchain exposes the production group installer with a caller-chosen
 // identity, so tests can exercise replacement without another channel lookup.
-func UpgradeToolchain(ctx context.Context, identity string, rt ResolvedToolchain, d *Distribution, opts Options) (bool, error) {
+func UpgradeToolchain(ctx context.Context, identity string, rt ResolvedToolchain, d *InstallationDistribution, opts Options) (bool, error) {
 	name, err := toolchain.ParseToolchainName(identity)
 	if err != nil {
 		return false, err

@@ -111,6 +111,9 @@ func (app *application) runToolchainListRemoteSingle(ctx context.Context, cmd *c
 		result.Channels = append(result.Channels, entry)
 	}
 
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	return app.output.RenderTo(cmdOutput(cmd), result)
 }
 
@@ -157,6 +160,9 @@ func (app *application) runToolchainListRemoteAllPlatforms(ctx context.Context, 
 		result.Channels = append(result.Channels, entry)
 	}
 
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	return app.output.RenderTo(cmdOutput(cmd), result)
 }
 
