@@ -47,29 +47,35 @@ docs/           两本 mdBook（见“文档站”一章）
 
 ### `lifecycle`：安装与内容生命周期
 
-`internal/lifecycle` 管理官方 SDK、交叉 SDK、组件、自定义安装及卸载。`OpenDistribution` 一次读取设置、主机平台和分发源；`Distribution.Resolve` 解析通道、具体版本、minor 和日期选择器。`Install(ctx, InstallRequest{Toolchain, Targets, Components, Force, NoUpdate}, opts)` 服务 CLI 与代理自动安装。`Force` 统一映射为 `Options.AllowMissing`，不再触发同版本重装；`Options.AllowDowngrade` 控制 nightly 降级，`Progress` 和 `ConfigurePath` 分别控制展示和首次安装的 PATH 配置。
+`internal/lifecycle` 管理官方 SDK、交叉 SDK、组件、自定义安装及卸载。`OpenDistribution` 读取设置、主机平台和分发源，不锁定、恢复或扫描本地安装，因此本地发布或恢复受阻时仍可读取远程目录。`Distribution.Resolve` 解析通道、具体版本、minor 和日期选择器。安装操作打开 `installationDistribution`：在可响应上下文取消的 home 锁内恢复中断操作、迁移旧布局，并取得设置和安装记录快照；发布前再次检查快照，避免覆盖已经变化的内容。`Install(ctx, InstallRequest{Toolchain, Targets, Components, Force, NoUpdate}, opts)` 服务 CLI 与代理自动安装。`Force` 统一映射为 `Options.AllowMissing`，不再触发同版本重装；`Options.AllowDowngrade` 控制 nightly 降级，`Progress` 和 `ConfigurePath` 分别控制展示和首次安装的 PATH 配置。
 
 `group_install.go` 在安装锁下先取得安装记录、组件选择及宿主依赖的快照，准备期间释放 home 锁。主机操作准备自身及所有同平台跟踪 targets；直接指定交叉 SDK 时使用相同流程且不发布默认工具链。未变化的 SDK 复用原内容，只准备新增组件。nightly 根据已发布历史解析完整的组件和目标集合，缺失项默认阻止升级或触发兼容版本回溯；AllowMissing 允许跳过并移除缺失项，校验或网络错误仍使操作失败。
 
 准备完成后重新获取 home 锁，检查依赖和快照，再由 `publication.go` 通过 `fstx.NewToolchainGroupTransaction` 一起替换 SDK、stdx 与文档根。事务包含所有成员的路径约束；失败及进程中断恢复使用同一提交或回滚决策。固定版本与其他主机独立保留，SDK 去重仅作用于符合来源与内容要求的文件。代理补齐目标保留宿主版本和默认选择。
 
-`UpdateInstalled` 更新指定通道，`UpdateAll` 遍历跟踪通道、跳过固定和自定义安装，交叉 SDK 由对应主机更新。独立目标入口也使用 group 策略。批量更新继续处理单项失败并返回聚合错误，仅全部成功时清理下载暂存区，失败时保留可续传分段。`InstallComponents`、目录链接、URL 和本地归档安装维持各自的组件替换或同名覆盖参数；自定义安装仍由 `resolved_install.go` 的放置流程负责。随包 stdx 可能在 SDK 安装后失败，单独记录部分成功。
+受管组件安装采用相同的准备和再次校验顺序。`component_publication.go` 暂存所选组件根及其清单，再通过一个 `fstx.NewToolchainTransaction` 发布整批组件。内容和元数据共用持久化提交决策，普通错误与进程中断都由 home 恢复流程处理。已有 SDK 内容留在原处，成功事件只在整批提交后发出。
+
+`UpdateInstalled` 更新指定通道，`UpdateAll` 先恢复本地状态再判断是否存在安装，随后遍历跟踪通道、跳过固定和自定义安装，交叉 SDK 由对应主机更新。独立目标入口也使用 group 策略。批量更新继续处理单项失败并返回聚合错误，仅全部成功时清理下载暂存区，失败时保留可续传分段。`InstallComponents`、目录链接、URL 和本地归档安装维持各自的组件替换或同名覆盖参数；自定义安装仍由 `resolved_install.go` 的放置流程负责。随包 stdx 在 SDK 发布后、home 锁释放前安装，准备生命周期覆盖这两步；stdx 失败仍独立于已提交的 SDK 记录部分成功。
 
 ### `resolve`：活动工具链解析
 
-`internal/resolve` 回答“现在该用哪个工具链”。`Active` 综合命令行的 `+toolchain` 覆盖、`CJV_TOOLCHAIN` 环境变量、目录级与全局的 override、默认设置，定出活动工具链的名字和目录，连同它的目标平台和组件一起返回成 `ActiveToolchain`。解析过程中如果工具链没装，它能通过 `AutoInstallFunc` 这个测试缝触发自动安装；生产环境里这个缝默认接到 `lifecycle`，这样 `resolve` 不必反向依赖 `cli`。自动安装的进度（包括它自己的“正在自动安装”与失败提示）和 `cjv install` 一样发到一个 `progress.Sink`：代理路径在任何 renderer 之前运行，stdout 属于被代理的工具，所以它用写到 stderr 的 `progress.Text`。
+`internal/resolve` 回答“现在该用哪个工具链”。`Active` 通过 `toolchain.SelectActive` 共用命令行 `+toolchain`、`CJV_TOOLCHAIN`、目录级与全局 override、默认设置的优先级规则。随后 `toolchain.PrepareActive` 恢复本地状态、校验所选宿主并定位安装目录。`Active`、`cjv run` 和状态检查共用这套准备策略：仅当官方工具链确实缺失时调用可选的安装函数，安装后再用相同查找流程校验结果。无效的宿主选择、损坏的记录和其他文件系统错误直接返回，不会触发安装。是否允许安装由调用方决定：`run --install` 显式启用，`Active` 遵循 `auto_install`，状态检查不传安装函数。
+
+`Active` 还会补齐项目要求的 targets 和组件，并返回包含解析目录及配置来源的 `ActiveToolchain`。`AutoInstallFunc` 与 `AutoInstallComponentsFunc` 保留为测试缝，生产实现默认调用 `lifecycle`，因此 `resolve` 不依赖 `cli`。自动安装的进度（包括它自己的“正在自动安装”与失败提示）和 `cjv install` 一样发到一个 `progress.Sink`：代理路径在任何 renderer 之前运行，stdout 属于被代理的工具，所以它用写到 stderr 的 `progress.Text`。
 
 ### `toolchain` 与 `component`：已装内容的模型
 
-`internal/toolchain` 管已安装的 SDK：列出已装工具链（`ListInstalled`）、解析活动工具链目录，以及工具链名字的解析与版本比较。`RecoverHome` 是 CJV_HOME 唯一的恢复入口：先让 `fstx` 恢复 `toolchains/` 下未完成的事务，再删除废弃的 staging 树、把原目录已缺失的旧式备份放回去。恢复受阻时它原样返回 `fstx.RecoveryError`，不碰任何残留；需要恢复的备份不会作为普通残留直接删除。安装、升级、删除在改动文件前调用它；代理解析也先完成恢复，恢复失败会阻止使用不完整安装。`update` 启动时记录恢复警告，但后续分发源初始化仍会返回未解决的恢复错误。
+`internal/toolchain` 管已安装的 SDK：列出已装工具链（`ListInstalled`）、解析活动工具链目录，以及工具链名字的解析与版本比较。`RecoverHomeContext` 以可取消的方式获取 home 锁，再执行恢复和旧布局迁移；已经持锁的调用方使用锁上的 `Recover` 与 `MigrateLegacy` 方法。恢复先让 `fstx` 处理 `toolchains/` 下未完成的事务，再删除废弃的 staging 树、把原目录已缺失的旧式备份放回去。恢复受阻时原样返回 `fstx.RecoveryError`，不碰任何残留；需要恢复的备份不会作为普通残留直接删除。安装、升级、删除在改动文件前要求恢复成功；活动工具链准备也先完成恢复，恢复失败会阻止使用不完整安装。
 
 `internal/component` 管工具链的附加组件：`stdx`、`docs`、`stdx-docs`。每个组件是单独下载的归档，解压后的文件通过逐组件的清单（manifest）记录，从而能独立卸载。`component` 还定义了组件装到哪（`InstallLocation`：有的落进工具链目录树，有的作为纯数据放到 `<CJV_HOME>/docs/<tc>/`）以及组件要注入哪些环境变量。
 
-`ApplyChanges` 管理一次组件修改或一批修改的备份、失败恢复和清理；归档安装与本地链接共用替换流程。备份包含组件文件和清单，恢复失败时保留备份并在错误中返回位置，供后续恢复，调用方不再自行管理快照寿命。
+`StagePreparedBatch` 将受影响的根和组件索引复制到私有暂存目录，在其中应用整批选择，再由 `lifecycle` 负责受管安装的持久化发布。`ApplyChanges` 继续为本地链接和直接归档操作提供备份与普通错误回滚；备份包含组件文件和清单，恢复失败时保留备份并在错误中返回位置。这些本地操作及自定义 SDK 的随包 stdx 保持各自原有的恢复语义。
 
 ### `dist`：下载与解包
 
-`internal/dist` 负责分发源与网络制品。`source.go` 是统一入口：LTS/STS 按需缓存 `versions.json`，nightly 按需缓存同目录的 `nightly.json`。显式 `dist_server` 时两者位于分发根下。相对 URL 以 manifest 所在目录解析，绝对 URL 原样使用。组件制品也由它按通道、版本和 stdx 平台解析（`ResolveComponent`），`component.InstallFromSource` 是唯一的组件下载路径。`manifest.go` 解析并校验通道数据；`download.go` 做重试、断点续传和 SHA256 校验，并把传输的开始、字节进展和结束作为 `progress` 事件发给调用方传入的 sink，自己不画进度条；`install.go` 解包归档，解出的树由 `fsops.MoveTree` 落到目标目录；`nightly.go` 持有共享 HTTP 客户端并读取 nightly 资产的 SHA256 sidecar。host 与目标 tuple 的计算在 `target`（`CurrentHostTuple`、`CurrentTargetTuple`），`dist` 不再转发。
+`internal/dist` 负责分发源与网络制品。`source.go` 是统一入口：LTS/STS 按需缓存 `versions.json`，nightly 按需缓存同目录的 `nightly.json`。显式 `dist_server` 时两者位于分发根下。相对 URL 以 manifest 所在目录解析，绝对 URL 原样使用。组件制品也由它按通道、版本和 stdx 平台解析（`ResolveComponent`）；`component.PrepareFromSource` 在调用方的下载生命周期内准备组件，`InstallFromSource` 为独立调用方开启该生命周期。`manifest.go` 解析并校验通道数据；`download.go` 做重试、断点续传和 SHA256 校验，并把传输的开始、字节进展和结束作为 `progress` 事件发给调用方传入的 sink，自己不画进度条；`install.go` 解包归档，解出的树由 `fsops.MoveTree` 落到目标目录；`nightly.go` 持有共享 HTTP 客户端并读取 nightly 资产的 SHA256 sidecar。host 与目标 tuple 的计算在 `target`（`CurrentHostTuple`、`CurrentTargetTuple`），`dist` 不再转发。
+
+`Preparation` 统一拥有一次 SDK 或组件操作的安装锁、私有暂存目录和下载归档。`BeginPreparation` 获取安装锁，随后由调用方获取 home 锁。安装锁持续到发布和清理结束，home 锁可在下载、解压期间释放。SDK 安装组和组件批次中的所有制品共用一次准备生命周期。`Complete` 标记发布成功；`Close` 总是清理私有暂存目录，仅在成功后删除自己拥有的已校验归档，失败时保留已下载归档及可续传分段，最后释放安装锁。用户提供的本地归档不归它所有；持久化日志和恢复备份放在其暂存区之外。下载清理也使用同一把锁，避免删除正在使用的文件。
 
 ### `target`：平台身份
 
@@ -126,7 +132,7 @@ docs/           两本 mdBook（见“文档站”一章）
 
 进程从 `cmd/cjv/main.go` 的 `run` 起步：`logging.Init` 配好日志，程序名是 `cjv` 不是某个工具名，于是走 `cli.Execute`。cobra 把 `install` 子命令路由到 `internal/cli/install.go` 的 `runInstall`。`runInstall` 把 `--target`、`--component`、`--force` 装进 `lifecycle.InstallRequest`，组好 `lifecycle.Options`（renderer 按输出模式选出的进度适配器，以及首次安装时配置 PATH 的选择），调 `lifecycle.Install`。
 
-`lifecycle` 编排其余步骤：`OpenDistribution` 读设置、选分发源、定 host tuple，`Distribution.Resolve` 让 `dist.Source` 从 manifest 解析通道、版本和平台，`installGroup` 在私有暂存目录下载、解压 SDK，准备全部所需组件并校验整个安装组，再由 `fstx` 一起发布所有根目录；`reachable` 在最终确认阶段建立托管二进制和代理链接。所有通道共用这条安装路径。进度事件一路发到 CLI 选好的适配器（文本模式下消息写到命令输出、下载进度条画在 stderr），命令结果由本次调用的 renderer 渲染；错误由 `cli.Execute` 经同一个 renderer 输出，再由 `main` 翻译成退出码。
+`lifecycle` 编排其余步骤：`openInstallationDistribution` 恢复本地状态，取得分发设置与安装记录快照；`Distribution.Resolve` 让 `dist.Source` 从 manifest 解析通道、版本和平台；`installGroup` 用一次 `dist.Preparation` 在私有暂存目录下载、解压 SDK，准备全部所需组件并再次校验整个安装组，再由 `fstx` 一起发布所有根目录。`reachable` 在最终确认阶段建立托管二进制和代理链接。所有通道共用这条安装路径。进度事件一路发到 CLI 选好的适配器（文本模式下消息写到命令输出、下载进度条画在 stderr），命令结果由本次调用的 renderer 渲染；错误由 `cli.Execute` 经同一个 renderer 输出，再由 `main` 翻译成退出码。
 
 代理路径是另一条主线。运行 `cjc build` 时，被调用的其实是名为 `cjc` 的 cjv 链接，`main` 认出工具名走 `proxy.Run`：`proxy` 经 `env.ResolveRuntime` 让 `resolve` 定出活动工具链、经 `sdktools` 在工具链目录里找到真正的 `cjc`、组装好运行环境，然后按平台替换当前进程或运行子进程。这条线绕过 cobra 命令树，保留工具的标准流和退出语义。
 
