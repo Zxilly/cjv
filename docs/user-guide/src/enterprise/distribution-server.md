@@ -15,7 +15,7 @@ https://artifacts.corp.example/cjv/dist/nightly.json   # nightly
 
 LTS/STS 操作只读取 `versions.json`；nightly 操作只读取 `nightly.json`。`cjv check` 与 `cjv update` 根据已安装通道加载所需文件。相对 SDK 与组件 URL 以分发根为基准解析，绝对 URL 完全按 manifest 中的值使用。
 
-## 推荐布局
+## 文件布局
 
 ```text
 企业制品库
@@ -31,7 +31,7 @@ LTS/STS 操作只读取 `versions.json`；nightly 操作只读取 `nightly.json`
 
 分发端点通过 HTTPS GET 向受管终端提供机器可读的只读访问。网络白名单、设备身份或企业反向代理可以实施访问控制。
 
-## `versions.json` 契约
+## `versions.json`
 
 `versions.json` 的顶层是 `channels`，包含 `lts` 与 `sts`：
 
@@ -66,7 +66,7 @@ LTS/STS 操作只读取 `versions.json`；nightly 操作只读取 `nightly.json`
 }
 ```
 
-## `nightly.json` 契约
+## `nightly.json`
 
 `nightly.json` 直接表示一个通道，包含 `latest`、`versions` 和可选 `components`：
 
@@ -96,7 +96,31 @@ LTS/STS 操作只读取 `versions.json`；nightly 操作只读取 `nightly.json`
 
 每个 SDK 条目包含 `name`、`url` 和 `sha256`。nightly 的 `sha256` 可以暂为空，此时 cjv 读取 `<url>.sha256`；企业镜像宜直接填入校验和。组件条目支持可选 `sha256`。版本键决定工具链名称，URL 精确定位下载资产。
 
-`cjv install nightly` 安装 `nightly.json` 的 `latest`；带版本的 nightly 安装、`check`、`update`、`list-remote` 和组件安装都读取同一文件。项目固定确切 nightly 版本可获得可复现构建。
+nightly 安装以 `latest` 为候选，并根据目标和组件需求查找清单中的兼容版本；默认不降级。固定完整版本名时使用对应版本。不要把 nightly 内容包在 `channels.nightly` 下。
+
+## 组件格式
+
+每个通道的 `components` 按版本索引。`docs` 与 `stdx-docs` 各对应一个归档；`stdx` 再按组件平台标识索引：
+
+```jsonc
+{
+  "components": {
+    "1.0.5": {
+      "stdx": {
+        "linux-x64": {
+          "name": "stdx-linux-x64.tar.gz",
+          "url": "components/stdx-linux-x64.tar.gz",
+          "sha256": "<64 位十六进制 SHA-256>"
+        }
+      },
+      "docs": { "name": "docs.tar.gz", "url": "components/docs.tar.gz" },
+      "stdx-docs": { "name": "stdx-docs.tar.gz", "url": "components/stdx-docs.tar.gz" }
+    }
+  }
+}
+```
+
+这是通道对象的片段，需与 `latest`、`versions` 合并。交叉 SDK 位于 `versions[版本][平台]`，例如 `linux-x64-ohos`；对应 stdx 使用组件平台标识，例如 `ohos-aarch64`。
 
 ## 发布顺序
 

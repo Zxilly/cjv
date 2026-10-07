@@ -1,144 +1,62 @@
 # 配置
 
-cjv 把持久化设置保存在 `~/.cjv/settings.toml` 这个 TOML 文件里。日常使用中你不需要手动编辑它，用 `cjv set` 子命令修改即可，它们会校验取值、写回文件，并打印确认信息。
-
-本章介绍 `cjv set` 的全部子命令、`settings.toml` 中对应的字段，以及 `~/.cjv/` 目录的整体布局。运行时通过环境变量做的临时覆盖（如 `CJV_HOME`、`CJV_DIST_SERVER`）见 [环境变量](environment-variables.md)。
-
-## settings.toml
-
-设置文件始终位于 `<用户主目录>/.cjv/settings.toml`，不会随 `CJV_HOME` 改变。
-
-一个典型的 `settings.toml` 大致长这样：
+用户设置始终保存在 `~/.cjv/settings.toml`。`CJV_HOME` 和 `home` 只改变数据目录，不改变这个文件的位置。
 
 ```toml
 version = 1
 default_toolchain = "lts"
 auto_self_update = "check"
 auto_install = true
-manifest_url = "https://raw.githubusercontent.com/Zxilly/cangjie-version-manifest/master/versions.json"
 
 [overrides]
 "/home/me/project-a" = "sts"
 ```
 
-字段速览：
+## 设置项
 
-| 字段                | 类型   | 对应命令                   | 说明                                                                  |
-| ------------------- | ------ | -------------------------- | --------------------------------------------------------------------- |
-| `version`           | int    | （自动维护）               | 设置文件格式版本，由 cjv 自动写入和迁移                                |
-| `default_toolchain` | string | `cjv default <toolchain>`  | 默认工具链，见 [工具链](concepts/toolchains.md)                       |
-| `manifest_url`      | string | 手动编辑 / 系统后备配置     | LTS/STS 清单地址；nightly 从同目录的 `nightly.json` 按需读取            |
-| `dist_server`       | string | 手动编辑 / 系统后备配置     | 工具链分发根；包含 `versions.json` 与 `nightly.json`，见[内部分发源](enterprise/distribution-server.md) |
-| `auto_self_update`  | string | `cjv set auto-self-update` | `cjv update` 时的自更新行为：`enable` / `disable` / `check`           |
-| `auto_install`      | bool   | `cjv set auto-install`     | 代理模式下是否自动安装缺失的工具链                                    |
-| `home`              | string | `cjv set home`             | 持久化的 `CJV_HOME` 数据目录路径                                     |
-| `default_host`      | string | `cjv set default-host`     | 默认主机平台标识（`goos-goarch` 形式）                                |
-| `link_mode` | string | 手动编辑 / 系统后备配置 | `hardlink`（默认）或 `copy`，控制同发行包 SDK 文件的空间复用 |
-| `overrides`         | table  | `cjv override`             | 目录到工具链的覆盖映射，见 [目标与覆盖](concepts/targets-overrides.md) |
+| 字段 | 默认值或作用 | 修改方式 |
+| --- | --- | --- |
+| `version` | 设置格式版本，由 cjv 维护 | 自动写入与迁移 |
+| `default_toolchain` | 默认工具链 | `cjv default <name>`；`none` 清除 |
+| `auto_self_update` | `check`：仅提示更新；另有 `enable`、`disable` | `cjv set auto-self-update <value>` |
+| `auto_install` | `true`：自动补齐所选工具链的缺失项 | `cjv set auto-install <true\|false>` |
+| `home` | 数据目录，默认 `~/.cjv` | `cjv set home <path>` |
+| `default_host` | 默认主机平台，默认自动检测 | `cjv set default-host <goos-goarch>` |
+| `manifest_url` | 默认 LTS/STS 清单；nightly 使用同目录的 `nightly.json` | 编辑设置文件 |
+| `dist_server` | 同时提供 `versions.json` 和 `nightly.json` 的根地址 | 编辑设置文件 |
+| `link_mode` | `hardlink` 或 `copy`，默认 `hardlink` | 编辑设置文件 |
+| `overrides` | 目录到工具链的映射 | `cjv override` |
 
-> 文件中无法识别的键（例如拼写错误）会以 warn 级别日志提示，但不会阻止 cjv 启动。把 `version` 设成超过当前二进制支持的值则会报错。
+`auto_self_update` 只影响未指定名称和全局 `+name` 的全量 `cjv update`。`enable` 自动更新 cjv，`check` 查询并提示，`disable` 跳过。开发构建跳过发行检查；`cjv self update` 可手动执行。
 
-`manifest_url` 与 `dist_server` 通过用户设置文件或系统后备配置提供。来源优先级为 `CJV_DIST_SERVER`、`dist_server`、`manifest_url`。根地址对应 `<root>/versions.json` 与 `<root>/nightly.json`；直接配置 `manifest_url` 时，nightly 文件位于其同一目录。完整契约见[内部分发源](enterprise/distribution-server.md)。
+`cjv set home` 将相对路径转为绝对路径。`cjv set home ""` 显式选择默认数据目录。`default_host` 使用 `linux-amd64` 这样的 Go 平台格式，和工具链名称中的 `linux-x64` 格式不同。
 
-## cjv set
+## 继承与临时覆盖
 
-`cjv set` 修改 `settings.toml` 中的单项设置，只保存你明确选择的字段，其他字段继续继承系统后备配置或内置默认值。当用户文件中的选择发生变化时，命令写盘并打印 `设置 '<key>' 已更新为 '<value>'`。即使新值等于当前继承的值，第一次显式设置也会将它固定；重复设置已经保存的相同值不会再次写盘。
+用户设置按字段覆盖[系统后备配置](enterprise/index.md)，未设置字段继续继承。`false` 和空字符串也是明确的用户值。`cjv set` 只保存指定字段，不把其他继承值写入用户文件；要恢复某个字段的继承，删除该字段。
 
-`false` 和空字符串都是明确的用户值，不会被系统后备值覆盖。例如，`cjv set auto-install false` 会保持关闭，`cjv default none` 会取消默认工具链。要恢复某个字段的继承关系，从用户设置文件中删除该字段即可。环境变量提供的临时覆盖不会随这些修改写入文件。
+数据目录优先级为 `CJV_HOME`、`home`、`~/.cjv`。分发源优先级为 `CJV_DIST_SERVER`、合并设置中的 `dist_server`、`manifest_url`。环境变量不会因运行 `cjv set` 而持久化。
 
-### cjv set auto-self-update
+未知设置键会警告。无法解析的设置和高于当前支持范围的格式版本会报错。
 
-控制 `cjv update` 在更新工具链之后是否顺带自更新 cjv 本体。
-
-```bash
-# 自动下载并安装 cjv 的新版本
-cjv set auto-self-update enable
-
-# 完全关闭自更新（连提示都不打印）
-cjv set auto-self-update disable
-
-# 默认：仅在有新版本时提示，不自动安装
-cjv set auto-self-update check
-```
-
-`enable` 会在无名称参数、无全局 `+toolchain` 选择器的全量 `cjv update` 完成后自动升级 cjv；`disable` 会跳过自更新；`check`（默认）检查发行元数据并提示可用的 cjv 更新，不自动安装。开发版本跳过这项发行检查。
-
-无论此设置如何，你都可以随时用 `cjv self update` 手动升级 cjv。
-
-### cjv set auto-install
-
-控制[代理模式](concepts/proxies.md)下，当解析出的工具链尚未安装时是否自动安装它。默认开启（`true`）。
-
-```bash
-# 默认：直接调用 cjc / cjpm 时，缺失的工具链会被自动安装
-cjv set auto-install true
-
-# 关闭：缺失工具链时报错，而不是自动安装
-cjv set auto-install false
-```
-
-开启时，直接运行 `cjc`、`cjpm` 等 SDK 工具，如果当前解析到的工具链没装，cjv 会先把它装上再代理执行。`cangjie-sdk.toml` 中声明的 [组件](concepts/components.md) 与 [目标](cross-compilation.md) 同样适用：开启 `auto-install` 后，代理执行会按需补齐缺失的组件和目标 SDK。
-
-### cjv set home
-
-把 `CJV_HOME` 数据目录路径持久化到 `settings.toml`。传入的相对路径会被转成绝对路径后存储。
-
-```bash
-# 把数据目录持久化到指定位置
-cjv set home /opt/cjv-data
-
-# 传空字符串可固定使用默认 ~/.cjv，不继承系统配置中的 home
-cjv set home ""
-```
-
-`CJV_HOME` 环境变量始终优先于此设置。即使在 `settings.toml` 里持久化了 `home`，只要 shell 中设置了 `CJV_HOME` 环境变量，后者仍然生效。`settings.toml` 文件本身不受影响，永远留在 `~/.cjv/`。
-
-### cjv set default-host
-
-设置默认的主机平台标识（`goos-goarch` 形式，如 `linux-amd64`）。一般无需手动设置，cjv 会自动探测当前主机平台；仅在自动探测不符合预期、需要显式指定时才用到。
-
-```bash
-cjv set default-host linux-amd64
-```
-
-取值必须是 cjv 能识别的合法平台标识，否则命令会报错。
-
-## ~/.cjv 目录结构
-
-cjv 的全部数据都放在 `CJV_HOME`（默认 `~/.cjv`）下，各子目录职责相互解耦：
+## 数据布局
 
 ```text
-~/.cjv/
-  bin/            # cjv 与 SDK 工具命令入口
-  toolchains/     # 已安装的 SDK 工具链（仅 SDK 本体）
-  stdx/           # stdx component（按工具链拆分，路径通过 CANGJIE_STDX_PATH_* 暴露）
-    <tc>/
-      dynamic/
-      static/
-  docs/           # 离线文档（与工具链解耦，docs 与 stdx-docs 各自独占子目录）
-    <tc>/
-      main/                    # docs component（dev-guide / libs/std / tools 入口）
-      stdx/                    # stdx-docs component（libs_stdx 入口）
-  downloads/      # 下载暂存区和可续传的部分文件
-  settings.toml   # 用户设置
+<CJV_HOME>/
+  bin/              # cjv 与 SDK 命令入口
+  toolchains/<tc>/  # SDK
+  stdx/<tc>/        # dynamic/ 与 static/
+  docs/<tc>/main/   # 主体文档
+  docs/<tc>/stdx/   # 扩展库文档
+  downloads/        # 下载归档与可续传部分文件
 ```
 
-`bin/` 存放 cjv 与 `cjc`、`cjpm` 等 SDK 工具的命令入口。把这个目录加入 `PATH` 后即可直接调用这些命令，详见[代理](concepts/proxies.md)。
+设置文件只有在使用默认数据目录时才与上述目录位于同一处。用 `cjv show home` 查看实际数据目录及来源。
 
-`toolchains/<tc>/` 是每个已安装工具链的 SDK 本体。
-
-`stdx/<tc>/` 按工具链拆分存放 `stdx` 组件，分为 `dynamic/` 与 `static/`。代理或运行时环境中会自动注入 `CANGJIE_STDX_PATH_DYNAMIC` 与 `CANGJIE_STDX_PATH_STATIC` 指向这两个目录，详见 [组件](concepts/components.md)。
-
-`docs/<tc>/` 是离线文档，与工具链目录解耦。`main/` 放 `docs` 组件（dev-guide、libs/std、tools），`stdx/` 放 `stdx-docs` 组件。用 `cjv doc` 在浏览器中打开。
-
-`downloads/` 保存下载归档和带 SHA-256 发行包的可续传部分文件。操作成功后删除所用归档；带 SHA-256 的下载失败或中断时保留部分文件，下一次调用可以继续下载。全部工具链更新成功后还会清理残留下载。`settings.toml` 是本章描述的用户设置文件。
-
-> `cjv toolchain uninstall <tc>` 会连带清理 `stdx/<tc>/` 与 `docs/<tc>/`，不会留下孤立的组件数据。
-
-如果设置或持久化了自定义 `CJV_HOME`，上述 `bin/`、`toolchains/`、`stdx/`、`docs/`、`downloads/` 都会落在新路径下；唯独 `settings.toml` 始终留在用户主目录的 `~/.cjv/`（见上文 [settings.toml](#settingstoml)）。
+带 SHA-256 的下载失败或中断时会保留可续传文件，下次完成后校验整个归档。成功的操作清理自己使用的下载；全量更新全部成功时还会清理残留下载。
 
 ## SDK 文件复用
 
-`link_mode = "hardlink"` 默认对相同发行版本、平台和 SHA-256 的 SDK 普通文件尝试硬链接。cjv 会先比较文件内容，跳过被修改的文件；`.cjv` 安装及组件元数据始终独立。硬链接不可用时保留复制的文件，不影响安装成功。迁移旧布局时直接复制，避免共享用户修改过的旧 SDK。
+默认 `link_mode = "hardlink"` 对相同发行版、平台和 SHA-256 的 SDK 尝试复用内容相同的普通文件。元数据和组件保持独立，硬链接不可用时保留复制文件。
 
-升级和卸载通过替换或移除目录生效，不会原地写入另一份 SDK。硬链接仍共享文件内容：手工原地编辑 SDK 文件会影响所有链接到该文件的安装。需要独立文件内容时，在 `settings.toml` 中设置 `link_mode = "copy"`；该设置控制后续安装，不会拆开已经存在的硬链接。组件的 stdx 和文档目录独立安装，不参与 SDK 硬链接优化。
+硬链接共享文件内容，手工原地编辑某份 SDK 可能影响其他安装。需要独立副本时设置 `link_mode = "copy"`；它只影响后续安装，不拆开已有硬链接。cjv 的更新通过替换目录发布，不原地改写共享文件。

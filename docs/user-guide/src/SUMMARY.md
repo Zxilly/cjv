@@ -2,31 +2,27 @@
 
 [简介](introduction.md)
 
-# 用户指南
+# 开始使用
 
 - [安装 cjv](installation/index.md)
 - [快速上手](basic-usage.md)
-- [核心概念](concepts/index.md)
-  - [工具链](concepts/toolchains.md)
-  - [通道](concepts/channels.md)
-  - [组件](concepts/components.md)
-  - [代理](concepts/proxies.md)
-  - [目标与覆盖](concepts/targets-overrides.md)
-- [工具链文件](toolchain-file.md)
-- [从 URL 或本地归档安装工具链](install-from-url.md)
+
+# 管理 SDK
+
+- [工具链与版本](concepts/toolchains.md)
+- [项目工具链](toolchain-file.md)
+- [组件与离线文档](concepts/components.md)
+- [自定义 SDK](install-from-url.md)
 - [交叉编译](cross-compilation.md)
-- [运行时环境](runtime-environment.md)
+- [运行命令与配置环境](runtime-environment.md)
+
+# 配置与部署
+
+- [配置](configuration.md)
 - [环境变量](environment-variables.md)
 - [网络代理](network-proxies.md)
-- [配置](configuration.md)
-
-# 企业部署
-
-- [企业部署概览](enterprise/index.md)
+- [企业与离线部署](enterprise/index.md)
   - [内部分发源](enterprise/distribution-server.md)
-  - [部署受管客户端](enterprise/client-deployment.md)
-  - [代理与完全离线环境](enterprise/restricted-networks.md)
-  - [发布、升级与验收](enterprise/operations.md)
 
 # 参考
 

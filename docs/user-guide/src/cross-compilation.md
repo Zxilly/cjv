@@ -1,112 +1,47 @@
 # 交叉编译
 
-仓颉支持交叉编译：在宿主机器上为另一个平台（如 OpenHarmony、Android）生成可执行文件。除了宿主工具链外，这还需要对应平台的 target SDK（交叉编译 SDK）。
+交叉 SDK 在当前宿主上提供面向其他平台的编译工具。cjv 把它作为宿主工具链的附加安装管理，版本必须与宿主一致，可用目标由分发清单决定。
 
-本章介绍如何安装、声明和使用 target SDK。`targets` 与目录覆盖在工具链解析中的位置，参见[目标与覆盖](concepts/targets-overrides.md)。
-
-## target SDK 是附加安装项
-
-target SDK 不是一条独立的工具链，而是挂在某条宿主工具链上的附加安装项。安装 target SDK 不会改变当前活跃工具链，也不会改变 `cjv default`。直接调用 `cjc`、`cjpm` 等工具时（[代理模式](concepts/proxies.md)），用的仍然是宿主 SDK，target SDK 只在你显式请求交叉编译环境时才会被使用。
-
-target SDK 的版本锁定到宿主工具链已解析出的版本。如果该版本没有对应的 target 资产，安装会失败，而不会装上一个版本错配的 SDK。`cjv install sts -t ohos` 给你的是 STS 宿主 SDK，加上与之配套的 OHOS 交叉 SDK，宿主开发体验完全不变。
-
-## 安装 target SDK
-
-用 `cjv install` 的 `-t` / `--target` 标志在安装宿主工具链时附带交叉编译目标：
+## 安装和查询
 
 ```bash
-# 安装宿主 STS SDK，并额外安装当前宿主对应的 OHOS 交叉 SDK
-cjv install sts -t ohos
-```
-
-一次安装多个目标有两种等价写法，可以混用：
-
-```bash
-# 重复标志
-cjv install sts -t ohos -t android
-
-# 逗号分隔
-cjv install sts --target ohos,android
-
-# 两者混用也可以
-cjv install sts -t ohos,android -t ohos-arm32
-```
-
-`--target` 只接受目标后缀，例如 `ohos`、`android`、`ohos-arm32`，不要填写完整的平台 key（如 `linux-x64-ohos`）。平台前缀由 cjv 根据宿主自动补全。
-
-target SDK 可以和[组件](concepts/components.md)在同一条命令里一起安装：
-
-```bash
-# 宿主 STS + OHOS 交叉 SDK + stdx 组件
-cjv install sts -t ohos -c stdx
-```
-
-对已安装的宿主，使用 `target add` 或 `install --no-update --target` 补齐目标，可保持当前发行版；普通 `install sts --target` 会同时检查并更新 STS 通道。
-
-```bash
-cjv +sts target list
+cjv install sts --target ohos
+cjv target list --toolchain sts
+cjv target add android --toolchain sts
 cjv target list --toolchain sts --installed
-cjv target add ohos android --toolchain sts
-cjv install sts --no-update --target ohos
-cjv +sts component add stdx --target ohos
 ```
 
-`target add` 安装宿主已装版本的配套目标，`target list --installed` 可离线使用。组件的 `--target` 选择该版本已安装的交叉 SDK。
+`target add` 为宿主已安装的版本补齐目标，不升级宿主。`target list --installed` 只读本地状态，可以离线执行；普通列表会查询该发行版的可用目标。
 
-主机更新会将所有跟踪目标与组件一起准备并在同一事务内发布。缺失目标或组件时，默认保留旧安装；nightly 会尝试 manifest 中较新的兼容历史版本，`--allow-downgrade` 才允许回退到更旧版本。install/update 的 `--force` 允许跳过并移除不可用项，不重装未变化的 SDK。
+目标参数只写后缀，如 `ohos`、`android`、`ohos-arm32`，不要写 `linux-x64-ohos`。安装时可重复 `--target` 或传入逗号分隔列表。
 
-## 在工具链文件中声明 targets
+## 使用目标 SDK
 
-项目可以把交叉编译目标写进 `cangjie-sdk.toml` 的 `[toolchain]` 表，让协作者无需记忆安装命令。`targets` 与命令行同样只填后缀：
-
-```toml
-[toolchain]
-channel = "sts"
-targets = ["ohos", "android", "ohos-arm32"]
-```
-
-`targets` 是附加语义：它在宿主工具链之上声明需要哪些 target SDK，不会改变 `channel` 解析出的活跃工具链。
-
-当设置中启用了 `auto_install` 时，[代理执行](concepts/proxies.md)会在调用 SDK 工具前自动补齐缺失的 target SDK；未启用时，你需要手动用上文的 `cjv install … -t …` 安装。`targets` 字段的完整语义见[工具链文件](toolchain-file.md)与[目标与覆盖](concepts/targets-overrides.md)。
-
-## 独立 SDK 模型与 `cjv envsetup --target`
-
-每个 target SDK 都是自包含的：它有自己的 `CANGJIE_HOME`、自己的 `bin` 目录和运行时库路径。要进入某个 target SDK 的交叉编译环境，给 [`cjv envsetup`](runtime-environment.md) 传 `--target=SUFFIX`：
+默认的 `cjc`、`cjpm` 代理仍使用宿主 SDK。需要调用交叉 SDK 中的工具时，在当前 shell 中加载它的环境：
 
 ```bash
-# 输出 OHOS 交叉编译环境（独立 SDK 模型）
-eval "$(cjv envsetup --target=ohos)"
-
-# 其他 shell
-cjv envsetup --target=ohos | source             # Fish
-cjv envsetup --target=ohos | Invoke-Expression   # PowerShell
+eval "$(cjv envsetup +sts --target=ohos)"
+cjc --version
 ```
 
-不带 `--target` 时输出宿主工具链环境；带上 `--target` 后，`CANGJIE_HOME`、`PATH` 与库搜索路径指向对应的 target SDK。
+PowerShell 使用：
 
-`--target` 同样遵循与代理模式一致的工具链解析优先级，并支持 `+toolchain` 语法指定宿主工具链：
+```powershell
+cjv envsetup +sts --target=ohos | Invoke-Expression
+```
+
+后续编译参数、系统库和链接器配置由目标 SDK 及项目决定。安装目标或在项目文件中声明 `targets` 只负责准备 SDK，不会自动把普通 `cjpm build` 转为目标平台构建。
+
+## 组件、更新和移除
 
 ```bash
-# 为 +nightly 宿主工具链输出 OHOS 交叉环境
-eval "$(cjv envsetup +nightly --target=ohos)"
+cjv component add stdx --toolchain sts --target ohos
+cjv component list --toolchain sts --target ohos
+cjv target remove ohos --toolchain sts
 ```
 
-> 注意：`cjv envsetup --target` 不会自动安装 target SDK。对应 target 必须已经通过 `cjv install <toolchain> --target <suffix>` 安装，否则命令会报错。
+`component --target` 管理交叉 SDK 自己的组件，要求目标已安装。宿主组件不会自动充当目标组件。
 
-配置好环境后，就可以直接调用交叉编译工具链了：
+更新跟踪通道时，cjv 一起准备宿主、已跟踪目标和组件，成功后统一发布。默认情况下，缺少所需制品会阻止更新；nightly 可以选择清单中的兼容版本。`--force` 允许跳过并移除未发布的可选项，具体规则见[命令参考](command-reference.md)。
 
-```bash
-eval "$(cjv envsetup --target=ohos)"
-cjc --version          # 此处的 cjc 来自 OHOS target SDK
-cjpm build             # 产物面向 OHOS 平台
-```
-
-环境变量注入、不同 shell 的写法，以及一次性执行（`cjv exec`）与配置当前会话（`cjv envsetup`）之间的取舍，详见[运行时环境](runtime-environment.md)。
-
-## 卸载
-
-卸载跟踪渠道（如 `sts`）时，同平台的跟踪 target SDK 会一并移除。明确版本的宿主和 target SDK 独立保留，需要分别卸载：
-
-```bash
-cjv toolchain uninstall sts
-```
+`target remove` 移除所选交叉 SDK 及其组件，保留宿主。交叉 SDK 不能直接设为默认或活跃工具链。

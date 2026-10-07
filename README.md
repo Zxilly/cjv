@@ -6,7 +6,7 @@
 
 [English](README.EN.md) | 中文
 
-cjv 是 [仓颉](https://cangjie-lang.cn/) SDK 的工具链管理器：安装并管理多套 SDK，切换默认版本，并让 `cjc`、`cjpm` 等 SDK 工具按当前项目透明代理到正确工具链。
+cjv 管理 [仓颉](https://cangjie-lang.cn/) SDK，让不同项目使用各自需要的版本。安装后直接运行 `cjc`、`cjpm`，由 cjv 选择工具链。
 
 ## 文档
 
@@ -64,19 +64,22 @@ cjv default lts
 cjv show
 
 # 使用指定工具链运行命令
-cjv run sts cjc --version
+cjv run --install sts cjc --version
 ```
 
-设置默认工具链后，可以直接调用 `cjc`、`cjpm` 等命令；cjv 会根据环境变量、目录覆盖、`cangjie-sdk.toml` 和默认配置解析应使用的工具链。
+项目可提交 `cangjie-sdk.toml` 固定版本：
 
-批量管理可使用 `cjv install lts sts`、`cjv update lts sts` 和 `cjv uninstall lts sts`。`cjv +sts component list`、`cjv +sts target list`、`cjv which cjc --toolchain sts` 可指定管理操作的 SDK。`default` 会立即安装缺失工具链，`check` 同时检查 SDK 和 cjv 新版本。install/update 的 `--force` 允许跳过缺失项而不重装未变化的 SDK；`install --no-update` 保留现有发行版，nightly 可通过 `--allow-downgrade` 选择较旧的兼容版本。全局 `--quiet/-q` 和 `--verbose` 控制进度及日志。
+```toml
+[toolchain]
+channel = "lts-1.0.5"
+components = ["stdx"]
+```
 
-完整命令参考、工具链解析、组件、交叉编译、运行时环境和配置说明见[用户手册](https://cjv.zxilly.dev/book/user-guide/zh-CN/)。
+版本仅为示例。进入项目运行 `cjc`、`cjpm` 时，cjv 按项目声明选择工具链，默认会安装缺失的 SDK 和组件。版本选择、交叉编译及完整参数见[用户手册](https://cjv.zxilly.dev/book/user-guide/zh-CN/)。
 
 ## Agent Skill
 
-仓库附带一个精简的 [cjv 使用指南 skill](skills/cjv)，帮助编码代理正确选择 cjv
-命令并遵循项目工具链解析规则。
+仓库提供 [cjv skill](skills/cjv)，供编码代理查询命令和项目工具链规则。
 
 使用 [skills CLI](https://github.com/vercel-labs/skills) 全局安装到 Codex：
 

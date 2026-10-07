@@ -16,3 +16,12 @@ preferred-dark-theme = "navy"
 # 右上角语言切换器(地球图标下拉)。
 additional-js = ["theme/cjv-i18n.js"]
 additional-css = ["theme/cjv-i18n.css"]
+
+[output.html.redirect]
+"concepts/index.html" = "toolchains.html"
+"concepts/channels.html" = "toolchains.html"
+"concepts/targets-overrides.html" = "../toolchain-file.html"
+"concepts/proxies.html" = "../runtime-environment.html"
+"enterprise/client-deployment.html" = "index.html"
+"enterprise/restricted-networks.html" = "index.html"
+"enterprise/operations.html" = "index.html"

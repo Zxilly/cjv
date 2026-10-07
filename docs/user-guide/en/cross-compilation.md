@@ -1,113 +1,47 @@
 # Cross-compilation
 
-Cangjie supports cross-compilation: producing executables for another platform (such as OpenHarmony, Android) on a host machine. In addition to the host toolchain, this requires the target SDK (cross-compilation SDK) for that platform.
+A cross SDK provides tools on the current host for compiling to another platform. cjv manages it as an addition to a host toolchain. Its release must match the host, and available targets depend on the distribution manifest.
 
-This chapter covers how to install, declare, and use a target SDK. For where `targets` and directory overrides sit in toolchain resolution, see [Targets and overrides](concepts/targets-overrides.md).
-
-## A target SDK is an add-on install
-
-A target SDK is not a separate toolchain but an additional install attached to a host toolchain. Installing a target SDK does not change the active toolchain, nor does it change `cjv default`. When you call `cjc`, `cjpm`, and other tools directly ([proxy mode](concepts/proxies.md)), the host SDK is still used; the target SDK is used only when you explicitly request a cross-compilation environment.
-
-A target SDK's version is locked to the version the host toolchain has resolved to. If that version has no matching target asset, the install fails rather than installing a version-mismatched SDK. `cjv install sts -t ohos` gives you the STS host SDK plus the matching OHOS cross SDK, with the host development experience unchanged.
-
-## Installing a target SDK
-
-Use the `-t` / `--target` flag of `cjv install` to attach cross-compilation targets while installing a host toolchain:
+## Install and inspect
 
 ```bash
-# Install the host STS SDK, and additionally install the OHOS cross SDK matching the current host
-cjv install sts -t ohos
-```
-
-There are two equivalent ways to install multiple targets at once, and they can be mixed:
-
-```bash
-# Repeated flags
-cjv install sts -t ohos -t android
-
-# Comma-separated
-cjv install sts --target ohos,android
-
-# Mixing the two also works
-cjv install sts -t ohos,android -t ohos-arm32
-```
-
-`--target` accepts only the target suffix, for example `ohos`, `android`, `ohos-arm32`. Do not write a full platform key (such as `linux-x64-ohos`). cjv fills in the platform prefix automatically based on the host.
-
-A target SDK can be installed together with [components](concepts/components.md) in the same command:
-
-```bash
-# Host STS + OHOS cross SDK + stdx component
-cjv install sts -t ohos -c stdx
-```
-
-For an installed host, use `target add` or `install --no-update --target` to add targets while keeping its installed release. Plain `install sts --target` also checks for and updates the STS channel.
-
-```bash
-cjv +sts target list
+cjv install sts --target ohos
+cjv target list --toolchain sts
+cjv target add android --toolchain sts
 cjv target list --toolchain sts --installed
-cjv target add ohos android --toolchain sts
-cjv install sts --no-update --target ohos
-cjv +sts component add stdx --target ohos
 ```
 
-`target add` installs matching SDKs for the host's installed release. `target list --installed` works offline. Component `--target` selects an already installed cross SDK at that release.
+`target add` supplies targets for the installed host release without upgrading it. `target list --installed` reads local state and works offline. The regular list queries targets published for that release.
 
-Host updates prepare all tracking targets and components before publishing them in one transaction. Missing targets or components preserve the old installation by default. Nightly searches published history for a compatible release without downgrading; `--allow-downgrade` permits an older release. Both install and update use `--force` to skip and remove unavailable entries, without reinstalling unchanged SDKs.
+Use suffixes such as `ohos`, `android`, or `ohos-arm32`, not a full platform name such as `linux-x64-ohos`. Installation accepts repeated `--target` flags or comma-separated values.
 
-## Declaring targets in the toolchain file
+## Use the target SDK
 
-A project can write cross-compilation targets into the `[toolchain]` table of `cangjie-sdk.toml`, so collaborators do not have to remember the install command. As on the command line, `targets` takes only the suffix:
-
-```toml
-[toolchain]
-channel = "sts"
-targets = ["ohos", "android", "ohos-arm32"]
-```
-
-`targets` is additional semantics: it declares which target SDKs are needed on top of the host toolchain, and does not change the active toolchain that `channel` resolves to.
-
-When `auto_install` is enabled in settings, [proxy execution](concepts/proxies.md) automatically installs any missing target SDK before invoking an SDK tool; when it is disabled, you need to install them manually with the `cjv install … -t …` shown above. For the full semantics of the `targets` field, see the [toolchain file](toolchain-file.md) and [Targets and overrides](concepts/targets-overrides.md).
-
-## The standalone-SDK model and `cjv envsetup --target`
-
-Each target SDK is self-contained: it has its own `CANGJIE_HOME`, its own `bin` directory, and its own runtime library paths. To enter the cross-compilation environment of a target SDK, pass `--target=SUFFIX` to [`cjv envsetup`](runtime-environment.md):
+The default `cjc` and `cjpm` proxies still select the host SDK. To call tools from a cross SDK, load its environment in the current shell:
 
 ```bash
-# Output the OHOS cross-compilation environment (standalone-SDK model)
-eval "$(cjv envsetup --target=ohos)"
-
-# Other shells
-cjv envsetup --target=ohos | source             # Fish
-cjv envsetup --target=ohos | Invoke-Expression   # PowerShell
+eval "$(cjv envsetup +sts --target=ohos)"
+cjc --version
 ```
 
-Without `--target`, cjv outputs the host toolchain environment. With `--target`, `CANGJIE_HOME`, `PATH`, and library search paths point to the corresponding target SDK.
+In PowerShell:
 
-`--target` also follows the same toolchain resolution priority as proxy mode, and supports the `+toolchain` syntax for specifying the host toolchain:
+```powershell
+cjv envsetup +sts --target=ohos | Invoke-Expression
+```
+
+Compiler options, system libraries, and linker configuration depend on the target SDK and project. Installing a target or declaring `targets` in the project file prepares SDKs; it does not turn a regular `cjpm build` into a target-platform build.
+
+## Components, updates, and removal
 
 ```bash
-# Output the OHOS cross environment for the +nightly host toolchain
-eval "$(cjv envsetup +nightly --target=ohos)"
+cjv component add stdx --toolchain sts --target ohos
+cjv component list --toolchain sts --target ohos
+cjv target remove ohos --toolchain sts
 ```
 
- >
- > Note: `cjv envsetup --target` does not install the target SDK automatically. The corresponding target must already be installed via `cjv install <toolchain> --target <suffix>`, or the command reports an error.
+`component --target` manages the cross SDK's own components and requires the target to be installed. Host components do not substitute for target components.
 
-Once the environment is set up, you can invoke the cross-compilation toolchain directly:
+Updating a tracked channel prepares its host, tracked targets, and components before publishing them together. Missing required artifacts block updates by default; nightly may select a compatible release from published history. `--force` allows unavailable optional entries to be skipped and removed. See the [command reference](command-reference.md).
 
-```bash
-eval "$(cjv envsetup --target=ohos)"
-cjc --version          # Here cjc comes from the OHOS target SDK
-cjpm build             # The output targets the OHOS platform
-```
-
-For environment variable injection, the syntax for different shells, and the trade-off between one-off execution (`cjv exec`) and configuring the current session (`cjv envsetup`), see [Runtime environment](runtime-environment.md).
-
-## Uninstalling
-
-Uninstalling a tracking channel such as `sts` also removes its tracking target SDKs for that platform. Explicit host and target versions remain independent and must be uninstalled separately:
-
-```bash
-cjv toolchain uninstall sts
-```
+`target remove` removes the cross SDK and its components while keeping the host. Cross SDKs cannot be set as the default or active toolchain.

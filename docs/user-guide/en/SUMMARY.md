@@ -2,33 +2,29 @@
 
 [Introduction](introduction.md)
 
-# User Guide
+# Get started
 
-- [Installing cjv](installation/index.md)
-- [Getting Started](basic-usage.md)
-- [Core Concepts](concepts/index.md)
-  - [Toolchains](concepts/toolchains.md)
-  - [Channels](concepts/channels.md)
-  - [Components](concepts/components.md)
-  - [Proxies](concepts/proxies.md)
-  - [Targets and Overrides](concepts/targets-overrides.md)
-- [The Toolchain File](toolchain-file.md)
-- [Installing a Toolchain from a URL or Archive](install-from-url.md)
+- [Install cjv](installation/index.md)
+- [Quick start](basic-usage.md)
+
+# Manage SDKs
+
+- [Toolchains and versions](concepts/toolchains.md)
+- [Project toolchains](toolchain-file.md)
+- [Components and offline documentation](concepts/components.md)
+- [Custom SDKs](install-from-url.md)
 - [Cross-compilation](cross-compilation.md)
-- [Runtime Environment](runtime-environment.md)
-- [Environment Variables](environment-variables.md)
-- [Network proxies](network-proxies.md)
+- [Running commands and setting the environment](runtime-environment.md)
+
+# Configure and deploy
+
 - [Configuration](configuration.md)
-
-# Enterprise Deployment
-
-- [Enterprise deployment overview](enterprise/index.md)
-  - [Internal distribution source](enterprise/distribution-server.md)
-  - [Deploy managed clients](enterprise/client-deployment.md)
-  - [Proxy and fully offline environments](enterprise/restricted-networks.md)
-  - [Publishing, upgrades, and acceptance](enterprise/operations.md)
+- [Environment variables](environment-variables.md)
+- [Network proxies](network-proxies.md)
+- [Enterprise and offline deployment](enterprise/index.md)
+  - [Internal distribution](enterprise/distribution-server.md)
 
 # Reference
 
-- [Command Reference](command-reference.md)
-- [Frequently Asked Questions](faq.md)
+- [Command reference](command-reference.md)
+- [Common questions](faq.md)

@@ -1,702 +1,132 @@
 # 命令参考
 
-本章逐条列出 cjv 的命令，给出用法、参数、标志与可复制的示例。每个命令的简短说明也会出现在 `cjv <command> --help` 中。
+用 `cjv <command> --help` 查看本机版本的帮助。名称格式见[工具链与版本](concepts/toolchains.md)，选择顺序见[项目工具链](toolchain-file.md)。
 
-## 全局约定
+## 全局选项
 
-全局 `--quiet` / `-q` 隐藏进度，`--verbose` 在未设置 `CJV_LOG` 时开启 debug 日志，两者互斥。`component list --quiet` 使用该子命令原有的单列输出。
+| 选项 | 作用 |
+| --- | --- |
+| `--json` | 结构化结果写入 stdout；`run`、`exec`、`init` 不支持 |
+| `--quiet`、`-q` | 隐藏进度；`component list -q` 单列打印名称 |
+| `--verbose` | 未设置 `CJV_LOG` 时启用 debug 日志，与全局 quiet 互斥 |
+| `--help`、`-h` | 显示帮助 |
+| `--version`、`-v` | 显示 cjv 版本 |
+| `+name` | 放在子命令前，为支持选择工具链的命令指定 SDK |
 
-几乎所有命令都接受全局标志 `--json`，它把结果以稳定的 JSON 结构输出到标准输出，便于脚本消费。`cjv run`、`cjv exec`、`cjv init` 不支持 JSON 输出，传入 `--json` 会报错。
+显式 `--toolchain` 优先于全局 `+name`。`exec` 和 `envsetup` 也接受子命令后的 `+name`。子进程参数由 `run`、`exec` 原样传递，退出码也会保留。
 
-未显式指定工具链的命令会按统一优先级解析活跃工具链：`CJV_TOOLCHAIN` 环境变量、目录覆盖、`cangjie-sdk.toml` 工具链文件、默认工具链，按此顺序取第一个生效的。详见 [目标与覆盖](concepts/targets-overrides.md)。
-
-标准通道名为 `lts`、`sts`、`nightly`，也可写成具体版本（如 `lts-1.0.0`）。通过 `cjv toolchain link` 链接的自定义工具链使用任意自定义名，但不得与保留通道名冲突。需要选择 SDK 的管理命令支持在命令之前使用全局 `+name` 选择器，例如 `cjv +sts component list`、`cjv +sts show active`。显式 `--toolchain` 参数优先。`cjv exec` 和 `cjv envsetup` 也接受子命令之后的 `+name`。
-
-被代理或被执行的子命令以其原始退出码退出，这适用于 `cjv run` 与 `cjv exec`。
-
----
-
-## 安装与卸载
-
-### `cjv install`
-
-安装仓颉 SDK 工具链，可附带交叉编译目标与组件。
+## 安装、更新与卸载
 
 ```text
 cjv install [toolchain]... [-t target]... [-c component]... [--force | --no-update] [--allow-downgrade]
-```
-
-参数：
-
-- `[toolchain]...`（可选）：要安装的一个或多个工具链；省略时安装当前选中的工具链。名称可以使用 `lts`、`sts`、`nightly` 或具体版本。它不能用于安装自定义工具链，那种情况请用 `cjv toolchain link`。
-
-标志：
-
-| 标志 | 说明 |
-| --- | --- |
-| `-t`, `--target <suffix>` | 需要附加安装的交叉编译目标后缀（可重复或逗号分隔），如 `ohos`、`android`、`ohos-arm32` |
-| `-c`, `--component <name>` | 需要附加安装的组件（可重复或逗号分隔），如 `stdx`、`docs`、`stdx-docs` |
-| `--force` | 允许跳过并移除目标发行版未发布的组件或 targets；不强制重装同版本 SDK |
-| `--no-update` | 保留已安装的 SDK 发行版，只补齐 targets 或组件；与 `--force` 互斥 |
-| `--allow-downgrade` | 允许选择较旧的 nightly，以满足组件和 target 需求 |
-
-示例：
-
-```bash
-# 安装最新 LTS 工具链
-cjv install lts
-
-# 安装具体版本
-cjv install lts-1.0.0
-
-# 安装宿主 STS SDK，并额外安装两个交叉编译目标
-cjv install sts -t ohos -t android
-cjv install sts --target ohos,android
-
-# 安装时顺带装上组件
-cjv install nightly -c stdx,docs
-
-# 即使部分组件或目标尚未发布，也安装最新 nightly
-cjv install nightly --force
-
-# 保留现有版本，只补齐交叉 SDK
-cjv install sts --no-update --target ohos
-
-# 一次安装多个工具链
-cjv install lts sts
-```
-
-target 只填目标后缀，不要写完整平台 key（如 `linux-x64-ohos`）。交叉编译目标是宿主工具链的附加安装项，不改变活跃工具链。详见 [交叉编译](cross-compilation.md)与 [组件](concepts/components.md)。
-
-### `cjv uninstall`
-
-卸载工具链，并一并清理其 stdx 与离线文档。
-
-```text
+cjv update [toolchain]... [--force] [--allow-downgrade] [--no-self-update]
 cjv uninstall <toolchain>... [-y]
-```
-
-参数：
-
-- `<toolchain>...`（必填）：要卸载的一个或多个工具链名称。
-
-标志：
-
-| 标志 | 说明 |
-| --- | --- |
-| `-y`, `--yes` | 跳过确认提示 |
-
-卸载会在交互式终端弹出确认；非交互式终端、`--json` 模式或加 `-y` 时直接执行。如果被卸载的工具链是默认工具链，cjv 会把默认指向另一个已安装的宿主工具链，指向它的目录覆盖也会被清除。卸载会连带删除 `<CJV_HOME>/stdx/<tc>/` 与 `<CJV_HOME>/docs/<tc>/`。
-
-```bash
-cjv uninstall sts
-cjv uninstall lts-1.0.0 -y
-```
-
-> `cjv toolchain uninstall <name>` 与本命令等价，行为一致。
-
-### `cjv update`
-
-将指定通道或所有已跟踪通道更新到最新版本，明确安装的固定版本保持不变。
-
-```text
-cjv update [toolchain]... [--no-self-update] [--force] [--allow-downgrade]
-```
-
-参数：
-
-- `[toolchain]...`（可选）：更新一个或多个通道及其交叉 SDK；明确版本等同于安装并保留该版本。未指定名字时，全局 `+name` 选择更新该工具链，否则更新所有已跟踪通道。
-
-标志：
-
-| 标志 | 说明 |
-| --- | --- |
-| `--no-self-update` | 跳过 cjv 自更新检查 |
-| `--force` | 与 install 相同：允许跳过并移除缺失的组件或 targets，不强制重装同版本 SDK |
-| `--allow-downgrade` | 允许选择较旧的兼容 nightly |
-
-传入通道名（如 `lts`）时更新该通道，尚未安装则安装最新版本。传入具体版本（包括交叉 SDK 版本）时，等同于安装并保留该固定版本，已安装则跳过。自定义（链接）工具链无法更新，会被跳过或报错。默认工具链、目录 override 和项目文件选择通道名时会跟随通道更新；明确的版本选择保持固定。升级在同一事务内替换渠道自身的 SDK、stdx 和文档目录，固定版本安装独立保留。首次使用新布局时，旧版本目录继续固定，并离线复制原先隐含的渠道选择为独立安装；默认工具链、override 和项目文件保持原样。无名称参数且未指定全局 `+toolchain` 的全量更新结束后，根据 `auto-self-update` 设置检查或升级 cjv，可用 `--no-self-update` 关闭。指定单个或多个工具链时只处理 SDK。
-
-```bash
-# 更新所有已跟踪通道
-cjv update
-
-# 只更新 LTS
-cjv update lts
-
-# 更新但不触发 cjv 自更新
-cjv update --no-self-update
-```
-
-### `cjv check`
-
-检查已安装的跟踪通道与 cjv 自身是否有可用更新，只查询发布信息，不执行安装。
-
-```text
 cjv check
 ```
 
-逐个列出已安装工具链：有更新显示 `当前 → 最新`，已是最新显示 `✓`，并报告 cjv 当前版本及可用的新版本。`--json` 包含 `update_available`、`latest`、`latest_cjv_version` 与查询失败时的 `self_update_error`。开发构建 `dev` 跳过自身版本比较。
+`install` 省略名称时安装当前选择，指定多个名称时逐项处理。`-t/--target` 和 `-c/--component` 可重复或逗号分隔。
 
-```bash
-cjv check
-cjv check --json
-```
+`update` 指定名称时处理这些工具链；无名称时使用全局 `+name`，否则更新所有已跟踪通道。具体版本保持固定，自定义工具链没有官方更新。只有全量更新会按 `auto_self_update` 检查或更新 cjv，`--no-self-update` 可跳过。
 
----
-
-## 查看与运行
-
-### `cjv show`
-
-显示活跃工具链、默认主机平台与已安装工具链列表。
-
-```text
-cjv show
-cjv show active
-cjv show installed
-cjv show home
-```
-
-子命令：
-
-| 子命令 | 说明 |
+| 策略 | 行为 |
 | --- | --- |
-| `cjv show` | 显示活跃工具链 + 默认主机 + 已安装列表（含各工具链已装组件） |
-| `cjv show active` | 仅显示当前活跃工具链及其来源 |
-| `cjv show installed` | 仅列出已安装工具链 |
-| `cjv show home` | 显示 `CJV_HOME` 路径及其来源 |
+| 默认 | 保留所需组件和目标；缺少制品时阻止更新，nightly 可查找兼容历史版本 |
+| `--force` | 允许跳过并移除未发布的可选组件或目标，不重装未变化的 SDK |
+| `install --no-update` | 保留已有发行版，只补齐目标或组件，与 `--force` 互斥 |
+| `--allow-downgrade` | 允许选择更旧的兼容 nightly |
 
-```bash
-cjv show
-cjv show active
-cjv show home
-```
+通道升级先准备宿主、跟踪目标和组件，再一起发布；失败时保留或恢复原安装。固定版本独立保留。无新增需求的 `--no-update` 可离线完成。
 
-### `cjv run`
+`uninstall` 同时清理 SDK、组件、文档及相关目录覆盖。移除默认工具链时尝试选择其他已装宿主。交互终端会确认，`-y/--yes`、非交互或 JSON 模式直接执行。`toolchain uninstall` 是等价入口。
 
-使用指定工具链运行命令，不影响当前 shell。
+`check` 只查询 SDK 和 cjv 的可用更新。开发构建跳过自身版本比较。
 
-```text
-cjv run [--install] <toolchain> <command> [args...]
-```
+## 查询与运行
 
-参数：
-
-- `<toolchain>`（必填）：用于运行命令的工具链。
-- `<command>`（必填）：要运行的命令；可以是工具链自带工具（如 `cjc`、`cjpm`），也可以是该工具链环境下 PATH 中的任意命令。
-- `[args...]`：传给命令的参数。
-
-标志：
-
-| 标志 | 说明 |
+| 命令 | 作用 |
 | --- | --- |
-| `--install` | 当目标工具链未安装时，先自动安装再运行 |
+| `cjv show` | 当前工具链、默认主机和安装列表 |
+| `cjv show active` | 当前工具链及来源 |
+| `cjv show installed`、`cjv toolchain list` | 已安装工具链 |
+| `cjv show home` | 数据目录及来源 |
+| `cjv which [command] [--toolchain <tc>]` | SDK 工具路径；省略 command 时返回 SDK 根目录 |
+| `cjv run [--install] <toolchain> <command> [args...]` | 在指定 SDK 环境中运行命令；先查 SDK 工具，再查该环境的 PATH |
+| `cjv exec [+toolchain] <command> [args...]` | 在当前或指定工具链环境中运行命令 |
+| `cjv envsetup [+toolchain] [--target=SUFFIX] [--shell=TYPE]` | 输出当前 shell 的环境脚本，JSON 模式返回环境数据 |
 
-命令在该工具链的运行时环境中执行，cjv 会注入正确的 PATH 与库路径，并应用已安装组件的环境（如 `CANGJIE_STDX_PATH_*`）。该命令不支持 `--json`。
-
-```bash
-# 用 sts 工具链查看 cjc 版本
-cjv run sts cjc --version
-
-# 工具链未装则先装再运行
-cjv run --install nightly cjpm build
-```
-
-### `cjv exec`
-
-在仓颉运行时环境中执行任意命令，便于直接运行编译产物。
+`run --install` 允许安装缺失工具链，放在工具链参数前。`exec -- +command` 可执行以 `+` 开头的命令。`envsetup` 支持 `bash`、`fish`、`powershell`、`cmd`；`--target` 要求交叉 SDK 已安装。用法见[运行环境](runtime-environment.md)。
 
 ```text
-cjv exec [+toolchain] <command> [args...]
+cjv toolchain list-remote [--channel all|lts|sts|nightly] [-t suffix] [--all-platforms] [--limit N]
 ```
 
-参数：
+远程列表默认查询所有通道和当前主机平台。`--all-platforms` 按所有平台分组；`--limit 0` 不限制每组版本数。`-t/--target` 过滤交叉目标后缀。
 
-- `[+toolchain]`（可选）：以 `+name` 前缀临时指定工具链；省略时按标准优先级解析活跃工具链。
-- `<command>`（必填）：要执行的命令。
-- `[args...]`：传给命令的参数。
-
-仓颉编译出的二进制动态链接运行时库，需要正确的库搜索路径。`cjv exec` 在注入了运行时库路径的环境中执行命令，但不影响当前 shell。该命令不支持 `--json`。
-
-```bash
-# 在活跃工具链的运行时环境中运行编译产物
-cjv exec ./my_binary arg1 arg2
-
-# 指定工具链
-cjv exec +nightly ./my_binary
-
-# "--" 之后的内容原样传递，可运行以 "+" 开头的命令名
-cjv exec -- +weird-command
-```
-
-详见 [运行时环境](runtime-environment.md)。
-
-### `cjv envsetup`
-
-输出用于配置仓颉运行时环境的 shell 命令，供当前 shell 会话 `eval`。
-
-```text
-cjv envsetup [+toolchain] [--target=SUFFIX] [--shell=TYPE]
-```
-
-参数与标志：
-
-| 参数 / 标志 | 说明 |
-| --- | --- |
-| `[+toolchain]` | 以 `+name` 临时指定工具链 |
-| `--shell=TYPE` | 手动指定 shell 类型：`bash`、`fish`、`powershell`、`cmd`；省略时自动检测 |
-| `--target=SUFFIX` | 输出已安装目标 SDK 的运行时环境（独立 SDK 模型），如 `--target=ohos` |
-
-`envsetup` 与代理模式使用相同的工具链解析优先级。`--target` 对应的目标 SDK 需先通过 `cjv install <toolchain> --target <suffix>` 安装。`--json` 模式输出结构化的环境描述（变量、PATH 前后置、库路径键），不打印 shell 脚本。
-
-```bash
-# Bash / Zsh
-eval "$(cjv envsetup)"
-
-# Fish
-cjv envsetup | source
-
-# PowerShell
-cjv envsetup | Invoke-Expression
-
-# 指定工具链并强制 bash 格式
-cjv envsetup +nightly --shell=bash
-
-# 输出已安装 ohos 目标 SDK 的环境
-cjv envsetup --target=ohos
-```
-
-### `cjv which`
-
-显示活跃工具链中某个 SDK 工具的路径；不带参数时打印工具链根目录。
-
-```text
-cjv which [command] [--toolchain <tc>]
-```
-
-参数：
-
-- `[command]`（可选）：要查询的工具名，如 `cjc`、`cjpm`。省略时打印活跃工具链根目录。
-
-```bash
-# 打印活跃工具链根目录
-cjv which
-
-# 打印 cjc 的绝对路径
-cjv which cjc
-cjv which cjc --toolchain sts
-cjv +sts which cjc
-```
-
-`cjv which` 与 `cjv run` 使用一致的工具解析逻辑：除固定代理工具外，也能解析 `bin/` 与 `tools/bin/` 下的二进制。
-
-### `cjv doc`
-
-在浏览器中打开当前工具链的离线文档。
-
-```text
-cjv doc [topic] [--path] [--toolchain <tc>]
-```
-
-参数：
-
-- `[topic]`（可选）：要跳转的子页主题，如 `stdx`、`std`、`dev-guide`、`book`、`tools`。省略时打开根 `index.html`。
-
-标志：
-
-| 标志 | 说明 |
-| --- | --- |
-| `--path` | 只打印文档路径或 URL，不打开浏览器 |
-| `--toolchain <tc>` | 指定要打开文档的工具链（默认为当前活跃工具链） |
-
-若目标工具链尚未安装 `docs` / `stdx-docs`，会提示先用 `cjv component add` 安装。`--json` 模式同样只返回路径，不启动浏览器。命令别名：`cjv docs`。
-
-```bash
-cjv doc
-cjv doc std
-cjv doc --path
-cjv doc stdx --toolchain nightly
-```
-
----
-
-## 工具链管理
-
-### `cjv toolchain list`
-
-列出已安装的工具链（等价于 `cjv show installed`）。
-
-```text
-cjv toolchain list
-```
-
-### `cjv toolchain link`
-
-将自定义工具链链接到本地目录（引用），或从本地归档 / URL 解包并安装为 cjv 拥有的工具链（物化）。
+## 自定义工具链
 
 ```text
 cjv toolchain link <name> <path|url> [--sha256 <hash>] [--force] [--no-stdx]
 ```
 
-参数：
+目录参数创建链接；归档或 URL 解包为受管安装。三个标志仅适用于归档来源：校验 SHA-256、替换同名安装、跳过随包 stdx。布局和平台限制见[自定义 SDK](install-from-url.md)。
 
-- `<name>`（必填）：自定义工具链名。必须是自定义名，不能与保留通道名 `lts`、`sts`、`nightly` 冲突，也不能含路径分隔符、`+` 前缀或为非法名。
-- `<path|url>`（必填）：本地目录、本地归档文件（`.zip` / `.tar.gz`），或 HTTP(S) URL。目录使用引用模式，归档和 URL 使用物化模式。
-
-两种行为：
-
-| 维度 | 引用模式（本地目录） | 物化模式（本地归档 / URL） |
-| --- | --- | --- |
-| `<path>` 形态 | 本地目录 | 本地归档 `sdk.zip`，或 `https://...` |
-| `toolchains/<name>` 内容 | 引用原目录 | 由 cjv 管理的安装目录 |
-| 数据归属 | cjv 不拥有，只引用 | cjv 拥有 |
-| 卸载行为 | 只删链接，原目录保留 | 删除整个目录（含 stdx） |
-
-标志（仅物化模式，本地归档与 URL 同样适用）：
-
-| 标志 | 说明 |
-| --- | --- |
-| `--sha256 <hash>` | 用该 SHA-256 校验归档 |
-| `--force` | 覆盖同名的已存在工具链 |
-| `--no-stdx` | 跳过安装随包的 stdx 组件 |
-
-这三个标志只对物化模式有效，与本地目录一起使用会报错，而不是静默忽略。引用模式要求目录是一个真实的仓颉 SDK（须存在 `bin/cjc`）。
-
-```bash
-# 引用模式：只创建链接，原目录保留
-cjv toolchain link mysdk /path/to/local/sdk
-
-# 物化模式（本地归档）：解包落地为 cjv 拥有的真实目录，源文件保留
-cjv toolchain link mysdk ./cangjie-linux-x64-1.0.0.zip
-
-# 物化模式（URL）：下载、解包，落地为 cjv 拥有的真实目录
-cjv toolchain link mysdk https://example.com/cangjie-linux-x64-1.0.0.zip
-
-# 物化模式 + 校验 + 覆盖同名 + 跳过随包 stdx
-cjv toolchain link mysdk https://example.com/sdk.zip \
-  --sha256 <hash> --force --no-stdx
-```
-
-物化模式的归档格式、随包 stdx 和平台限制见[从 URL 或本地归档安装工具链](install-from-url.md)。链接本地 stdx 见[组件](concepts/components.md)。
-
-### `cjv toolchain uninstall`
-
-卸载工具链（等价于 `cjv uninstall`）。
-
-```text
-cjv toolchain uninstall <name> [-y]
-```
-
-| 标志 | 说明 |
-| --- | --- |
-| `-y`, `--yes` | 跳过确认提示 |
-
----
-
-## 目标管理
-
-`cjv target` 管理所选宿主工具链的交叉 SDK。所有子命令支持 `--toolchain <tc>`，省略时使用全局 `+name` 或当前活跃工具链。
-
-### `cjv target list`
+## 目标与组件
 
 ```text
 cjv target list [--toolchain <tc>] [--installed]
-```
-
-列出宿主已安装版本的 manifest 可用目标，并标记已安装项。`--installed` 只读本地安装，可离线使用。
-
-### `cjv target add`
-
-```text
 cjv target add <suffix>... [--toolchain <tc>]
-```
-
-为宿主当前已安装的具体版本补齐一个或多个目标，不升级宿主。后缀使用 `ohos`、`android` 等；不要填写完整平台 key。
-
-### `cjv target remove`
-
-```text
 cjv target remove <suffix>... [--toolchain <tc>]
-```
-
-只移除指定交叉 SDK 及其组件，保留宿主安装。
-
-```bash
-cjv +sts target list
-cjv target list --toolchain sts --installed
-cjv +sts target add ohos android
-cjv +sts target remove ohos
-```
-
----
-
-## 组件管理
-
-`cjv component` 的子命令统一支持持久标志 `--toolchain <tc>` 指定目标工具链；省略时使用当前活跃工具链。
-
-`--target <suffix>` 选择该宿主相同发行版的交叉 SDK，用于 add、remove、link 和 list；它不会安装缺失的 SDK。组件命令中的 `--force` 仍用于替换组件或链接，与 install/update 的缺失项策略不同。
-
-### `cjv component add`
-
-为工具链安装一个或多个组件（如 `stdx`、`docs`、`stdx-docs`）。
-
-```text
 cjv component add <name>... [--toolchain <tc>] [--target <suffix>] [--force]
-```
-
-| 标志 | 说明 |
-| --- | --- |
-| `--toolchain <tc>` | 目标工具链（默认为当前活跃工具链） |
-| `--force` | 强制重新下载并重装，即使已安装 |
-
-`<name>` 可重复或逗号分隔。通过 `cjv toolchain link` 链接的自定义工具链没有对应的 release 资产，`component add` 对其不可用，请改用 `cjv component link`。
-
-```bash
-cjv component add stdx --toolchain lts
-cjv component add stdx,docs
-cjv component add stdx --force
-```
-
-### `cjv component link`
-
-将本地组件目录链接到工具链，而非通过下载安装。当前用于 `stdx`。
-
-```text
 cjv component link <name> <path> [--toolchain <tc>] [--target <suffix>] [--force]
-```
-
-| 标志 | 说明 |
-| --- | --- |
-| `--toolchain <tc>` | 目标工具链（默认为当前活跃工具链） |
-| `--force` | 替换已存在的组件安装（无论它是 link 还是下载得到的） |
-
-`<path>` 必须包含 `dynamic/` 与 `static/` 两个子目录。链接后相关环境变量仍会正常配置；移除组件或卸载工具链不会删除原始目录。
-
-```bash
-# 自定义工具链没有 release 资产，用 link 挂上本地 stdx
-cjv toolchain link mysdk /path/to/local/sdk
-cjv component link stdx /path/to/local/stdx --toolchain mysdk
-
-# 标准通道也可用 link 替代下载（离线 / 调试自编译 stdx）
-cjv component link stdx /path/to/local/stdx --toolchain lts --force
-```
-
-### `cjv component remove`
-
-从工具链卸载一个或多个组件。
-
-```text
 cjv component remove <name>... [--toolchain <tc>] [--target <suffix>]
-```
-
-`<name>` 可重复或逗号分隔。别名：`uninstall`、`rm`、`delete`、`del`。
-
-```bash
-cjv component remove stdx-docs
-cjv component remove stdx,docs --toolchain nightly
-```
-
-### `cjv component list`
-
-列出组件的已安装与可安装情况。
-
-```text
 cjv component list [--toolchain <tc>] [--target <suffix>] [--installed] [-q]
 ```
 
-| 标志 | 说明 |
-| --- | --- |
-| `--toolchain <tc>` | 目标工具链（默认为当前活跃工具链） |
-| `--installed` | 仅列出已安装的组件 |
-| `-q`, `--quiet` | 以单列形式输出（只打印名字，便于脚本） |
+`target add` 保留宿主版本；`target remove` 保留宿主安装。`target list --installed` 可离线查询。组件的 `--target` 只选择已有交叉 SDK，不安装 SDK。
 
-```bash
-cjv component list
-cjv component list --toolchain nightly
-cjv component list --installed -q
+组件名支持 `stdx`、`docs`、`stdx-docs`，可逗号分隔。`component add --force` 重新安装组件，`component link --force` 替换已有组件。只有 stdx 支持本地链接，源目录需包含 `dynamic/` 和 `static/`。外部 SDK 目录链接不支持组件修改。详情见[组件](concepts/components.md)。
+
+## 离线文档
+
+```text
+cjv doc [topic] [--path] [--toolchain <tc>]
 ```
 
-详见 [组件](concepts/components.md)。
+主题为 `std`、`dev-guide`（别名 `book`）、`tools`、`stdx`。省略时打开文档首页。`--path` 和 `--json` 只返回路径，其他情况启动浏览器。`docs` 是命令别名，需要先安装文档组件。
 
----
-
-## 默认工具链与覆盖
-
-### `cjv default`
-
-设置或显示默认工具链。
+## 选择与设置
 
 ```text
 cjv default [toolchain]
-```
-
-参数：
-
-- `[toolchain]`（可选）：要设为默认的工具链。省略时显示当前默认。传入 `none` 清除默认设置。
-
-交叉编译目标变体（如 `lts-1.0.0-linux-x64-ohos`）不能设为活跃或默认工具链，请用宿主工具链并通过 targets 配置。若工具链尚未安装，会先完成安装；安装失败时保持原默认选择。
-
-```bash
-# 显示当前默认
-cjv default
-
-# 设为 lts
-cjv default lts
-
-# 清除默认
-cjv default none
-```
-
-### `cjv override set`
-
-为某个目录设置工具链覆盖。进入该目录（或其子目录）时，cjv 优先使用该工具链。
-
-```text
 cjv override set <toolchain> [--path <dir>]
-```
-
-| 标志 | 说明 |
-| --- | --- |
-| `--path <dir>` | 为指定目录设置覆盖，而非当前目录 |
-
-```bash
-cjv override set nightly
-cjv override set lts --path /path/to/project
-```
-
-### `cjv override unset`
-
-移除目录的工具链覆盖。
-
-```text
 cjv override unset [--path <dir>] [--nonexistent]
-```
-
-| 标志 | 说明 |
-| --- | --- |
-| `--path <dir>` | 移除指定目录的覆盖，而非当前目录 |
-| `--nonexistent` | 移除所有指向已不存在目录的覆盖 |
-
-```bash
-cjv override unset
-cjv override unset --path /path/to/project
-cjv override unset --nonexistent
-```
-
-### `cjv override list`
-
-列出所有目录覆盖。
-
-```text
 cjv override list
-```
-
-工具链解析优先级与覆盖语义详见 [目标与覆盖](concepts/targets-overrides.md)。
-
----
-
-## 配置
-
-### `cjv set`
-
-修改 cjv 设置（存储在 `<CJV_HOME>/settings.toml`）。
-
-```text
 cjv set auto-self-update <enable|disable|check>
 cjv set auto-install <true|false>
 cjv set default-host <goos-goarch>
 cjv set home <path>
 ```
 
-子命令：
+`default` 省略参数时显示默认选择，`none` 清除选择；指定未安装的官方工具链时先安装，失败则保留原选择。交叉 SDK 不能设为默认。
 
-| 子命令 | 取值 | 说明 |
-| --- | --- | --- |
-| `auto-self-update` | `enable` / `disable` / `check` | 设置自动自更新行为；`check` 只检查不更新 |
-| `auto-install` | `true` / `false` | 代理模式下，解析到的工具链未安装时是否自动安装 |
-| `default-host` | `<goos-goarch>` | 设置默认主机平台标识（如 `linux-amd64`），用于解析下载平台 |
-| `home` | `<path>` | 持久化 `CJV_HOME` 到 settings.toml；传空字符串清除该覆盖；`CJV_HOME` 环境变量仍优先生效 |
+目录覆盖默认作用于当前目录，`--nonexistent` 清理已不存在目录。设置写入 `~/.cjv/settings.toml`，不随 `CJV_HOME` 改变。字段含义见[配置](configuration.md)。
 
-```bash
-cjv set auto-self-update check
-cjv set auto-install true
-cjv set default-host linux-amd64
-cjv set home /opt/cjv
-```
-
-详见 [配置](configuration.md)与 [环境变量](environment-variables.md)。
-
----
-
-## 自管理
-
-### `cjv self update`
-
-将 cjv 自身更新到最新版本。
-
-```text
-cjv self update
-```
-
-```bash
-cjv self update
-```
-
-### `cjv self uninstall`
-
-卸载 cjv 自身以及所有已安装的工具链（删除整个 `<CJV_HOME>/` 并清理 PATH 配置）。
-
-```text
-cjv self uninstall [-y]
-```
-
-| 标志 | 说明 |
-| --- | --- |
-| `-y`, `--yes` | 跳过确认提示 |
-
-交互式终端会弹出确认。`--json` 模式下必须配合 `-y` 才能执行。
-
-```bash
-cjv self uninstall
-cjv self uninstall -y
-```
-
----
-
-## 安装引导
-
-### `cjv init`
-
-交互式引导首次安装：配置数据目录、PATH，并可选安装默认工具链与组件。通常由安装脚本调用，也可手动运行。
+## 初始化与自管理
 
 ```text
 cjv init [-y] [--default-toolchain <name>] [-c component]... [--no-modify-path]
+cjv self update
+cjv self uninstall [-y]
 ```
 
-| 标志 | 说明 |
-| --- | --- |
-| `-y`, `--yes` | 跳过交互菜单，按默认选项非交互安装 |
-| `--default-toolchain <name>` | 要安装的默认工具链（默认 `lts`；用 `none` 跳过安装工具链） |
-| `-c`, `--component <name>` | 随默认工具链安装的组件（可重复或逗号分隔） |
-| `--no-modify-path` | 不修改 PATH |
+`init` 安装 cjv 命令入口、配置 PATH，并默认安装 `lts`。`--default-toolchain none` 跳过 SDK，`-c/--component` 选择组件，`-y/--yes` 跳过交互，`--no-modify-path` 保留现有 PATH。非终端输入采用非交互模式。
 
-标准输入不是终端时（如 `curl ... | sh` 引导），自动回退为非交互安装。该命令不支持 `--json`。
+`self update` 更新 cjv 本体。`self uninstall` 删除整个数据目录、工具链及组件，并清理 PATH；JSON 模式必须加 `-y`。
 
-```bash
-cjv init
-cjv init -y --default-toolchain lts -c stdx,docs
-cjv init -y --default-toolchain none --no-modify-path
+## Shell 补全
+
+```text
+cjv completion <bash|zsh|fish|powershell>
 ```
 
-安装方式详见 [安装 cjv](installation/index.md)。
-
-## 安装与更新策略
-
-通道安装和更新会先准备主机、所有已跟踪交叉 SDK 与组件，再统一发布。任何下载、校验、解压或发布失败都会保留原安装；中断后恢复也使用同一个事务决策。明确版本独立保留。
-
-nightly 会在 manifest 已发布的历史版本中寻找能提供所需目标和组件的最新版本，默认不降级。`--allow-downgrade` 允许选择较旧的兼容 nightly。`--force` 允许跳过并删除缺失的可选组件和目标；install 和 update 使用相同策略，不重新下载或替换未变化的 SDK。`--no-update` 保留已有 SDK 的发行版，只添加目标或组件，不能与 `--force` 同用；没有新增需求时可离线完成。
-
-全局 `--quiet` / `-q` 隐藏进度，`--verbose` 开启调试日志，两者互斥。`component list --quiet` 保留原有的单列输出含义。`cjv check` 同时检查工具链与 cjv 自身的发行版，仅查询元数据，不安装更新。
-
-具有 SHA256 的下载失败或中断后会保留分段文件，下次命令通过 HTTP Range 继续，完成后校验完整文件。没有校验和的归档只在同一次命令内尝试续传。
+输出对应 shell 的补全脚本，加载方法见 `cjv completion <shell> --help`。

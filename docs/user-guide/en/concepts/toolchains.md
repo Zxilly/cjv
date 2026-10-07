@@ -1,158 +1,55 @@
-# Toolchains
+# Toolchains and versions
 
-A toolchain is the basic unit cjv manages, a complete, self-contained Cangjie SDK installation. A toolchain contains at least the compiler `cjc`, the package manager `cjpm`, and the accompanying runtime libraries. On top of it you can also mount [components](components.md) (such as `stdx`, `docs`) and [cross-compilation targets](targets-overrides.md).
+A toolchain is a Cangjie SDK containing the compiler, build tools, and runtime libraries. cjv stores multiple SDKs under `<CJV_HOME>/toolchains/`. Components and offline documentation are stored separately.
 
-cjv can install multiple toolchains at the same time and switch between them. Each toolchain has a unique name, which you use in almost every command to refer to it:
+## Channels and names
+
+| Name | Meaning |
+| --- | --- |
+| `lts` | Track the long-term support channel |
+| `sts` | Track the short-term support channel |
+| `nightly` | Track development builds available in the published manifest |
+| `lts-1.0.5` | Pin a specific version within a channel |
+| `1.0.5` | Omit the channel and let cjv find the matching version |
+| `sts-1.2`, `1.2` | Select the latest stable patch in that minor version |
+| `nightly-2026-10-04` | Select the latest published nightly for that date |
+| `my-sdk` | A custom toolchain created with `cjv toolchain link` |
+
+Versions and dates in this table illustrate the syntax. Query your distribution for available versions:
 
 ```bash
-cjv install lts          # Install a toolchain named lts
-cjv default sts          # Set the default toolchain to sts
-cjv run nightly cjc -V   # Run cjc with the nightly toolchain
-cjv uninstall lts        # Uninstall lts
+cjv toolchain list-remote --channel lts
+cjv toolchain list-remote --channel nightly --limit 10
 ```
 
-All installed toolchains live under `<CJV_HOME>/toolchains/<name>/`, where `CJV_HOME` defaults to `~/.cjv`.
+Channel names are case-insensitive. Custom names must not conflict with official names, contain path separators, start with `+`, or be empty, `.` or `..`.
 
-## Forms of a toolchain name
-
-A toolchain name can take one of the following forms. The first few are recognized by cjv directly and downloaded from official sources; the last one, `custom`, is created explicitly by you.
-
-|Form|Example|Description|
-|----|-------|-----------|
-|Channel name|`lts`, `sts`, `nightly`|Uses that [channel](channels.md)'s independent installation; install and update fetch the latest release|
-|Channel name + version|`lts-1.0.5`, `sts-1.1.0-beta.23`|A specific version within that channel|
-|Bare version number|`1.0.5`|A version number without a channel prefix, looked up across all channels|
-|custom|`my-sdk`, `local-build`|Created with `cjv toolchain link`, see below|
-
-### Channel name
-
-`lts`, `sts`, and `nightly` are three channels. Install and update fetch the channel's latest release; running a tool uses the release already installed in its channel directory. Channel names are case-insensitive, so `LTS`, `Lts`, and `lts` are equivalent.
+## Tracked channels and pinned versions
 
 ```bash
-cjv install lts      # Install the latest LTS
-cjv install nightly  # Install the latest nightly
-```
-
-For the semantics, update cadence, and download sources of each channel, see [Channels](channels.md).
-
-### Channel name + version
-
-Append a `-` and a version number after a channel name to pin a specific version within that channel. The version number may include a pre-release suffix:
-
-```bash
+cjv install lts
 cjv install lts-1.0.5
-cjv install sts-1.1.0-beta.23
-cjv install nightly-1.1.0-alpha.20260306010001
 ```
 
-A toolchain installed this way takes the full string you typed as its name, for example `lts-1.0.5`, and later commands refer to it by that name too:
+These are separate installations. `cjv update lts` updates the tracked channel and leaves `lts-1.0.5` unchanged. Their components are also managed separately. Running `cjc` uses the installed release; upgrading requires `install` or `update`.
 
-```bash
-cjv default lts-1.0.5
-cjv uninstall sts-1.1.0-beta.23
-```
+Minor-version and date selectors install the resolved concrete version. Put the full version name in [cangjie-sdk.toml](../toolchain-file.md) when a team needs the same release.
 
-### Bare version number
+Nightly installation considers required components and cross SDKs when choosing a compatible release from published history. It does not downgrade by default; `--allow-downgrade` permits an older compatible nightly. See the [command reference](../command-reference.md) for other installation policies.
 
-If you give only a version number (starting with a digit, without a channel prefix), cjv looks across all channels for an installed toolchain matching that version:
+## Host platforms
 
-```bash
-cjv run 1.0.5 cjc --version
-```
+Names such as `sts-linux-x64` and `sts-1.2.0-darwin-arm64` select a host platform. Hosts are installed separately. An explicit name for the default platform identifies the same installation as the name without a platform. Installing another platform's SDK does not make its programs executable on your machine.
 
-Use it to refer to a specific installed version without remembering which channel it belongs to.
+[Target management](../cross-compilation.md) attaches cross SDKs to a host toolchain. A cross SDK cannot be the default or active toolchain.
 
-### custom: custom toolchains
-
-Any name that does not match the forms above (not a channel name, not `channel-version`, and not starting with a digit) is treated as a custom toolchain. These toolchains do not come from the official source; you create them explicitly with `cjv toolchain link`:
+## Custom SDKs
 
 ```bash
 cjv toolchain link my-sdk /path/to/local/sdk
+cjv default my-sdk
 ```
 
-Custom toolchains come from two sources, differing in who owns the data. See [Custom toolchains](#custom-toolchains) below.
+A directory link refers directly to an SDK you maintain. Uninstalling removes the link and preserves the source directory. Use [archive installation](../install-from-url.md) for a copy managed by cjv or to attach local stdx. Custom toolchains are not updated by `cjv update` and have no official components available through `component add`.
 
-## Naming rules
-
-Whatever the form, a toolchain name must satisfy the following constraints, or the command reports an error:
-
-- must not be empty;
-- must not contain the path separators `/` or `\`;
-- must not be `.` or `..`;
-- It cannot start with a `+` prefix. `+` is the toolchain selection syntax in commands like `cjv exec` and `cjv envsetup`; just write the name directly;
-- trailing `/` or `\` are stripped automatically.
-
-In addition, in `cjv toolchain link`, a custom toolchain name cannot conflict with the reserved channel names: `lts`, `sts`, and `nightly` are taken by the official channels and cannot be used as link names.
-
-## Custom toolchains
-
-Custom toolchains let you bring SDKs from outside the official source under cjv's management, for example a locally built SDK, an internally distributed build, or an archive you downloaded temporarily. There are two ways to create one, differing in whether cjv owns the data.
-
-### Source 1: link a local directory (cjv does not own the data)
-
-The first way references an existing local SDK directory without copying its files:
-
-```bash
-cjv toolchain link my-sdk /path/to/local/sdk
-```
-
-The linked directory must be a real Cangjie SDK. cjv checks that `bin/cjc` exists in it, and refuses to link otherwise.
-
-Because it is only a link, the original data still belongs to you. Any change you make in the source directory takes effect immediately through cjv; `cjv toolchain uninstall my-sdk` (as well as `cjv uninstall my-sdk`) only removes the link and does not touch your original directory. This way suits debugging a self-built SDK, or sharing one installation across several tools.
-
-### Source 2: install from an archive (cjv owns the data)
-
-When the second argument to `cjv toolchain link` is a local `.zip` / `.tar.gz` archive or an HTTP(S) URL, cjv installs it under `<CJV_HOME>/toolchains/<name>/`. A local source archive is never moved or deleted:
-
-```bash
-# Local archive (the source file is kept)
-cjv toolchain link my-sdk ./cangjie-sdk.tar.gz
-
-# URL
-cjv toolchain link my-sdk https://example.com/cangjie-sdk.tar.gz
-```
-
-In contrast to a local link, this toolchain's data is managed by cjv: `cjv toolchain uninstall my-sdk` actually deletes this directory and its components.
-
-A materialize install supports a few extra options. They apply only to an archive source (a local file or a URL) and are rejected when used with a local directory:
-
-- `--sha256 <hash>`: verify the SHA-256 of the archive;
-- `--force`: overwrite an already-installed toolchain of the same name;
-- `--no-stdx`: skip auto-detecting and installing the bundled stdx.
-
-For the full archive format conventions, layout requirements, verification behavior, and examples, see [Installing a toolchain from a URL or archive](../install-from-url.md).
-
-### Attaching stdx to a custom toolchain
-
-A custom toolchain created by linking a local directory has no corresponding official release asset, so `cjv component add stdx` does not work for it. When needed, use `cjv component link stdx` instead to attach a local stdx directory:
-
-```bash
-cjv component link stdx /path/to/local/stdx --toolchain my-sdk
-```
-
-See [Components](components.md) for details.
-
-## Viewing and managing toolchains
-
-List all installed toolchains; custom toolchains also appear in the list:
-
-```bash
-cjv toolchain list
-# Equivalent to
-cjv show installed
-```
-
-View the currently active toolchain and the overall status:
-
-```bash
-cjv show
-cjv show active
-```
-
-Setting the default toolchain, setting a directory override, and selecting a toolchain through an environment variable or `cangjie-sdk.toml` are the mechanisms that decide which toolchain is active in a given context. The priority rules for this are detailed in [Targets and overrides](targets-overrides.md) and [The toolchain file](../toolchain-file.md).
-
-## Hosts and shorthand selectors
-
-Use `sts-linux-x64` or `sts-1.2.0-darwin-arm64` to select a host platform. Different platforms have independent installations. An explicit name for the current default platform and the legacy unsuffixed name resolve to one installation so cross SDKs have one host owner. Existing unsuffixed directories remain compatible.
-
-`sts-1.2` or bare `1.2` chooses the latest published stable patch release. `nightly-2026-10-04` chooses the newest published nightly for that date. Installations use concrete release directories, and running or uninstalling shorthand selectors resolves the concrete installation. Date availability depends on the manifest's retained history; cjv never invents download URLs.
+Use `cjv toolchain list` to inspect installations and `cjv show active` to see the current selection and its source. Selection rules are covered in [project toolchains](../toolchain-file.md).

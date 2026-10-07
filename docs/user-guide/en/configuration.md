@@ -1,146 +1,62 @@
 # Configuration
 
-cjv keeps its persisted settings in the TOML file `~/.cjv/settings.toml`. In daily use you do not need to edit it by hand; modify it with the `cjv set` subcommands, which validate values, write the file back, and print a confirmation.
-
-This chapter covers all `cjv set` subcommands, the corresponding fields in `settings.toml`, and the overall layout of the `~/.cjv/` directory. Temporary overrides made at runtime via environment variables (such as `CJV_HOME` and `CJV_DIST_SERVER`) are covered in [Environment Variables](environment-variables.md).
-
-## settings.toml
-
-The settings file always lives at `<user home>/.cjv/settings.toml` and does not move with `CJV_HOME`.
-
-A typical `settings.toml` looks roughly like this:
+User settings always live in `~/.cjv/settings.toml`. `CJV_HOME` and `home` change the data directory, not this file's location.
 
 ```toml
 version = 1
 default_toolchain = "lts"
 auto_self_update = "check"
 auto_install = true
-manifest_url = "https://raw.githubusercontent.com/Zxilly/cangjie-version-manifest/master/versions.json"
 
 [overrides]
 "/home/me/project-a" = "sts"
 ```
 
-Field overview:
+## Settings
 
-|Field|Type|Corresponding command|Description|
-|-----|----|---------------------|-----------|
-|`version`|int|(maintained automatically)|Settings file format version, written and migrated automatically by cjv|
-|`default_toolchain`|string|`cjv default <toolchain>`|Default toolchain; see [Toolchains](concepts/toolchains.md)|
-|`manifest_url`|string|Manual edit / system fallback|LTS/STS manifest URL; nightly is loaded on demand from sibling `nightly.json`|
-|`dist_server`|string|Manual edit / system fallback|Toolchain distribution root containing `versions.json` and `nightly.json`; see [Internal distribution source](enterprise/distribution-server.md)|
-|`auto_self_update`|string|`cjv set auto-self-update`|Self-update behavior during `cjv update`: `enable` / `disable` / `check`|
-|`auto_install`|bool|`cjv set auto-install`|Whether to automatically install missing toolchains in proxy mode|
-|`home`|string|`cjv set home`|Persisted `CJV_HOME` data directory path|
-|`default_host`|string|`cjv set default-host`|Default host platform identity (`goos-goarch` form)|
-|`link_mode`|string|Manual edit / system fallback|`hardlink` (default) or `copy`, controlling identical SDK payload sharing|
-|`overrides`|table|`cjv override`|Directory-to-toolchain override mapping; see [Targets and Overrides](concepts/targets-overrides.md)|
+| Field | Default or purpose | How to change it |
+| --- | --- | --- |
+| `version` | Settings format version maintained by cjv | Written and migrated automatically |
+| `default_toolchain` | Default toolchain | `cjv default <name>`; `none` clears it |
+| `auto_self_update` | `check`: report updates; also accepts `enable`, `disable` | `cjv set auto-self-update <value>` |
+| `auto_install` | `true`: install missing requirements of the selected toolchain | `cjv set auto-install <true\|false>` |
+| `home` | Data directory; defaults to `~/.cjv` | `cjv set home <path>` |
+| `default_host` | Default host platform; detected automatically | `cjv set default-host <goos-goarch>` |
+| `manifest_url` | Default LTS/STS manifest; nightly uses its sibling `nightly.json` | Edit settings |
+| `dist_server` | Root serving both `versions.json` and `nightly.json` | Edit settings |
+| `link_mode` | `hardlink` or `copy`; defaults to `hardlink` | Edit settings |
+| `overrides` | Directory-to-toolchain mapping | `cjv override` |
 
- >
- > Unrecognized keys in the file (for example, typos) are reported with a warn-level log message but do not prevent cjv from starting. Setting `version` to a value higher than the current binary supports does cause an error.
+`auto_self_update` applies only to a full `cjv update` without names or a global `+name`. `enable` updates cjv, `check` reports available updates, and `disable` skips the check. Development builds skip release checks. `cjv self update` remains available for manual use.
 
-Provide `manifest_url` and `dist_server` through the user settings file or system fallback settings. Source precedence is `CJV_DIST_SERVER`, `dist_server`, then `manifest_url`. A root maps to `<root>/versions.json` and `<root>/nightly.json`; a direct `manifest_url` locates nightly in the same directory. See [Internal distribution source](enterprise/distribution-server.md) for the contract.
+`cjv set home` converts relative paths to absolute paths. `cjv set home ""` explicitly selects the default data directory. `default_host` uses Go platform names such as `linux-amd64`, unlike the `linux-x64` spelling in toolchain names.
 
-## cjv set
+## Inheritance and temporary overrides
 
-`cjv set` modifies one setting in `settings.toml`, persisting only fields you explicitly choose. Other fields continue to inherit system fallback or built-in defaults. When the choice stored in the user file changes, the command writes it and prints `Setting '<key>' updated to '<value>'`. The first explicit setting also pins a value equal to the current inherited value; repeating an already persisted choice does not write again.
+User settings override [system fallback settings](enterprise/index.md) field by field. Unset fields continue to inherit; `false` and empty strings count as explicit values. `cjv set` saves only the selected field without persisting other inherited values. Remove a field to restore inheritance.
 
-`false` and empty strings are explicit user values, so system fallback values do not replace them. For example, `cjv set auto-install false` keeps automatic installation disabled, and `cjv default none` clears the default toolchain. To resume inheritance for a field, remove that field from the user settings file. Temporary environment overrides are not written to the file by these changes.
+Data directory precedence is `CJV_HOME`, then `home`, then `~/.cjv`. Distribution precedence is `CJV_DIST_SERVER`, then `dist_server` in merged settings, then `manifest_url`. Environment overrides are not persisted by `cjv set`.
 
-### cjv set auto-self-update
+Unknown keys produce warnings. Invalid settings and unsupported future format versions cause errors.
 
-Controls whether `cjv update` also self-updates the cjv binary after updating toolchains.
-
-```bash
-# Automatically download and install the latest version of cjv
-cjv set auto-self-update enable
-
-# Fully disable self-update (not even a prompt is printed)
-cjv set auto-self-update disable
-
-# Default: only notify when a new version is available, do not install automatically
-cjv set auto-self-update check
-```
-
-`enable` upgrades cjv after a full `cjv update` without name arguments or a global `+toolchain` selector; `disable` skips self-update; `check` (the default) checks release metadata and reports available cjv updates without installing them. Development builds skip this release check.
-
-Regardless of this setting, you can upgrade cjv manually at any time with `cjv self update`.
-
-### cjv set auto-install
-
-Controls whether, in [proxy mode](concepts/proxies.md), a resolved toolchain that is not yet installed is installed automatically. Enabled by default (`true`).
-
-```bash
-# Default: when you invoke cjc / cjpm directly, a missing toolchain is installed automatically
-cjv set auto-install true
-
-# Disabled: error out when a toolchain is missing, instead of installing it automatically
-cjv set auto-install false
-```
-
-When enabled, running `cjc`, `cjpm`, or other SDK tools directly will install the resolved toolchain first if it is not present, then proxy the call. The [components](concepts/components.md) and [targets](cross-compilation.md) declared in `cangjie-sdk.toml` apply the same way: with `auto-install` enabled, proxy execution fills in the missing components and target SDKs as needed.
-
-### cjv set home
-
-Persists the `CJV_HOME` data directory path to `settings.toml`. A relative path passed in is converted to an absolute path before being stored.
-
-```bash
-# Persist the data directory to a specific location
-cjv set home /opt/cjv-data
-
-# An empty string selects ~/.cjv instead of inheriting a system home setting
-cjv set home ""
-```
-
-The `CJV_HOME` environment variable always takes priority over this setting. Even if `home` is persisted in `settings.toml`, the `CJV_HOME` environment variable still wins when set in the shell. The `settings.toml` file itself is unaffected and always stays in `~/.cjv/`.
-
-### cjv set default-host
-
-Sets the default host platform identifier (in `goos-goarch` form, such as `linux-amd64`). You generally do not need to set this manually, as cjv detects the current host platform automatically; it is only needed when automatic detection does not match your expectations and you need to specify it explicitly.
-
-```bash
-cjv set default-host linux-amd64
-```
-
-The value must be a valid platform identifier that cjv recognizes, otherwise the command will error out.
-
-## ~/.cjv Directory Structure
-
-All of cjv's data is kept under `CJV_HOME` (`~/.cjv` by default), with each subdirectory holding a decoupled responsibility:
+## Data layout
 
 ```text
-~/.cjv/
-  bin/            # cjv and SDK tool command entry points
-  toolchains/     # installed SDK toolchains (the SDK proper only)
-  stdx/           # stdx component (split per toolchain; paths exposed via CANGJIE_STDX_PATH_*)
-    <tc>/
-      dynamic/
-      static/
-  docs/           # offline docs (decoupled from toolchains; docs and stdx-docs each own a subdir)
-    <tc>/
-      main/                    # docs component (dev-guide / libs/std / tools entry)
-      stdx/                    # stdx-docs component (libs_stdx entry)
-  downloads/      # download staging and resumable partial files
-  settings.toml   # user settings
+<CJV_HOME>/
+  bin/              # cjv and SDK command entry points
+  toolchains/<tc>/  # SDK
+  stdx/<tc>/        # dynamic/ and static/
+  docs/<tc>/main/   # Main documentation
+  docs/<tc>/stdx/   # Extension library documentation
+  downloads/        # Archives and resumable partial downloads
 ```
 
-`bin/` contains the command entry points for cjv and SDK tools such as `cjc` and `cjpm`. Add this directory to `PATH` to invoke them directly; see [Proxies](concepts/proxies.md).
+The settings file shares this location only when the default data directory is used. `cjv show home` reports the effective data directory and its source.
 
-`toolchains/<tc>/` is the SDK itself for each installed toolchain.
+Downloads with SHA-256 retain resumable files after failure or interruption. A later download verifies the complete archive. Successful operations clean up their own downloads; a fully successful update of all toolchains also cleans leftover downloads.
 
-`stdx/<tc>/` holds the `stdx` component per toolchain, split into `dynamic/` and `static/`. During proxying or in the runtime environment, `CANGJIE_STDX_PATH_DYNAMIC` and `CANGJIE_STDX_PATH_STATIC` are injected automatically to point at these two directories. See [Components](concepts/components.md).
+## SDK file reuse
 
-`docs/<tc>/` is offline documentation, decoupled from the toolchain directory. `main/` holds the `docs` component (dev-guide, libs/std, tools), and `stdx/` holds the `stdx-docs` component. Open them in a browser with `cjv doc`.
+The default `link_mode = "hardlink"` tries to reuse identical regular files for SDKs with the same release, platform, and SHA-256. Metadata and components remain separate. If hard links are unavailable, the copied files are kept.
 
-`downloads/` holds downloaded archives and resumable partial files for artifacts with SHA-256 checksums. Successful operations remove their archives; failed or interrupted checksum-backed transfers retain partial files so the next invocation can resume them. A successful update of all toolchains also purges leftover downloads. `settings.toml` is the user settings file described in this chapter.
-
- >
- > `cjv toolchain uninstall <tc>` also cleans up `stdx/<tc>/` and `docs/<tc>/`, leaving no orphaned component data behind.
-
-If a custom `CJV_HOME` is set or persisted, the `bin/`, `toolchains/`, `stdx/`, `docs/`, and `downloads/` directories above all fall under the new path; only `settings.toml` always stays in the user's home directory at `~/.cjv/` (see [settings.toml](#settingstoml) above).
-
-## SDK file sharing
-
-The default `link_mode = "hardlink"` attempts hardlinks for regular SDK files from the same release, platform and SHA-256. cjv compares file contents first and skips modified files. Installation and component metadata under `.cjv` always remain independent. Unsupported hardlinks leave the copied files in place without failing the install. Legacy migration copies existing files to avoid sharing user-modified SDKs.
-
-Updates and removals replace or unlink directories rather than editing another SDK in place. Hardlinks still share file contents: manual in-place edits affect every installation linked to that file. Set `link_mode = "copy"` in `settings.toml` for independent file contents in subsequent installs. This does not detach existing hardlinks. Component stdx and documentation directories are installed independently and are outside this SDK deduplication optimization.
+Hard links share content, so manually editing an SDK file in place can affect other installations. Use `link_mode = "copy"` for independent copies. This affects future installations and does not split existing hard links. cjv updates publish replacement directories without editing shared files in place.

@@ -6,7 +6,7 @@
 
 English | [中文](README.md)
 
-cjv is a toolchain manager for the [Cangjie](https://cangjie-lang.cn/) SDK. It installs and manages multiple SDKs, switches default versions, and transparently proxies SDK tools such as `cjc` and `cjpm` to the right toolchain for the current project.
+cjv manages [Cangjie](https://cangjie-lang.cn/) SDKs so each project can use the version it needs. Run `cjc` and `cjpm` directly after installation; cjv selects the toolchain.
 
 ## Documentation
 
@@ -64,20 +64,22 @@ cjv default lts
 cjv show
 
 # Run a command with a specific toolchain
-cjv run sts cjc --version
+cjv run --install sts cjc --version
 ```
 
-After setting a default toolchain, you can call `cjc`, `cjpm`, and other SDK tools directly. cjv resolves the active toolchain from environment variables, directory overrides, `cangjie-sdk.toml`, and the default configuration.
+Commit a `cangjie-sdk.toml` to pin a project's version:
 
-Batch commands accept multiple names: `cjv install lts sts`, `cjv update lts sts`, and `cjv uninstall lts sts`. Select an SDK with `cjv +sts component list`, `cjv +sts target list`, or `cjv which cjc --toolchain sts`. `default` installs missing toolchains immediately; `check` checks SDK and cjv releases. Install/update share a `--force` policy that skips unavailable entries without reinstalling unchanged SDKs. `install --no-update` keeps an existing release, and `--allow-downgrade` permits older compatible nightly releases. Global `--quiet/-q` and `--verbose` control progress and logging.
+```toml
+[toolchain]
+channel = "lts-1.0.5"
+components = ["stdx"]
+```
 
-See the [user guide](https://cjv.zxilly.dev/book/user-guide/en/) for the full command reference, toolchain resolution, components, cross-compilation, runtime environment, and configuration.
+The version is an example. When you run `cjc` or `cjpm` in the project, cjv selects its declared toolchain and installs missing SDKs and components by default. See the [user guide](https://cjv.zxilly.dev/book/user-guide/en/) for version selection, cross-compilation, and command options.
 
 ## Agent Skill
 
-The repository includes a concise [cjv user-guide skill](skills/cjv) that helps
-coding agents choose the right cjv command and follow its toolchain-resolution
-rules.
+The [cjv skill](skills/cjv) gives coding agents a reference for commands and project toolchain rules.
 
 Install it globally for Codex with the [skills CLI](https://github.com/vercel-labs/skills):
 

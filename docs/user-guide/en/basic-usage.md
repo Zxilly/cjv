@@ -1,101 +1,55 @@
-# Getting Started
+# Quick start
 
-This chapter walks you through the complete flow from installing a toolchain to running Cangjie tools, and introduces the common commands you'll use day to day. By the end you'll be up and running; for deeper concepts see [Core Concepts](concepts/index.md), and for the full set of options for each command see the [Command Reference](command-reference.md).
-
-This chapter assumes you have already installed `cjv` itself. If you haven't, start with [Installing cjv](installation/index.md).
-
-## Up and running in five minutes
-
-The following four steps demonstrate the most typical usage: install an LTS toolchain, set it as the default, check the status, and then run a command with it.
+Install the LTS toolchain and make it the default:
 
 ```bash
-# 1. Install the latest LTS toolchain
 cjv install lts
-
-# 2. Set it as the default toolchain
 cjv default lts
-
-# 3. Show the active and installed toolchains
-cjv show
-
-# 4. Run a command with a specific toolchain
-cjv run lts cjc --version
-```
-
-`cjv install lts` downloads and installs the latest toolchain from the LTS channel. `lts` is a channel name, which cjv resolves to a specific version. Besides `lts`, you can also install `sts`, `nightly`, or an exact version number. For the meaning of each channel, see [Channels](concepts/channels.md).
-
-`cjv default lts` records `lts` as the default toolchain. Once a default is set, cjv uses it whenever no toolchain is declared separately in the project.
-
-`cjv show` lists the currently active toolchain and all installed toolchains, which makes it easy to confirm the installation. To see just one of these, use `cjv show active` or `cjv show installed`.
-
-`cjv run lts cjc --version` runs `cjc --version` explicitly with the `lts` toolchain. `cjv run <toolchain> <command> [args...]` temporarily switches to the given toolchain to run a command without changing the default, which makes it easy to compare across toolchains temporarily.
-
-## Using `cjc` and `cjpm` directly (proxy execution)
-
-Once a toolchain is installed and `PATH` is configured, you do not need to prefix every command with `cjv run`; just call the SDK tools directly:
-
-```bash
 cjc --version
-cjpm build
 ```
 
-cjv resolves the toolchain for the current context, forwards the command to the corresponding SDK, and configures the required runtime environment. Common tools such as `cjc`, `cjpm`, `cjfmt`, `cjlint`, `cjdb`, `cjcov`, and `cjprof` all support this usage.
+If the shell cannot find `cjc`, open a new terminal to load the installed `PATH` setting. If it is still missing, check that `<CJV_HOME>/bin` is on `PATH`; the default is `~/.cjv/bin`.
 
-The proxy resolves the toolchain by the same rules as `cjv run`, but without requiring you to specify a toolchain. It decides automatically by priority: environment variable, directory override, the project's `cangjie-sdk.toml`, and finally falling back to the default toolchain. For the full resolution order, see [Proxies](concepts/proxies.md) and [Targets and overrides](concepts/targets-overrides.md).
+## Choose a project version
 
-If the resolved toolchain is not yet installed and you have enabled the `auto_install` setting, cjv installs it automatically before proxying, with no manual `cjv install` needed. To enable it:
-
-```bash
-cjv set auto-install true
-```
-
-For details on this setting, see [Configuration](configuration.md).
-
- >
- > Tip: a binary compiled by Cangjie still needs the correct library search paths at runtime. To run a program you compiled yourself, see `cjv exec` and `cjv envsetup` in [Runtime environment](runtime-environment.md).
-
-## Project-level toolchains
-
-Write the toolchain declaration into the project so that team members automatically use the same toolchain once they enter the directory, without each switching manually. Place a `cangjie-sdk.toml` in the project root:
+Create `cangjie-sdk.toml` in the project root:
 
 ```toml
 [toolchain]
-channel = "lts"
+channel = "lts-1.0.5"
+components = ["stdx"]
 ```
 
-After that, within this directory (or any of its subdirectories), `cjv run`, the proxied `cjc`/`cjpm`, and `cjv show active` all prefer the toolchain declared here. For the full set of fields in this file (`channel`, `components`, `targets`), see [Toolchain file](toolchain-file.md).
+Replace the example version with one your project needs and your distribution provides. Running `cjpm build` in this directory uses the declared toolchain. Automatic installation is enabled by default and supplies missing SDKs and components. Running a command does not automatically upgrade an existing toolchain.
 
-If you only want to temporarily bind a toolchain to a directory without committing a file, you can use a directory override:
+For a selection that applies only on your machine, use a directory override:
 
 ```bash
-cjv override set nightly
+cjv override set sts
+cjv show active
+cjv override unset
 ```
 
-For details, see [Targets and overrides](concepts/targets-overrides.md).
+Overrides are stored in user settings; project files can be committed to version control. See [project toolchains](toolchain-file.md) for precedence.
 
-## Common commands at a glance
+## Run once and inspect
 
-Below are the commands you'll use most in day-to-day work. For the full set of arguments and subcommands of each command, see [Command reference](command-reference.md).
+```bash
+cjv run --install sts cjc --version
+cjv show
+cjv which cjc
+cjv toolchain list
+```
 
-|Command|Description|
-|-------|-----------|
-|`cjv install <toolchain>`|Install a toolchain (such as `lts`, `sts`, `nightly`, or a specific version)|
-|`cjv uninstall <toolchain>`|Uninstall a toolchain|
-|`cjv update [toolchain]`|Update installed toolchains|
-|`cjv default [toolchain]`|Set or show the default toolchain|
-|`cjv show`|Show the active and installed toolchains|
-|`cjv run <toolchain> <command> [args...]`|Run a command with a specific toolchain|
-|`cjv exec [+toolchain] <command> [args...]`|Execute a command in the Cangjie runtime environment|
-|`cjv which <command>`|Show the path of an SDK tool in the active toolchain|
-|`cjv check`|Check for available updates (without installing)|
-|`cjv override set <toolchain>`|Set a toolchain override for the current directory|
-|`cjv component add <name>...`|Install a component for a toolchain (such as `stdx`)|
-|`cjv self update`|Update cjv itself to the latest version|
+`run` selects a toolchain explicitly; `--install` allows a missing version to be installed. Use `cjv exec ./my_binary` to run your own compiled program with its runtime library paths.
 
-## Next steps
+## Update and uninstall
 
-- To learn about core concepts such as toolchains, channels, components, and proxies, start from [Core concepts](concepts/index.md).
-- To pin a toolchain version for a project, see [Toolchain file](toolchain-file.md).
-- For cross-compilation, see [Cross-compilation](cross-compilation.md).
-- To run binaries you compiled yourself, see [Runtime environment](runtime-environment.md).
-- For all commands, options, and environment variables, see [Command reference](command-reference.md) and [Environment variables](environment-variables.md).
+```bash
+cjv check
+cjv update
+cjv self update
+cjv uninstall sts
+```
+
+`check` looks for SDK and cjv updates. `update` updates tracked channels and leaves pinned versions and custom toolchains unchanged. The [auto_self_update](configuration.md) setting controls automatic updates to cjv itself. `uninstall` also removes the selected toolchain's components and documentation.

@@ -1,41 +1,76 @@
-# 企业部署概览
+# 企业与离线部署
 
-企业网络可以让 cjv 通过统一代理访问上游，也可以把工具链和组件发布到内部 HTTPS 制品库。网络请求集中在安装、更新、远程查询和自动补齐阶段；已安装工具链的日常命令在本地执行。
+允许终端访问上游时，配置[网络代理](../network-proxies.md)即可。终端只能访问内网时，将 SDK、组件和版本清单放入[内部分发源](distribution-server.md)。完全离线时使用本地归档或目录。
 
-## 选择部署模式
+`dist_server` 控制 SDK 和组件的分发，不控制 cjv 本体升级，也不配置 `cjpm` 的项目依赖仓库。后两者需要分别安排。
 
-| 网络条件 | 推荐模式 | 支持范围 |
-| --- | --- | --- |
-| 允许经企业代理访问公网 | 设置标准代理环境变量 | 全部通道和自更新，受上游可用性约束 |
-| 终端只能访问内部制品库 | 配置统一 `dist_server` | LTS、STS、nightly、SDK 与组件均可完整内网化 |
-| 完全离线或气隙环境 | 本地归档或目录链接 | 已安装或本地提供的工具链可用 |
-| 要求强制统一源和版本 | 内部分发源 + 网络 ACL + 企业软件分发 | 系统后备配置提供默认值，网络 ACL 实施访问策略 |
+## 部署客户端
 
-`mirror` 构建变体提供 GitCode 默认端点，适合 GitHub 访问不稳定的网络。企业内部镜像使用 `dist_server`。
+通过企业软件分发系统安装 cjv，或托管安装脚本及发布归档：
 
-## 工具链分发与 cjv 更新是两条链路
+```powershell
+$env:CJV_UPDATE_ROOT = "https://artifacts.corp.example/cjv/releases/latest/download"
+& ([scriptblock]::Create((irm https://artifacts.corp.example/cjv/install.ps1))) `
+  -Yes -DefaultToolchain none -NoModifyPath
+```
 
-cjv 将两类制品分开处理：
+`CJV_UPDATE_ROOT` 只选择安装脚本的下载地址。该目录需要提供平台归档和 `checksums.txt`。`-NoModifyPath` 适合由终端管理系统统一设置 PATH 的环境。
 
-- **工具链分发源**：SDK、stdx、docs、stdx-docs，以及 LTS、STS、nightly 的版本元数据。企业部署通过 `dist_server` 或 `CJV_DIST_SERVER` 统一控制。
-- **cjv 本体**：安装脚本首次下载 cjv 时可使用 `CJV_UPDATE_ROOT`。企业软件分发系统负责已安装 cjv 的升级，客户端配置 `auto_self_update = "disable"`。
+先安装 cjv，再下发设置，最后安装 SDK，可分别检查每一步的退出码。
 
-配置 `dist_server` 后，cjv 从 `<dist_server>/versions.json` 按需读取 LTS/STS，从 `<dist_server>/nightly.json` 按需读取 nightly。两份文件分别携带对应通道的 SDK 与组件。
+## 系统后备配置
 
-## 网络访问范围
+| 系统 | 默认文件 |
+| --- | --- |
+| Windows | `C:\ProgramData\cjv\settings.toml` |
+| Linux / macOS | `/etc/cjv/settings.toml` |
 
-| 操作 | 默认来源 | 企业替代方式 |
-| --- | --- | --- |
-| 安装 cjv 本体 | GitHub 或 GitCode Release | 内部托管发布归档与 `checksums.txt`，安装脚本设置 `CJV_UPDATE_ROOT` |
-| 安装、查询或更新工具链 | 默认 manifest | 配置 `dist_server` |
-| 下载 SDK 和组件 | manifest 中声明的 URL | 在对应的 `versions.json` 或 `nightly.json` 中声明批准的 URL |
-| `cjv self update` | 官方版使用 GitHub，mirror 版使用 GitCode | 关闭自更新，由企业软件分发系统升级 cjv |
+`CJV_FALLBACK_SETTINGS` 可指定其他文件。示例：
 
-`cjpm` 项目依赖仓库和凭据遵循项目自身配置；企业还需配置对应的依赖仓库镜像。cjv 的企业分发源覆盖 SDK 与组件。
+```toml
+version = 1
+dist_server = "https://artifacts.corp.example/cjv/dist"
+default_toolchain = "lts-1.0.5"
+auto_self_update = "disable"
+auto_install = false
+```
 
-接下来依次完成：
+将示例版本替换为批准版本。关闭自动安装后，项目缺少 SDK 或组件时会报错，由部署流程补齐。为每个用户分配独立的 `CJV_HOME`。
 
-1. [建设内部分发源](distribution-server.md)
-2. [部署受管客户端](client-deployment.md)
-3. [配置代理或完全离线终端](restricted-networks.md)
-4. [制定发布、升级与验收流程](operations.md)
+后备设置提供默认值，用户文件可以逐字段覆盖，环境变量也能改变分发源。强制来源和版本策略需由网络 ACL、终端权限及软件分发流程实施。
+
+## 安装批准版本
+
+```bash
+cjv install lts-1.0.5 -c stdx
+cjv default lts-1.0.5
+cjv which cjc
+cjc --version
+```
+
+项目的 `cangjie-sdk.toml` 使用同一完整版本名。nightly 也应固定完整版本，并在分发源中保留该版本及其组件。
+
+## 完全离线
+
+```bash
+cjv toolchain link corp-sdk ./cangjie-sdk.zip
+cjv component link stdx /opt/corp/cangjie-stdx --toolchain corp-sdk
+cjv default corp-sdk
+```
+
+有批准的哈希时，给归档安装传 `--sha256 <approved-sha256>`。也可直接链接已有 SDK 目录，但这种方式由外部 SDK 所有者维护组件。项目文件使用 `corp-sdk` 这样的自定义名称，构建依赖也需预先准备。
+
+归档格式见[自定义 SDK](../install-from-url.md)。`docs` 和 `stdx-docs` 不支持本地链接，可在断网前通过分发源安装。
+
+## 发布和验收
+
+先上传并校验制品，再原子替换清单和推进 `latest`。nightly 的 `latest` 位于 `nightly.json` 顶层；客户端可能根据组件和目标需求选择历史兼容版本。保留被项目固定的所有版本。
+
+验收时使用普通用户和实际 CI 服务账户，检查：
+
+- LTS/STS 和 nightly 分别读取 `versions.json`、`nightly.json`，制品 URL 都在批准范围内。
+- 批准版本及组件能安装，`cjv which cjc` 和 `cjc --version` 指向预期 SDK。
+- 断网后，已准备好工具链及依赖的项目仍能构建。
+- 企业 CA、代理和 `NO_PROXY` 生效，缺失项按预期报错。
+
+关闭自动自更新后，由企业软件分发系统升级 cjv 本体。显式执行 `cjv self update` 仍会使用该构建的上游更新源；网络限制应与部署策略一致。

@@ -96,7 +96,31 @@ The top-level `channels` object contains `lts` and `sts`:
 
 Every SDK entry contains `name`, `url`, and `sha256`. A nightly `sha256` may temporarily be empty, in which case cjv reads `<url>.sha256`; enterprise mirrors should normally populate it directly. Component entries accept an optional `sha256`. The version key determines the toolchain name, while the URL identifies the exact asset.
 
-`cjv install nightly` installs `latest` from `nightly.json`. Pinned nightly installs, `check`, `update`, `list-remote`, and component installation all read that same file. Projects gain reproducible builds by pinning an exact nightly version.
+Nightly installation starts from `latest` and searches published history when targets or components require a compatible release. It does not downgrade by default. A full pinned name selects that release. Do not wrap nightly content in `channels.nightly`.
+
+## Component format
+
+Each channel indexes `components` by version. `docs` and `stdx-docs` each identify one archive; `stdx` is further indexed by component platform:
+
+```jsonc
+{
+  "components": {
+    "1.0.5": {
+      "stdx": {
+        "linux-x64": {
+          "name": "stdx-linux-x64.tar.gz",
+          "url": "components/stdx-linux-x64.tar.gz",
+          "sha256": "<64-digit hexadecimal SHA-256>"
+        }
+      },
+      "docs": { "name": "docs.tar.gz", "url": "components/docs.tar.gz" },
+      "stdx-docs": { "name": "stdx-docs.tar.gz", "url": "components/stdx-docs.tar.gz" }
+    }
+  }
+}
+```
+
+This is a fragment of a channel object; combine it with `latest` and `versions`. Cross SDKs are stored at `versions[version][platform]`, such as `linux-x64-ohos`. Their stdx entries use component platform names, such as `ohos-aarch64`.
 
 ## Publishing order
 

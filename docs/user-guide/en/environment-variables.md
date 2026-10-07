@@ -1,108 +1,31 @@
-# Environment Variables
+# Environment variables
 
-Some of cjv's behavior can be adjusted through environment variables. Environment variables are suited for temporary overrides, injecting credentials in CI, and changing default behavior without writing to `settings.toml`.
-
-The table below lists the common user-facing variables. Unless noted otherwise, all variables are read when a command runs, so you can set them temporarily for individual invocations:
+Set environment variables before starting cjv to override settings for that process:
 
 ```bash
-CJV_LOG=debug cjv install lts
+CJV_LOG=debug cjv show active
 ```
 
-## Common variables
-
-|Variable|Default|Description|
-|--------|-------|-----------|
-|`CJV_HOME`|`~/.cjv`|Overrides cjv's home directory (the data root). It must be an absolute path, otherwise cjv exits with an error. This variable takes priority over the `home` setting persisted in `settings.toml`.|
-|`CJV_TOOLCHAIN`|None|Force the active toolchain, overriding all other resolution methods (directory override, toolchain file, default toolchain).|
-|`CJV_LOG`|`warn`|Log level; one of `debug`, `info`, `warn`, `error`. Unrecognized values are treated as `warn`. Logs are written to standard error (stderr).|
-|`CJV_MAX_RETRIES`|`3`|Maximum number of retries after a single download failure. The value must be a non-negative integer; invalid values are ignored and fall back to the default.|
-|`CJV_DOWNLOAD_TIMEOUT`|`180`|Timeout for HTTP downloads, in seconds. The value must be a positive integer; invalid values are ignored and fall back to the default.|
-|`CJV_DIST_SERVER`|None|Overrides the toolchain distribution root. LTS/STS use `<root>/versions.json`; nightly uses `<root>/nightly.json`.|
-|`CJV_NO_PATH_SETUP`|None|Set to `1` to skip the automatic `PATH` configuration on first install (useful for CI environments and integration tests). Any other value (including unset) has no effect.|
-|`CANGJIE_STDX_PATH_DYNAMIC`|Injected by cjv|Points to `<CJV_HOME>/stdx/<tc>/dynamic`, injected only when the corresponding toolchain has the `stdx` component installed. You normally do not need to set it manually.|
-|`CANGJIE_STDX_PATH_STATIC`|Injected by cjv|Points to `<CJV_HOME>/stdx/<tc>/static`, injected only when the corresponding toolchain has the `stdx` component installed. You normally do not need to set it manually.|
-
-## Details
-
-### `CJV_HOME`
-
-`CJV_HOME` determines the root directory where cjv stores toolchains, components, documentation, the download cache, and the settings file. It defaults to `~/.cjv` under the user's home directory.
-
-It must be an absolute path. A relative path would point to different locations as the working directory changes, so calling cjv from different directories would see different sets of installations. cjv therefore rejects relative paths and exits with an error.
-
-The home directory is resolved in the following order (highest to lowest):
-
-1. The `CJV_HOME` environment variable
-1. The `home` value persisted in `settings.toml` (written via `cjv set home <path>`)
-1. The default value `~/.cjv`
-
-To persist the home directory instead of setting the environment variable each time, see [Configuration](configuration.md). `cjv show home` prints the home directory currently in effect and its source.
-
-### `CJV_TOOLCHAIN`
-
-`CJV_TOOLCHAIN` sits at the very top of the toolchain resolution priority, overriding directory overrides, the toolchain file (`cangjie-sdk.toml`), and the default toolchain. It is commonly used to temporarily switch toolchains for a single command:
-
-```bash
-CJV_TOOLCHAIN=nightly cjc --version
+```powershell
+$env:CJV_LOG = "debug"
+cjv show active
 ```
 
-For the full resolution order, see [Targets and Overrides](concepts/targets-overrides.md).
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `CJV_HOME` | `~/.cjv`, or the `home` setting | Absolute data directory; does not move user settings |
+| `CJV_TOOLCHAIN` | Unset | Toolchain name or absolute SDK path; overrides directory and default settings |
+| `CJV_DIST_SERVER` | Unset | Override the [toolchain distribution root](enterprise/distribution-server.md) |
+| `CJV_LOG` | `warn` | `debug`, `info`, `warn`, or `error`; unknown values use `warn`; logs go to stderr |
+| `CJV_MAX_RETRIES` | `3` | Maximum retries after a failed download; nonnegative integer |
+| `CJV_DOWNLOAD_TIMEOUT` | `180` | HTTP download timeout in seconds; positive integer |
+| `CJV_NO_PATH_SETUP` | Unset | Skip automatic PATH setup when exactly `1` |
+| `CJV_LANG` | System locale | Override the interface language, such as `zh`, `en`, or `ja` |
+| `CJV_FALLBACK_SETTINGS` | [System settings path](enterprise/index.md) | Select a fallback settings file |
+| `CJV_ALLOW_INSECURE_MANIFEST` | Unset | Allow plain HTTP manifests from non-loopback hosts when `1` |
 
-### `CJV_LOG`
+Invalid retry counts and timeouts fall back to defaults. Manifests supply both artifact URLs and checksums, so HTTPS is required by default. Loopback test servers are exempt.
 
-Setting the log level to `debug` lets you observe the details of downloads, resolution, and proxy execution, which helps with troubleshooting:
+When stdx is installed, cjv injects `CANGJIE_STDX_PATH_DYNAMIC` and `CANGJIE_STDX_PATH_STATIC` into the selected SDK's environment, pointing to its component's `dynamic/` and `static/` directories. They normally need no manual configuration.
 
-```bash
-CJV_LOG=debug cjv install lts
-```
-
-### `CJV_MAX_RETRIES` and `CJV_DOWNLOAD_TIMEOUT`
-
-These two variables let you tune download behavior when the network is unstable or a mirror is slow:
-
-```bash
-# Increase the retry count and extend the timeout (for slow networks)
-CJV_MAX_RETRIES=5 CJV_DOWNLOAD_TIMEOUT=600 cjv install sts
-```
-
-`CJV_MAX_RETRIES` is the number of retries after a failure, and `CJV_DOWNLOAD_TIMEOUT` is in seconds. Invalid values for either are ignored and fall back to the default.
-
-### `CJV_DIST_SERVER`
-
-`CJV_DIST_SERVER` temporarily overrides `dist_server` from user or system fallback settings. It is useful for selecting production or staging sources in CI:
-
-```bash
-CJV_DIST_SERVER=https://artifacts.corp.example/cjv/dist cjv install nightly
-```
-
-LTS/STS and their components are described by `<root>/versions.json`; nightly and its components are described by `<root>/nightly.json`. cjv loads the file required by the requested channel. Relative artifact URLs use the root as their base, while absolute URLs are honored as written. See [Internal distribution source](enterprise/distribution-server.md) for the layout.
-
-### `CJV_NO_PATH_SETUP`
-
-When you first install a toolchain, cjv adds its own `bin` directory to `PATH` so that proxied commands (such as `cjc` and `cjpm`) become immediately available. In CI environments or integration tests, automatically modifying `PATH` is often unnecessary, so you can set this variable to `1` to skip it:
-
-```bash
-CJV_NO_PATH_SETUP=1 cjv install lts
-```
-
-It is skipped only when the value is exactly `1`; other values have no effect.
-
-### `CANGJIE_STDX_PATH_DYNAMIC` and `CANGJIE_STDX_PATH_STATIC`
-
-These two variables are injected automatically by cjv during proxy execution and runtime environment setup (`cjv exec` / `cjv envsetup`), pointing respectively to the extracted `dynamic` and `static` directories of the `stdx` component. They are injected only when the current toolchain has the `stdx` component installed.
-
-You normally do not need to set them manually; cjv makes sure the Cangjie compiler and build tools can find the extension libraries. For installation and directory layout of the `stdx` component, see [Components](concepts/components.md); for how the runtime environment is set up, see [Runtime environment](runtime-environment.md).
-
-### Network proxies (`https_proxy` / `http_proxy` / `no_proxy`)
-
-cjv's downloads automatically honor the standard proxy environment variables, so no cjv configuration is needed on a restricted enterprise network. For how to set them, the supported proxy schemes (http / https / socks5), and caveats, see [Network proxies](network-proxies.md).
-
-## Advanced variables
-
-The following variables target special scenarios and normally do not need to be set.
-
-|Variable|Description|
-|--------|-----------|
-|`CJV_LANG`|Override the interface language (such as `zh`, `en`, `ja`). When unset, it follows the system locale setting.|
-|`CJV_ALLOW_INSECURE_MANIFEST`|When set to `1`, allows fetching the toolchain manifest over plaintext HTTP from non-loopback hosts. HTTPS is required by default because the manifest carries download URLs and checksums. Use this only with trusted internal mirrors; see [Internal distribution source](enterprise/distribution-server.md).|
-|`CJV_FALLBACK_SETTINGS`|Selects a system-level fallback settings file; see [Deploy managed clients](enterprise/client-deployment.md) for platform defaults and an enterprise example.|
+See [network proxies](network-proxies.md) for HTTP(S) proxy variables. `CJV_UPDATE_ROOT` belongs to the installer scripts and selects the initial cjv download location; it does not override self-updates of an installed cjv binary.

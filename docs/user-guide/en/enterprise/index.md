@@ -1,41 +1,76 @@
-# Enterprise deployment overview
+# Enterprise and offline deployment
 
-An enterprise network can let cjv reach upstream services through a controlled proxy or publish toolchains and components to an internal HTTPS artifact repository. Network requests are concentrated in installation, updates, remote queries, and automatic acquisition; daily commands for installed toolchains run locally.
+When clients can reach upstream servers, configure a [network proxy](../network-proxies.md). For internal-only clients, publish SDKs, components, and manifests to an [internal distribution](distribution-server.md). Fully offline clients can use local archives or directories.
 
-## Choose a deployment mode
+`dist_server` controls SDK and component distribution. cjv binary upgrades and `cjpm` project dependency repositories require separate configuration.
 
-| Network condition | Recommended mode | Supported scope |
-| --- | --- | --- |
-| Public services are reachable through an enterprise proxy | Set the standard proxy environment variables | All channels and self-update, subject to upstream availability |
-| Endpoints can reach only an internal artifact repository | Configure a unified `dist_server` | LTS, STS, nightly, SDKs, and components can all stay internal |
-| Fully offline or air-gapped | Use local archives or directory links | Installed or locally supplied toolchains |
-| Sources and versions must be centrally enforced | Internal source plus network ACLs and enterprise software distribution | Fallback settings provide defaults; network ACLs enforce access policy |
+## Deploy clients
 
-The `mirror` build variant provides GitCode default endpoints for networks where GitHub is unreliable. Enterprise mirrors use `dist_server`.
+Install cjv through enterprise software distribution, or host the installer scripts and release archives internally:
 
-## Toolchain distribution and cjv updates are separate
+```powershell
+$env:CJV_UPDATE_ROOT = "https://artifacts.corp.example/cjv/releases/latest/download"
+& ([scriptblock]::Create((irm https://artifacts.corp.example/cjv/install.ps1))) `
+  -Yes -DefaultToolchain none -NoModifyPath
+```
 
-cjv separates two kinds of artifacts:
+`CJV_UPDATE_ROOT` selects the installer download location only. The directory must provide platform archives and `checksums.txt`. Use `-NoModifyPath` when endpoint management sets PATH.
 
-- **Toolchain distribution**: SDKs, stdx, docs, stdx-docs, and the LTS, STS, and nightly metadata. Enterprise deployments control this with `dist_server` or `CJV_DIST_SERVER`.
-- **cjv itself**: `CJV_UPDATE_ROOT` selects the installer's initial download location. Enterprise software distribution owns upgrades of installed cjv binaries, with clients configured as `auto_self_update = "disable"`.
+Install cjv, distribute settings, then install SDKs so each step has a separate exit status.
 
-With `dist_server` configured, cjv lazily reads LTS/STS from `<dist_server>/versions.json` and nightly from `<dist_server>/nightly.json`. Each file carries the SDKs and components for its channels.
+## System fallback settings
 
-## Network destinations
+| System | Default file |
+| --- | --- |
+| Windows | `C:\ProgramData\cjv\settings.toml` |
+| Linux / macOS | `/etc/cjv/settings.toml` |
 
-| Operation | Default source | Enterprise replacement |
-| --- | --- | --- |
-| Install cjv itself | A GitHub or GitCode Release | Host release archives and `checksums.txt` internally; set `CJV_UPDATE_ROOT` for the installer |
-| Install, query, or update toolchains | Default manifest | Configure `dist_server` |
-| Download SDKs and components | URLs declared by the manifest | Declare approved URLs in the corresponding `versions.json` or `nightly.json` |
-| Run `cjv self update` | GitHub for the official build, GitCode for the mirror build | Disable self-update and upgrade cjv through enterprise software distribution |
+`CJV_FALLBACK_SETTINGS` selects another file. Example:
 
-The project-specific configuration of `cjpm` supplies dependency repositories and credentials. Enterprise environments configure those dependency mirrors separately, while cjv distributes SDKs and components.
+```toml
+version = 1
+dist_server = "https://artifacts.corp.example/cjv/dist"
+default_toolchain = "lts-1.0.5"
+auto_self_update = "disable"
+auto_install = false
+```
 
-Proceed through these sections:
+Replace the example version with an approved release. With automatic installation disabled, missing SDKs or components cause errors and must be supplied by deployment. Give each user a separate `CJV_HOME`.
 
-1. [Build an internal distribution source](distribution-server.md)
-2. [Deploy managed clients](client-deployment.md)
-3. [Configure proxy-only or fully offline endpoints](restricted-networks.md)
-4. [Define publishing, upgrade, and acceptance procedures](operations.md)
+Fallback settings provide defaults. User settings can override individual fields, and environment variables can change the distribution source. Enforce source and version policies through network ACLs, endpoint permissions, and software distribution.
+
+## Install approved versions
+
+```bash
+cjv install lts-1.0.5 -c stdx
+cjv default lts-1.0.5
+cjv which cjc
+cjc --version
+```
+
+Use the same full version name in the project's `cangjie-sdk.toml`. Pin full nightly versions as well, and retain their SDKs and components in the distribution.
+
+## Fully offline clients
+
+```bash
+cjv toolchain link corp-sdk ./cangjie-sdk.zip
+cjv component link stdx /opt/corp/cangjie-stdx --toolchain corp-sdk
+cjv default corp-sdk
+```
+
+Pass `--sha256 <approved-sha256>` when an approved hash is available. You can also link an existing SDK directory, whose owner then maintains its components. Project files use the custom name, such as `corp-sdk`; build dependencies must also be prepared in advance.
+
+See [custom SDKs](../install-from-url.md) for archive formats. `docs` and `stdx-docs` cannot be linked locally; install them through a distribution before disconnecting.
+
+## Publication and validation
+
+Upload and verify artifacts before atomically replacing manifests and advancing `latest`. Nightly's `latest` is a top-level field in `nightly.json`; clients may choose a compatible historical release for their component and target requirements. Retain all versions pinned by projects.
+
+Validate with ordinary user accounts and the actual CI service account:
+
+- LTS/STS and nightly read `versions.json` and `nightly.json` respectively, and all artifact URLs stay within approved locations.
+- Approved releases and components install, and `cjv which cjc` and `cjc --version` identify the intended SDK.
+- Projects with prepared toolchains and dependencies still build offline.
+- Corporate CAs, proxies, and `NO_PROXY` work, and missing requirements produce the expected errors.
+
+With automatic self-updates disabled, distribute cjv upgrades through enterprise software management. An explicit `cjv self update` still uses the build's upstream update source; network restrictions should match deployment policy.
