@@ -3,14 +3,13 @@ package lifecycle
 import (
 	"context"
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
 
 	"github.com/Zxilly/cjv/internal/cjverr"
 	"github.com/Zxilly/cjv/internal/component"
 	"github.com/Zxilly/cjv/internal/config"
-	"github.com/Zxilly/cjv/internal/fsops"
+	"github.com/Zxilly/cjv/internal/dist"
 	"github.com/Zxilly/cjv/internal/progress"
 	"github.com/Zxilly/cjv/internal/toolchain"
 )
@@ -73,11 +72,15 @@ func installComponents(ctx context.Context, d *Distribution, resolvedName string
 	}
 	// Follow SDK placement's lock order. Serialize shared download cache access,
 	// but release the home lock throughout network requests and extraction.
-	installLock, err := fsops.LockFile(ctx, filepath.Join(home, ".install.lock"))
+	downloadsDir, err := config.DownloadsDir()
 	if err != nil {
 		return err
 	}
-	defer installLock.Close() //nolint:errcheck
+	preparation, err := dist.BeginPreparation(ctx, downloadsDir)
+	if err != nil {
+		return err
+	}
+	defer preparation.Close() //nolint:errcheck // best-effort scratch cleanup
 	lock, err := toolchain.LockHome(ctx)
 	if err != nil {
 		return err
@@ -134,22 +137,14 @@ func installComponents(ctx context.Context, d *Distribution, resolvedName string
 		return err
 	}
 	lock = nil
-	downloadsDir, err := config.DownloadsDir()
+	stage, err := preparation.TempDir(".cjv-components-*")
 	if err != nil {
 		return err
 	}
-	if err := os.MkdirAll(downloadsDir, 0o755); err != nil {
-		return err
-	}
-	stage, err := os.MkdirTemp(downloadsDir, ".cjv-components-*")
-	if err != nil {
-		return err
-	}
-	defer os.RemoveAll(stage) //nolint:errcheck // private extraction scratch
 	prepared := component.Roots{TcDir: filepath.Join(stage, "sdk"), DocsDir: filepath.Join(stage, "docs"), StdxDir: filepath.Join(stage, "stdx")}
 	for _, c := range selected {
 		d.note()
-		if err := component.InstallFromSource(ctx, prepared, resolvedTC, c, tuple, downloadsDir, false, d.Source, opts.sink()); err != nil {
+		if err := component.PrepareFromSource(ctx, prepared, resolvedTC, c, tuple, false, d.Source, preparation, opts.sink()); err != nil {
 			return err
 		}
 	}
@@ -165,5 +160,9 @@ func installComponents(ctx context.Context, d *Distribution, resolvedName string
 	if err != nil || current != record || stateErr != nil || currentState != state {
 		return fmt.Errorf("toolchain %s changed during component installation; retry", resolvedName)
 	}
-	return publishComponentBatch(home, resolvedName, prepared, selected, force, opts)
+	if err := publishComponentBatch(home, resolvedName, prepared, selected, force, opts); err != nil {
+		return err
+	}
+	preparation.Complete()
+	return nil
 }

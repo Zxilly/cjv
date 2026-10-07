@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 
 	"github.com/Zxilly/cjv/internal/config"
+	"github.com/Zxilly/cjv/internal/dist"
 	"github.com/Zxilly/cjv/internal/fsops"
 )
 
@@ -32,16 +33,12 @@ func purgeDownloadsDirContext(ctx context.Context) (int, error) {
 	} else if err != nil {
 		return 0, err
 	}
-	home, err := config.Home()
-	if err != nil {
-		return 0, err
-	}
 	// A sweep must never delete a live SDK/component download or private stage.
-	lock, err := fsops.LockFile(ctx, filepath.Join(home, ".install.lock"))
+	preparation, err := dist.BeginPreparation(ctx, dir)
 	if err != nil {
 		return 0, err
 	}
-	defer lock.Close() //nolint:errcheck
+	defer preparation.Close() //nolint:errcheck // release the shared preparation lock
 	removed := 0
 
 	for range purgeDownloadsMaxPasses {

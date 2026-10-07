@@ -32,12 +32,15 @@ type ResolvedToolchain struct {
 // that differs between a CI bundle fetched from a URL and a local archive;
 // everything around it is placeToolchain.
 type acquisition struct {
-	// fetch returns the archive path and whether cjv owns that file, in which
-	// case it is removed once the toolchain is committed. A failed placement
-	// keeps it for the next retry.
-	fetch func(ctx context.Context, downloadsDir string) (archivePath string, owned bool, err error)
+	// fetch uses preparation for downloaded archives; local inputs remain
+	// user-owned and are never registered for cleanup.
+	fetch func(ctx context.Context, preparation *dist.Preparation) (string, error)
 	// extract materializes the SDK tree at stagingDir from archivePath.
 	extract func(ctx context.Context, archivePath, stagingDir string) error
+	// finish places bundled content after the SDK commits, while the home
+	// lock still protects its identity from removal or replacement. Failure
+	// retains the committed SDK, matching custom archive install semantics.
+	finish func(context.Context) error
 }
 
 // placeToolchain prepares a private SDK tree under downloads/, then publishes
@@ -45,7 +48,7 @@ type acquisition struct {
 // proxy recovery; a separate install lock protects the shared archive cache.
 // The destination is rechecked after preparation. Staging and all journal
 // changes stay locked until commit/rollback and residue cleanup finish.
-func placeToolchain(ctx context.Context, name string, force bool, tuple string, acq acquisition, publish func() error, opts Options) (retErr error) {
+func placeToolchain(ctx context.Context, name string, force bool, tuple string, preparation *dist.Preparation, acq acquisition, publish func() error, opts Options) (retErr error) {
 	parsed, err := toolchain.ParseToolchainName(name)
 	if err != nil {
 		return err
@@ -58,13 +61,8 @@ func placeToolchain(ctx context.Context, name string, force bool, tuple string, 
 	if err != nil {
 		return err
 	}
-	// Always take the install lock before the home lock. Recovery, links and
-	// removal only need the home lock, so they can proceed during downloads.
-	installLock, err := fsops.LockFile(ctx, filepath.Join(filepath.Dir(tcDir), ".install.lock"))
-	if err != nil {
-		return err
-	}
-	defer installLock.Close() //nolint:errcheck // protect cache consumption and cleanup
+	// The caller's preparation owns the install lock through bundled content
+	// placement too. Only take the home lock around snapshots and publication.
 	destDir := filepath.Join(tcDir, name)
 	lock, _, err := lockPlacement(ctx, destDir, force)
 	if err != nil {
@@ -74,26 +72,14 @@ func placeToolchain(ctx context.Context, name string, force bool, tuple string, 
 		return err
 	}
 
-	downloadsDir, err := config.DownloadsDir()
+	archivePath, err := acq.fetch(ctx, preparation)
 	if err != nil {
 		return err
 	}
-	archivePath, owned, err := acq.fetch(ctx, downloadsDir)
+	preparedRoot, err := preparation.TempDir(".cjv-stage-*")
 	if err != nil {
 		return err
 	}
-	if owned {
-		defer func() {
-			if retErr == nil {
-				_ = dist.CleanupDownload(archivePath) //nolint:errcheck // best-effort
-			}
-		}()
-	}
-	preparedRoot, err := os.MkdirTemp(downloadsDir, ".cjv-stage-*")
-	if err != nil {
-		return err
-	}
-	defer os.RemoveAll(preparedRoot) //nolint:errcheck // private extraction scratch
 	preparedDir := filepath.Join(preparedRoot, "sdk")
 	opts.emit(progress.Event{Kind: progress.Extracting})
 	if err := acq.extract(ctx, archivePath, preparedDir); err != nil {
@@ -137,6 +123,9 @@ func placeToolchain(ctx context.Context, name string, force bool, tuple string, 
 		return err
 	}
 	opts.emit(progress.Event{Kind: progress.ToolchainInstalled, Toolchain: name})
+	if acq.finish != nil {
+		return acq.finish(ctx)
+	}
 	return nil
 }
 

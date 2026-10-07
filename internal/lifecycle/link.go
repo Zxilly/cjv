@@ -35,14 +35,13 @@ func InstallToolchainFromURL(ctx context.Context, name, url, sha256 string, forc
 		return err
 	}
 	name = parsed.String()
-	return installLinkedToolchain(ctx, name, force, noStdx, opts, func(ctx context.Context, downloadsDir string) (string, bool, error) {
+	return installLinkedToolchain(ctx, name, force, noStdx, opts, func(ctx context.Context, preparation *dist.Preparation) (string, error) {
 		// An optional sha256 verifies the download; otherwise we rely on the
 		// transport (TLS for https — a plain http URL is the user's risk) plus the
 		// archive-magic sniff in DownloadCachedWithName. The staged file is owned
 		// by cjv and cleaned up on success.
 		opts.emit(progress.Event{Kind: progress.LinkDownloadingURL, Subject: url})
-		archivePath, err := dist.DownloadCachedWithName(ctx, url, sha256, downloadsDir, name, opts.sink())
-		return archivePath, true, err
+		return preparation.Download(ctx, url, sha256, name, opts.sink())
 	})
 }
 
@@ -57,13 +56,12 @@ func InstallToolchainFromZip(ctx context.Context, name, archivePath, sha256 stri
 		return err
 	}
 	name = parsed.String()
-	return installLinkedToolchain(ctx, name, force, noStdx, opts, func(_ context.Context, _ string) (string, bool, error) {
+	return installLinkedToolchain(ctx, name, force, noStdx, opts, func(_ context.Context, _ *dist.Preparation) (string, error) {
 		opts.emit(progress.Event{Kind: progress.LinkUsingArchive, Subject: archivePath})
 		if err := dist.VerifyArchive(archivePath, sha256); err != nil {
-			return "", false, err
+			return "", err
 		}
-		// owned=false: a user-supplied archive must never be cleaned up.
-		return archivePath, false, nil
+		return archivePath, nil
 	})
 }
 
@@ -115,11 +113,11 @@ func LinkToolchainDir(name, dir string) error {
 
 // installLinkedToolchain holds the logic shared by the URL and local-archive link
 // paths. fetch obtains the SDK archive (downloading it, or vetting a local file)
-// and reports whether cjv owns that file and may delete it on success. The
+// and leaves archive ownership with the preparation or the local user. The
 // placement itself is the shared pipeline; what this adds is the CI bundle
 // layout (outer archive, inner SDK/stdx archives, bare-archive fallback), the
 // cross-OS guard, and the bundled-stdx install after the SDK is committed.
-func installLinkedToolchain(ctx context.Context, name string, force, noStdx bool, opts Options, fetch func(ctx context.Context, downloadsDir string) (string, bool, error)) (retErr error) {
+func installLinkedToolchain(ctx context.Context, name string, force, noStdx bool, opts Options, fetch func(context.Context, *dist.Preparation) (string, error)) error {
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -127,23 +125,23 @@ func installLinkedToolchain(ctx context.Context, name string, force, noStdx bool
 	// toolchains/), so ExtractFlattened's own .cjv-install-* scratch dir never
 	// pollutes the toolchain listing. It outlives the placement because the
 	// bundled stdx archive inside it is installed after the SDK is committed.
-	var outerTmp, innerStdx, downloadsDir string
-	defer func() {
-		if outerTmp != "" {
-			_ = os.RemoveAll(outerTmp) //nolint:errcheck // best-effort cleanup
-		}
-	}()
+	downloadsDir, err := config.DownloadsDir()
+	if err != nil {
+		return err
+	}
+	preparation, err := dist.BeginPreparation(ctx, downloadsDir)
+	if err != nil {
+		return err
+	}
+	defer preparation.Close() //nolint:errcheck // protect bundled archives through publication
+	var innerStdx string
 	acq := acquisition{
 		// A local archive stays wherever the user keeps it (possibly read-only,
 		// possibly on another volume), so the scratch dir is keyed off the
 		// downloads dir the pipeline hands to fetch, not off the archive's parent.
-		fetch: func(ctx context.Context, dir string) (string, bool, error) {
-			downloadsDir = dir
-			return fetch(ctx, dir)
-		},
+		fetch: fetch,
 		extract: func(ctx context.Context, archivePath, stagingDir string) error {
-			var err error
-			outerTmp, err = os.MkdirTemp(downloadsDir, ".cjv-link-*")
+			outerTmp, err := preparation.TempDir(".cjv-link-*")
 			if err != nil {
 				return err
 			}
@@ -185,20 +183,29 @@ func installLinkedToolchain(ctx context.Context, name string, force, noStdx bool
 			}
 			return nil
 		},
+		finish: func(ctx context.Context) error {
+			if innerStdx == "" || noStdx {
+				return nil
+			}
+			return installBundledStdx(ctx, name, innerStdx, force, opts)
+		},
 	}
 	// tuple is always "": a linked SDK is validated against the host OS only
 	// and never sets the default toolchain.
-	if err := placeToolchain(ctx, name, force, "", acq, nil, opts); err != nil {
+	if err := placeToolchain(ctx, name, force, "", preparation, acq, nil, opts); err != nil {
 		return err
 	}
+	preparation.Complete()
+	return nil
+}
 
+// The caller holds the home lock from SDK placement through bundled content
+// installation, so an uninstall cannot remove the SDK between these steps.
+func installBundledStdx(ctx context.Context, name, innerStdx string, force bool, opts Options) error {
 	// Install bundled stdx as a component of this toolchain, if present. The SDK
 	// is already committed at this point; if stdx fails we keep the working SDK
 	// (matching `install -c stdx` half-failure semantics) but surface recovery
 	// guidance, since a plain retry would hit ToolchainAlreadyInstalledError.
-	if innerStdx == "" || noStdx {
-		return nil
-	}
 	opts.emit(progress.Event{Kind: progress.LinkInstallingStdx, Toolchain: name})
 	roots, err := component.RootsFor(name)
 	if err != nil {

@@ -237,18 +237,25 @@ func TestInstallComponentsPreparesWholeBatchBeforePublishing(t *testing.T) {
 	mux.HandleFunc("/versions.json", func(w http.ResponseWriter, _ *http.Request) {
 		assert.NoError(t, json.NewEncoder(w).Encode(manifest))
 	})
+	var docsRequests atomic.Int32
 	mux.HandleFunc("/docs.zip", func(w http.ResponseWriter, _ *http.Request) {
+		docsRequests.Add(1)
 		_, err := w.Write(archive.Bytes())
 		assert.NoError(t, err)
 	})
 	var secondArchiveRequested atomic.Bool
+	var secondArchiveValid atomic.Bool
 	mux.HandleFunc("/stdx-docs.zip", func(w http.ResponseWriter, _ *http.Request) {
 		secondArchiveRequested.Store(true)
 		// Even after the first archive has been prepared, every live root stays
 		// intact until the complete batch is ready to publish.
 		assert.NoFileExists(t, filepath.Join(docsRoot, "new.html"))
 		assert.FileExists(t, filepath.Join(docsRoot, "old.html"))
-		_, err := w.Write([]byte("invalid archive"))
+		body := []byte("invalid archive")
+		if secondArchiveValid.Load() {
+			body = archive.Bytes()
+		}
+		_, err := w.Write(body)
 		assert.NoError(t, err)
 	})
 	settings := config.DefaultSettings()
@@ -268,6 +275,26 @@ func TestInstallComponentsPreparesWholeBatchBeforePublishing(t *testing.T) {
 	installed, readErr := component.ListInstalled(roots.TcDir)
 	require.NoError(t, readErr)
 	assert.ElementsMatch(t, []component.Name{component.Docs, component.Stdx}, installed)
+
+	// A later member's failure must not discard an earlier verified archive.
+	// Retry the real batch with the server repaired and prove the first member
+	// is consumed from retained staging rather than fetched a second time.
+	downloads, err := config.DownloadsDir()
+	require.NoError(t, err)
+	assert.FileExists(t, filepath.Join(downloads, checksum))
+	entries, err := os.ReadDir(downloads)
+	require.NoError(t, err)
+	for _, entry := range entries {
+		assert.False(t, entry.IsDir(), "private preparation scratch must be removed after failure")
+	}
+	secondArchiveValid.Store(true)
+	require.NoError(t, InstallComponents(t.Context(), toolchainName, []string{"docs", "stdx-docs"}, true, quietLifecycleOptions()))
+	assert.EqualValues(t, 1, docsRequests.Load())
+	assert.FileExists(t, filepath.Join(docsRoot, "new.html"))
+	assert.FileExists(t, filepath.Join(roots.DocsDir, "stdx", "new.html"))
+	entries, err = os.ReadDir(downloads)
+	require.NoError(t, err)
+	assert.Empty(t, entries, "a successful batch releases its archives and scratch")
 }
 
 type componentInstallSink func(progress.Event)

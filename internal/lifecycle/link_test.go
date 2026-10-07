@@ -11,11 +11,15 @@ import (
 	"path/filepath"
 	"runtime"
 	"testing"
+	"time"
 
 	"github.com/Zxilly/cjv/internal/cjverr"
 	"github.com/Zxilly/cjv/internal/config"
+	"github.com/Zxilly/cjv/internal/fsops"
 	"github.com/Zxilly/cjv/internal/lifecycle"
+	"github.com/Zxilly/cjv/internal/progress"
 	"github.com/Zxilly/cjv/internal/sdktools"
+	"github.com/Zxilly/cjv/internal/toolchain"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -252,6 +256,53 @@ func TestLinkURL_StdxMissingDirsRollsBack(t *testing.T) {
 	assert.FileExists(t, filepath.Join(home, "toolchains", "my-sdk", "bin", sdktools.PlatformBinaryName("cjc")))
 	assert.NoDirExists(t, filepath.Join(home, "stdx", "my-sdk"))
 	assert.NoFileExists(t, filepath.Join(home, "toolchains", "my-sdk", ".cjv", "components", "manifest-stdx"))
+	entries, err := os.ReadDir(filepath.Join(home, "downloads"))
+	require.NoError(t, err)
+	require.Len(t, entries, 1, "the outer download stays available after bundled stdx fails")
+	assert.False(t, entries[0].IsDir(), "private extraction trees must not outlive the operation")
+}
+
+type linkProgress func(progress.Event)
+
+func (f linkProgress) Report(event progress.Event) { f(event) }
+
+func TestLinkPreparationProtectsBundledArchiveAfterSDKPublication(t *testing.T) {
+	home := linkHome(t)
+	body := ciBundle(t, sdkInnerArchive(t), stdxInnerArchiveWith(t, "libfoo"))
+	checked := false
+	sink := linkProgress(func(event progress.Event) {
+		if event.Kind != progress.LinkInstallingStdx {
+			return
+		}
+		checked = true
+		// The SDK transaction has committed, but the inner stdx archive is
+		// still live. A purge must not acquire the preparation lock yet.
+		ctx, cancel := context.WithTimeout(t.Context(), 50*time.Millisecond)
+		defer cancel()
+		lock, err := fsops.LockFile(ctx, filepath.Join(home, ".install.lock"))
+		if lock != nil {
+			_ = lock.Close()
+		}
+		require.ErrorIs(t, err, context.DeadlineExceeded)
+		// Home-only mutations such as uninstall must also wait until bundled
+		// content no longer depends on this SDK's installed identity.
+		homeCtx, homeCancel := context.WithTimeout(t.Context(), 50*time.Millisecond)
+		defer homeCancel()
+		homeLock, err := toolchain.LockHome(homeCtx)
+		if homeLock != nil {
+			_ = homeLock.Close()
+		}
+		require.ErrorIs(t, err, context.DeadlineExceeded)
+		archives, err := filepath.Glob(filepath.Join(home, "downloads", ".cjv-link-*", "cangjie-stdx-*"))
+		require.NoError(t, err)
+		require.Len(t, archives, 1)
+	})
+	require.NoError(t, lifecycle.InstallToolchainFromURL(t.Context(), "bundled-sdk", serveBytes(t, body), "", false, false, lifecycle.Options{Progress: sink}))
+	require.True(t, checked)
+	assert.FileExists(t, filepath.Join(home, "stdx", "bundled-sdk", "dynamic", "libfoo"))
+	entries, err := os.ReadDir(filepath.Join(home, "downloads"))
+	require.NoError(t, err)
+	assert.Empty(t, entries)
 }
 
 func TestLinkURL_ForceReinstallWithStdx(t *testing.T) {

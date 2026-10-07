@@ -49,11 +49,15 @@ func installGroup(ctx context.Context, d *installationDistribution, name toolcha
 	if err := config.EnsureDirs(); err != nil {
 		return false, err
 	}
-	installLock, err := fsops.LockFile(ctx, filepath.Join(home, ".install.lock"))
+	downloads, err := config.DownloadsDir()
 	if err != nil {
 		return false, err
 	}
-	defer installLock.Close() //nolint:errcheck
+	preparation, err := dist.BeginPreparation(ctx, downloads)
+	if err != nil {
+		return false, err
+	}
+	defer preparation.Close() //nolint:errcheck // best-effort scratch cleanup
 	lock, err := toolchain.LockHome(ctx)
 	if err != nil {
 		return false, err
@@ -170,17 +174,11 @@ func installGroup(ctx context.Context, d *installationDistribution, name toolcha
 	if err := resolveGroup(ctx, d.Distribution, name, members, opts); err != nil {
 		return false, err
 	}
-	downloads, err := config.DownloadsDir()
+	stage, err := preparation.TempDir(".cjv-group-*")
 	if err != nil {
 		return false, err
 	}
-	stage, err := os.MkdirTemp(downloads, ".cjv-group-*")
-	if err != nil {
-		return false, err
-	}
-	defer os.RemoveAll(stage) //nolint:errcheck
 	var changed []*groupMember
-	var archives []string
 	for i, m := range members {
 		if m.drop {
 			if m.before != nil {
@@ -224,11 +222,10 @@ func installGroup(ctx context.Context, d *installationDistribution, name toolcha
 				}
 			}
 		} else {
-			archive, err := dist.DownloadCachedWithName(ctx, m.release.URL, m.release.SHA256, downloads, m.release.ArchiveName, opts.sink())
+			archive, err := preparation.Download(ctx, m.release.URL, m.release.SHA256, m.release.ArchiveName, opts.sink())
 			if err != nil {
 				return false, err
 			}
-			archives = append(archives, archive)
 			opts.emit(progress.Event{Kind: progress.Extracting})
 			if err := dist.InstallSDK(ctx, archive, m.prepared.TcDir); err != nil {
 				return false, err
@@ -248,7 +245,7 @@ func installGroup(ctx context.Context, d *installationDistribution, name toolcha
 			if intent.Source != "" {
 				_, err = component.Link(m.prepared, intent.Name, intent.Source, false)
 			} else {
-				err = component.InstallFromSource(ctx, m.prepared, concrete, intent.Name, m.release.Tuple, downloads, false, d.Source, opts.sink())
+				err = component.PrepareFromSource(ctx, m.prepared, concrete, intent.Name, m.release.Tuple, false, d.Source, preparation, opts.sink())
 			}
 			if err != nil {
 				return false, err
@@ -332,9 +329,7 @@ func installGroup(ctx context.Context, d *installationDistribution, name toolcha
 			d.installed[m.identity] = toolchain.Installation{Release: m.release.Name, Tuple: m.release.Tuple, SHA256: m.release.SHA256}
 		}
 	}
-	for _, archive := range archives {
-		_ = dist.CleanupDownload(archive)
-	}
+	preparation.Complete()
 	return true, nil
 }
 

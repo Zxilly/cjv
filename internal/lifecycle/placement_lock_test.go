@@ -9,6 +9,7 @@ import (
 
 	"github.com/Zxilly/cjv/internal/cjverr"
 	"github.com/Zxilly/cjv/internal/config"
+	"github.com/Zxilly/cjv/internal/dist"
 	"github.com/Zxilly/cjv/internal/sdktools"
 	"github.com/Zxilly/cjv/internal/toolchain"
 	"github.com/stretchr/testify/assert"
@@ -18,15 +19,18 @@ import (
 func TestPlacementDoesNotBlockRecoveryDuringPreparation(t *testing.T) {
 	home := t.TempDir()
 	config.IsolateForTest(t, home)
+	preparation, err := dist.BeginPreparation(t.Context(), filepath.Join(home, "downloads"))
+	require.NoError(t, err)
+	defer preparation.Close()
 	recoverHome := func() {
 		ctx, cancel := context.WithTimeout(t.Context(), time.Second)
 		defer cancel()
 		require.NoError(t, toolchain.RecoverHomeContext(ctx))
 	}
 	acq := acquisition{
-		fetch: func(context.Context, string) (string, bool, error) {
+		fetch: func(context.Context, *dist.Preparation) (string, error) {
 			recoverHome()
-			return "unused", false, nil
+			return "unused", nil
 		},
 		extract: func(_ context.Context, _, prepared string) error {
 			compiler := filepath.Join(prepared, "bin", sdktools.PlatformBinaryName("cjc"))
@@ -38,17 +42,20 @@ func TestPlacementDoesNotBlockRecoveryDuringPreparation(t *testing.T) {
 			return nil
 		},
 	}
-	require.NoError(t, placeToolchain(t.Context(), "background-sdk", false, "", acq, nil, Options{}))
+	require.NoError(t, placeToolchain(t.Context(), "background-sdk", false, "", preparation, acq, nil, Options{}))
 	assert.FileExists(t, filepath.Join(home, "toolchains", "background-sdk", "bin", sdktools.PlatformBinaryName("cjc")))
 }
 
 func TestPlacementRechecksDestinationAfterPreparation(t *testing.T) {
 	home := t.TempDir()
 	config.IsolateForTest(t, home)
+	preparation, err := dist.BeginPreparation(t.Context(), filepath.Join(home, "downloads"))
+	require.NoError(t, err)
+	defer preparation.Close()
 	const name = "shared-sdk"
 	dest := filepath.Join(home, "toolchains", name)
 	acq := acquisition{
-		fetch: func(context.Context, string) (string, bool, error) { return "unused", false, nil },
+		fetch: func(context.Context, *dist.Preparation) (string, error) { return "unused", nil },
 		extract: func(_ context.Context, _, prepared string) error {
 			compiler := filepath.Join(prepared, "bin", sdktools.PlatformBinaryName("cjc"))
 			require.NoError(t, os.MkdirAll(filepath.Dir(compiler), 0o755))
@@ -63,7 +70,7 @@ func TestPlacementRechecksDestinationAfterPreparation(t *testing.T) {
 			return nil
 		},
 	}
-	err := placeToolchain(t.Context(), name, false, "", acq, nil, Options{})
+	err = placeToolchain(t.Context(), name, false, "", preparation, acq, nil, Options{})
 	var already *cjverr.ToolchainAlreadyInstalledError
 	require.ErrorAs(t, err, &already)
 	content, err := os.ReadFile(filepath.Join(dest, "bin", sdktools.PlatformBinaryName("cjc")))

@@ -22,21 +22,24 @@ import (
 // reinstalls over an existing manifest. sink receives the FetchingComponent
 // and InstallingComponent stages and the download progress; nil reports
 // nothing.
-func InstallFromSource(ctx context.Context, roots Roots, tc toolchain.ToolchainName, name Name, tuple, downloadsDir string, force bool, source *dist.Source, sink progress.Sink) (retErr error) {
-	return installWithResolver(ctx, roots, tc, name, tuple, downloadsDir, force, func(spec Spec) (dist.ComponentInfo, error) {
-		platform := ""
-		if name == Stdx {
-			var err error
-			platform, err = stdxPlatform(tuple)
-			if err != nil {
-				return dist.ComponentInfo{}, err
-			}
-		}
-		return source.ResolveComponent(ctx, tc.Channel, tc.Version, string(name), platform)
-	}, progress.Or(sink))
+func InstallFromSource(ctx context.Context, roots Roots, tc toolchain.ToolchainName, name Name, tuple, downloadsDir string, force bool, source *dist.Source, sink progress.Sink) error {
+	preparation, err := dist.BeginPreparation(ctx, downloadsDir)
+	if err != nil {
+		return err
+	}
+	defer preparation.Close() //nolint:errcheck // best-effort scratch cleanup
+	if err := PrepareFromSource(ctx, roots, tc, name, tuple, force, source, preparation, sink); err != nil {
+		return err
+	}
+	preparation.Complete()
+	return nil
 }
 
-func installWithResolver(ctx context.Context, roots Roots, tc toolchain.ToolchainName, name Name, tuple, downloadsDir string, force bool, resolve func(Spec) (dist.ComponentInfo, error), sink progress.Sink) (retErr error) {
+// PrepareFromSource shares the caller's preparation lifetime. Its archive is
+// retained until the complete SDK/component operation is successfully published,
+// rather than discarded when this one component finishes extraction.
+func PrepareFromSource(ctx context.Context, roots Roots, tc toolchain.ToolchainName, name Name, tuple string, force bool, source *dist.Source, preparation *dist.Preparation, sink progress.Sink) error {
+	sink = progress.Or(sink)
 	spec, err := SpecFor(name)
 	if err != nil {
 		return err
@@ -56,11 +59,15 @@ func installWithResolver(ctx context.Context, roots Roots, tc toolchain.Toolchai
 		}
 	}
 
-	asset, err := resolve(spec)
-	if err != nil {
-		return err
+	platform := ""
+	if name == Stdx {
+		platform, err = stdxPlatform(tuple)
+		if err != nil {
+			return err
+		}
 	}
-	if err := os.MkdirAll(downloadsDir, 0o755); err != nil {
+	asset, err := source.ResolveComponent(ctx, tc.Channel, tc.Version, string(name), platform)
+	if err != nil {
 		return err
 	}
 	if parsed, err := url.Parse(asset.URL); err != nil || parsed.Path == "" {
@@ -68,17 +75,10 @@ func installWithResolver(ctx context.Context, roots Roots, tc toolchain.Toolchai
 	}
 
 	sink.Report(progress.Event{Kind: progress.FetchingComponent, Toolchain: tc.String(), Component: string(name)})
-	archivePath, err := dist.DownloadCached(ctx, asset.URL, asset.SHA256, downloadsDir, sink)
+	archivePath, err := preparation.Download(ctx, asset.URL, asset.SHA256, "", sink)
 	if err != nil {
 		return err
 	}
-	// Drop the staged archive on success; failures keep it for the next retry.
-	defer func() {
-		if retErr == nil {
-			_ = dist.CleanupDownload(archivePath) //nolint:errcheck // best-effort
-		}
-	}()
-
 	sink.Report(progress.Event{Kind: progress.InstallingComponent, Toolchain: tc.String(), Component: string(name)})
 
 	return stageAndInstall(ctx, roots, spec, name, archivePath, force, alreadyInstalled)
