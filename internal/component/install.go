@@ -105,11 +105,10 @@ func InstallFromArchive(ctx context.Context, roots Roots, name Name, archivePath
 	return stageAndInstall(ctx, roots, spec, name, archivePath, force, alreadyInstalled)
 }
 
-// InstallPrepared publishes a component already downloaded and extracted into
-// private roots. The caller holds the home lock and has rechecked its selected
-// SDK and component state. Replacement uses the same ownership and rollback
-// rules as archive installs and local links.
-func InstallPrepared(roots, prepared Roots, name Name, force bool) error {
+// installPrepared changes private roots only. The complete replacement is
+// published by the caller, so errors discard scratch rather than snapshotting
+// each component again.
+func installPrepared(roots, prepared Roots, name Name, force bool) error {
 	spec, err := SpecFor(name)
 	if err != nil {
 		return err
@@ -122,10 +121,21 @@ func InstallPrepared(roots, prepared Roots, name Name, force bool) error {
 	if err != nil {
 		return err
 	}
-	return replaceComponent(roots, name, alreadyInstalled && force, paths, func() error {
-		_, err := fsops.MoveTree(spec.InstallRoot(prepared), spec.InstallRoot(roots))
+	if alreadyInstalled && force {
+		if err := checkPreparedRemoval(roots, name); err != nil {
+			return err
+		}
+		if err := Remove(roots, name); err != nil {
+			return err
+		}
+	}
+	if err := checkPreparedDirectories(spec.InstallRoot(prepared), spec.InstallRoot(roots)); err != nil {
 		return err
-	})
+	}
+	if _, err := fsops.MoveTree(spec.InstallRoot(prepared), spec.InstallRoot(roots)); err != nil {
+		return err
+	}
+	return WriteManifest(roots.TcDir, name, paths)
 }
 
 // stageAndInstall extracts archivePath into the component's install root, moves

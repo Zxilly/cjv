@@ -165,13 +165,5 @@ func installComponents(ctx context.Context, d *Distribution, resolvedName string
 	if err != nil || current != record || stateErr != nil || currentState != state {
 		return fmt.Errorf("toolchain %s changed during component installation; retry", resolvedName)
 	}
-	return component.ApplyChanges(roots, selected, func() error {
-		for _, c := range selected {
-			if err := component.InstallPrepared(roots, prepared, c, force); err != nil {
-				return err
-			}
-			opts.emit(progress.Event{Kind: progress.ComponentInstalled, Toolchain: resolvedName, Component: string(c)})
-		}
-		return nil
-	})
+	return publishComponentBatch(home, resolvedName, prepared, selected, force, opts)
 }
