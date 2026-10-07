@@ -159,6 +159,40 @@ func TestActiveTargetErrorsWhenTargetSDKMissing(t *testing.T) {
 	assert.True(t, errors.As(err, &notInstalled))
 }
 
+func TestActiveDoesNotAutoInstallOverBrokenTargetRecord(t *testing.T) {
+	home := t.TempDir()
+	config.IsolateForTest(t, home)
+	t.Setenv(config.EnvToolchain, "")
+	t.Chdir(home)
+	require.NoError(t, toolchain.RecoverHome())
+	hostTuple, err := sdktarget.CurrentHostTuple("")
+	require.NoError(t, err)
+	hostDir := filepath.Join(home, "toolchains", "sts")
+	require.NoError(t, toolchain.WriteInstallation(hostDir, toolchain.Installation{Release: "sts-2.0.0", Tuple: hostTuple}))
+	targetDir := filepath.Join(home, "toolchains", "sts-"+hostTuple+"-ohos")
+	// A tracking directory exists but its required installation record is lost.
+	// This must remain a record error rather than becoming an install request.
+	require.NoError(t, os.MkdirAll(targetDir, 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(home, config.ToolchainFileName), []byte("[toolchain]\nchannel = 'sts'\ntargets = ['ohos']\n"), 0644))
+	sf, err := config.DefaultSettingsFile()
+	require.NoError(t, err)
+	autoInstall := true
+	_, err = sf.Update(config.SettingsUpdate{AutoInstall: &autoInstall})
+	require.NoError(t, err)
+	previous := AutoInstallFunc
+	called := false
+	AutoInstallFunc = func(context.Context, string, []string) error {
+		called = true
+		return os.ErrPermission
+	}
+	t.Cleanup(func() { AutoInstallFunc = previous })
+	_, err = Active(t.Context(), "")
+	require.ErrorIs(t, err, os.ErrNotExist)
+	require.False(t, called)
+	var missing *cjverr.ToolchainNotInstalledError
+	require.False(t, errors.As(err, &missing))
+}
+
 func TestActiveAutoInstallsMissingTargetsAndComponents(t *testing.T) {
 	home := t.TempDir()
 	cwd := t.TempDir()

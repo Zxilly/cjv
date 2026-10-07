@@ -152,45 +152,11 @@ func (app *application) resolveComponentToolchain() (string, toolchain.Toolchain
 	if err != nil || app.componentTarget == "" {
 		return dir, release, err
 	}
-	environment, err := sdktarget.Normalize(app.componentTarget)
+	host, err := toolchain.ReadHostTargets(dir)
 	if err != nil {
 		return "", release, err
 	}
-	record, err := toolchain.ReadInstallation(dir)
-	if err != nil {
-		return "", release, err
-	}
-	host := record.Tuple
-	if host == "" {
-		d, err := lifecycle.OpenDistribution(app.lifecycleOptions())
-		if err != nil {
-			return "", release, err
-		}
-		host = d.HostTuple
-	}
-	id, err := sdktarget.ParseIdentity(host)
-	if err != nil {
-		return "", release, err
-	}
-	target, err := id.WithEnvironment(environment)
-	if err != nil {
-		return "", release, err
-	}
-	identity, err := toolchain.ParseToolchainName(filepath.Base(dir))
-	if err != nil {
-		return "", release, err
-	}
-	identity.Host = ""
-	identity.Target = target.Tuple()
-	dir, err = toolchain.FindInstalled(identity)
-	if err != nil {
-		return "", release, err
-	}
-	actual, err := toolchain.InstalledRelease(dir)
-	if err == nil && actual.Version != release.Version {
-		return "", actual, fmt.Errorf("target %s does not match host release %s", identity.String(), release.String())
-	}
-	return dir, actual, err
+	return host.FindTarget(app.componentTarget)
 }
 
 func (app *application) runComponentAdd(cmd *cobra.Command, args []string) error {
