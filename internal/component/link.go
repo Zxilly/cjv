@@ -42,7 +42,7 @@ func Link(roots Roots, name Name, sourcePath string, force bool) (string, error)
 		}
 	}
 
-	err = replaceComponent(roots, name, force && alreadyInstalled, spec.LinkChildren, func() error {
+	err = replaceComponent(roots, name, force && alreadyInstalled, spec.LinkChildren, "", func() error {
 		destDir := spec.InstallRoot(roots)
 		if err := os.MkdirAll(destDir, 0o755); err != nil {
 			return err

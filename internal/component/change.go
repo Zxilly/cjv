@@ -41,7 +41,10 @@ func (e *restoreError) Unwrap() error { return e.err }
 // replaceComponent keeps archive installation and local linking on the same
 // replacement path. Snapshotting even a first install preserves untracked
 // files which the new contents may overwrite before a later failure.
-func replaceComponent(roots Roots, name Name, replaceExisting bool, paths []string, place func() error) error {
+func replaceComponent(roots Roots, name Name, replaceExisting bool, paths []string, source string, place func() error) error {
+	if err := checkReplacement(roots, name, replaceExisting, source); err != nil {
+		return err
+	}
 	return ApplyChanges(roots, []Name{name}, func() error {
 		if replaceExisting {
 			if err := Remove(roots, name); err != nil {
@@ -53,4 +56,28 @@ func replaceComponent(roots Roots, name Name, replaceExisting bool, paths []stri
 		}
 		return WriteManifest(roots.TcDir, name, paths)
 	})
+}
+
+// Preflight belongs before snapshotting: rejecting unsafe ownership must not
+// run a restore that replaces otherwise untouched files or follows root links.
+func checkReplacement(roots Roots, name Name, replaceExisting bool, source string) error {
+	if err := checkEditRoots(roots, []Name{name}); err != nil {
+		return err
+	}
+	var removed []string
+	if replaceExisting {
+		var err error
+		removed, err = removalPaths(roots, name)
+		if err != nil {
+			return err
+		}
+	}
+	if source != "" {
+		spec, err := SpecFor(name)
+		if err != nil {
+			return err
+		}
+		return checkMerge(source, spec.InstallRoot(roots), removed)
+	}
+	return nil
 }

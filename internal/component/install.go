@@ -121,16 +121,13 @@ func installPrepared(roots, prepared Roots, name Name, force bool) error {
 	if err != nil {
 		return err
 	}
+	if err := checkReplacement(roots, name, alreadyInstalled && force, spec.InstallRoot(prepared)); err != nil {
+		return err
+	}
 	if alreadyInstalled && force {
-		if err := checkPreparedRemoval(roots, name); err != nil {
-			return err
-		}
 		if err := Remove(roots, name); err != nil {
 			return err
 		}
-	}
-	if err := checkPreparedDirectories(spec.InstallRoot(prepared), spec.InstallRoot(roots)); err != nil {
-		return err
 	}
 	if _, err := fsops.MoveTree(spec.InstallRoot(prepared), spec.InstallRoot(roots)); err != nil {
 		return err
@@ -142,6 +139,9 @@ func installPrepared(roots, prepared Roots, name Name, force bool) error {
 // the files into place, and writes the manifest through the same replacement
 // operation as local linking. It is the shared tail of Install and InstallFromArchive.
 func stageAndInstall(ctx context.Context, roots Roots, spec Spec, name Name, archivePath string, force, alreadyInstalled bool) error {
+	if err := checkEditRoots(roots, []Name{name}); err != nil {
+		return err
+	}
 	destDir := spec.InstallRoot(roots)
 	if err := os.MkdirAll(filepath.Dir(destDir), 0o755); err != nil {
 		return err
@@ -160,7 +160,7 @@ func stageAndInstall(ctx context.Context, roots Roots, spec Spec, name Name, arc
 		return fmt.Errorf("component %q archive contained no files", name)
 	}
 
-	return replaceComponent(roots, name, force && alreadyInstalled, paths, func() error {
+	return replaceComponent(roots, name, force && alreadyInstalled, paths, stageDir, func() error {
 		_, err := fsops.MoveTree(stageDir, destDir)
 		return err
 	})

@@ -157,10 +157,9 @@ func writeComponentsIndex(tcDir string, names []Name) error {
 // claimed by another installed component (mdBook archives ship overlapping
 // static assets) stay on disk.
 func Remove(roots Roots, name Name) error {
-	myPaths, err := ReadManifest(roots.TcDir, name)
+	myPaths, err := removalPaths(roots, name)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			// Manifest missing — best-effort tidy of the index.
 			return removeFromComponentsIndex(roots.TcDir, name)
 		}
 		return err
@@ -174,20 +173,15 @@ func Remove(roots Roots, name Name) error {
 	return removeFromComponentsIndex(roots.TcDir, name)
 }
 
-// removePaths skips paths still claimed by another component, then prunes
-// the now-empty directories up to (and including) the install root.
+// removePaths applies the validated deletion plan, then prunes empty directories
+// up to the install root. Shared ownership was resolved before any mutation.
 func removePaths(roots Roots, name Name, paths []string) error {
 	spec, err := SpecFor(name)
 	if err != nil {
 		return err
 	}
 	installRoot := spec.InstallRoot(roots)
-	keep := otherComponentClaims(roots, name)
-
 	for _, rel := range paths {
-		if keep[rel] {
-			continue
-		}
 		abs := filepath.Join(installRoot, filepath.FromSlash(rel))
 		if err := os.Remove(abs); err != nil && !errors.Is(err, os.ErrNotExist) {
 			return fmt.Errorf("remove %s: %w", abs, err)
@@ -197,9 +191,6 @@ func removePaths(roots Roots, name Name, paths []string) error {
 	rootStop := filepath.Clean(installRoot)
 	pruneSet := make(map[string]struct{})
 	for _, rel := range paths {
-		if keep[rel] {
-			continue
-		}
 		dir := filepath.Dir(filepath.Join(installRoot, filepath.FromSlash(rel)))
 		for {
 			clean := filepath.Clean(dir)
@@ -232,15 +223,18 @@ func removePaths(roots Roots, name Name, paths []string) error {
 // installed components other than `excluding` AND share the same install
 // root. Used by Remove to keep shared static assets alive when overlapping
 // components remain.
-func otherComponentClaims(roots Roots, excluding Name) map[string]bool {
+func otherComponentClaims(roots Roots, excluding Name) (map[string]bool, error) {
 	claims := make(map[string]bool)
 	excludingSpec, err := SpecFor(excluding)
 	if err != nil {
-		return claims
+		return nil, err
 	}
-	installed, _ := ListInstalled(roots.TcDir)
+	installed, err := ListInstalled(roots.TcDir)
+	if err != nil {
+		return nil, err
+	}
 	if len(installed) == 0 || (len(installed) == 1 && installed[0] == excluding) {
-		return claims
+		return claims, nil
 	}
 	excludingRoot := excludingSpec.InstallRoot(roots)
 	for _, n := range installed {
@@ -253,11 +247,11 @@ func otherComponentClaims(roots Roots, excluding Name) map[string]bool {
 		}
 		paths, err := ReadManifest(roots.TcDir, n)
 		if err != nil {
-			continue
+			return nil, err
 		}
 		for _, p := range paths {
-			claims[p] = true
+			claims[filepath.Clean(filepath.FromSlash(p))] = true
 		}
 	}
-	return claims
+	return claims, nil
 }
