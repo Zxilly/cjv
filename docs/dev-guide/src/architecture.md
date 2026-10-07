@@ -67,15 +67,21 @@ docs/           两本 mdBook（见“文档站”一章）
 
 `internal/toolchain` 管已安装的 SDK：列出已装工具链（`ListInstalled`）、解析活动工具链目录，以及工具链名字的解析与版本比较。`RecoverHomeContext` 以可取消的方式获取 home 锁，再执行恢复和旧布局迁移；已经持锁的调用方使用锁上的 `Recover` 与 `MigrateLegacy` 方法。恢复先让 `fstx` 处理 `toolchains/` 下未完成的事务，再删除废弃的 staging 树、把原目录已缺失的旧式备份放回去。恢复受阻时原样返回 `fstx.RecoveryError`，不碰任何残留；需要恢复的备份不会作为普通残留直接删除。安装、升级、删除在改动文件前要求恢复成功；活动工具链准备也先完成恢复，恢复失败会阻止使用不完整安装。
 
+`toolchain.ReadHostTargets` 把已装宿主的安装身份、实际发行版和制品平台组合成 `HostTargets`。`TargetName` 保持跟踪或固定身份，`FindTarget` 验证目标所属身份及发行版，`Installed` 只列出当前宿主可用的目标。`target` 命令、`component --target`、目标运行环境和代理目标补齐都共用这些规则；旧记录的平台回退也集中在这里。调用方仍决定是否安装或如何显示结果，安装组的锁、快照与发布复查仍属于 `lifecycle`。
+
 `internal/component` 管工具链的附加组件：`stdx`、`docs`、`stdx-docs`。每个组件是单独下载的归档，解压后的文件通过逐组件的清单（manifest）记录，从而能独立卸载。`component` 还定义了组件装到哪（`InstallLocation`：有的落进工具链目录树，有的作为纯数据放到 `<CJV_HOME>/docs/<tc>/`）以及组件要注入哪些环境变量。
 
 `StagePreparedBatch` 将受影响的根和组件索引复制到私有暂存目录，在其中应用整批选择，再由 `lifecycle` 负责受管安装的持久化发布。`ApplyChanges` 继续为本地链接和直接归档操作提供备份与普通错误回滚；备份包含组件文件和清单，恢复失败时保留备份并在错误中返回位置。这些本地操作及自定义 SDK 的随包 stdx 保持各自原有的恢复语义。
+
+组件删除、批次替换、本地归档和链接替换共用所有权编辑规则：先校验完整清单、组件根与父目录链接，再修改文件。共享文件保留，已跟踪的叶链接可以删除而不触及用户源目录；归档合并不能穿过未跟踪链接。替换操作在创建快照前完成预检，恢复也检查目标根，避免拒绝危险输入后又通过回滚访问外部目录。
 
 ### `dist`：下载与解包
 
 `internal/dist` 负责分发源与网络制品。`source.go` 是统一入口：LTS/STS 按需缓存 `versions.json`，nightly 按需缓存同目录的 `nightly.json`。显式 `dist_server` 时两者位于分发根下。相对 URL 以 manifest 所在目录解析，绝对 URL 原样使用。组件制品也由它按通道、版本和 stdx 平台解析（`ResolveComponent`）；`component.PrepareFromSource` 在调用方的下载生命周期内准备组件，`InstallFromSource` 为独立调用方开启该生命周期。`manifest.go` 解析并校验通道数据；`download.go` 做重试、断点续传和 SHA256 校验，并把传输的开始、字节进展和结束作为 `progress` 事件发给调用方传入的 sink，自己不画进度条；`install.go` 解包归档，解出的树由 `fsops.MoveTree` 落到目标目录；`nightly.go` 持有共享 HTTP 客户端并读取 nightly 资产的 SHA256 sidecar。host 与目标 tuple 的计算在 `target`（`CurrentHostTuple`、`CurrentTargetTuple`），`dist` 不再转发。
 
 `Preparation` 统一拥有一次 SDK 或组件操作的安装锁、私有暂存目录和下载归档。`BeginPreparation` 获取安装锁，随后由调用方获取 home 锁。安装锁持续到发布和清理结束，home 锁可在下载、解压期间释放。SDK 安装组和组件批次中的所有制品共用一次准备生命周期。`Complete` 标记发布成功；`Close` 总是清理私有暂存目录，仅在成功后删除自己拥有的已校验归档，失败时保留已下载归档及可续传分段，最后释放安装锁。用户提供的本地归档不归它所有；持久化日志和恢复备份放在其暂存区之外。下载清理也使用同一把锁，避免删除正在使用的文件。
+
+归档传输和 nightly 校验文件共用网络重试策略：取消或截止时间到达时停止尝试，退避等待也可中断；永久 HTTP 错误不重试，408、429 和服务器错误允许重试。nightly 校验文件的 404 仍表示没有可用 sidecar，格式错误不重试。取消的校验下载保留可续传分段，未开始的操作不创建下载目录。
 
 ### `target`：平台身份
 
@@ -121,7 +127,7 @@ docs/           两本 mdBook（见“文档站”一章）
 - `cjverr` 错误类型。定义带稳定机器码（`ErrorCode`）的结构化错误，`Error()` 方法通过 `i18n` 产出人读信息，`Coded` 接口让 `output` 能在 JSON 模式下输出错误码。`ExitCodeError` 携带进程退出码。
 - `fstx` 文件系统事务。落盘日志记录受管路径、备份和事务状态，读取时限制日志大小与路径范围；事务目录名、staging 树和工具链事务覆盖的 `toolchains/`、`stdx/`、`docs/` 条目都取自 `config` 的布局。`toolchain.RecoverHome` 在启动清理及安装、删除重试时先调用 `Recover` 恢复未完成操作；提交及准备发布的状态保留已就绪内容，再清理备份。恢复受阻时保留日志和备份并报告位置，后续可以重试，而不是依赖进程内的 undo 闭包。
 - `fsops` 文件系统操作。所有改动 CJV_HOME 的包都经它落盘：`RemoveAllRetry`、`RenameRetry` 和给 `os.Root` 用的 `Retry` 吸收 Windows 上杀毒软件与索引器造成的瞬时锁；`WriteFileAtomic` 原子写文件；`SymlinkOrJunction` 在符号链接需要特权时退回目录 junction；`CreateLink` 按符号链接、硬链接、复制三级退化建代理链接；`IsPathUnder` 判断路径归属。树操作只有一份实现：`MoveTree` 把解压好的树逐项合并进目标目录——目录合并、文件与符号链接覆盖已有条目、重命名失败时跨卷复制、拒绝绝对或逃出源树的符号链接、返回放置的文件清单；`CopyTree` 原样备份和恢复组件根，符号链接保留原目标、目录模式在填满后再套用。`dist` 解包、`component` 的暂存与快照、`lifecycle` 的 staging、`fstx`、`selfupdate`、`reachable`、`toolchain`、`config` 都调用它。
-- `retry` 斐波那契退避的重试引擎 `retry.Do`：`fsops` 用它重试瞬时文件错误，`dist` 用它重试网络请求。
+- `retry` 提供斐波那契退避：`fsops` 的 `retry.Do` 保持文件错误重试语义；`dist` 使用可取消的 `retry.DoContext`，网络错误分类由 `dist` 统一拥有。
 - `logging` 用 `CJV_LOG` 环境变量配 `slog` 全局 logger（默认 `warn`）。
 - `progress` 进度缝。`Event` 是带 `Kind` 与所需数据（工具链、组件、下载字节数等）的类型化进度事件，`Sink` 是接收方。两个适配器：`Text` 把事件渲染成 i18n 文本并在终端上用 mpb 画下载进度条，`Discard` 什么都不输出。`lifecycle`、`resolve`、`dist`、`component`、`selfupdate` 只发事件，不认识 i18n 消息 ID。
 - `testutil` 测试辅助：mock 下载服务器、Windows 注册表守卫、记录进度事件的 `ProgressRecorder`。它带 `_test.go` 之外的源文件，供其他包的测试导入。
