@@ -1,21 +1,16 @@
-# Overview
+# Summary
 
 [Introduction](introduction.md)
 
-# Getting Started with Development
+# Development
 
-- [Building from Source](building.md)
-- [Code Architecture](architecture.md)
-- [Testing](testing.md)
-- [Linting and Formatting](linting.md)
+- [Build from source](building.md)
+- [Architecture](architecture.md)
+- [Testing and checks](testing.md)
+- [Contributing](contributing.md)
 
-# Subsystems
+# Site and releases
 
-- [Documentation Site](documentation.md)
-- [Landing Page](web.md)
-- [Continuous Integration](ci.md)
-- [Release Process](releasing.md)
-
-# Contributing
-
-- [Contributing Guide](contributing.md)
+- [Landing page](web.md)
+- [Documentation site](documentation.md)
+- [Releases](releasing.md)

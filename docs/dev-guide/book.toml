@@ -16,3 +16,7 @@ preferred-dark-theme = "navy"
 # 右上角语言切换器(地球图标下拉)。
 additional-js = ["theme/cjv-i18n.js"]
 additional-css = ["theme/cjv-i18n.css"]
+
+[output.html.redirect]
+"linting.html" = "testing.html"
+"ci.html" = "testing.html"
