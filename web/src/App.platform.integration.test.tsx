@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import { server } from 'vitest/browser'
-import userEvent from '@testing-library/user-event'
 import App from './App'
 import { HARMONY_SAMPLES } from './test-fixtures/harmony'
+import { activateLang, type Lang } from './lib/i18n'
 import { computePlatformResult, type PlatformResult, type PlatformState } from './hooks/use-platform'
 
 const MAC_DESKTOP_UA =
@@ -184,30 +184,29 @@ describe('App platform detection integration', () => {
     expect(screen.queryByRole('tablist')).not.toBeInTheDocument()
   })
 
-  it.each(HARMONY_SAMPLES)('renders version and device guidance for $name in both languages', async sample => {
-    stubNavigator({
-      maxTouchPoints: 5,
-      platform: 'Win32',
-      userAgent: sample.userAgent,
-      userAgentData: null,
+  describe.each<Lang>(['zh', 'en'])('HarmonyOS guidance (%s)', lang => {
+    it.each(HARMONY_SAMPLES)('renders version and device guidance for $name', sample => {
+      stubNavigator({
+        maxTouchPoints: 5,
+        platform: 'Win32',
+        userAgent: sample.userAgent,
+        userAgentData: null,
+      })
+      // Test platform copy independently of the page's animated language switch.
+      // App.test.tsx covers switching languages and expanding other platforms.
+      activateLang(lang)
+      render(<App />)
+
+      expect(screen.getByText(`HarmonyOS (OpenHarmony ${sample.version})`)).toBeInTheDocument()
+      expect(screen.getByText(lang === 'zh' ? sample.message : sample.englishMessage)).toBeInTheDocument()
+      expect(screen.queryByText(/已列入计划|support.*planned/)).not.toBeInTheDocument()
+      expect(screen.queryByText(/请在桌面设备上访问|Please open this page on a desktop/)).not.toBeInTheDocument()
+      expect(screen.queryByRole('tablist')).not.toBeInTheDocument()
+      expect(screen.queryByText(/install\.(ps1|sh)/)).not.toBeInTheDocument()
+      expect(screen.getByRole('button', {
+        name: lang === 'zh' ? '查看其他平台的安装方式' : 'Show install methods for other platforms',
+      })).toBeInTheDocument()
     })
-    const user = userEvent.setup()
-    render(<App />)
-
-    expect(screen.getByText(`HarmonyOS (OpenHarmony ${sample.version})`)).toBeInTheDocument()
-    expect(screen.getByText(sample.message)).toBeInTheDocument()
-    expect(screen.queryByText(/已列入计划/)).not.toBeInTheDocument()
-    expect(screen.queryByText(/请在桌面设备上访问/)).not.toBeInTheDocument()
-    expect(screen.queryByRole('tablist')).not.toBeInTheDocument()
-    expect(screen.queryByText(/install\.(ps1|sh)/)).not.toBeInTheDocument()
-
-    await user.click(screen.getByRole('button', { name: 'English' }))
-    expect(await screen.findByText(sample.englishMessage)).toBeInTheDocument()
-    expect(screen.queryByText(/support.*planned/)).not.toBeInTheDocument()
-    expect(screen.getByText(`HarmonyOS (OpenHarmony ${sample.version})`)).toBeInTheDocument()
-
-    await user.click(screen.getByRole('button', { name: 'Show install methods for other platforms' }))
-    expect(screen.getByRole('tablist')).toBeInTheDocument()
   })
 
   it('updates to macOS ARM64 when Chromium UA Client Hints expose Apple Silicon', async () => {
