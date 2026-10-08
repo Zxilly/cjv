@@ -1,7 +1,9 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import { server } from 'vitest/browser'
+import userEvent from '@testing-library/user-event'
 import App from './App'
+import { HARMONY_SAMPLES } from './test-fixtures/harmony'
 import { computePlatformResult, type PlatformResult, type PlatformState } from './hooks/use-platform'
 
 const MAC_DESKTOP_UA =
@@ -180,6 +182,32 @@ describe('App platform detection integration', () => {
     expect(screen.getByText(/cjv 暂不支持/)).toBeInTheDocument()
     expect(screen.getByText('Android')).toBeInTheDocument()
     expect(screen.queryByRole('tablist')).not.toBeInTheDocument()
+  })
+
+  it.each(HARMONY_SAMPLES)('renders version and device guidance for $name in both languages', async sample => {
+    stubNavigator({
+      maxTouchPoints: 5,
+      platform: 'Win32',
+      userAgent: sample.userAgent,
+      userAgentData: null,
+    })
+    const user = userEvent.setup()
+    render(<App />)
+
+    expect(screen.getByText(`HarmonyOS (OpenHarmony ${sample.version})`)).toBeInTheDocument()
+    expect(screen.getByText(sample.message)).toBeInTheDocument()
+    expect(screen.queryByText(/已列入计划/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/请在桌面设备上访问/)).not.toBeInTheDocument()
+    expect(screen.queryByRole('tablist')).not.toBeInTheDocument()
+    expect(screen.queryByText(/install\.(ps1|sh)/)).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'English' }))
+    expect(await screen.findByText(sample.englishMessage)).toBeInTheDocument()
+    expect(screen.queryByText(/support.*planned/)).not.toBeInTheDocument()
+    expect(screen.getByText(`HarmonyOS (OpenHarmony ${sample.version})`)).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Show install methods for other platforms' }))
+    expect(screen.getByRole('tablist')).toBeInTheDocument()
   })
 
   it('updates to macOS ARM64 when Chromium UA Client Hints expose Apple Silicon', async () => {

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { renderHook, waitFor } from '@testing-library/react'
 import { i18n } from '@/lib/i18n'
+import { HARMONY_SAMPLES } from '../test-fixtures/harmony'
 import {
   computeBrowserPlatformResult,
   computePlatformResult,
@@ -146,7 +147,7 @@ describe('computePlatformResult', () => {
   it('tags mobile OSes with reason "mobile" and unsupported desktop archs with reason "arch"', () => {
     expect(computePlatformResult('iOS', 'arm64').info.reason).toBe('mobile')
     expect(computePlatformResult('Android', 'arm64').info.reason).toBe('mobile')
-    expect(computePlatformResult('HarmonyOS', 'arm64').info.reason).toBe('mobile')
+    expect(computePlatformResult('HarmonyOS', 'arm64').info.reason).toBe('harmony')
     expect(computePlatformResult('Windows', 'arm64').info.reason).toBe('arch')
     expect(computePlatformResult('Linux', 'mips64').info.reason).toBe('arch')
     // Unknown and ready states do not carry an unsupported reason.
@@ -215,7 +216,7 @@ describe('computeBrowserPlatformResult', () => {
     expect(r.binary).toBeNull()
   })
 
-  it('treats a HarmonyOS NEXT / OpenHarmony UA as an unsupported mobile platform', () => {
+  it('retains the OpenHarmony version for an older NEXT UA', () => {
     const r = computeBrowserPlatformResult({
       maxTouchPoints: 5,
       platform: 'Linux aarch64',
@@ -223,12 +224,12 @@ describe('computeBrowserPlatformResult', () => {
     })
 
     expect(r.state).toBe('unsupported')
-    expect(r.info.label).toBe('HarmonyOS')
-    expect(r.info.reason).toBe('mobile')
+    expect(r.info.label).toBe('HarmonyOS (OpenHarmony 5.0)')
+    expect(r.info.reason).toBe('harmony')
     expect(r.binary).toBeNull()
   })
 
-  it('treats a legacy (Android-token) HarmonyOS UA as unsupported mobile too', () => {
+  it('keeps legacy HarmonyOS without inventing an OS version from browser tokens', () => {
     const r = computeBrowserPlatformResult({
       maxTouchPoints: 5,
       platform: 'Linux armv8l',
@@ -237,7 +238,60 @@ describe('computeBrowserPlatformResult', () => {
 
     expect(r.state).toBe('unsupported')
     expect(r.info.label).toBe('HarmonyOS')
+    expect(r.info.reason).toBe('harmony')
+    if (r.state !== 'unsupported') throw new Error('expected unsupported')
+    expect(r.info.harmony?.version).toBeUndefined()
+  })
+
+  it.each(HARMONY_SAMPLES)('detects $name despite conflicting platform hints', async sample => {
+    const input = {
+      userAgent: sample.userAgent,
+      platform: 'Win32',
+      userAgentData: {
+        platform: 'Windows',
+        getHighEntropyValues: async () => ({ platform: 'Windows', architecture: 'x86', bitness: '64' }),
+      },
+    }
+    for (const r of [computeBrowserPlatformResult(input), await detectBrowserPlatformResult(input)]) {
+      expect(r.state).toBe('unsupported')
+      expect(r.info.label).toBe(`HarmonyOS (OpenHarmony ${sample.version})`)
+      expect(r.info.reason).toBe('harmony')
+      expect(r.binary).toBeNull()
+      if (r.state !== 'unsupported') throw new Error('expected unsupported')
+      expect(r.info.harmony).toEqual({ family: 'OpenHarmony', version: sample.version, device: sample.device })
+    }
+  })
+
+  it.each([
+    ['Mozilla/5.0 (Tablet; openharmony 8.2.1)', 'OpenHarmony', '8.2.1', 'tablet'],
+    ['Mozilla/5.0 (HarmonyOS/4.0)', 'HarmonyOS', '4.0', 'unknown'],
+    ['Mozilla/5.0 (OpenHarmony) ArkWeb/7.0 HuaweiBrowser/6.1', 'OpenHarmony', undefined, 'unknown'],
+  ])('preserves explicit OS metadata for %s', (userAgent, family, version, device) => {
+    // Even a MacIntel/touch compatibility hint must not override an explicit OS.
+    const r = computeBrowserPlatformResult({ userAgent, platform: 'MacIntel', maxTouchPoints: 5 })
+    if (r.state !== 'unsupported') throw new Error('expected unsupported')
+    expect(r.info.harmony).toEqual({ family, version, device })
+    expect(r.binary).toBeNull()
+  })
+
+  it('does not identify HarmonyOS from HuaweiBrowser or ArkWeb alone', () => {
+    const r = computeBrowserPlatformResult({
+      userAgent: 'Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 Chrome/144.0.0.0 Mobile Safari/537.36 ArkWeb/7.0 HuaweiBrowser/6.1',
+    })
+    expect(r.info.label).toBe('Android')
     expect(r.info.reason).toBe('mobile')
+  })
+
+  it('updates the device hint when a HarmonyOS device changes mode at the same version', async () => {
+    const userAgent = HARMONY_SAMPLES[1].userAgent
+    const { result, rerender } = renderHook(({ ua }) => usePlatform({ userAgent: ua }), {
+      initialProps: { ua: userAgent as string },
+    })
+    rerender({ ua: userAgent.replace('; Windows NT 10.0; Win64; x64', '') })
+    await waitFor(() => {
+      if (result.current.state !== 'unsupported') throw new Error('expected unsupported')
+      expect(result.current.info.harmony?.device).toBe('tablet')
+    })
   })
 
   it('uses UA Client Hints to detect macOS ARM64 when Chromium exposes them', async () => {

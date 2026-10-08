@@ -258,7 +258,21 @@ function AppContent() {
                 <p className="text-base text-gray-500 dark:text-gray-400">
                   <Trans>cjv 暂不支持 <strong className="text-gray-700 dark:text-gray-300">{platform.info.label}</strong> 平台。</Trans>
                 </p>
-                {platform.info.reason === 'arch' ? (
+                {platform.info.reason === 'harmony' ? (
+                  <>
+                    <p className="mt-2 text-sm text-gray-400 dark:text-gray-500">
+                      {platform.info.harmony?.device === 'convertible-tablet' ? (
+                        <Trans>你正在使用鸿蒙二合一设备的平板模式，Windows 安装包不适用于此系统。</Trans>
+                      ) : platform.info.harmony?.device === 'tablet' ? (
+                        <Trans>你正在使用鸿蒙平板。</Trans>
+                      ) : platform.info.harmony?.device === 'phone' ? (
+                        <Trans>你正在使用鸿蒙手机。</Trans>
+                      ) : (
+                        <Trans>你正在使用鸿蒙设备。</Trans>
+                      )}
+                    </p>
+                  </>
+                ) : platform.info.reason === 'arch' ? (
                   <>
                     <p className="mt-2 text-sm text-gray-400 dark:text-gray-500"><Trans>该架构暂无预编译版本。</Trans></p>
                     <p className="mt-3 text-sm text-gray-400 dark:text-gray-500">

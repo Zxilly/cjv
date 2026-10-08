@@ -9,7 +9,7 @@ const REPO = 'https://github.com/Zxilly/cjv'
 const GITCODE = 'https://gitcode.com/Zxilly/cjv'
 const DL_BASE = '/dl'
 
-const UNSUPPORTED = new Set(['iOS', 'Android', 'HarmonyOS'])
+const UNSUPPORTED = new Set(['iOS', 'Android'])
 const MAC_X86_WARNING = msg`部分 LTS 和 STS 版本可能不包含 macOS x86_64 的预编译 SDK。`
 
 export interface ReadyInfo {
@@ -25,14 +25,23 @@ export interface ReadyInfo {
 }
 
 // Why a visitor is unsupported, so the UI can tailor its advice:
-//   'mobile' — a phone/tablet OS (iOS/Android/HarmonyOS); ask them to use a desktop.
+//   'mobile' — a phone/tablet OS (iOS/Android); ask them to use a desktop.
+//   'harmony' — HarmonyOS has no installer available yet.
 //   'arch'   — a known desktop OS whose CPU architecture has no prebuilt binary
 //              (e.g. Windows arm64); suggest the amd64 build or a manual download.
-export type UnsupportedReason = 'mobile' | 'arch'
+export type UnsupportedReason = 'mobile' | 'arch' | 'harmony'
+
+export interface HarmonyInfo {
+  // Keep the UA's version namespace; OpenHarmony is not a marketing version.
+  family: 'OpenHarmony' | 'HarmonyOS'
+  version?: string
+  device: 'phone' | 'tablet' | 'convertible-tablet' | 'unknown'
+}
 
 export interface BasicInfo {
   label: string
   reason?: UnsupportedReason
+  harmony?: HarmonyInfo
 }
 
 export interface InstallMethod {
@@ -270,20 +279,21 @@ export function computePlatformResult(os: string, arch: string): PlatformResult 
     }
   }
   const isMobile = UNSUPPORTED.has(os)
+  const isHarmony = os === 'HarmonyOS'
   const isUnsupportedArch = knownDesktopOS && hasArch
   const state: 'unsupported' | 'unknown' =
-    isMobile || isUnsupportedArch ? 'unsupported' : 'unknown'
+    isMobile || isHarmony || isUnsupportedArch ? 'unsupported' : 'unknown'
   return {
     ...common,
     state,
     info: {
       label:
-        isMobile ? os
+        isMobile || isHarmony ? os
         : isUnsupportedArch ? `${displayOS(os)} ${arch}`
         : knownDesktopOS ? `${displayOS(os)} 未知架构`
         : '未知平台',
       // Only set on the 'unsupported' branch; 'unknown' carries no reason.
-      reason: isMobile ? 'mobile' : isUnsupportedArch ? 'arch' : undefined,
+      reason: isHarmony ? 'harmony' : isMobile ? 'mobile' : isUnsupportedArch ? 'arch' : undefined,
     },
     binary: null,
   }
@@ -304,13 +314,23 @@ function isIPadOSDesktopMode(input: BrowserPlatformInput): boolean {
   return input.platform === 'MacIntel' && (input.maxTouchPoints || 0) > 1
 }
 
-// ua-parser-modern only emits OS name 'HarmonyOS' when the UA carries both 'android' and
-// 'harmonyos'. HarmonyOS NEXT drops the Android token, so it parses as undefined or
-// 'Linux' and would otherwise land in 'unknown' (or worse, 'Linux'), showing a Harmony
-// phone user a wall of desktop commands. The 'harmonyos'/'openharmony' tokens only appear
-// in genuine Harmony UAs, so matching them in the raw UA is a reliable override.
+// Harmony UAs can include Android or Windows compatibility tokens. Explicit OS
+// tokens take precedence over those tokens, Client Hints, and iPad heuristics.
+function parseHarmony(ua: string = ''): HarmonyInfo | undefined {
+  const match = /\b(OpenHarmony|HarmonyOS)\b(?:[ /](\d+(?:\.\d+)*))?/i.exec(ua)
+  if (!match) return undefined
+  const tablet = /\bTablet\b/i.test(ua)
+  return {
+    family: match[1].toLowerCase() === 'openharmony' ? 'OpenHarmony' : 'HarmonyOS',
+    version: match[2],
+    // The supplied convertible sample uses Tablet together with Windows NT.
+    // Its Win64/x64 tokens do not establish the device's native CPU architecture.
+    device: tablet ? (/\bWindows NT\b/i.test(ua) ? 'convertible-tablet' : 'tablet')
+      : /\bPhone\b|\bMobile\b/i.test(ua) ? 'phone' : 'unknown',
+  }
+}
+
 function parseBrowserOS(input: BrowserPlatformInput): string {
-  if (/harmonyos|openharmony/i.test(input.userAgent ?? '')) return 'HarmonyOS'
   return parseOS(input.userAgent).name || normalizeClientHintOS(input.userAgentData?.platform)
 }
 
@@ -322,6 +342,23 @@ function parseBrowserArch(input: BrowserPlatformInput): string {
 }
 
 export function computeBrowserPlatformResult(input: BrowserPlatformInput = readBrowserPlatformInput()): PlatformResult {
+  const harmony = parseHarmony(input.userAgent)
+  if (harmony) {
+    // TODO: Enable HarmonyOS installation when native cjv builds are available;
+    // use confirmed version/architecture support rather than compatibility tokens.
+    return {
+      ...computePlatformResult('HarmonyOS', ''),
+      state: 'unsupported',
+      info: {
+        label: !harmony.version ? 'HarmonyOS'
+          : harmony.family === 'OpenHarmony' ? `HarmonyOS (OpenHarmony ${harmony.version})`
+          : `HarmonyOS ${harmony.version}`,
+        reason: 'harmony',
+        harmony,
+      },
+      binary: null,
+    }
+  }
   if (isIPadOSDesktopMode(input)) return computePlatformResult('iOS', 'arm64')
   return computePlatformResult(parseBrowserOS(input), parseBrowserArch(input))
 }
@@ -352,6 +389,9 @@ function samePlatformResult(a: PlatformResult, b: PlatformResult): boolean {
   return (
     a.state === b.state
     && a.info.label === b.info.label
+    && a.info.reason === b.info.reason
+    && (a.state !== 'ready' ? a.info.harmony?.device : undefined)
+      === (b.state !== 'ready' ? b.info.harmony?.device : undefined)
     && a.binary?.goos === b.binary?.goos
     && a.binary?.goarch === b.binary?.goarch
   )
