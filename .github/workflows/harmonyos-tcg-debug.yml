@@ -1,0 +1,57 @@
+name: HarmonyOS ARM64 live SSH debug
+
+on:
+  push:
+    branches: [zxilly/harmonyos-emulator-ci]
+    paths:
+      - .github/workflows/harmonyos-tcg-debug.yml
+      - scripts/harmonyos-tcg/debug/**
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  debug:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          persist-credentials: false
+      - name: Install emulator and debugger dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y libatomic1 libpulse0 libegl1 libgbm1 libgl1 \
+            libpng16-16 libfontconfig1 libfreetype6 libxcb-icccm4 libxcb-image0 \
+            libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-shape0 \
+            libxcb-xinerama0 libxcb-xkb1 libsm6 libice6 libxkbcommon-x11-0 \
+            libxkbcommon0 libglib2.0-0 gdb strace sysstat
+      - name: Download official emulator
+        run: python3 scripts/harmonyos-tcg/probe.py
+      - uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25
+        with:
+          path: ${{ runner.temp }}/harmonyos-cli/images
+          key: harmonyos-pc-ARM64-6.1.1-24-v1
+      - name: Install official image
+        run: python3 scripts/harmonyos-emulator/probe.py install
+      - name: Start authenticated SSH debugging
+        run: bash scripts/harmonyos-tcg/debug/start.sh
+      - name: Publish connection details
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: debug-connection
+          path: emulator-diagnostics/debug-connection.json
+          retention-days: 1
+      - name: Boot and inspect the running guest
+        run: python3 scripts/harmonyos-tcg/debug/boot.py
+      - name: Close SSH session
+        if: always()
+        run: upterm session stop harmonyos-debug || true
+      - name: Upload diagnostic logs
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: harmonyos-live-debug
+          path: emulator-diagnostics/
+          retention-days: 7
