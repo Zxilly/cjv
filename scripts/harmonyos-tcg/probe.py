@@ -56,7 +56,8 @@ subprocess.run(["gcc", "-nostdlib", "-static", "-Wl,--build-id=none,-Ttext=0x400
 serial = probe.LOGS / "tcg-marker-serial.log"
 qmp = probe.ROOT / "tcg-marker.qmp"
 command = [str(raw), "-machine", "virt", "-accel", "tcg,thread=multi", "-cpu", "max",
-           "-m", "128M", "-display", "none", "-monitor", "none",
+           "-m", "128M", "-nodefaults", "-L", str(raw.parent / "pc-bios"),
+           "-display", "none", "-monitor", "none",
            "-serial", f"file:{serial}", "-qmp", f"unix:{qmp},server=on,wait=off",
            "-device", f"loader,file={guest},cpu-num=0"]
 with (probe.LOGS / "tcg-marker-process.log").open("w") as log:
