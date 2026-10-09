@@ -19,7 +19,8 @@ if code:
     probe.run("crash-backtrace", [
         "gdb", "-q", "-batch", "-ex", "set pagination off",
         "-ex", "set confirm off", "-ex", "handle SIGUSR1 SIGUSR2 SIGPIPE nostop noprint pass",
-        "-ex", "run",
+        "-ex", "start", "-ex", "set $emu_base = (unsigned long)&main - 0xc4512c",
+        "-ex", "break *($emu_base + 0xf21c38)", "-ex", "continue",
         "-ex", "bt 30", "-ex", "info proc mappings",
         "-x", str(Path(__file__).with_name("crash.gdb").resolve()),
         "--args", str(probe.EMULATOR), "-start", "cjv_pc_ci",

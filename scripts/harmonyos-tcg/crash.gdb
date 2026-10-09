@@ -15,6 +15,20 @@ while frame is not None and index < 16:
                     print("  string:", data.decode())
         except (gdb.error, ValueError):
             pass
+    try:
+        import struct
+        fp = int(frame.read_register("x29"))
+        words = struct.unpack("<16Q", bytes(gdb.selected_inferior().read_memory(fp, 128)))
+        print("frame memory", hex(fp), [hex(value) for value in words])
+        for value in words:
+            try:
+                data = bytes(gdb.selected_inferior().read_memory(value, 128)).split(b"\0", 1)[0]
+                if data and all(32 <= ch < 127 for ch in data):
+                    print("  stack string:", data.decode())
+            except gdb.error:
+                pass
+    except (gdb.error, ValueError):
+        pass
     frame = frame.older()
     index += 1
 end
