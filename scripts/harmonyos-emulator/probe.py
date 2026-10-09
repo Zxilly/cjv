@@ -177,7 +177,21 @@ def boot():
                 if code == 0 and "Linux " in (LOGS / "guest-uname.log").read_text():
                     run("guest-environment", [str(hdc), "-t", target, "shell",
                         "id; uname -m; echo HOME=$HOME; pwd; mount; ls -ld /data /storage"], env=env)
-                    report("**Ready:** official PC emulator booted and HDC executed a guest shell.")
+                    guest_script = "/data/local/tmp/cjv-ci-smoke.sh"
+                    run("hdc-send", [str(hdc), "-t", target, "file", "send",
+                                     str(Path(__file__).with_name("guest-smoke.sh").resolve()),
+                                     guest_script], env=env)
+                    run("guest-smoke", [str(hdc), "-t", target, "shell", "sh", guest_script], env=env)
+                    if "CJV_ENV_READY" not in (LOGS / "guest-smoke.log").read_text():
+                        report("**Blocked:** guest file transfer or writable HOME setup failed.")
+                        return 1
+                    run("hdc-receive", [str(hdc), "-t", target, "file", "recv",
+                                        "/data/local/tmp/cjv-ci/env.sh", str(LOGS / "guest-env.sh")], env=env)
+                    if not (LOGS / "guest-env.sh").is_file():
+                        report("**Blocked:** HDC could not retrieve the guest environment file.")
+                        return 1
+                    report("**Ready:** official PC emulator booted; HDC shell, file transfer, "
+                           "and a writable CI HOME are verified. Guest architecture: x86_64.")
                     return 0
                 if process.poll() not in (None, 0):
                     break
@@ -185,7 +199,7 @@ def boot():
             report("**Blocked:** no usable HDC shell after emulator startup; see start.log.")
             return 1
         finally:
-            emulator("collect-logs", "-logZip", name, "-logPath", LOGS)
+            emulator("collect-logs", "-logZip", name, "-logPath", LOGS / "emulator.zip")
             emulator("stop", "-stop", name)
             if process.poll() is None:
                 process.terminate()
