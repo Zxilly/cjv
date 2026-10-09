@@ -1,5 +1,17 @@
 python
 import gdb
+import struct
+fp = int(gdb.parse_and_eval("$x29"))
+base = int(gdb.parse_and_eval("$emu_base"))
+for index in range(24):
+    try:
+        words = struct.unpack("<8Q", bytes(gdb.selected_inferior().read_memory(fp, 64)))
+        print("[TCG diagnostic] AArch64 frame", index, hex(fp), "return RVA", hex(words[1] - base), [hex(v) for v in words])
+        if words[0] <= fp or words[0] - fp > 1024 * 1024:
+            break
+        fp = words[0]
+    except gdb.error:
+        break
 frame = gdb.newest_frame()
 index = 0
 while frame is not None and index < 16:
