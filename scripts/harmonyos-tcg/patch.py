@@ -37,9 +37,14 @@ def patch(source: Path, destination: Path, mode="qemu"):
             raise ValueError("Unexpected KVM guard instruction")
         if data[0x43C2408:0x43C240D] != b"host\0" or data[0x43C2450:0x43C2454] != b"kvm\0":
             raise ValueError("Unexpected launcher CPU/accelerator constants")
+        if data[0x43C2420:0x43C2448] != b"type=virt,highmem=on,gic-version=3".ljust(40, b"\0"):
+            raise ValueError("Unexpected launcher machine constant")
         struct.pack_into("<I", data, 0x1055788, 0x14000015)  # b 0x10557dc
         data[0x43C2408:0x43C240D] = b"max\0\0"
         data[0x43C2450:0x43C2454] = b"tcg\0"
+        # This build has no registered software arm-gicv3-its object. Preserve
+        # GICv3/highmem but disable ITS to avoid object_new_with_type(NULL).
+        data[0x43C2420:0x43C2448] = b"virt,highmem=on,gic-version=3,its=off".ljust(40, b"\0")
     else:
         raise ValueError(f"Unknown patch mode: {mode}")
     destination.write_bytes(data)
