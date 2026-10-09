@@ -93,6 +93,19 @@ func TestLibraryPathKeyForHost(t *testing.T) {
 	assert.Equal(t, "", libraryPathKey("windows"))
 }
 
+func TestOpenHarmonyRuntimeEnvironment(t *testing.T) {
+	sdk, home := t.TempDir(), t.TempDir()
+	bin := writeDir(t, sdk, "bin")
+	tools := writeDir(t, sdk, "tools", "bin")
+	libs := writeDir(t, sdk, "tools", "lib")
+	runtimeLib := writeDir(t, sdk, "runtime", "lib", "ohos_aarch64_cjnative")
+	cfg := deriveToolchainEnvForHost(sdk, "openharmony", "arm64", home)
+	assert.Equal(t, "LD_LIBRARY_PATH", libraryPathKey("openharmony"))
+	assert.Equal(t, []string{bin, tools}, cfg.PathPrepend)
+	assert.Equal(t, []string{runtimeLib, libs}, cfg.LibraryPathPrepend)
+	assert.Equal(t, []string{filepath.Join(home, ".cjpm", "bin")}, cfg.PathAppend)
+}
+
 func TestLibraryPathEntriesReturnsExistingLibraryPaths(t *testing.T) {
 	sdk := t.TempDir()
 	runtimeLib := writeDir(t, sdk, "runtime", "lib", "linux_x86_64_cjnative")

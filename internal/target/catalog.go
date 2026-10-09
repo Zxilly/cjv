@@ -33,6 +33,12 @@ func SupportedHostPlatforms() []HostPlatform {
 }
 
 var (
+	// Runtime identities for ports that do not yet ship release binaries.
+	// Keep these out of SupportedHostPlatforms and its generated download matrix.
+	experimentalHostByGo = map[string]TupleParts{
+		"openharmony-arm64": {Host: "ohos-arm64", StdxOS: "ohos", StdxArch: "aarch64"},
+	}
+
 	hostByGo = map[string]TupleParts{
 		"windows-amd64": {Host: "win32-x64", StdxOS: "windows", StdxArch: "x64"},
 		"darwin-arm64":  {Host: "darwin-arm64", StdxOS: "mac", StdxArch: "aarch64"},

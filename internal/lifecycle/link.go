@@ -172,12 +172,12 @@ func installLinkedToolchain(ctx context.Context, name string, force, noStdx bool
 			default:
 				return errors.New(i18n.T("LinkNoSDKArchive", nil))
 			}
-			// Cross-OS guard. Read the target OS from the staged cjc executable's magic
-			// (ELF/Mach-O/PE) rather than the archive filename: it is authoritative and
-			// works for both the nested-archive and bare-archive paths.
-			if archOS := sdkBinaryOS(stagingDir); archOS != "" && archOS != runtime.GOOS {
+			// Reject incompatible executable formats. ELF alone cannot distinguish
+			// Linux from OpenHarmony, nor prove ABI compatibility. This guard only
+			// excludes formats the host cannot use, for nested and bare archives.
+			if format := sdkBinaryFormat(stagingDir); !binaryFormatCompatible(format, runtime.GOOS) {
 				return errors.New(i18n.T("LinkCrossOSUnsupported", i18n.MsgData{
-					"Target": archOS,
+					"Target": format,
 					"Host":   runtime.GOOS,
 				}))
 			}
@@ -271,10 +271,10 @@ func isArchiveName(name, prefix string) bool {
 		strings.HasSuffix(lower, ".tgz")
 }
 
-// sdkBinaryOS returns the GOOS that the SDK's cjc executable targets, read from
+// sdkBinaryFormat returns the executable format of the SDK's cjc, read from
 // the file's magic bytes, or "" when no cjc binary is present or its format is
 // unrecognized.
-func sdkBinaryOS(sdkDir string) string {
+func sdkBinaryFormat(sdkDir string) string {
 	for _, name := range []string{"cjc", "cjc.exe"} {
 		f, err := os.Open(filepath.Join(sdkDir, "bin", name))
 		if err != nil {
@@ -283,28 +283,44 @@ func sdkBinaryOS(sdkDir string) string {
 		var hdr [4]byte
 		n, _ := io.ReadFull(f, hdr[:])
 		_ = f.Close() //nolint:errcheck // read-only
-		if goos := osFromMagic(hdr[:n]); goos != "" {
+		if goos := formatFromMagic(hdr[:n]); goos != "" {
 			return goos
 		}
 	}
 	return ""
 }
 
-// osFromMagic maps an executable's leading bytes to a GOOS: ELF -> linux,
-// Mach-O -> darwin, PE (MZ) -> windows. The Mach-O magics cover 32/64-bit in
+// formatFromMagic identifies the container format, not the operating system.
+// The Mach-O magics cover 32/64-bit in
 // both byte orders plus the universal (fat) header. See gore's file.go.
-func osFromMagic(b []byte) string {
+func formatFromMagic(b []byte) string {
 	if len(b) >= 4 && b[0] == 0x7f && b[1] == 'E' && b[2] == 'L' && b[3] == 'F' {
-		return "linux"
+		return "ELF"
 	}
 	if len(b) >= 2 && b[0] == 'M' && b[1] == 'Z' {
-		return "windows"
+		return "PE"
 	}
 	if len(b) >= 4 {
 		switch binary.BigEndian.Uint32(b) {
 		case 0xFEEDFACE, 0xFEEDFACF, 0xCEFAEDFE, 0xCFFAEDFE, 0xCAFEBABE, 0xBEBAFECA:
-			return "darwin"
+			return "Mach-O"
 		}
 	}
 	return ""
+}
+
+func binaryFormatCompatible(format, goos string) bool {
+	if format == "" {
+		return true // Preserve support for SDK wrappers and unknown formats.
+	}
+	switch goos {
+	case "linux", "openharmony":
+		return format == "ELF"
+	case "darwin":
+		return format == "Mach-O"
+	case "windows":
+		return format == "PE"
+	default:
+		return false
+	}
 }

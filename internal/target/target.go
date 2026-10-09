@@ -122,6 +122,9 @@ func NormalizeList(values []string) ([]string, error) {
 func HostIdentity(goos, goarch string) (Identity, error) {
 	parts, ok := hostByGo[goos+"-"+goarch]
 	if !ok {
+		parts, ok = experimentalHostByGo[goos+"-"+goarch]
+	}
+	if !ok {
 		return Identity{}, &cjverr.UnsupportedPlatformError{OS: goos, Arch: goarch}
 	}
 	return Identity{tuple: parts.Host, parts: parts}, nil
