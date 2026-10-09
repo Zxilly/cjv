@@ -90,6 +90,9 @@ func cachedUserHomeDir() (string, error) {
 	}
 	userHomeDirOnce.Do(func() {
 		userHomeDirVal, errUserHomeDir = os.UserHomeDir()
+		if errUserHomeDir == nil {
+			errUserHomeDir = validateUserHome(userHomeDirVal)
+		}
 	})
 	return userHomeDirVal, errUserHomeDir
 }

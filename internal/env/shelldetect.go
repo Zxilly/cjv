@@ -16,7 +16,7 @@ func ClassifyShellName(name string) (ShellType, bool) {
 	}
 
 	switch base {
-	case "bash", "zsh", "sh", "dash", "ksh":
+	case "bash", "zsh", "sh", "dash", "ksh", "mksh":
 		return ShellPosix, true
 	case "fish":
 		return ShellFish, true

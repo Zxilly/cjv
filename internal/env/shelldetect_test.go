@@ -17,6 +17,7 @@ func TestClassifyShellName(t *testing.T) {
 		{"bash", ShellPosix, true},
 		{"zsh", ShellPosix, true},
 		{"sh", ShellPosix, true},
+		{"mksh", ShellPosix, true},
 		{"fish", ShellFish, true},
 		{"powershell", ShellPowerShell, true},
 		{"pwsh", ShellPowerShell, true},

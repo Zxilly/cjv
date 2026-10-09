@@ -121,7 +121,7 @@ func batchLiteral(value string) string {
 // ParseShellFlag parses the --shell flag value into a ShellType.
 func ParseShellFlag(s string) (ShellType, error) {
 	switch strings.ToLower(s) {
-	case "bash", "zsh", "sh", "posix":
+	case "bash", "zsh", "sh", "dash", "ksh", "mksh", "posix":
 		return ShellPosix, nil
 	case "fish":
 		return ShellFish, nil

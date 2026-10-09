@@ -176,6 +176,9 @@ func TestAddPathToFishConfig_CreatesBlock(t *testing.T) {
 func TestShellConfigPaths_ReturnsNonNil(t *testing.T) {
 	posix, fish := ShellConfigPaths()
 	assert.NotNil(t, posix, "posix config paths should not be nil")
+	home, err := os.UserHomeDir()
+	require.NoError(t, err)
+	assert.Contains(t, posix, filepath.Join(home, ".mkshrc"))
 	// fish may be empty if fish is not installed, which is fine
 	_ = fish
 }

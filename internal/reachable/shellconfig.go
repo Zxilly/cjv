@@ -65,7 +65,7 @@ func ShellConfigPaths() (posix []string, fish string) {
 	if err != nil {
 		return nil, ""
 	}
-	for _, rc := range []string{".profile", ".bashrc", ".zshrc", ".zprofile"} {
+	for _, rc := range []string{".profile", ".bashrc", ".zshrc", ".zprofile", ".mkshrc"} {
 		posix = append(posix, filepath.Join(homeDir, rc))
 	}
 	fishDir := filepath.Join(homeDir, ".config", "fish")
