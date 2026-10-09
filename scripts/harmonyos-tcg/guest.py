@@ -18,7 +18,8 @@ code = probe.boot()
 if code:
     probe.run("crash-backtrace", [
         "gdb", "-q", "-batch", "-ex", "set pagination off",
-        "-ex", "set confirm off", "-ex", "run",
+        "-ex", "set confirm off", "-ex", "handle SIGUSR1 SIGUSR2 SIGPIPE nostop noprint pass",
+        "-ex", "run",
         "-ex", "bt 30", "-ex", "info proc mappings",
         "-x", str(Path(__file__).with_name("crash.gdb").resolve()),
         "--args", str(probe.EMULATOR), "-start", "cjv_pc_ci",
