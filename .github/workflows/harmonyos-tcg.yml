@@ -24,7 +24,7 @@ jobs:
             libpng16-16 libfontconfig1 libfreetype6 libxcb-icccm4 libxcb-image0 \
             libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-shape0 \
             libxcb-xinerama0 libxcb-xkb1 libsm6 libice6 libxkbcommon-x11-0 \
-            libxkbcommon0 libglib2.0-0
+            libxkbcommon0 libglib2.0-0 gdb
       - name: Inspect official embedded QEMU and TCG entry points
         run: python3 scripts/harmonyos-tcg/probe.py
       - name: Restore official PC image cache
