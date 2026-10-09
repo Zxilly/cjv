@@ -170,7 +170,7 @@ def install():
     return 0
 
 
-def boot():
+def boot(timeout=300):
     env = emulator_env()
     instances = ROOT / "instances"
     instances.mkdir(exist_ok=True)
@@ -192,7 +192,7 @@ def boot():
         ], stdout=output, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL,
             env=env, cwd=EMULATOR.parent)
         try:
-            deadline = time.monotonic() + 300
+            deadline = time.monotonic() + timeout
             while time.monotonic() < deadline:
                 run("hdc-connect", [str(hdc), "tconn", target], env=env, timeout=15)
                 code = run("guest-uname", [str(hdc), "-t", target, "shell",
