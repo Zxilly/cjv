@@ -7,11 +7,12 @@ export CJV_HOME="$HOME/.cjv"
 export TMPDIR=/data/local/tmp/cjv-ci/tmp
 mkdir -p "$HOME" "$CJV_HOME" "$TMPDIR"
 
-cat > /data/local/tmp/cjv-ci/env.sh <<'EOF'
-export HOME=/data/local/tmp/cjv-ci/home
-export CJV_HOME="$HOME/.cjv"
-export TMPDIR=/data/local/tmp/cjv-ci/tmp
-EOF
+# The device shell's here-doc implementation uses the read-only /tmp directory.
+printf '%s\n' \
+    'export HOME=/data/local/tmp/cjv-ci/home' \
+    'export CJV_HOME="$HOME/.cjv"' \
+    'export TMPDIR=/data/local/tmp/cjv-ci/tmp' \
+    > /data/local/tmp/cjv-ci/env.sh
 
 printf 'cjv-filesystem-check\n' > "$TMPDIR/write-check"
 mv "$TMPDIR/write-check" "$TMPDIR/rename-check"
