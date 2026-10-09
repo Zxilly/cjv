@@ -1,0 +1,69 @@
+name: HarmonyOS Apple Silicon host probe
+
+on:
+  push:
+    branches: [zxilly/harmonyos-emulator-ci]
+    paths: [.github/workflows/harmonyos-macos-probe.yml]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  hypervisor:
+    name: Apple Silicon virtualization prerequisite
+    runs-on: macos-26
+    timeout-minutes: 10
+    steps:
+      - name: Inspect the Apple Silicon host
+        run: |
+          mkdir diagnostics
+          {
+            uname -a
+            sw_vers
+            sysctl hw.model hw.memsize machdep.cpu.brand_string kern.hv_support
+          } 2>&1 | tee diagnostics/host.log
+      - name: Build a signed Hypervisor.framework probe
+        run: |
+          cat > probe.c <<'EOF'
+          #include <Hypervisor/Hypervisor.h>
+          #include <stdio.h>
+
+          int main(void) {
+              hv_return_t result = hv_vm_create(NULL);
+              printf("hv_vm_create: 0x%08x\n", (unsigned)result);
+              if (result == HV_UNSUPPORTED) {
+                  puts("Hypervisor.framework reports HV_UNSUPPORTED.");
+              }
+              if (result != HV_SUCCESS) {
+                  puts("Cannot create a VM on this hosted Apple Silicon runner.");
+                  return 1;
+              }
+              puts("Hypervisor.framework VM creation succeeded.");
+              return hv_vm_destroy() == HV_SUCCESS ? 0 : 1;
+          }
+          EOF
+          cat > entitlements.plist <<'EOF'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict><key>com.apple.security.hypervisor</key><true/></dict></plist>
+          EOF
+          xcrun clang -Wall -Wextra -Werror probe.c -framework Hypervisor -o hv-probe
+          codesign --force --sign - --entitlements entitlements.plist hv-probe
+          codesign --verify --strict hv-probe
+          codesign --display --entitlements - hv-probe 2>&1 | tee diagnostics/signature.log
+      - name: Test actual virtual machine creation
+        run: |
+          set +e
+          ./hv-probe > diagnostics/hypervisor.log 2>&1
+          result=$?
+          cat diagnostics/hypervisor.log
+          cat diagnostics/host.log diagnostics/hypervisor.log >> "$GITHUB_STEP_SUMMARY"
+          exit "$result"
+      - name: Upload host diagnostics
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: harmonyos-macos-arm64-host
+          path: diagnostics/
+          retention-days: 7
