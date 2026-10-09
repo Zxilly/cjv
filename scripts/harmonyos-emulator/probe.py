@@ -14,6 +14,10 @@ import time
 LOGS = Path("emulator-diagnostics").resolve()
 ROOT = Path(os.environ.get("RUNNER_TEMP", "/tmp")) / "harmonyos-cli"
 EMULATOR = ROOT / "command-line-tools/emulator/Emulator"
+TOOLCHAINS = ROOT / "command-line-tools/sdk/default/openharmony/toolchains"
+IMAGES = ROOT / "images"
+VERSION = "HarmonyOS 6.1.1(24)"
+SYSTEM_IMAGE = IMAGES / "system-image/HarmonyOS-6.1.1/pc_all_x86/system.img"
 METADATA = json.loads(Path(__file__).with_name("cli.json").read_text())
 
 
@@ -28,6 +32,7 @@ def report(message):
 
 def run(label, command, timeout=120, env=None, cwd=None):
     log = LOGS / (label + ".log")
+    print(f"Running {label} (timeout {timeout}s)", flush=True)
     with log.open("w") as output:
         output.write("$ " + " ".join(map(str, command)) + "\n")
         output.flush()
@@ -75,7 +80,9 @@ def download():
         raise RuntimeError("Official CLI archive does not match the pinned checksum")
     subprocess.run([
         "unzip", "-q", str(archive), "command-line-tools/emulator/*",
-        "command-line-tools/sdk/default/openharmony/toolchains/hdc", "-d", str(ROOT),
+        "command-line-tools/sdk/default/openharmony/toolchains/hdc",
+        "command-line-tools/sdk/default/openharmony/toolchains/libusb_shared.so",
+        "-d", str(ROOT),
     ], check=True)
     archive.unlink()
 
@@ -84,7 +91,7 @@ def emulator_env():
     env = dict(os.environ)
     env["QT_QPA_PLATFORM"] = "offscreen"
     env["QT_QPA_PLATFORM_PLUGIN_PATH"] = str(EMULATOR.parent / "plugins/platforms")
-    env["LD_LIBRARY_PATH"] = f"{EMULATOR.parent}:{EMULATOR.parent / 'lib'}"
+    env["LD_LIBRARY_PATH"] = f"{EMULATOR.parent}:{EMULATOR.parent / 'lib'}:{TOOLCHAINS}"
     return env
 
 
@@ -116,47 +123,59 @@ def cli():
     return int(catalog != 0)
 
 
-def boot():
-    env = emulator_env()
-    images = ROOT / "images"
-    instances = ROOT / "instances"
-    name = "cjv-pc-ci"
-    version = "HarmonyOS 6.1.1(24)"
-    hdc = ROOT / "command-line-tools/sdk/default/openharmony/toolchains/hdc"
+def emulator(label, *args, timeout=120):
+    return run(label, [str(EMULATOR), *map(str, args)], timeout=timeout,
+               env=emulator_env(), cwd=EMULATOR.parent)
 
-    def emulator(label, *args, timeout=120):
-        return run(label, [str(EMULATOR), *map(str, args)], timeout=timeout,
-                   env=env, cwd=EMULATOR.parent)
 
+def install():
     if emulator("license", "-license", "accept"):
         return 1
-    if emulator("install", "-install", "-deviceType", "2in1", "-osVersion", version,
-                "-imageRoot", images, "-force", timeout=1200):
+    if run("hdc-version", [str(TOOLCHAINS / "hdc"), "-v"], env=emulator_env()):
+        report("**Blocked:** HDC dependencies are incomplete.")
+        return 1
+    if SYSTEM_IMAGE.is_file():
+        report("- Restored the official PC image from cache.")
+        return 0
+    code = emulator("install", "-install", "-deviceType", "2in1", "-osVersion", VERSION,
+                    "-imageRoot", IMAGES, "-force", timeout=1200)
+    if code or not SYSTEM_IMAGE.is_file():
         report("**Blocked:** official PC image installation failed; see install.log.")
         return 1
-    run("image-files", ["find", str(images), "-maxdepth", "5", "-type", "f",
+    run("image-files", ["find", str(IMAGES), "-maxdepth", "5", "-type", "f",
                         "-printf", "%p %s bytes\n"])
-    if emulator("create", "-create", name, "-deviceType", "2in1", "-osVersion", version,
-                "-imageRoot", images, "-instancePath", instances, "-storage", "6",
-                "-memory", "4", "-hotBoot", "false"):
+    return 0
+
+
+def boot():
+    env = emulator_env()
+    instances = ROOT / "instances"
+    instances.mkdir(exist_ok=True)
+    name = "cjv_pc_ci"
+    target = "127.0.0.1:15555"
+    hdc = TOOLCHAINS / "hdc"
+    code = emulator("create", "-create", name, "-deviceType", "2in1", "-osVersion", VERSION,
+                    "-imageRoot", IMAGES, "-instancePath", instances, "-storage", "6",
+                    "-memory", "4", "-hotBoot", "false")
+    # This CLI can report creation errors with exit status zero.
+    if code or not (instances / name).is_dir():
         report("**Blocked:** official PC emulator creation failed; see create.log.")
         return 1
-    run("hdc-version", [str(hdc), "-v"], env=env)
     # The launcher may stay attached for the lifetime of the virtual machine.
     with (LOGS / "start.log").open("w") as output:
         process = subprocess.Popen([
             str(EMULATOR), "-start", name, "-instancePath", str(instances),
-            "-imageRoot", str(images), "-hdcport", "5555", "-bootMode", "reset", "-noWindow",
+            "-imageRoot", str(IMAGES), "-hdcPort", "15555", "-bootMode", "reset", "-noWindow",
         ], stdout=output, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL,
             env=env, cwd=EMULATOR.parent)
         try:
             deadline = time.monotonic() + 300
             while time.monotonic() < deadline:
-                run("hdc-connect", [str(hdc), "tconn", "127.0.0.1:5555"], env=env, timeout=15)
-                code = run("guest-uname", [str(hdc), "-t", "127.0.0.1:5555", "shell",
+                run("hdc-connect", [str(hdc), "tconn", target], env=env, timeout=15)
+                code = run("guest-uname", [str(hdc), "-t", target, "shell",
                                           "uname", "-a"], env=env, timeout=15)
                 if code == 0 and "Linux " in (LOGS / "guest-uname.log").read_text():
-                    run("guest-environment", [str(hdc), "-t", "127.0.0.1:5555", "shell",
+                    run("guest-environment", [str(hdc), "-t", target, "shell",
                         "id; uname -m; echo HOME=$HOME; pwd; mount; ls -ld /data /storage"], env=env)
                     report("**Ready:** official PC emulator booted and HDC executed a guest shell.")
                     return 0
@@ -166,6 +185,7 @@ def boot():
             report("**Blocked:** no usable HDC shell after emulator startup; see start.log.")
             return 1
         finally:
+            emulator("collect-logs", "-logZip", name, "-logPath", LOGS)
             emulator("stop", "-stop", name)
             if process.poll() is None:
                 process.terminate()
@@ -179,4 +199,5 @@ def boot():
 
 if __name__ == "__main__":
     LOGS.mkdir(exist_ok=True)
-    sys.exit({"hardware": hardware, "download": download, "cli": cli, "boot": boot}[sys.argv[1]]())
+    sys.exit({"hardware": hardware, "download": download, "cli": cli,
+              "install": install, "boot": boot}[sys.argv[1]]())
