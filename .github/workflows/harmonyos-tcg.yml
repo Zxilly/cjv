@@ -14,7 +14,7 @@ permissions:
 jobs:
   inspect:
     runs-on: ubuntu-24.04-arm
-    timeout-minutes: 15
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       - name: Install official emulator dependencies
@@ -27,6 +27,22 @@ jobs:
             libxkbcommon0 libglib2.0-0
       - name: Inspect official embedded QEMU and TCG entry points
         run: python3 scripts/harmonyos-tcg/probe.py
+      - name: Restore official PC image cache
+        id: image-cache
+        uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25 # v5
+        with:
+          path: ${{ runner.temp }}/harmonyos-cli/images
+          key: harmonyos-pc-ARM64-6.1.1-24-v1
+      - name: Install the official ARM64 PC image
+        run: python3 scripts/harmonyos-emulator/probe.py install
+      - name: Save official PC image cache
+        if: steps.image-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@caa296126883cff596d87d8935842f9db880ef25 # v5
+        with:
+          path: ${{ runner.temp }}/harmonyos-cli/images
+          key: harmonyos-pc-ARM64-6.1.1-24-v1
+      - name: Boot the official PC guest through the patched TCG frontend
+        run: python3 scripts/harmonyos-tcg/guest.py
       - name: Upload diagnostic logs
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4

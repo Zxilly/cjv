@@ -16,7 +16,7 @@ MAIN = 0xC4512C
 RUN_QEMU_MAIN = 0xC509A4
 
 
-def patch(source: Path, destination: Path):
+def patch(source: Path, destination: Path, mode="qemu"):
     if source.resolve() == destination.resolve():
         raise ValueError("Refusing to overwrite the original emulator")
     data = bytearray(source.read_bytes())
@@ -27,8 +27,21 @@ def patch(source: Path, destination: Path):
     if data[RUN_QEMU_MAIN:RUN_QEMU_MAIN + 16].hex() != "fd7bbea9fd030091a01f00b9a10b00f9":
         raise ValueError("Unexpected embedded QEMU entry instructions")
     # Both virtual addresses equal file offsets in this pinned executable.
-    branch = 0x14000000 | (((RUN_QEMU_MAIN - MAIN) // 4) & 0x3FFFFFF)
-    struct.pack_into("<I", data, MAIN, branch)
+    if mode == "qemu":
+        branch = 0x14000000 | (((RUN_QEMU_MAIN - MAIN) // 4) & 0x3FFFFFF)
+        struct.pack_into("<I", data, MAIN, branch)
+    elif mode == "frontend":
+        # Preserve all Huawei device and instance setup. Skip only the host KVM
+        # availability guard and select the software CPU/accelerator instead.
+        if data[0x1055788:0x105578C] != bytes.fromhex("a0020054"):
+            raise ValueError("Unexpected KVM guard instruction")
+        if data[0x43C2408:0x43C240D] != b"host\0" or data[0x43C2450:0x43C2454] != b"kvm\0":
+            raise ValueError("Unexpected launcher CPU/accelerator constants")
+        struct.pack_into("<I", data, 0x1055788, 0x14000015)  # b 0x10557dc
+        data[0x43C2408:0x43C240D] = b"max\0\0"
+        data[0x43C2450:0x43C2454] = b"tcg\0"
+    else:
+        raise ValueError(f"Unknown patch mode: {mode}")
     destination.write_bytes(data)
     destination.chmod(source.stat().st_mode)
     print(f"Patched copy: {destination}; SHA-256: {hashlib.sha256(data).hexdigest()}")
@@ -36,4 +49,4 @@ def patch(source: Path, destination: Path):
 
 
 if __name__ == "__main__":
-    patch(Path(sys.argv[1]), Path(sys.argv[2]))
+    patch(Path(sys.argv[1]), Path(sys.argv[2]), sys.argv[3] if len(sys.argv) > 3 else "qemu")

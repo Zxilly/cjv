@@ -51,7 +51,7 @@ assembly.extend(["1: wfi", "b 1b"])
 source = probe.LOGS / "tcg-marker.S"
 source.write_text("\n".join(assembly) + "\n")
 guest = probe.LOGS / "tcg-marker.elf"
-subprocess.run(["gcc", "-nostdlib", "-static", "-Wl,--build-id=none,-Ttext=0x40080000,-e,_start",
+subprocess.run(["gcc", "-nostdlib", "-static", "-Wl,--build-id=none,-Ttext=0x40200000,-e,_start",
                 "-o", str(guest), str(source)], check=True)
 serial = probe.LOGS / "tcg-marker-serial.log"
 qmp = probe.ROOT / "tcg-marker.qmp"
