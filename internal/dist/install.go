@@ -11,6 +11,8 @@ import (
 	"github.com/Zxilly/cjv/internal/fsops"
 )
 
+var prepareExtractedTree = preparePlatformTree
+
 func InstallSDK(ctx context.Context, archivePath, destDir string) error {
 	_, err := ExtractFlattened(ctx, archivePath, destDir, true)
 	return err
@@ -54,5 +56,8 @@ func ExtractFlattened(ctx context.Context, archivePath, destDir string, stripTop
 		}
 	}
 
+	if err := prepareExtractedTree(ctx, srcDir); err != nil {
+		return nil, fmt.Errorf("prepare extracted payload: %w", err)
+	}
 	return fsops.MoveTree(srcDir, destDir)
 }

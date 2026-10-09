@@ -5,6 +5,7 @@ import (
 	"archive/zip"
 	"compress/gzip"
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -12,6 +13,22 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func TestPreparationFailureDoesNotPublishExtractedPayload(t *testing.T) {
+	original := prepareExtractedTree
+	t.Cleanup(func() { prepareExtractedTree = original })
+	prepareExtractedTree = func(context.Context, string) error { return errors.New("signature failure") }
+	archive := createTestZip(t, map[string]string{"sdk/bin/cjc": "replacement"})
+	dest := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(dest, "bin"), 0o755))
+	compiler := filepath.Join(dest, "bin", "cjc")
+	require.NoError(t, os.WriteFile(compiler, []byte("old"), 0o755))
+	_, err := ExtractFlattened(context.Background(), archive, dest, true)
+	require.ErrorContains(t, err, "signature failure")
+	got, err := os.ReadFile(compiler)
+	require.NoError(t, err)
+	assert.Equal(t, "old", string(got))
+}
 
 // createTestZip creates a zip archive containing the given files.
 func createTestZip(t *testing.T, files map[string]string) string {
