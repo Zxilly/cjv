@@ -27,6 +27,11 @@ jobs:
             libxkbcommon0 libglib2.0-0 gdb
       - name: Inspect official embedded QEMU and TCG entry points
         run: python3 scripts/harmonyos-tcg/probe.py
+      - name: Verify the AArch64 notification lock wrapper
+        run: |
+          gcc -Wall -Wextra -Werror scripts/harmonyos-tcg/test-notify-lock.c \
+            scripts/harmonyos-tcg/notify-lock.S -o "$RUNNER_TEMP/test-notify-lock"
+          "$RUNNER_TEMP/test-notify-lock"
       - name: Restore official PC image cache
         id: image-cache
         uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25 # v5

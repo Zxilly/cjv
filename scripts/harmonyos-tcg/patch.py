@@ -14,6 +14,14 @@ import sys
 EMULATOR_SHA256 = "62dd21c38f6e21e242f66f6c17753dfa445dd4073e072d851d4af41f8ff9ab4e"
 MAIN = 0xC4512C
 RUN_QEMU_MAIN = 0xC509A4
+NOTIFY_STUB = 0x789C200
+# Assembled from notify-lock.S, linked at NOTIFY_STUB. Calls resolve to the
+# pinned build's BQL helpers and virtio_notify, with ASLR-safe PC-relative BL.
+NOTIFY_CODE = bytes.fromhex(
+    "fd7bbda9fd030091f30b00f9e00702a9a0dc4296f303002a9300003540010010"
+    "21008052a7dc4296e00742a9e9423b9653000035c8dc4296f30b40f9fd7bc3a8"
+    "c0035fd6636a762d7463672d74656c65706f72742d6e6f7469667900"
+)
 
 
 def patch(source: Path, destination: Path, mode="qemu"):
@@ -45,6 +53,23 @@ def patch(source: Path, destination: Path, mode="qemu"):
         # This build has no registered software arm-gicv3-its object. Preserve
         # GICv3/highmem but disable ITS to avoid object_new_with_type(NULL).
         data[0x43C2420:0x43C2448] = b"virt,highmem=on,gic-version=3,its=off".ljust(40, b"\0")
+        # The Teleport input thread calls virtio_notify without the BQL. KVM
+        # tolerated this path, but software GICv3 requires the real lock.
+        if data[0x7812E8:0x7812EC] != bytes.fromhex("baaeff97"):
+            raise ValueError("Unexpected Teleport notification call")
+        if any(data[NOTIFY_STUB:NOTIFY_STUB + len(NOTIFY_CODE)]):
+            raise ValueError("Expected unused RX segment alignment padding")
+        ph = 64 + 2 * 56  # First PT_LOAD: offset=VA=0, flags=R|X.
+        if struct.unpack_from("<IIQQQQQQ", data, ph) != (1, 5, 0, 0, 0, 0x789C1BD, 0x789C1BD, 0x10000):
+            raise ValueError("Unexpected executable segment layout")
+        # Extend only into the zero alignment gap before the next segment at
+        # file offset 0x789cb50. Existing addresses and file size stay unchanged.
+        end = NOTIFY_STUB + len(NOTIFY_CODE)
+        if end >= 0x789CB50:
+            raise ValueError("Notification wrapper exceeds alignment padding")
+        struct.pack_into("<QQ", data, ph + 32, end, end)
+        data[NOTIFY_STUB:end] = NOTIFY_CODE
+        struct.pack_into("<I", data, 0x7812E8, 0x94000000 | ((NOTIFY_STUB - 0x7812E8) // 4))
     else:
         raise ValueError(f"Unknown patch mode: {mode}")
     destination.write_bytes(data)
