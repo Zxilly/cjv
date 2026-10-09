@@ -1,0 +1,8 @@
+{
+  "version": "26.0.0.851",
+  "archive": "commandline-tools-linux-arm64-26.0.0.851.zip",
+  "sha256": "c36fdba852ce02354ffcc1ad5f3ab4bdeac917403fe9bbbd60c499a4416246a0",
+  "url": "https://github.com/Zxilly/static/releases/download/harmonyos-cli-26.0.0.851/commandline-tools-linux-arm64-26.0.0.851.zip",
+  "source": "https://github.com/Zxilly/static/releases/tag/harmonyos-cli-26.0.0.851",
+  "documentation": "https://developer.huawei.com/consumer/cn/doc/doccenter-deveco-studio/ide-commandline-emulator"
+}

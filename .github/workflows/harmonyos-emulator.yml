@@ -9,10 +9,10 @@ on:
   workflow_dispatch:
     inputs:
       runner:
-        description: Runner architecture (official Linux CLI currently requires x64)
+        description: Runner architecture (uses the matching native Linux CLI package)
         type: choice
         options: [ubuntu-24.04, ubuntu-24.04-arm]
-        default: ubuntu-24.04
+        default: ubuntu-24.04-arm
 
 permissions:
   contents: read
@@ -23,8 +23,8 @@ concurrency:
 
 jobs:
   probe:
-    name: Official CLI (${{ inputs.runner || 'ubuntu-24.04' }})
-    runs-on: ${{ inputs.runner || 'ubuntu-24.04' }}
+    name: Official CLI (${{ inputs.runner || 'ubuntu-24.04-arm' }})
+    runs-on: ${{ inputs.runner || 'ubuntu-24.04-arm' }}
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -32,6 +32,9 @@ jobs:
         run: python3 scripts/harmonyos-emulator/probe.py hardware
       - name: Grant runner access to virtualization and rendering devices
         run: |
+          if [ "$(uname -m)" = aarch64 ] && [ ! -e /dev/kvm ]; then
+            sudo modprobe kvm || true
+          fi
           if [ -e /dev/kvm ]; then
             sudo setfacl -m "u:$(id -un):rw" /dev/kvm
           fi
@@ -53,6 +56,8 @@ jobs:
         run: python3 scripts/harmonyos-emulator/probe.py download
       - name: Probe native CLI and image catalog
         run: python3 scripts/harmonyos-emulator/probe.py cli
+      - name: Verify KVM before downloading a guest image
+        run: python3 scripts/harmonyos-emulator/probe.py virtualization
       - name: Restore official PC image cache
         id: image-cache
         uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25 # v5
@@ -73,7 +78,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: harmonyos-emulator-${{ inputs.runner || 'ubuntu-24.04' }}
+          name: harmonyos-emulator-${{ inputs.runner || 'ubuntu-24.04-arm' }}
           path: emulator-diagnostics/
           if-no-files-found: warn
           retention-days: 7

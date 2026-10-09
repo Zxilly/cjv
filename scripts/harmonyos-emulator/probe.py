@@ -17,8 +17,13 @@ EMULATOR = ROOT / "command-line-tools/emulator/Emulator"
 TOOLCHAINS = ROOT / "command-line-tools/sdk/default/openharmony/toolchains"
 IMAGES = ROOT / "images"
 VERSION = "HarmonyOS 6.1.1(24)"
-SYSTEM_IMAGE = IMAGES / "system-image/HarmonyOS-6.1.1/pc_all_x86/system.img"
-METADATA = json.loads(Path(__file__).with_name("cli.json").read_text())
+IS_ARM64 = platform.machine() in ("aarch64", "arm64")
+NATIVE_ARCH = "aarch64" if IS_ARM64 else "x86_64"
+METADATA = json.loads(Path(__file__).with_name("cli-arm64.json" if IS_ARM64 else "cli.json").read_text())
+
+
+def has_system_image():
+    return any(IMAGES.glob("system-image/HarmonyOS-6.1.1/pc*/system.img"))
 
 
 def report(message):
@@ -64,6 +69,9 @@ def hardware():
     except OSError as error:
         report(f"- KVM unavailable: {error}")
     report(f"- DRM nodes: {[str(path) for path in Path('/dev/dri').glob('*')]}")
+    if IS_ARM64:
+        run("kvm-kernel", ["sh", "-c",
+            "ls -ld /sys/module/kvm; sudo dmesg | grep -iE 'kvm|hyp mode|EL2'"], timeout=30)
 
 
 def download():
@@ -85,6 +93,21 @@ def download():
         "-d", str(ROOT),
     ], check=True)
     archive.unlink()
+
+
+def virtualization():
+    import fcntl
+
+    try:
+        with open("/dev/kvm", "rb+") as device:
+            # KVM_CREATE_VM verifies VM creation, beyond device presence/API version.
+            vm = fcntl.ioctl(device.fileno(), 0xAE01, 0)
+            os.close(vm)
+    except OSError as error:
+        report(f"**Blocked:** the native CLI runs, but KVM VM creation is unavailable: {error}")
+        return 1
+    report("- KVM_CREATE_VM succeeded.")
+    return 0
 
 
 def emulator_env():
@@ -134,12 +157,12 @@ def install():
     if run("hdc-version", [str(TOOLCHAINS / "hdc"), "-v"], env=emulator_env()):
         report("**Blocked:** HDC dependencies are incomplete.")
         return 1
-    if SYSTEM_IMAGE.is_file():
+    if has_system_image():
         report("- Restored the official PC image from cache.")
         return 0
     code = emulator("install", "-install", "-deviceType", "2in1", "-osVersion", VERSION,
                     "-imageRoot", IMAGES, "-force", timeout=1200)
-    if code or not SYSTEM_IMAGE.is_file():
+    if code or not has_system_image():
         report("**Blocked:** official PC image installation failed; see install.log.")
         return 1
     run("image-files", ["find", str(IMAGES), "-maxdepth", "5", "-type", "f",
@@ -175,6 +198,9 @@ def boot():
                 code = run("guest-uname", [str(hdc), "-t", target, "shell",
                                           "uname", "-a"], env=env, timeout=15)
                 if code == 0 and "Linux " in (LOGS / "guest-uname.log").read_text():
+                    if f" {NATIVE_ARCH} " not in (LOGS / "guest-uname.log").read_text():
+                        report("**Blocked:** guest architecture does not match the native runner.")
+                        return 1
                     run("guest-environment", [str(hdc), "-t", target, "shell",
                         "id; uname -m; echo HOME=$HOME; pwd; mount; ls -ld /data /storage"], env=env)
                     guest_script = "/data/local/tmp/cjv-ci-smoke.sh"
@@ -191,7 +217,7 @@ def boot():
                         report("**Blocked:** HDC could not retrieve the guest environment file.")
                         return 1
                     report("**Ready:** official PC emulator booted; HDC shell, file transfer, "
-                           "and a writable CI HOME are verified. Guest architecture: x86_64.")
+                           f"and a writable CI HOME are verified. Guest architecture: {NATIVE_ARCH}.")
                     return 0
                 if process.poll() not in (None, 0):
                     break
@@ -214,4 +240,4 @@ def boot():
 if __name__ == "__main__":
     LOGS.mkdir(exist_ok=True)
     sys.exit({"hardware": hardware, "download": download, "cli": cli,
-              "install": install, "boot": boot}[sys.argv[1]]())
+              "virtualization": virtualization, "install": install, "boot": boot}[sys.argv[1]]())
