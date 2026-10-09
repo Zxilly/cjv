@@ -170,7 +170,7 @@ def install():
     return 0
 
 
-def boot(timeout=300):
+def boot(timeout=300, cpu_count=None):
     env = emulator_env()
     instances = ROOT / "instances"
     instances.mkdir(exist_ok=True)
@@ -184,6 +184,18 @@ def boot(timeout=300):
     if code or not (instances / name).is_dir():
         report("**Blocked:** official PC emulator creation failed; see create.log.")
         return 1
+    if cpu_count is not None:
+        if not isinstance(cpu_count, int) or cpu_count < 1:
+            raise ValueError("cpu_count must be a positive integer")
+        config = instances / name / "config.ini"
+        lines = config.read_text().splitlines()
+        if sum(line.startswith("hw.cpu.ncore=") for line in lines) != 1:
+            raise RuntimeError("Expected exactly one official CPU count setting")
+        config.write_text("\n".join(
+            f"hw.cpu.ncore={cpu_count}" if line.startswith("hw.cpu.ncore=") else line
+            for line in lines
+        ) + "\n")
+        report(f"- Requested virtual CPU count: {cpu_count}")
     # The launcher may stay attached for the lifetime of the virtual machine.
     with (LOGS / "start.log").open("w") as output:
         process = subprocess.Popen([

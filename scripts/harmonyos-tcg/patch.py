@@ -53,6 +53,13 @@ def patch(source: Path, destination: Path, mode="qemu"):
         # This build has no registered software arm-gicv3-its object. Preserve
         # GICv3/highmem but disable ITS to avoid object_new_with_type(NULL).
         data[0x43C2420:0x43C2448] = b"virt,highmem=on,gic-version=3,its=off".ljust(40, b"\0")
+        # The Linux surfaceless path omits EGL_SURFACE_TYPE, whose default is
+        # EGL_WINDOW_BIT. Mesa's surfaceless backend then returns zero configs.
+        # RGB_BUFFER is already the default; use this pair to request a Pbuffer
+        # config explicitly for this headless CI copy. Keep the source intact.
+        if data[0x2239410:0x2239418] != bytes.fromhex("3f3000008e300000"):
+            raise ValueError("Unexpected Linux EGL configuration attributes")
+        struct.pack_into("<II", data, 0x2239410, 0x3033, 1)  # EGL_SURFACE_TYPE, EGL_PBUFFER_BIT
         # Teleport input and distribution threads notify without the BQL.
         # Wrap all five notification call sites in that device module.
         notify_calls = {

@@ -14,7 +14,9 @@ spec.loader.exec_module(probe)
 probe.LOGS.mkdir(exist_ok=True)
 probe.EMULATOR = patch(probe.EMULATOR, probe.EMULATOR.with_name("Emulator-frontend-tcg"), "frontend")
 os.environ["LIBGL_ALWAYS_SOFTWARE"] = "1"
-code = probe.boot(timeout=1200)
+# This build lacks the CONFIG_ATOMIC64 TCG helpers. Multiple virtual CPUs
+# repeatedly enter stop-the-world atomic emulation; a single CPU avoids it.
+code = probe.boot(timeout=1200, cpu_count=1)
 # A slow TCG cold boot is not a crash. Do not reset it under GDB and overwrite
 # its native logs unless startup actually reported the known assertion class.
 if code and "assertion failed" in (probe.LOGS / "start.log").read_text(errors="replace"):
