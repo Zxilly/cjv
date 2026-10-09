@@ -7,6 +7,12 @@ on:
       - .github/workflows/harmonyos-emulator.yml
       - scripts/harmonyos-emulator/**
   workflow_dispatch:
+    inputs:
+      runner:
+        description: Runner architecture (official Linux CLI currently requires x64)
+        type: choice
+        options: [ubuntu-24.04, ubuntu-24.04-arm]
+        default: ubuntu-24.04
 
 permissions:
   contents: read
@@ -17,17 +23,24 @@ concurrency:
 
 jobs:
   probe:
-    name: Official CLI (${{ matrix.runner }})
-    strategy:
-      fail-fast: false
-      matrix:
-        runner: [ubuntu-24.04-arm, ubuntu-24.04]
-    runs-on: ${{ matrix.runner }}
-    timeout-minutes: 30
+    name: Official CLI (${{ inputs.runner || 'ubuntu-24.04' }})
+    runs-on: ${{ inputs.runner || 'ubuntu-24.04' }}
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       - name: Inspect runner hardware
         run: python3 scripts/harmonyos-emulator/probe.py hardware
+      - name: Grant runner access to virtualization and rendering devices
+        run: |
+          if [ -e /dev/kvm ]; then
+            sudo setfacl -m "u:$(id -un):rw" /dev/kvm
+          fi
+          for device in /dev/dri/card* /dev/dri/renderD*; do
+            if [ -e "$device" ]; then
+              sudo setfacl -m "u:$(id -un):rw" "$device"
+            fi
+          done
+          python3 scripts/harmonyos-emulator/probe.py hardware
       - name: Install official emulator dependencies
         run: |
           sudo apt-get update -qq
@@ -40,11 +53,13 @@ jobs:
         run: python3 scripts/harmonyos-emulator/probe.py download
       - name: Probe native CLI and image catalog
         run: python3 scripts/harmonyos-emulator/probe.py cli
+      - name: Install and boot HarmonyOS PC emulator
+        run: python3 scripts/harmonyos-emulator/probe.py boot
       - name: Upload diagnostic logs
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: harmonyos-emulator-${{ matrix.runner }}
+          name: harmonyos-emulator-${{ inputs.runner || 'ubuntu-24.04' }}
           path: emulator-diagnostics/
           if-no-files-found: warn
           retention-days: 7
