@@ -1,12 +1,17 @@
 name: HarmonyOS ARM64 live SSH debug
 
 on:
-  push:
-    branches: [zxilly/harmonyos-emulator-ci]
-    paths:
-      - .github/workflows/harmonyos-tcg-debug.yml
-      - scripts/harmonyos-tcg/debug/**
   workflow_dispatch:
+    inputs:
+      ssh_public_key:
+        description: SSH public key authorized for this temporary session
+        required: true
+        type: string
+      cpu_count:
+        description: Virtual CPU count (4 reproduces the atomic fallback overhead)
+        default: '1'
+        type: choice
+        options: ['1', '4']
 
 permissions:
   contents: read
@@ -36,6 +41,8 @@ jobs:
       - name: Install official image
         run: python3 scripts/harmonyos-emulator/probe.py install
       - name: Start authenticated SSH debugging
+        env:
+          DEBUG_SSH_PUBLIC_KEY: ${{ inputs.ssh_public_key }}
         run: bash scripts/harmonyos-tcg/debug/start.sh
       - name: Publish connection details
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -44,6 +51,8 @@ jobs:
           path: emulator-diagnostics/debug-connection.json
           retention-days: 1
       - name: Boot and inspect the running guest
+        env:
+          HARMONYOS_CPU_COUNT: ${{ inputs.cpu_count }}
         run: python3 scripts/harmonyos-tcg/debug/boot.py
       - name: Close SSH session
         if: always()

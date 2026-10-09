@@ -6,6 +6,7 @@ on:
     paths:
       - .github/workflows/harmonyos-tcg.yml
       - scripts/harmonyos-tcg/**
+      - '!scripts/harmonyos-tcg/debug/**'
   workflow_dispatch:
 
 permissions:

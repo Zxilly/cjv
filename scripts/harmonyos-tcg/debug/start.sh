@@ -9,7 +9,9 @@ grep ' upterm_linux_arm64.tar.gz$' checksums.txt | sha256sum -c -
 tar -xzf upterm_linux_arm64.tar.gz
 sudo install -m 755 upterm /usr/local/bin/upterm
 cd "$GITHUB_WORKSPACE"
+printf '%s\n' "${DEBUG_SSH_PUBLIC_KEY:?Pass the SSH public key for this session}" > "$RUNNER_TEMP/upterm-authorized_keys"
+ssh-keygen -l -f "$RUNNER_TEMP/upterm-authorized_keys"
 upterm host --detach --accept --name harmonyos-debug --join-timeout 15m \
-  --authorized-keys scripts/harmonyos-tcg/debug/authorized_keys \
+  --authorized-keys "$RUNNER_TEMP/upterm-authorized_keys" \
   --known-hosts scripts/harmonyos-tcg/debug/known_hosts \
   --output json -- bash --noprofile --norc > emulator-diagnostics/debug-connection.json
