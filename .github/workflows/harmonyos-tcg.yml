@@ -1,0 +1,36 @@
+name: HarmonyOS ARM64 TCG inspection
+
+on:
+  push:
+    branches: [zxilly/harmonyos-emulator-ci]
+    paths:
+      - .github/workflows/harmonyos-tcg.yml
+      - scripts/harmonyos-tcg/**
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Install official emulator dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y libatomic1 libpulse0 libegl1 libgbm1 libgl1 \
+            libpng16-16 libfontconfig1 libfreetype6 libxcb-icccm4 libxcb-image0 \
+            libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-shape0 \
+            libxcb-xinerama0 libxcb-xkb1 libsm6 libice6 libxkbcommon-x11-0 \
+            libxkbcommon0 libglib2.0-0
+      - name: Inspect official embedded QEMU and TCG entry points
+        run: python3 scripts/harmonyos-tcg/probe.py
+      - name: Upload diagnostic logs
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: harmonyos-arm64-tcg
+          path: emulator-diagnostics/
+          retention-days: 7
