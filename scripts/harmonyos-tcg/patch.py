@@ -53,10 +53,16 @@ def patch(source: Path, destination: Path, mode="qemu"):
         # This build has no registered software arm-gicv3-its object. Preserve
         # GICv3/highmem but disable ITS to avoid object_new_with_type(NULL).
         data[0x43C2420:0x43C2448] = b"virt,highmem=on,gic-version=3,its=off".ljust(40, b"\0")
-        # The Teleport input thread calls virtio_notify without the BQL. KVM
-        # tolerated this path, but software GICv3 requires the real lock.
-        if data[0x7812E8:0x7812EC] != bytes.fromhex("baaeff97"):
-            raise ValueError("Unexpected Teleport notification call")
+        # Teleport input and distribution threads notify without the BQL.
+        # Wrap all five notification call sites in that device module.
+        notify_calls = {
+            0x77AF9C: "8dc7ff97", 0x77C74C: "a1c1ff97",
+            0x77F004: "73b7ff97", 0x77F080: "54b7ff97",
+            0x7812E8: "baaeff97",
+        }
+        for address, expected in notify_calls.items():
+            if data[address:address + 4] != bytes.fromhex(expected):
+                raise ValueError("Unexpected Teleport notification call")
         if any(data[NOTIFY_STUB:NOTIFY_STUB + len(NOTIFY_CODE)]):
             raise ValueError("Expected unused RX segment alignment padding")
         ph = 64 + 2 * 56  # First PT_LOAD: offset=VA=0, flags=R|X.
@@ -69,7 +75,8 @@ def patch(source: Path, destination: Path, mode="qemu"):
             raise ValueError("Notification wrapper exceeds alignment padding")
         struct.pack_into("<QQ", data, ph + 32, end, end)
         data[NOTIFY_STUB:end] = NOTIFY_CODE
-        struct.pack_into("<I", data, 0x7812E8, 0x94000000 | ((NOTIFY_STUB - 0x7812E8) // 4))
+        for address in notify_calls:
+            struct.pack_into("<I", data, address, 0x94000000 | ((NOTIFY_STUB - address) // 4))
     else:
         raise ValueError(f"Unknown patch mode: {mode}")
     destination.write_bytes(data)

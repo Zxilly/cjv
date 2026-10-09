@@ -1,5 +1,5 @@
 /* Exact Emulator 26.0.0.402, linked at unused RX alignment padding 0x789c200.
- * express_input_device_sync calls this in place of virtio_notify at 0x7812e8.
+ * Teleport's five call sites use this in place of virtio_notify.
  * Keep the GIC lock assertion; acquire/release the real BQL only when needed.
  */
 .text
