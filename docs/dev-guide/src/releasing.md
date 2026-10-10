@@ -28,7 +28,7 @@
 
 ## OpenHarmony 构建与签名
 
-GoReleaser 使用 `HMOS_GO` 构建 `openharmony_arm64` 和 `openharmony_amd64`，在归档前调用 `HMOS_SIGN`。`.github/actions/setup-hmos` 安装 `go1.27.2-hmos.4` 并构建主机签名工具。归档参与 GitCode 同步和 Pages 提取。
+GoReleaser 使用 `HMOS_GO` 构建 `openharmony_arm64` 和 `openharmony_amd64`，在归档前调用 `HMOS_SIGN`。`.github/actions/setup-hmos` 安装 `go1.27.2-hmos.5` 并构建主机签名工具。归档参与 GitCode 同步和 Pages 提取。
 
 本地快照先按[构建文档](building.md#openharmony)设置 `HMOS_GO`、`HMOS_SIGN` 并编译主机签名工具。
 

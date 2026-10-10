@@ -28,7 +28,7 @@ When changing archive names or platforms, check the installers, `scripts/extract
 
 ## OpenHarmony builds and signing
 
-GoReleaser builds `openharmony_arm64` and `openharmony_amd64` with `HMOS_GO` and calls `HMOS_SIGN` before archiving. `.github/actions/setup-hmos` installs `go1.27.2-hmos.4` and builds the host signer. The archives are included in GitCode synchronization and Pages extraction.
+GoReleaser builds `openharmony_arm64` and `openharmony_amd64` with `HMOS_GO` and calls `HMOS_SIGN` before archiving. `.github/actions/setup-hmos` installs `go1.27.2-hmos.5` and builds the host signer. The archives are included in GitCode synchronization and Pages extraction.
 
 Before a local snapshot, set `HMOS_GO` and `HMOS_SIGN` and build the host signer as described in [building](building.md#openharmony).
 

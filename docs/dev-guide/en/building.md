@@ -38,7 +38,7 @@ Review the generated frontend platforms, then check release configuration and th
 
 ## OpenHarmony
 
-Use the Linux/amd64 toolchain from [Go-HMOS go1.27.2-hmos.4](https://github.com/ZxillyFork/go-hmos-build/releases/tag/go1.27.2-hmos.4) with `CGO_ENABLED=0`.
+Use the Linux/amd64 toolchain from [Go-HMOS go1.27.2-hmos.5](https://github.com/ZxillyFork/go-hmos-build/releases/tag/go1.27.2-hmos.5) with `CGO_ENABLED=0`.
 
 From the repository root, set the tool paths and build the signer with host Go:
 

@@ -38,7 +38,7 @@ go generate ./...
 
 ## OpenHarmony
 
-使用 [Go-HMOS go1.27.2-hmos.4](https://github.com/ZxillyFork/go-hmos-build/releases/tag/go1.27.2-hmos.4) 的 Linux/amd64 工具链，并设置 `CGO_ENABLED=0`。
+使用 [Go-HMOS go1.27.2-hmos.5](https://github.com/ZxillyFork/go-hmos-build/releases/tag/go1.27.2-hmos.5) 的 Linux/amd64 工具链，并设置 `CGO_ENABLED=0`。
 
 在仓库根目录设置工具路径，用主机 Go 构建签名工具：
 

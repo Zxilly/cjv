@@ -6,7 +6,7 @@ runs:
     - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
       with:
         go-version: 1.27.2-hmos-devel
-        go-download-base-url: https://github.com/ZxillyFork/go-hmos-build/releases/download/go1.27.2-hmos.4
+        go-download-base-url: https://github.com/ZxillyFork/go-hmos-build/releases/download/go1.27.2-hmos.5
         token: ''
         cache: false
     - name: Prepare Go-HMOS and host signer
@@ -19,7 +19,7 @@ runs:
         GOARCH: amd64
       run: |
         test "$(go env GOVERSION)" = go1.27.2-hmos-devel
-        test "$(cat "$(go env GOROOT)/core-revision.txt")" = e6f73c93079c6bc3c41086632420af33bb3de631
+        test "$(cat "$(go env GOROOT)/core-revision.txt")" = 7ea2c37368c408d68804c9bda8f9e74b03fe4122
         go build -tags=hmos_sign -o "$RUNNER_TEMP/cjv-hmos-sign" ./scripts/harmonyos
         {
           echo "HMOS_GO=$(go env GOROOT)/bin/go"
