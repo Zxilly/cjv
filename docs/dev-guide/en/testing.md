@@ -86,6 +86,26 @@ Documentation changes also require both language builds; see [documentation](doc
 
 ## Real downloads and CI
 
+### HarmonyOS emulator tests
+
+The separate `hmos.yml` workflow boots the official HarmonyOS 6.1.1/API 24 PC emulator on an x86_64 Linux KVM runner. It cross-compiles a standalone self-signing test binary and executes it both unsigned and signed. It then runs the complete `ohos`, `config`, `env`, `fsops`, `target`, `cjverr`, `i18n`, and `retry` package tests with `go test -exec`. Host CI continues to cover the remaining packages, including HTTP server tests. This workflow does not execute ARM64 binaries.
+
+`scripts/harmonyos/ci.py` owns the workflow's three steps: `build` compiles the tools, `install` installs the pinned emulator and Ubuntu dependencies, and `test` runs the unsigned, signed, exit-code, and package checks. It invokes programs directly through Python's `subprocess`, without Bash orchestration. Run `python3 scripts/harmonyos/emulator.py python3 scripts/harmonyos/ci.py test` after `build` to reproduce the CI test sequence locally.
+
+`scripts/harmonyos/exec` is a host Go executable that transfers a binary through HDC, maps its package directory to a guest source checkout, supplies isolated `HOME` and `TMPDIR` directories, and propagates the guest exit code. Set `HDC`, `HDC_TARGET`, `HMOS_TEST_SOURCE`, and `HMOS_TEST_ROOT`; the latter must be below `/data/local/tmp`. Set `HMOS_SIGN` to sign a private copy before transfer, or leave it empty to test unsigned execution. `scripts/harmonyos/emulator.py` prepares the guest checkout and these variables, runs the supplied command, then stops the emulator.
+
+With the official CLI unpacked under `HMOS_EMULATOR_HOME` and the tools from [building](building.md):
+
+```bash
+go build -o /tmp/cjv-hmos-exec ./scripts/harmonyos/exec
+python3 scripts/harmonyos/emulator.py env GOOS=openharmony GOARCH=amd64 CGO_ENABLED=0 \
+  "$HMOS_GO" test -exec /tmp/cjv-hmos-exec -p 1 -count=1 ./internal/ohos/...
+```
+
+The HDC shell runs as uid 2000 with SELinux enforcing. It permits unsigned executables and symlinks in this image, but denies hard links: only tests that require successful hard-link creation skip on a verified permission error; deduplication still tests its fallback behavior. This emulator result does not establish the HiShell policy on physical PCs, so releases and SDK preparation retain platform-gated self-signing.
+
+### Live downloads
+
 Live component download tests run separately and fetch real artifacts:
 
 ```bash
