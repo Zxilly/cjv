@@ -29,7 +29,9 @@ The page computes a result from synchronous browser information, then tries UA C
 
 When a macOS browser cannot reliably report CPU architecture, the installer script remains available while manual downloads offer Apple Silicon and Intel choices. Mobile systems and architectures without prebuilt binaries are marked unsupported. Detection also handles iPadOS desktop mode and HarmonyOS NEXT user agents.
 
-HarmonyOS detection prioritizes the version in the `OpenHarmony` / `HarmonyOS` token and preserves its version namespace. ArkWeb, HuaweiBrowser, and Chrome versions are not OS versions. `Phone` / `Mobile` identifies phones and `Tablet` identifies tablets; based on collected UA samples, `Tablet` together with `Windows NT` selects guidance for a 2-in-1 in tablet mode. Compatibility tokens and UA Client Hints cannot override HarmonyOS with Windows or Android, and do not establish its native CPU architecture. HarmonyOS remains unsupported with no recommended installer; a TODO marks the future installation support entry point.
+HarmonyOS detection prioritizes the version in the `OpenHarmony` / `HarmonyOS` token and preserves its version namespace. ArkWeb, HuaweiBrowser, and Chrome versions are not OS versions. `Phone` / `Mobile` identifies phones and `Tablet` identifies tablets. `Tablet` together with `Windows NT` identifies a 2-in-1 in tablet mode; `PC` or desktop `Windows NT` tokens identify PCs. PCs and 2-in-1 devices get the shell installer and native ARM64/x86_64 download choices. Phones, ordinary tablets, and unclassified devices retain device-specific guidance.
+
+Compatibility tokens and UA Client Hints cannot override HarmonyOS with Windows or Android, and do not establish its native CPU architecture. The download panel explains how to use `uname -m` to select an architecture and run `cjv-init` in the terminal.
 
 After changes here, run real-browser platform tests and verify that an unknown architecture does not produce a single incorrect binary recommendation. See [testing and checks](testing.md).
 

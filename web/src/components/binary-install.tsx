@@ -9,6 +9,7 @@ interface BinaryInstallProps {
   allBinaries: BinaryInfo[]
   mirror: boolean
   showMacOSChoices?: boolean
+  showHarmonyOSChoices?: boolean
 }
 
 const platformKey = (b: BinaryInfo) => `${b.goos}_${b.goarch}`
@@ -165,8 +166,26 @@ function MacOSDownloadChoices({
   )
 }
 
-export function BinaryInstall({ binary, allBinaries, mirror, showMacOSChoices = false }: BinaryInstallProps) {
+export function BinaryInstall({ binary, allBinaries, mirror, showMacOSChoices = false, showHarmonyOSChoices = false }: BinaryInstallProps) {
   const { t } = useLingui()
+
+  if (showHarmonyOSChoices) {
+    return (
+      <>
+        <div className="px-6 pt-6 pb-4">
+          <p className="text-base text-gray-600 dark:text-gray-300"><Trans>为鸿蒙电脑或二合一设备下载 cjv 安装器</Trans></p>
+          <p className="mt-2 mb-4 text-sm text-gray-500 dark:text-gray-400"><Trans>在终端运行 uname -m：aarch64 对应 ARM64，x86_64 对应 x86_64。</Trans></p>
+          <ManualDownloadList binaries={allBinaries.filter(b => b.goos === 'openharmony')} mirror={mirror} showFullReleaseHint={false} />
+          <p className="mt-3 text-sm text-gray-500 dark:text-gray-400"><Trans>下载后在终端运行 chmod +x cjv-init && ./cjv-init，按提示完成安装。</Trans></p>
+        </div>
+        <CollapsibleSection title={t`其他平台`} initial={false}>
+          <div className="mt-2">
+            <ManualDownloadList binaries={allBinaries.filter(b => b.goos !== 'openharmony')} mirror={mirror} />
+          </div>
+        </CollapsibleSection>
+      </>
+    )
+  }
 
   if (showMacOSChoices) {
     return <MacOSDownloadChoices allBinaries={allBinaries} mirror={mirror} />

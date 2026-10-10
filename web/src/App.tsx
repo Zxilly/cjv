@@ -80,7 +80,7 @@ function AppContent() {
   // 'ready' state with no concrete binary. Only then do we offer an explicit Apple
   // Silicon / Intel choice; once the arch is known (Chromium via UA Client Hints) the
   // detected single binary is shown instead. This is the sole ready+null-binary case.
-  const showMacOSDownloadChoices = platform.state === 'ready' && platform.binary === null
+  const choiceOS = platform.state === 'ready' ? platform.info.choiceOS : undefined
   const otherPlatformsTitle = t`其他平台`
 
   function handleTabChange(value: string) {
@@ -128,7 +128,8 @@ function AppContent() {
         binary={platform.binary}
         allBinaries={allBinaries}
         mirror={mirror}
-        showMacOSChoices={showMacOSDownloadChoices}
+        showMacOSChoices={choiceOS === 'darwin'}
+        showHarmonyOSChoices={choiceOS === 'openharmony'}
       />
     ),
     source: (
@@ -261,9 +262,7 @@ function AppContent() {
                 {platform.info.reason === 'harmony' ? (
                   <>
                     <p className="mt-2 text-sm text-gray-400 dark:text-gray-500">
-                      {platform.info.harmony?.device === 'convertible-tablet' ? (
-                        <Trans>你正在使用鸿蒙二合一设备的平板模式，Windows 安装包不适用于此系统。</Trans>
-                      ) : platform.info.harmony?.device === 'tablet' ? (
+                      {platform.info.harmony?.device === 'tablet' ? (
                         <Trans>你正在使用鸿蒙平板。</Trans>
                       ) : platform.info.harmony?.device === 'phone' ? (
                         <Trans>你正在使用鸿蒙手机。</Trans>
@@ -285,7 +284,7 @@ function AppContent() {
                   </>
                 ) : (
                   <>
-                    <p className="mt-2 text-sm text-gray-400 dark:text-gray-500"><Trans>cjv 目前仅在 Linux、macOS 和 Windows 桌面系统上提供。</Trans></p>
+                    <p className="mt-2 text-sm text-gray-400 dark:text-gray-500"><Trans>cjv 支持 Linux、macOS、Windows，以及鸿蒙电脑和二合一设备。</Trans></p>
                     <p className="mt-3 text-sm text-gray-400 dark:text-gray-500">
                       <Trans>
                         请在桌面设备上访问此页面，或查看{' '}
