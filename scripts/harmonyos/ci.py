@@ -7,13 +7,12 @@ from pathlib import Path
 import subprocess
 
 
+# CI subset of the official archive: Emulator, HDC, and HDC's USB library.
 CLI_URL = (
-    "https://contentcenter-vali-drcn.dbankcdn.cn/pvt_2/DeveloperAlliance_package_901_9/"
-    "d1/v3/PCx_dpJhQG63WXNUPT30vg/commandline-tools-linux-x64-26.0.0.821.zip"
-    "?HW-CC-KV=V1&HW-CC-Date=20260911T194309Z&HW-CC-Expire=315360000"
-    "&HW-CC-Sign=3DB31575DB2B7D734B702811DD4737C04CB4CEE100F2FA0B421E49F258DF7850"
+    "https://github.com/Zxilly/static/releases/download/harmonyos-cli-26.0.0.821/"
+    "commandline-tools-linux-x64-26.0.0.821-ci.zip"
 )
-CLI_SHA256 = "58da7359019e9360a8bb82da0cd1d3b3b26fedc338379f257849f2162e3ac1fc"
+CLI_SHA256 = "ee8ee0ef65453fea847f0a7e92ac1e29a7e59e9ef4e4b5c289fdf6fa8ba2f707"
 EMULATOR_LIBRARIES = [
     "libatomic1", "libpulse0", "libegl1", "libgbm1", "libgl1", "libpng16-16t64",
     "libfontconfig1", "libfreetype6", "libxcb-icccm4", "libxcb-image0",

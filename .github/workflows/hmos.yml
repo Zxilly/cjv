@@ -26,7 +26,7 @@ jobs:
           path: |
             ${{ env.HMOS_EMULATOR_HOME }}/command-line-tools
             ${{ env.HMOS_EMULATOR_HOME }}/images
-          key: hmos-linux-x64-cli-26.0.0.821-pc-6.1.1-api24-v1
+          key: hmos-linux-x64-cli-26.0.0.821-ci-pc-6.1.1-api24-v2
       - name: Install official emulator
         run: python3 scripts/harmonyos/ci.py install
       - name: Run native tests through HDC
