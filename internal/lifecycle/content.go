@@ -37,8 +37,9 @@ func preserveComponentMetadata(stagingDir, installedDir string) error {
 	return nil
 }
 
-// RemoveToolchain retires the SDK, its external component roots, and settings
-// references together. Linked SDKs and components are removed as links only.
+// RemoveToolchain retires an owned SDK and its component roots transactionally.
+// On Unix, a linked SDK without component roots is unlinked directly after
+// clearing its settings references; its user-owned target is never removed.
 func RemoveToolchain(name string) error {
 	if err := PrepareToolchainRemoval(name); err != nil {
 		return err
@@ -94,7 +95,8 @@ func removeInstallation(name string) error {
 	if err != nil {
 		return err
 	}
-	if _, err := os.Lstat(roots.TcDir); err != nil {
+	info, err := os.Lstat(roots.TcDir)
+	if err != nil {
 		return err
 	}
 	sf, _, err := config.LoadDefaultSettings()
@@ -109,6 +111,9 @@ func removeInstallation(name string) error {
 	update, err := referencesAfterRemoval(settings, name)
 	if err != nil {
 		return err
+	}
+	if unlink := linkedToolchainRemover(info); unlink != nil {
+		return unlinkToolchainLocked(roots, sf, settings, update, unlink)
 	}
 	return retireLocked(roots, sf, settings, update)
 }
