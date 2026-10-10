@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { server } from 'vitest/browser'
 import App from './App'
 import { HARMONY_SAMPLES } from './test-fixtures/harmony'
@@ -185,7 +186,7 @@ describe('App platform detection integration', () => {
   })
 
   describe.each<Lang>(['zh', 'en'])('HarmonyOS guidance (%s)', lang => {
-    it.each(HARMONY_SAMPLES)('renders version and device guidance for $name', sample => {
+    it.each(HARMONY_SAMPLES)('renders version and device guidance for $name', async sample => {
       stubNavigator({
         maxTouchPoints: 5,
         platform: 'Win32',
@@ -197,6 +198,14 @@ describe('App platform detection integration', () => {
       activateLang(lang)
       render(<App />)
 
+      if (sample.device === 'convertible-tablet') {
+        expect(screen.getByRole('tablist')).toBeInTheDocument()
+        await userEvent.click(screen.getByRole('tab', { name: lang === 'zh' ? '下载安装' : 'Download' }))
+        expect(await screen.findByRole('link', { name: /HarmonyOS ARM64/ })).toHaveAttribute('href', '/dl/official/openharmony_arm64/cjv-init')
+        expect(screen.getByRole('link', { name: /HarmonyOS x86_64/ })).toHaveAttribute('href', '/dl/official/openharmony_amd64/cjv-init')
+        expect(screen.queryByText(/cjv 暂不支持/)).not.toBeInTheDocument()
+        return
+      }
       expect(screen.getByText(`HarmonyOS (OpenHarmony ${sample.version})`)).toBeInTheDocument()
       expect(screen.getByText(lang === 'zh' ? sample.message : sample.englishMessage)).toBeInTheDocument()
       expect(screen.queryByText(/已列入计划|support.*planned/)).not.toBeInTheDocument()

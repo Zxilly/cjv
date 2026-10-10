@@ -111,7 +111,7 @@ describe('computePlatformResult', () => {
     expect(r.allBinaries).toContain(r.binary)
   })
 
-  it('lists all five build targets under allBinaries', () => {
+  it('lists all seven build targets under allBinaries', () => {
     const r = computePlatformResult('Linux', 'amd64')
     const keys = r.allBinaries.map(b => `${b.goos}_${b.goarch}`)
     expect(keys).toEqual([
@@ -120,6 +120,8 @@ describe('computePlatformResult', () => {
       'darwin_amd64',
       'linux_amd64',
       'linux_arm64',
+      'openharmony_amd64',
+      'openharmony_arm64',
     ])
   })
 
@@ -253,11 +255,10 @@ describe('computeBrowserPlatformResult', () => {
       },
     }
     for (const r of [computeBrowserPlatformResult(input), await detectBrowserPlatformResult(input)]) {
-      expect(r.state).toBe('unsupported')
+      expect(r.state).toBe(sample.device === 'convertible-tablet' ? 'ready' : 'unsupported')
       expect(r.info.label).toBe(`HarmonyOS (OpenHarmony ${sample.version})`)
-      expect(r.info.reason).toBe('harmony')
+      expect(r.info.reason).toBe(sample.device === 'convertible-tablet' ? undefined : 'harmony')
       expect(r.binary).toBeNull()
-      if (r.state !== 'unsupported') throw new Error('expected unsupported')
       expect(r.info.harmony).toEqual({ family: 'OpenHarmony', version: sample.version, device: sample.device })
     }
   })
@@ -272,6 +273,18 @@ describe('computeBrowserPlatformResult', () => {
     if (r.state !== 'unsupported') throw new Error('expected unsupported')
     expect(r.info.harmony).toEqual({ family, version, device })
     expect(r.binary).toBeNull()
+  })
+
+  it.each(['PC', 'Windows NT 10.0; Win64; x64'])('offers native choices for a synthetic desktop UA with %s', token => {
+    const r = computeBrowserPlatformResult({
+      userAgent: `Mozilla/5.0 (${token}; OpenHarmony 7.0)`,
+      userAgentData: { platform: 'Windows', architecture: 'x86', bitness: '64' },
+    })
+    expect(r.state).toBe('ready')
+    expect(r.binary).toBeNull()
+    if (r.state !== 'ready') throw new Error('expected ready')
+    expect(r.info.choiceOS).toBe('openharmony')
+    expect(r.info.harmony?.device).toBe('pc')
   })
 
   it('does not identify HarmonyOS from HuaweiBrowser or ArkWeb alone', () => {
@@ -349,7 +362,7 @@ describe('usePlatform', () => {
       sourceMethod: expect.any(Object),
       allBinaries: expect.any(Array),
     })
-    expect(r.allBinaries).toHaveLength(5)
+    expect(r.allBinaries).toHaveLength(7)
   })
 
   it('updates when asynchronous UA Client Hints refine a macOS architecture', async () => {

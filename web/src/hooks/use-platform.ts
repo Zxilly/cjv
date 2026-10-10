@@ -14,6 +14,8 @@ const MAC_X86_WARNING = msg`部分 LTS 和 STS 版本可能不包含 macOS x86_6
 
 export interface ReadyInfo {
   label: string
+  choiceOS?: 'darwin' | 'openharmony'
+  harmony?: HarmonyInfo
   hint: MessageDescriptor
   command: string
   mirrorCommand: string
@@ -35,7 +37,7 @@ export interface HarmonyInfo {
   // Keep the UA's version namespace; OpenHarmony is not a marketing version.
   family: 'OpenHarmony' | 'HarmonyOS'
   version?: string
-  device: 'phone' | 'tablet' | 'convertible-tablet' | 'unknown'
+  device: 'phone' | 'tablet' | 'convertible-tablet' | 'pc' | 'unknown'
 }
 
 export interface BasicInfo {
@@ -72,9 +74,8 @@ interface CommonResult {
 }
 
 export type PlatformResult = CommonResult & (
-  // In the 'ready' state `binary` is null only when the OS is known but the CPU
-  // architecture is hidden (macOS on Safari/Firefox): install.sh still installs the
-  // right build, but there is no single binary to offer — the UI shows an arch choice.
+  // When the OS is supported but its native CPU is unknown, the installer resolves
+  // the architecture and manual downloads offer a choice for that OS.
   | { state: 'ready'; info: ReadyInfo; binary: BinaryInfo | null }
   | { state: 'unsupported' | 'unknown'; info: BasicInfo; binary: null }
 )
@@ -273,7 +274,7 @@ export function computePlatformResult(os: string, arch: string): PlatformResult 
   // macOS without a detectable arch (Safari/Firefox hide it): install.sh resolves the
   // arch itself, so we stay 'ready' with no specific binary rather than giving up.
   if (goos === 'darwin' && !hasArch) {
-    const info: ReadyInfo = { label: 'macOS', hint: SH_HINT, command: SH_CMD, mirrorCommand: SH_MIRROR_CMD }
+    const info: ReadyInfo = { label: 'macOS', choiceOS: 'darwin', hint: SH_HINT, command: SH_CMD, mirrorCommand: SH_MIRROR_CMD }
     return {
       ...common,
       otherMethods: otherMethodsFor('darwin'),
@@ -330,7 +331,8 @@ function parseHarmony(ua: string = ''): HarmonyInfo | undefined {
     // The supplied convertible sample uses Tablet together with Windows NT.
     // Its Win64/x64 tokens do not establish the device's native CPU architecture.
     device: tablet ? (/\bWindows NT\b/i.test(ua) ? 'convertible-tablet' : 'tablet')
-      : /\bPhone\b|\bMobile\b/i.test(ua) ? 'phone' : 'unknown',
+      : /\bPhone\b|\bMobile\b/i.test(ua) ? 'phone'
+      : /\bPC\b|\bWindows NT\b/i.test(ua) ? 'pc' : 'unknown',
   }
 }
 
@@ -348,15 +350,28 @@ function parseBrowserArch(input: BrowserPlatformInput): string {
 export function computeBrowserPlatformResult(input: BrowserPlatformInput = readBrowserPlatformInput()): PlatformResult {
   const harmony = parseHarmony(input.userAgent)
   if (harmony) {
-    // Native downloads are listed manually. Browser compatibility tokens cannot
-    // establish the device architecture or whether a usable terminal is available.
+    const label = !harmony.version ? 'HarmonyOS'
+      : harmony.family === 'OpenHarmony' ? `HarmonyOS (OpenHarmony ${harmony.version})`
+      : `HarmonyOS ${harmony.version}`
+    // Compatibility UA and Client Hints cannot establish the native CPU.
+    if (harmony.device === 'pc' || harmony.device === 'convertible-tablet') {
+      return {
+        ...computePlatformResult('HarmonyOS', ''),
+        otherMethods: METHODS,
+        state: 'ready',
+        info: {
+          label, harmony, choiceOS: 'openharmony',
+          hint: msg`在鸿蒙电脑或二合一设备的终端中运行：`,
+          command: SH_CMD, mirrorCommand: SH_MIRROR_CMD,
+        },
+        binary: null,
+      }
+    }
     return {
       ...computePlatformResult('HarmonyOS', ''),
       state: 'unsupported',
       info: {
-        label: !harmony.version ? 'HarmonyOS'
-          : harmony.family === 'OpenHarmony' ? `HarmonyOS (OpenHarmony ${harmony.version})`
-          : `HarmonyOS ${harmony.version}`,
+        label,
         reason: 'harmony',
         harmony,
       },
@@ -394,8 +409,7 @@ function samePlatformResult(a: PlatformResult, b: PlatformResult): boolean {
     a.state === b.state
     && a.info.label === b.info.label
     && a.info.reason === b.info.reason
-    && (a.state !== 'ready' ? a.info.harmony?.device : undefined)
-      === (b.state !== 'ready' ? b.info.harmony?.device : undefined)
+    && a.info.harmony?.device === b.info.harmony?.device
     && a.binary?.goos === b.binary?.goos
     && a.binary?.goarch === b.binary?.goarch
   )

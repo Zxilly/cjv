@@ -9,6 +9,18 @@ const winBinary = allBinaries.find(b => b.goos === 'windows')!
 const macArmBinary = allBinaries.find(b => b.goos === 'darwin' && b.goarch === 'arm64')!
 const macX86Binary = allBinaries.find(b => b.goos === 'darwin' && b.goarch === 'amd64')!
 
+describe('BinaryInstall (HarmonyOS choices)', () => {
+  it.each([false, true])('offers both native architectures with mirror=%s', mirror => {
+    render(<BinaryInstall binary={null} allBinaries={allBinaries} mirror={mirror} showHarmonyOSChoices />)
+    const origin = mirror ? 'mirror' : 'official'
+    expect(screen.getByRole('link', { name: /HarmonyOS ARM64/ })).toHaveAttribute('href', `/dl/${origin}/openharmony_arm64/cjv-init`)
+    expect(screen.getByRole('link', { name: /HarmonyOS x86_64/ })).toHaveAttribute('href', `/dl/${origin}/openharmony_amd64/cjv-init`)
+    expect(screen.getAllByRole('link')).toHaveLength(2)
+    expect(screen.getByText(/uname -m/)).toBeInTheDocument()
+    expect(screen.getByText(/chmod \+x cjv-init/)).toBeInTheDocument()
+  })
+})
+
 describe('BinaryInstall (binary detected)', () => {
   it('renders the primary download for the detected binary', () => {
     render(<BinaryInstall binary={winBinary} allBinaries={allBinaries} mirror={false} />)

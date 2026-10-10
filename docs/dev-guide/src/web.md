@@ -29,7 +29,9 @@ pnpm dev
 
 macOS 浏览器无法可靠给出 CPU 架构时，安装脚本仍可用，但手动下载显示 Apple Silicon 与 Intel 两个选项。移动系统及没有预编译二进制的架构显示不支持。检测还处理 iPadOS 桌面模式和 HarmonyOS NEXT 的 UA 差异。
 
-鸿蒙检测优先读取 `OpenHarmony` / `HarmonyOS` 标记中的版本，保留其版本名称，不将 `ArkWeb`、`HuaweiBrowser` 或 Chrome 版本当作系统版本。`Phone` / `Mobile` 表示手机，`Tablet` 表示平板；根据已收集的 UA 样例，`Tablet` 同时包含 `Windows NT` 时显示二合一设备平板模式的提示。这些兼容标记及 UA Client Hints 不会将鸿蒙识别为 Windows 或 Android，也不用于推断鸿蒙设备的原生架构。目前鸿蒙仍显示不支持，不推荐安装包；后续适配入口留有 TODO。
+鸿蒙检测优先读取 `OpenHarmony` / `HarmonyOS` 标记中的版本，保留其版本名称，不将 `ArkWeb`、`HuaweiBrowser` 或 Chrome 版本当作系统版本。`Phone` / `Mobile` 表示手机，`Tablet` 表示平板；`Tablet` 同时包含 `Windows NT` 时识别为二合一设备平板模式，`PC` 或桌面 `Windows NT` 标记识别为电脑。电脑和二合一设备显示 shell 安装命令及 ARM64/x86_64 原生下载选项；手机、普通平板和无法确认类型的设备保留对应提示。
+
+这些兼容标记及 UA Client Hints 不会将鸿蒙识别为 Windows 或 Android，也不用于推断鸿蒙设备的原生架构。下载面板说明如何用 `uname -m` 确认架构，以及如何在终端运行 `cjv-init`。
 
 改动此处时运行真实浏览器平台测试，确认无法识别架构时不会错误推荐单一二进制。测试命令见[测试与检查](testing.md)。
 
