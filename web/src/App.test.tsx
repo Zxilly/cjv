@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import App from './App'
 import { computePlatformResult } from '@/hooks/use-platform'
@@ -23,6 +23,16 @@ describe('App (ready / Windows)', () => {
     render(<App />)
     expect(screen.getByText(/检测到你的平台：Windows x86_64/)).toBeInTheDocument()
     expect(screen.getByText(/install\.ps1/)).toBeInTheDocument()
+  })
+
+  it('offers the HarmonyOS terminal command under other platforms, including its mirror', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+    await user.click(screen.getByRole('button', { name: /^其他平台/ }))
+    const label = await screen.findByText('HarmonyOS')
+    expect(label.parentElement).toHaveTextContent('curl -sSf https://cjv.zxilly.dev/install.sh | sh')
+    await user.click(screen.getByRole('switch'))
+    await waitFor(() => expect(screen.getByText('HarmonyOS').parentElement).toHaveTextContent('sh -s -- --mirror'))
   })
 
   it('switches to the download tab and shows the primary binary', async () => {

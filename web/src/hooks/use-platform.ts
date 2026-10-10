@@ -227,21 +227,23 @@ function binaryForEntry(entry: PlatformEntry): BinaryInfo {
 
 const UNIX_METHOD: InstallMethod = { label: 'Linux / macOS', command: SH_CMD, mirrorCommand: SH_MIRROR_CMD }
 const WINDOWS_METHOD: InstallMethod = { label: 'Windows (PowerShell)', command: PS_CMD, mirrorCommand: PS_MIRROR_CMD }
+const HARMONY_METHOD: InstallMethod = { label: 'HarmonyOS', command: SH_CMD, mirrorCommand: SH_MIRROR_CMD }
 
-const METHODS: InstallMethod[] = [UNIX_METHOD, WINDOWS_METHOD]
+const METHODS: InstallMethod[] = [UNIX_METHOD, WINDOWS_METHOD, HARMONY_METHOD]
 
 // install.sh installs on both Linux and macOS, so for a non-Unix visitor we keep the
 // single combined "Linux / macOS" row. But when the visitor IS on Linux or macOS, that
 // combined row is their own platform — filtering it out would also drop the sibling Unix
 // OS from 其他平台. So we name the remaining sibling explicitly instead.
 function otherMethodsFor(detected: BinaryInfo['goos']): InstallMethod[] {
-  if (detected === 'windows') return [UNIX_METHOD]
+  if (detected === 'windows') return [UNIX_METHOD, HARMONY_METHOD]
+  if (detected === 'openharmony') return [UNIX_METHOD, WINDOWS_METHOD]
   const sibling: InstallMethod = {
     label: detected === 'linux' ? 'macOS' : 'Linux',
     command: SH_CMD,
     mirrorCommand: SH_MIRROR_CMD,
   }
-  return [sibling, WINDOWS_METHOD]
+  return [sibling, WINDOWS_METHOD, HARMONY_METHOD]
 }
 
 const SOURCE_METHOD: InstallMethod = {
@@ -357,7 +359,7 @@ export function computeBrowserPlatformResult(input: BrowserPlatformInput = readB
     if (harmony.device === 'pc' || harmony.device === 'convertible-tablet') {
       return {
         ...computePlatformResult('HarmonyOS', ''),
-        otherMethods: METHODS,
+        otherMethods: otherMethodsFor('openharmony'),
         state: 'ready',
         info: {
           label, harmony, choiceOS: 'openharmony',
