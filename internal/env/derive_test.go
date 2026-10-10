@@ -53,23 +53,23 @@ func TestDeriveToolchainEnv_NoBackendDirReturnsNoLibPaths(t *testing.T) {
 	}
 }
 
-func TestHostBackendDirForArch_DetectsCjnative(t *testing.T) {
+func TestHostBackendDir_DetectsCjnative(t *testing.T) {
 	sdk := t.TempDir()
 	backend := "linux_x86_64_cjnative"
 	writeDir(t, sdk, "runtime", "lib", backend)
 
-	assert.Equal(t, backend, hostBackendDirForArch(sdk, "x86_64"))
+	assert.Equal(t, backend, hostBackendDir(sdk, "linux", "x86_64"))
 }
 
-func TestHostBackendDirForArch_DetectsLlvm(t *testing.T) {
+func TestHostBackendDir_DetectsLlvm(t *testing.T) {
 	sdk := t.TempDir()
 	backend := "linux_x86_64_llvm"
 	writeDir(t, sdk, "runtime", "lib", backend)
 
-	assert.Equal(t, backend, hostBackendDirForArch(sdk, "x86_64"))
+	assert.Equal(t, backend, hostBackendDir(sdk, "linux", "x86_64"))
 }
 
-func TestHostBackendDirForArch_IgnoresCrossTargets(t *testing.T) {
+func TestHostBackendDir_IgnoresCrossTargets(t *testing.T) {
 	sdk := t.TempDir()
 	host := "linux_x86_64_cjnative"
 	writeDir(t, sdk, "runtime", "lib", host)
@@ -77,10 +77,10 @@ func TestHostBackendDirForArch_IgnoresCrossTargets(t *testing.T) {
 	// segment between OS and arch (e.g. linux_ohos_aarch64_cjnative).
 	writeDir(t, sdk, "runtime", "lib", "linux_ohos_aarch64_cjnative")
 
-	assert.Equal(t, host, hostBackendDirForArch(sdk, "x86_64"))
+	assert.Equal(t, host, hostBackendDir(sdk, "linux", "x86_64"))
 }
 
-func TestHostBackendDirForArch_OSPrefixAgnostic(t *testing.T) {
+func TestHostBackendDir_OSPrefixAgnostic(t *testing.T) {
 	// The host arch suffix (x86_64 / aarch64) is what we match on, not the
 	// OS prefix — Cangjie's archive filenames use "mac" while Go uses
 	// "darwin", and we shouldn't have to know which one ends up in the
@@ -89,16 +89,16 @@ func TestHostBackendDirForArch_OSPrefixAgnostic(t *testing.T) {
 	custom := "someos_x86_64_cjnative"
 	writeDir(t, sdk, "runtime", "lib", custom)
 
-	assert.Equal(t, custom, hostBackendDirForArch(sdk, "x86_64"))
+	assert.Equal(t, custom, hostBackendDir(sdk, "linux", "x86_64"))
 }
 
-func TestHostBackendDirForArch_PrefersCjnativeOverLlvm(t *testing.T) {
+func TestHostBackendDir_PrefersCjnativeOverLlvm(t *testing.T) {
 	sdk := t.TempDir()
 	cj := "linux_x86_64_cjnative"
 	writeDir(t, sdk, "runtime", "lib", cj)
 	writeDir(t, sdk, "runtime", "lib", "linux_x86_64_llvm")
 
-	assert.Equal(t, cj, hostBackendDirForArch(sdk, "x86_64"))
+	assert.Equal(t, cj, hostBackendDir(sdk, "linux", "x86_64"))
 }
 
 func TestHostArchMapsGoArch(t *testing.T) {

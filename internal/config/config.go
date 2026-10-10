@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 
@@ -91,10 +92,19 @@ func cachedUserHomeDir() (string, error) {
 	userHomeDirOnce.Do(func() {
 		userHomeDirVal, errUserHomeDir = os.UserHomeDir()
 		if errUserHomeDir == nil {
-			errUserHomeDir = validateUserHome(userHomeDirVal)
+			errUserHomeDir = validateUserHome(userHomeDirVal, runtime.GOOS)
 		}
 	})
 	return userHomeDirVal, errUserHomeDir
+}
+
+// HDC and application shells can expose different homes. Avoid installing in
+// the system root when an OpenHarmony shell has no usable user environment.
+func validateUserHome(home, goos string) error {
+	if goos == "openharmony" && (!filepath.IsAbs(home) || filepath.Dir(filepath.Clean(home)) == filepath.Clean(home)) {
+		return errors.New("OpenHarmony requires an absolute user HOME distinct from the filesystem root; run cjv in the user's terminal environment")
+	}
+	return nil
 }
 
 // Home returns the CJV_HOME path. The resolution order is:

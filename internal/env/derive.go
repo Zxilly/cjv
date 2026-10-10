@@ -17,16 +17,12 @@ func hostArchName(goarch string) string {
 	return goarch
 }
 
-// hostBackendDirForArch returns the SDK's host backend subdirectory name
-// (e.g. "windows_x86_64_cjnative") by scanning runtime/lib for an entry
-// shaped like "<os>_<host_arch>_<backend>". The host arch component is what
-// we match on — cross-target directories have an extra segment between the
-// OS and the arch (e.g. "linux_ohos_aarch64_cjnative") so they fall out
-// naturally, and we don't have to guess the OS prefix (which differs
-// between the manifest's "mac" and Go's "darwin", for example).
+// hostBackendDir finds the native runtime for the host architecture. Most
+// SDKs use <os>_<arch>_<backend>; native HarmonyOS SDKs also use linux_ohos
+// as the OS prefix, which denotes a cross target on other hosts.
 //
 // Returns an empty string when no matching directory is found.
-func hostBackendDirForArch(sdkDir, arch string) string {
+func hostBackendDir(sdkDir, goos, arch string) string {
 	suffixes := []string{
 		"_" + arch + "_cjnative",
 		"_" + arch + "_llvm",
@@ -44,13 +40,12 @@ func hostBackendDirForArch(sdkDir, arch string) string {
 			if !strings.HasSuffix(name, suffix) {
 				continue
 			}
-			// Host dirs are exactly "<os>_<arch>_<backend>" — three
-			// segments where the os has no underscore. Cross-target dirs
-			// like "linux_ohos_aarch64_cjnative" carry an extra segment
-			// before the arch, so we reject anything with an underscore
-			// before the host-arch suffix.
 			prefix := strings.TrimSuffix(name, suffix)
-			if !strings.Contains(prefix, "_") {
+			matchesHost := !strings.Contains(prefix, "_")
+			if goos == "openharmony" {
+				matchesHost = prefix == "linux_ohos" || prefix == "ohos"
+			}
+			if matchesHost {
 				return name
 			}
 		}
@@ -80,7 +75,7 @@ func deriveToolchainEnvForHost(sdkDir, goos, goarch, homeDir string) *EnvConfig 
 	}
 
 	arch := hostArchName(goarch)
-	backendDir := hostBackendDirForArch(sdkDir, arch)
+	backendDir := hostBackendDir(sdkDir, goos, arch)
 
 	if goos == "windows" {
 		appendIfDir(&cfg.PathPrepend, filepath.Join(sdkDir, "tools", "lib"))

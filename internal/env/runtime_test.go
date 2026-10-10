@@ -46,12 +46,12 @@ func TestRuntimeHonorsBaseLibraryPath(t *testing.T) {
 				quoted := "'" + strings.ReplaceAll(value, "'", "'\\''") + "'"
 				script = "export " + key + "=" + quoted + "\n"
 			}
-			script += rt.ShellScript(base, env.ShellPosix) + "printf '%s' \"$" + key + "\""
+			script += rt.ShellScript(base, env.ShellPosix) + "echo \"$" + key + "\""
 			cmd := exec.Command("/bin/sh", "-c", script)
 			cmd.Env = append([]string{}, base...)
 			out, err := cmd.Output()
 			require.NoError(t, err)
-			return []string{key + "=" + string(out)}
+			return []string{key + "=" + strings.TrimSuffix(string(out), "\n")}
 		}},
 	} {
 		t.Run(mode.name, func(t *testing.T) {
