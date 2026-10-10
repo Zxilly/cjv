@@ -131,7 +131,7 @@ func TestInstallInitRestoresHomeEnvironment(t *testing.T) {
 	}
 }
 
-func TestRunInitContinuesWhenDefaultToolchainInstallFails(t *testing.T) {
+func TestRunInitReturnsErrorWhenDefaultToolchainInstallFails(t *testing.T) {
 	app := newApplication("dev", "")
 	home := t.TempDir()
 	config.IsolateForTest(t, home)
@@ -145,16 +145,36 @@ func TestRunInitContinuesWhenDefaultToolchainInstallFails(t *testing.T) {
 		config.ResetDefaultSettingsFileCache()
 	})
 
-	var stderr bytes.Buffer
+	var stdout, stderr bytes.Buffer
 	cmd := &cobra.Command{}
-	cmd.SetOut(io.Discard)
+	cmd.SetOut(&stdout)
 	cmd.SetErr(&stderr)
 	err := app.runInit(cmd, nil)
 
-	require.NoError(t, err)
-	assert.Contains(t, stderr.String(), "local-sdk", "the failed toolchain install is reported on the command's err writer")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "local-sdk")
+	assert.Contains(t, err.Error(), " install 'local-sdk'")
+	assert.Contains(t, err.Error(), " list-remote")
+	assert.NotContains(t, stdout.String(), i18n.T("InitComplete", nil))
+	assert.Empty(t, stderr.String(), "the root command renders the returned error once")
 	assert.FileExists(t, filepath.Join(home, "bin", sdktools.CjvBinaryName()))
 	assert.Equal(t, originalNoPathSetup, os.Getenv(config.EnvNoPathSetup))
+}
+
+func TestInitRecoveryHintPreservesComponentsAndQuotesPaths(t *testing.T) {
+	hint := initRecoveryHint(initCustomizeOptions{
+		home:       filepath.Join(t.TempDir(), "cjv's home"),
+		toolchain:  "nightly",
+		components: []string{"stdx", "docs"},
+	})
+	assert.Contains(t, hint, "install 'nightly' --component 'stdx' --component 'docs'")
+	assert.Contains(t, hint, "list-remote")
+	if runtime.GOOS == "windows" {
+		assert.Contains(t, hint, "& '")
+		assert.Contains(t, hint, "cjv''s home")
+	} else {
+		assert.Contains(t, hint, "cjv'\"'\"'s home")
+	}
 }
 
 // observeInitPathSetup points HOME at a temporary shell config so the test
@@ -248,6 +268,7 @@ func TestInitCustomizeFormEndToEnd(t *testing.T) {
 	target := filepath.Join(userHome, "custom", "cjv")
 	opts := initCustomizeOptions{
 		toolchain:  "lts",
+		channels:   []string{"lts", "sts", "nightly"},
 		components: []string{"stdx"},
 		modifyPath: true,
 	}

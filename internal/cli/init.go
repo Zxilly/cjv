@@ -192,6 +192,7 @@ type initCustomizeOptions struct {
 	toolchain  string
 	components []string
 	modifyPath bool
+	channels   []string
 }
 
 func newInitCustomizeForm(opts *initCustomizeOptions) *huh.Form {
@@ -209,12 +210,7 @@ func newInitCustomizeForm(opts *initCustomizeOptions) *huh.Form {
 		huh.NewGroup(
 			huh.NewSelect[string]().
 				Title(i18n.T("InitToolchainQuestion", nil)).
-				Options(
-					huh.NewOption("lts", "lts"),
-					huh.NewOption("sts", "sts"),
-					huh.NewOption("nightly", "nightly"),
-					huh.NewOption(i18n.T("InitToolchainNone", nil), "none"),
-				).
+				Options(initToolchainOptions(opts)...).
 				Value(&opts.toolchain),
 		),
 		huh.NewGroup(
@@ -258,6 +254,10 @@ func (app *application) runInit(cmd *cobra.Command, _ []string) error {
 	}
 	selfmgmt.CheckSudoSafety()
 	con := newInitConsole(cmd)
+	ctx := cmd.Context()
+	if ctx == nil {
+		ctx = context.Background()
+	}
 
 	home, err := config.Home()
 	if err != nil {
@@ -319,6 +319,31 @@ func (app *application) runInit(cmd *cobra.Command, _ []string) error {
 		con.println(i18n.T("InitNonInteractive", nil))
 	}
 
+	var channels []string
+	if interactive || toolchain == "auto" {
+		d, err := lifecycle.OpenDistribution(app.lifecycleOptions())
+		if err != nil {
+			return err
+		}
+		channels, err = initAvailableChannels(ctx, d.Source, d.HostTuple)
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		if toolchain == "auto" && len(channels) == 0 {
+			message := i18n.T("InitNoAvailableChannel", i18n.MsgData{"Target": d.HostTuple})
+			if err != nil {
+				return fmt.Errorf("%s: %w", message, err)
+			}
+			return errors.New(message)
+		}
+		if err != nil {
+			_, _ = fmt.Fprintln(con.err, i18n.T("InitChannelCheckFailed", i18n.MsgData{"Err": err.Error()}))
+		}
+		if toolchain == "auto" {
+			toolchain = initPreferredToolchain(channels)
+		}
+	}
+
 	if interactive {
 		customized := false
 	menuLoop:
@@ -362,6 +387,7 @@ func (app *application) runInit(cmd *cobra.Command, _ []string) error {
 					toolchain:  toolchain,
 					components: components,
 					modifyPath: modifyPath,
+					channels:   channels,
 				}
 				if err := runInitCustomizePrompt(&opts); err != nil {
 					return err
@@ -397,7 +423,7 @@ func (app *application) runInit(cmd *cobra.Command, _ []string) error {
 		}
 	}
 
-	return app.installInit(cmd.Context(), con, initialHome, initCustomizeOptions{
+	return app.installInit(ctx, con, initialHome, initCustomizeOptions{
 		home:       home,
 		toolchain:  toolchain,
 		components: components,
@@ -462,10 +488,7 @@ func (app *application) installInit(ctx context.Context, con initConsole, initia
 		installOpts := app.lifecycleOptions()
 		installOpts.ConfigurePath = false
 		if err := lifecycle.Install(ctx, lifecycle.InstallRequest{Toolchain: opts.toolchain, Components: opts.components}, installOpts); err != nil {
-			_, _ = fmt.Fprintf(con.err, "\n%s\n", i18n.T("InitToolchainFailed", i18n.MsgData{
-				"Name": opts.toolchain,
-				"Err":  err.Error(),
-			}))
+			return fmt.Errorf("%s: %w\n\n%s", i18n.T("InitToolchainFailed", i18n.MsgData{"Name": opts.toolchain}), err, initRecoveryHint(opts))
 		}
 	}
 
@@ -497,6 +520,29 @@ func (app *application) installInit(ctx context.Context, con initConsole, initia
 	return nil
 }
 
+// Use the installed binary's absolute path so recovery also works before PATH
+// is reloaded, or when the user selected --no-modify-path.
+func initRecoveryHint(opts initCustomizeOptions) string {
+	quote := func(value string) string {
+		if runtime.GOOS == "windows" {
+			return "'" + strings.ReplaceAll(value, "'", "''") + "'"
+		}
+		return "'" + strings.ReplaceAll(value, "'", "'\"'\"'") + "'"
+	}
+	command := quote(filepath.Join(opts.home, "bin", sdktools.CjvBinaryName()))
+	if runtime.GOOS == "windows" {
+		command = "& " + command
+	}
+	retry := command + " install " + quote(opts.toolchain)
+	for _, component := range opts.components {
+		retry += " --component " + quote(component)
+	}
+	return i18n.T("InitRecoveryHint", i18n.MsgData{
+		"Retry": retry,
+		"List":  command + " list-remote",
+	})
+}
+
 func (app *application) initInitCommands() {
 	app.initCmd = &cobra.Command{
 		Use:   "init",
@@ -506,7 +552,7 @@ func (app *application) initInitCommands() {
 	}
 
 	app.initCmd.Flags().BoolVarP(&app.initYes, "yes", "y", false, i18n.T("FlagSkipConfirm", nil))
-	app.initCmd.Flags().StringVar(&app.initDefaultToolchain, "default-toolchain", "lts", i18n.T("InitFlagDefaultToolchain", nil))
+	app.initCmd.Flags().StringVar(&app.initDefaultToolchain, "default-toolchain", "auto", i18n.T("InitFlagDefaultToolchain", nil))
 	app.initCmd.Flags().StringSliceVarP(&app.initComponents, "component", "c", nil, i18n.T("InstallFlagComponent", nil))
 	app.initCmd.Flags().BoolVar(&app.initNoModifyPath, "no-modify-path", false, i18n.T("InitFlagNoModifyPath", nil))
 	app.rootCmd.AddCommand(app.initCmd)

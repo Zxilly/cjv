@@ -9,7 +9,7 @@
 .PARAMETER Yes
     Skip confirmation prompt
 .PARAMETER DefaultToolchain
-    Default toolchain to install (default: lts, use 'none' to skip)
+    Toolchain to install (default: auto, use 'none' to skip)
 .PARAMETER NoModifyPath
     Do not modify PATH
 .EXAMPLE
@@ -20,7 +20,7 @@
 param(
     [switch]$Mirror,
     [switch]$Yes,
-    [string]$DefaultToolchain = "lts",
+    [string]$DefaultToolchain = "auto",
     [switch]$NoModifyPath
 )
 
@@ -249,7 +249,7 @@ function Install-Cjv {
     $initArgs = @("init")
     if ($Yes) { $initArgs += "-y" }
     if ($NoModifyPath) { $initArgs += "--no-modify-path" }
-    if ($DefaultToolchain -ne "lts") {
+    if ($DefaultToolchain -ne "auto") {
         $initArgs += "--default-toolchain"
         $initArgs += $DefaultToolchain
     }

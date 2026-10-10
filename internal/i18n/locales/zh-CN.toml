@@ -298,7 +298,7 @@ other = "要配置当前终端，请运行："
 other = "要安装特定工具链："
 
 [InitToolchainFailed]
-other = "警告：安装默认工具链 '{{.Name}}' 失败：{{.Err}}。您可以稍后运行 'cjv install {{.Name}}' 手动安装。"
+other = "工具链 '{{.Name}}' 安装失败（cjv 本身已安装）"
 
 [InitNoModifyPath]
 other = "未修改 PATH（--no-modify-path）。请手动将 {{.BinDir}} 添加到 PATH。"
@@ -633,7 +633,7 @@ other = "卸载 cjv 及所有已安装的工具链"
 other = "跳过确认提示"
 
 [InitFlagDefaultToolchain]
-other = "要安装的默认工具链（使用 'none' 跳过）"
+other = "安装的工具链（auto 自动选择可用频道，none 跳过 SDK）"
 
 [InitFlagNoModifyPath]
 other = "不修改 PATH"
@@ -705,3 +705,17 @@ other = "删除工具链失败"
 
 [NoOverrideSet]
 other = "未为 {{.Dir}} 设置覆盖"
+
+[InitChannelCheckFailed]
+other = "部分工具链频道查询失败：{{.Err}}"
+
+[InitNoAvailableChannel]
+other = "无法确认 {{.Target}} 上有可用的工具链频道。若仅安装 cjv，请指定 --default-toolchain none"
+
+[InitRecoveryHint]
+other = """
+修复上述问题后，在终端中重试（Windows 使用 PowerShell）：
+    {{.Retry}}
+查看当前平台可用的版本：
+    {{.List}}
+"""

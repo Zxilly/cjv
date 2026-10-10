@@ -298,7 +298,7 @@ other = "To configure your current shell, run:"
 other = "To install a specific toolchain:"
 
 [InitToolchainFailed]
-other = "Warning: Failed to install default toolchain '{{.Name}}': {{.Err}}. You can install it later with 'cjv install {{.Name}}'."
+other = "Failed to install toolchain '{{.Name}}' (cjv itself is installed)"
 
 [InitNoModifyPath]
 other = "PATH was not modified (--no-modify-path). Add {{.BinDir}} to your PATH manually."
@@ -633,7 +633,7 @@ other = "Uninstall cjv and all installed toolchains"
 other = "Skip confirmation prompt"
 
 [InitFlagDefaultToolchain]
-other = "Default toolchain to install (use 'none' to skip)"
+other = "Toolchain to install (auto selects an available channel; none skips the SDK)"
 
 [InitFlagNoModifyPath]
 other = "Do not modify PATH"
@@ -705,3 +705,17 @@ other = "failed to remove toolchain"
 
 [NoOverrideSet]
 other = "no override set for {{.Dir}}"
+
+[InitChannelCheckFailed]
+other = "Could not check some toolchain channels: {{.Err}}"
+
+[InitNoAvailableChannel]
+other = "No available toolchain channel could be confirmed for {{.Target}}. Use --default-toolchain none to install only cjv"
+
+[InitRecoveryHint]
+other = """
+Fix the error above, then retry in your terminal (PowerShell on Windows):
+    {{.Retry}}
+To check versions available for this platform:
+    {{.List}}
+"""
