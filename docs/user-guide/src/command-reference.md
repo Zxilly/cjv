@@ -119,7 +119,7 @@ cjv self update
 cjv self uninstall [-y]
 ```
 
-`init` 安装 cjv 命令入口、配置 PATH，并默认安装 `lts`。`--default-toolchain none` 跳过 SDK，`-c/--component` 选择组件，`-y/--yes` 跳过交互，`--no-modify-path` 保留现有 PATH。非终端输入采用非交互模式。
+`init` 安装 cjv 命令入口、配置 PATH，并根据当前平台自动选择可用频道，优先顺序为 `lts`、`sts`、`nightly`。交互菜单只列出可用频道，例如鸿蒙目前会选择 `nightly`。无法确认任何可用频道时，引导会报错退出。工具链安装失败也会返回非零退出码，不再显示安装成功；已安装的 cjv 会保留。错误信息会提供保留组件选项的重试命令，以及查看兼容版本的命令；两者均使用已安装程序的绝对路径，无需先刷新 PATH。显式指定 `--default-toolchain <name>` 可覆盖自动选择。`--default-toolchain none` 跳过 SDK，`-c/--component` 选择组件，`-y/--yes` 跳过交互，`--no-modify-path` 保留现有 PATH。非终端输入采用非交互模式。
 
 `self update` 更新 cjv 本体。`self uninstall` 删除整个数据目录、工具链及组件，并清理 PATH；JSON 模式必须加 `-y`。
 

@@ -119,7 +119,7 @@ cjv self update
 cjv self uninstall [-y]
 ```
 
-`init` installs cjv command entry points, sets up PATH, and installs `lts` by default. `--default-toolchain none` skips the SDK, `-c/--component` selects components, `-y/--yes` skips interaction, and `--no-modify-path` leaves PATH unchanged. Non-terminal input uses non-interactive mode.
+`init` installs cjv command entry points, sets up PATH, and automatically selects a channel available for the current platform, in order of `lts`, `sts`, then `nightly`. The interactive menu only lists available channels. For example, HarmonyOS currently selects `nightly`. If no channel can be confirmed, initialization fails. A toolchain installation failure also returns a nonzero exit code without reporting success; the installed cjv remains available. The error includes commands to retry with the same components and list compatible versions; both use the installed binary path so they work before PATH is reloaded. An explicit `--default-toolchain <name>` overrides automatic selection. `--default-toolchain none` skips the SDK, `-c/--component` selects components, `-y/--yes` skips interaction, and `--no-modify-path` leaves PATH unchanged. Non-terminal input uses non-interactive mode.
 
 `self update` updates cjv itself. `self uninstall` removes the data directory, toolchains, and components, and cleans up PATH. JSON mode requires `-y`.
 
