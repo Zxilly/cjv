@@ -45,56 +45,49 @@ func hardLinkStrategy(src, dst string) error {
 	return os.Link(src, dst)
 }
 
-func copyStrategy(src, dst string) error {
-	return CopyFile(src, dst, 0o755)
-}
-
-// CreateLink creates a link from src to dst with three-level fallback:
-// symlink -> hard link -> copy.
-//
-// The replacement is staged through a temporary path so a failed update does
-// not delete an existing destination.
+// CreateLink installs a proxy by removing the old entry, trying a symlink, then
+// falling back to a hard link. An entry already pointing to src is left alone.
+// There is no copy fallback or atomic replacement: if both link attempts fail,
+// the old entry has already been removed. Callers own the destination entry.
 func CreateLink(src, dst string) error {
-	return createLinkWith([]linkStrategy{symlinkStrategy, hardLinkStrategy, copyStrategy}, src, dst)
+	return createLinkWith([]linkStrategy{symlinkStrategy, hardLinkStrategy}, src, dst)
 }
 
-// createLinkWith tries each strategy in order against a temporary path next
-// to dst and moves the first success into place. When every strategy fails,
-// the last error is returned and dst is left untouched.
+// createLinkWith tries each strategy directly at dst after removing its old
+// entry. The first success ends the chain; otherwise the last error is returned.
 func createLinkWith(strategies []linkStrategy, src, dst string) error {
-	tmpPath, err := createReplacementPath(dst)
+	sourceInfo, err := os.Stat(src)
 	if err != nil {
 		return err
 	}
-	defer os.Remove(tmpPath) //nolint:errcheck // best-effort cleanup
+	if destinationInfo, err := os.Stat(dst); err == nil {
+		if os.SameFile(sourceInfo, destinationInfo) {
+			return nil
+		}
+	}
+	if info, err := os.Lstat(dst); err == nil {
+		// os.Remove also removes empty directories, unlike a file unlink.
+		// A proxy replacement must never remove a directory entry.
+		if info.IsDir() {
+			return &os.PathError{Op: "remove", Path: dst, Err: errors.New("proxy destination is a directory")}
+		}
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+		return err
+	}
+	if err := Retry(func() error { return os.Remove(dst) }); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
 
 	err = errors.New("fsops: no link strategy")
 	for _, create := range strategies {
-		if err = create(src, tmpPath); err == nil {
-			return RenameRetry(tmpPath, dst)
+		if err = create(src, dst); err == nil {
+			return nil
 		}
 	}
 	return err
-}
-
-func createReplacementPath(dst string) (string, error) {
-	dir := filepath.Dir(dst)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return "", err
-	}
-
-	f, err := os.CreateTemp(dir, "."+filepath.Base(dst)+"-*")
-	if err != nil {
-		return "", err
-	}
-	path := f.Name()
-	if err := f.Close(); err != nil {
-		return "", errors.Join(err, os.Remove(path))
-	}
-	if err := os.Remove(path); err != nil {
-		return "", err
-	}
-	return path, nil
 }
 
 // CopyFile copies a single file from src to dst with the given permissions.

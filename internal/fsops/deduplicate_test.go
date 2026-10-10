@@ -12,6 +12,7 @@ import (
 
 func TestDeduplicationLinksOnlyIdenticalPayloadAndCopiesMetadata(t *testing.T) {
 	base := t.TempDir()
+	canLink := hardlinksAvailable(t, base)
 	source, dest := filepath.Join(base, "source"), filepath.Join(base, "dest")
 	for _, root := range []string{source, dest} {
 		require.NoError(t, os.MkdirAll(filepath.Join(root, ".cjv"), 0o755))
@@ -26,7 +27,7 @@ func TestDeduplicationLinksOnlyIdenticalPayloadAndCopiesMetadata(t *testing.T) {
 		require.NoError(t, err)
 		b, err := os.Stat(filepath.Join(dest, name))
 		require.NoError(t, err)
-		assert.Equal(t, name == "compiler", os.SameFile(a, b), name)
+		assert.Equal(t, canLink && name == "compiler", os.SameFile(a, b), name)
 	}
 	// Replacements break the link; removing one installation preserves the other.
 	require.NoError(t, WriteFileAtomic(filepath.Join(dest, "compiler"), []byte("new"), 0o644))
@@ -34,6 +35,22 @@ func TestDeduplicationLinksOnlyIdenticalPayloadAndCopiesMetadata(t *testing.T) {
 	data, err := os.ReadFile(filepath.Join(source, "compiler"))
 	require.NoError(t, err)
 	assert.Equal(t, "same", string(data))
+}
+
+// HDC's SELinux shell domain can deny hard links while permitting symlinks.
+// Only permission failures are treated as a capability limitation.
+func hardlinksAvailable(t *testing.T, dir string) bool {
+	t.Helper()
+	src, dst := filepath.Join(dir, "hardlink-probe"), filepath.Join(dir, "hardlink-probe-link")
+	require.NoError(t, os.WriteFile(src, nil, 0o600))
+	defer os.Remove(src)
+	defer os.Remove(dst)
+	err := os.Link(src, dst)
+	if errors.Is(err, os.ErrPermission) {
+		return false
+	}
+	require.NoError(t, err)
+	return true
 }
 
 func TestDeduplicationSkipsModifiedSourceDirectoryLinks(t *testing.T) {

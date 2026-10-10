@@ -64,8 +64,14 @@ func TestSelfUpdateReportsAppliedVersionAfterProxyRefresh(t *testing.T) {
 			if blocked {
 				require.Error(t, err)
 				assert.Contains(t, err.Error(), "1.1.0")
-				var renameErr *os.LinkError
-				require.ErrorAs(t, err, &renameErr, "the proxy failure must remain inspectable")
+				var removalErr *os.PathError
+				require.ErrorAs(t, err, &removalErr, "the proxy failure must remain inspectable")
+				obstruction := filepath.Join(binDir, sdktools.PlatformBinaryName("cjc"))
+				assert.Equal(t, "remove", removalErr.Op)
+				assert.Equal(t, obstruction, removalErr.Path)
+				data, readErr := os.ReadFile(filepath.Join(obstruction, "keep"))
+				require.NoError(t, readErr)
+				assert.Equal(t, "obstruction", string(data), "proxy replacement must preserve directory contents")
 				require.ErrorIs(t, renderer.RenderErrorTo(&stdout, &stderr, err), err)
 				var envelope struct {
 					Error struct {
