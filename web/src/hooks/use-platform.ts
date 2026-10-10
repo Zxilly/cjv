@@ -26,7 +26,7 @@ export interface ReadyInfo {
 
 // Why a visitor is unsupported, so the UI can tailor its advice:
 //   'mobile' — a phone/tablet OS (iOS/Android); ask them to use a desktop.
-//   'harmony' — HarmonyOS has no installer available yet.
+//   'harmony' — the browser cannot establish native terminal/architecture support.
 //   'arch'   — a known desktop OS whose CPU architecture has no prebuilt binary
 //              (e.g. Windows arm64); suggest the amd64 build or a manual download.
 export type UnsupportedReason = 'mobile' | 'arch' | 'harmony'
@@ -52,7 +52,7 @@ export interface InstallMethod {
 
 export interface BinaryInfo {
   label: string
-  goos: 'linux' | 'darwin' | 'windows'
+  goos: SupportedPlatform['goos']
   goarch: 'amd64' | 'arm64'
   binaryName: string
   officialUrl: string
@@ -121,6 +121,8 @@ const PLATFORM_PRESENTATION: Record<SupportedPlatformKey, Omit<PlatformEntry, 'g
   darwin_amd64: { label: 'macOS x86_64', hint: SH_HINT, command: SH_CMD, mirrorCommand: SH_MIRROR_CMD, warning: MAC_X86_WARNING },
   linux_amd64: { label: 'Linux x86_64', hint: SH_HINT, command: SH_CMD, mirrorCommand: SH_MIRROR_CMD },
   linux_arm64: { label: 'Linux ARM64', hint: SH_HINT, command: SH_CMD, mirrorCommand: SH_MIRROR_CMD },
+  openharmony_amd64: { label: 'HarmonyOS x86_64', hint: SH_HINT, command: SH_CMD, mirrorCommand: SH_MIRROR_CMD },
+  openharmony_arm64: { label: 'HarmonyOS ARM64', hint: SH_HINT, command: SH_CMD, mirrorCommand: SH_MIRROR_CMD },
 }
 
 const PLATFORM_ORDER: SupportedPlatformKey[] = [
@@ -129,6 +131,8 @@ const PLATFORM_ORDER: SupportedPlatformKey[] = [
   'darwin_amd64',
   'linux_amd64',
   'linux_arm64',
+  'openharmony_amd64',
+  'openharmony_arm64',
 ]
 
 const GENERATED_PLATFORM_BY_KEY = new Map(SUPPORTED_PLATFORMS.map(p => [`${p.goos}_${p.goarch}`, p] as const))
@@ -344,8 +348,8 @@ function parseBrowserArch(input: BrowserPlatformInput): string {
 export function computeBrowserPlatformResult(input: BrowserPlatformInput = readBrowserPlatformInput()): PlatformResult {
   const harmony = parseHarmony(input.userAgent)
   if (harmony) {
-    // TODO: Enable HarmonyOS installation when native cjv builds are available;
-    // use confirmed version/architecture support rather than compatibility tokens.
+    // Native downloads are listed manually. Browser compatibility tokens cannot
+    // establish the device architecture or whether a usable terminal is available.
     return {
       ...computePlatformResult('HarmonyOS', ''),
       state: 'unsupported',

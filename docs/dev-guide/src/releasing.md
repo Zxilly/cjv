@@ -13,7 +13,7 @@
 
 ## 产物
 
-`.goreleaser.yml` 定义 `cjv` 和带 `-tags=mirror` 的 `cjv-mirror`。每套发布 Linux/macOS 的 amd64、arm64，以及 Windows amd64。
+`.goreleaser.yml` 定义 `cjv` 和带 `-tags=mirror` 的 `cjv-mirror`。每套发布 Linux/macOS/OpenHarmony 的 amd64、arm64，以及 Windows amd64。
 
 | 项目 | 命名 |
 | --- | --- |
@@ -25,6 +25,12 @@
 发布通过 ldflags 注入版本与更新地址。mirror 切换默认 manifest 和自更新后端；清单中的绝对制品 URL 仍按清单使用。
 
 修改归档命名或平台时，同时检查安装脚本、`scripts/extract-init-binaries.sh`、前端生成平台数据和 CI 矩阵。
+
+## OpenHarmony 构建与签名
+
+GoReleaser 使用 `HMOS_GO` 构建 `openharmony_arm64` 和 `openharmony_amd64`，在归档前调用 `HMOS_SIGN`。`.github/actions/setup-hmos` 安装 `go1.27.2-hmos.4` 并构建主机签名工具。归档参与 GitCode 同步和 Pages 提取。
+
+本地快照先按[构建文档](building.md#openharmony)设置 `HMOS_GO`、`HMOS_SIGN` 并编译主机签名工具。
 
 ## 网页安装器
 

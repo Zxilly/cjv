@@ -52,6 +52,7 @@ jobs:
           jq -e '.isDraft == false and .isPrerelease == false' "${RUNNER_TEMP}/release.json" > /dev/null
           for asset in cjv-mirror_darwin_amd64.tar.gz cjv-mirror_darwin_arm64.tar.gz \
             cjv-mirror_linux_amd64.tar.gz cjv-mirror_linux_arm64.tar.gz \
+            cjv-mirror_openharmony_amd64.tar.gz cjv-mirror_openharmony_arm64.tar.gz \
             cjv-mirror_windows_amd64.zip checksums.txt; do
             jq -e --arg name "${asset}" '.assets | any(.name == $name)' "${RUNNER_TEMP}/release.json" > /dev/null
           done
@@ -76,6 +77,8 @@ jobs:
           - cjv-mirror_darwin_arm64.tar.gz
           - cjv-mirror_linux_amd64.tar.gz
           - cjv-mirror_linux_arm64.tar.gz
+          - cjv-mirror_openharmony_amd64.tar.gz
+          - cjv-mirror_openharmony_arm64.tar.gz
           - cjv-mirror_windows_amd64.zip
           - checksums.txt
     steps:

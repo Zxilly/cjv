@@ -21,6 +21,8 @@ PLATFORMS=(
   "darwin_arm64 tar.gz"
   "linux_amd64 tar.gz"
   "linux_arm64 tar.gz"
+  "openharmony_amd64 tar.gz"
+  "openharmony_arm64 tar.gz"
 )
 
 extract_one() {
