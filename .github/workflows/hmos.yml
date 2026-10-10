@@ -1,0 +1,41 @@
+name: HarmonyOS tests
+on:
+  pull_request:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  emulator-test:
+    name: HarmonyOS unit tests (x86_64 emulator)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      CGO_ENABLED: '0'
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: ./.github/actions/setup-hmos
+      - name: Build host exec wrapper and cross-compile standalone tests
+        run: python3 scripts/harmonyos/ci.py build
+      - name: Cache official emulator and image
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: |
+            ${{ env.HMOS_EMULATOR_HOME }}/command-line-tools
+            ${{ env.HMOS_EMULATOR_HOME }}/images
+          key: hmos-linux-x64-cli-26.0.0.821-pc-6.1.1-api24-v1
+      - name: Install official emulator
+        run: python3 scripts/harmonyos/ci.py install
+      - name: Run native tests through HDC
+        run: python3 scripts/harmonyos/emulator.py python3 scripts/harmonyos/ci.py test
+      - name: Upload emulator diagnostics
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: harmonyos-emulator
+          path: |
+            ${{ env.HMOS_EMULATOR_HOME }}/logs/*.log
+            ${{ env.HMOS_EMULATOR_HOME }}/logs/*.txt

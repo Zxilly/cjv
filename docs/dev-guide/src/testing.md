@@ -86,6 +86,26 @@ go mod verify
 
 ## 真实下载与 CI
 
+### 鸿蒙模拟器测试
+
+独立的 `hmos.yml` 流程在 x86_64 Linux KVM runner 上启动官方 HarmonyOS 6.1.1/API 24 PC 模拟器。先交叉编译独立的自签名单元测试二进制，分别以未签名和签名形式执行，再通过 `go test -exec` 运行 `ohos`、`config`、`env`、`fsops`、`target`、`cjverr`、`i18n` 和 `retry` 包的完整测试。其余包（包括 HTTP 服务测试）继续由主机 CI 覆盖。这个流程不执行 ARM64 二进制。
+
+`scripts/harmonyos/ci.py` 负责流程的三个步骤：`build` 编译工具，`install` 安装固定版本的模拟器和 Ubuntu 依赖，`test` 执行未签名、签名、退出码及包测试。它通过 Python 的 `subprocess` 直接调用程序，不使用 Bash 编排。完成 `build` 后，运行 `python3 scripts/harmonyos/emulator.py python3 scripts/harmonyos/ci.py test` 即可在本地复现 CI 的测试序列。
+
+`scripts/harmonyos/exec` 是主机 Go 程序：通过 HDC 传入二进制，将包目录映射到客机源码目录，为每次运行分配独立的 `HOME` 和 `TMPDIR`，并返回客机退出码。需设置 `HDC`、`HDC_TARGET`、`HMOS_TEST_SOURCE` 和 `HMOS_TEST_ROOT`；后者必须位于 `/data/local/tmp` 下。设置 `HMOS_SIGN` 时先签名私有副本，留空则测试未签名执行。`scripts/harmonyos/emulator.py` 准备客机源码及这些变量，运行传入的命令，最后停止模拟器。
+
+将官方 CLI 解压到 `HMOS_EMULATOR_HOME`，并按[构建说明](building.md)准备工具后：
+
+```bash
+go build -o /tmp/cjv-hmos-exec ./scripts/harmonyos/exec
+python3 scripts/harmonyos/emulator.py env GOOS=openharmony GOARCH=amd64 CGO_ENABLED=0 \
+  "$HMOS_GO" test -exec /tmp/cjv-hmos-exec -p 1 -count=1 ./internal/ohos/...
+```
+
+HDC shell 使用 uid 2000，SELinux 为 Enforcing。该镜像允许未签名程序和符号链接，但拒绝硬链接：只有必须成功创建硬链接的测试会在确认权限错误后跳过；去重仍验证回退行为。模拟器结果不能证明真机 HiShell 的策略相同，因此发布和 SDK 准备保留仅在鸿蒙启用的自签名。
+
+### 在线下载
+
 线上组件下载测试独立于常规测试，会下载真实制品：
 
 ```bash
