@@ -69,10 +69,29 @@ func TestIntegrationInitFailureStatus(t *testing.T) {
 					assert.Contains(t, stderr, "Failed to install toolchain 'lts'")
 					assert.Contains(t, stderr, "Fix the error above")
 					assert.Contains(t, stderr, " install 'lts'")
-					assert.Contains(t, stderr, " list-remote")
+					assert.Contains(t, stderr, " toolchain list-remote")
 					assert.Contains(t, stderr, filepath.Join(home, "bin", sdktools.CjvBinaryName()))
 					assert.NotContains(t, stdout, "cjv is installed now.")
 					assert.NoDirExists(t, filepath.Join(home, "toolchains", "lts-1.0.5"))
+					if installer == "cjv" {
+						var listCommand string
+						for _, line := range strings.Split(stderr, "\n") {
+							if strings.HasSuffix(strings.TrimSpace(line), " toolchain list-remote") {
+								listCommand = strings.TrimSpace(line)
+							}
+						}
+						require.NotEmpty(t, listCommand)
+						var recovery *exec.Cmd
+						if runtime.GOOS == "windows" {
+							recovery = exec.Command("powershell", "-NoProfile", "-Command", listCommand)
+						} else {
+							recovery = exec.Command("sh", "-c", listCommand)
+						}
+						recovery.Env = installScriptEnv(server.URL, home, "CJV_DIST_SERVER=")
+						result, recoveryErr := recovery.CombinedOutput()
+						require.NoError(t, recoveryErr, "recovery command: %s\n%s", listCommand, result)
+						assert.Contains(t, string(result), "1.0.5")
+					}
 				}
 				assert.FileExists(t, filepath.Join(home, "bin", sdktools.CjvBinaryName()))
 			})

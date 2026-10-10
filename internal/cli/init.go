@@ -539,7 +539,7 @@ func initRecoveryHint(opts initCustomizeOptions) string {
 	}
 	return i18n.T("InitRecoveryHint", i18n.MsgData{
 		"Retry": retry,
-		"List":  command + " list-remote",
+		"List":  command + " toolchain list-remote",
 	})
 }
 

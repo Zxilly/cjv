@@ -154,7 +154,7 @@ func TestRunInitReturnsErrorWhenDefaultToolchainInstallFails(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "local-sdk")
 	assert.Contains(t, err.Error(), " install 'local-sdk'")
-	assert.Contains(t, err.Error(), " list-remote")
+	assert.Contains(t, err.Error(), " toolchain list-remote")
 	assert.NotContains(t, stdout.String(), i18n.T("InitComplete", nil))
 	assert.Empty(t, stderr.String(), "the root command renders the returned error once")
 	assert.FileExists(t, filepath.Join(home, "bin", sdktools.CjvBinaryName()))
