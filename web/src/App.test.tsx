@@ -25,14 +25,14 @@ describe('App (ready / Windows)', () => {
     expect(screen.getByText(/install\.ps1/)).toBeInTheDocument()
   })
 
-  it('offers the HarmonyOS terminal command under other platforms, including its mirror', async () => {
+  it('offers one shared terminal command under other platforms, including its mirror', async () => {
     const user = userEvent.setup()
     render(<App />)
     await user.click(screen.getByRole('button', { name: /^其他平台/ }))
-    const label = await screen.findByText('HarmonyOS')
+    const label = await screen.findByText('Linux / macOS / HarmonyOS')
     expect(label.parentElement).toHaveTextContent('curl -sSf https://cjv.zxilly.dev/install.sh | sh')
     await user.click(screen.getByRole('switch'))
-    await waitFor(() => expect(screen.getByText('HarmonyOS').parentElement).toHaveTextContent('sh -s -- --mirror'))
+    await waitFor(() => expect(screen.getByText('Linux / macOS / HarmonyOS').parentElement).toHaveTextContent('sh -s -- --mirror'))
   })
 
   it('switches to the download tab and shows the primary binary', async () => {

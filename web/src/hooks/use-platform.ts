@@ -225,25 +225,22 @@ function binaryForEntry(entry: PlatformEntry): BinaryInfo {
   return binary
 }
 
-const UNIX_METHOD: InstallMethod = { label: 'Linux / macOS', command: SH_CMD, mirrorCommand: SH_MIRROR_CMD }
+const UNIX_METHOD: InstallMethod = { label: 'Linux / macOS / HarmonyOS', command: SH_CMD, mirrorCommand: SH_MIRROR_CMD }
 const WINDOWS_METHOD: InstallMethod = { label: 'Windows (PowerShell)', command: PS_CMD, mirrorCommand: PS_MIRROR_CMD }
-const HARMONY_METHOD: InstallMethod = { label: 'HarmonyOS', command: SH_CMD, mirrorCommand: SH_MIRROR_CMD }
 
-const METHODS: InstallMethod[] = [UNIX_METHOD, WINDOWS_METHOD, HARMONY_METHOD]
+const METHODS: InstallMethod[] = [UNIX_METHOD, WINDOWS_METHOD]
 
-// install.sh installs on both Linux and macOS, so for a non-Unix visitor we keep the
-// single combined "Linux / macOS" row. But when the visitor IS on Linux or macOS, that
-// combined row is their own platform — filtering it out would also drop the sibling Unix
-// OS from 其他平台. So we name the remaining sibling explicitly instead.
+// Platforms sharing install.sh use one row, with the detected platform omitted
+// from the label under "other platforms".
 function otherMethodsFor(detected: BinaryInfo['goos']): InstallMethod[] {
-  if (detected === 'windows') return [UNIX_METHOD, HARMONY_METHOD]
-  if (detected === 'openharmony') return [UNIX_METHOD, WINDOWS_METHOD]
+  if (detected === 'windows') return [UNIX_METHOD]
   const sibling: InstallMethod = {
-    label: detected === 'linux' ? 'macOS' : 'Linux',
-    command: SH_CMD,
-    mirrorCommand: SH_MIRROR_CMD,
+    ...UNIX_METHOD,
+    label: detected === 'linux' ? 'macOS / HarmonyOS'
+      : detected === 'darwin' ? 'Linux / HarmonyOS'
+      : 'Linux / macOS',
   }
-  return [sibling, WINDOWS_METHOD, HARMONY_METHOD]
+  return [sibling, WINDOWS_METHOD]
 }
 
 const SOURCE_METHOD: InstallMethod = {

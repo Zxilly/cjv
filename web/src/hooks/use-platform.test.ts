@@ -157,22 +157,20 @@ describe('computePlatformResult', () => {
     expect(computePlatformResult('Windows', 'amd64').info.reason).toBeUndefined()
   })
 
-  it('lists the other platforms in otherMethods, naming the Unix sibling for Linux/macOS visitors', () => {
-    // A non-Unix visitor keeps the combined "Linux / macOS" row (one shared command).
+  it('groups other platforms sharing the shell installer in one row', () => {
+    // A Windows visitor sees one shared shell command for all three platforms.
     const win = computePlatformResult('Windows', 'amd64')
-    expect(win.otherMethods.map(m => m.label)).toEqual(['Linux / macOS', 'HarmonyOS'])
+    expect(win.otherMethods.map(m => m.label)).toEqual(['Linux / macOS / HarmonyOS'])
 
-    // A macOS visitor still needs Linux listed, named explicitly so it is not dropped
-    // along with their own platform's combined row.
+    // Omit the detected platform from the shared command's label.
     const mac = computePlatformResult('macOS', 'arm64')
-    expect(mac.otherMethods.map(m => m.label)).toEqual(['Linux', 'Windows (PowerShell)', 'HarmonyOS'])
+    expect(mac.otherMethods.map(m => m.label)).toEqual(['Linux / HarmonyOS', 'Windows (PowerShell)'])
 
     const macUnknownArch = computePlatformResult('macOS', '')
-    expect(macUnknownArch.otherMethods.map(m => m.label)).toEqual(['Linux', 'Windows (PowerShell)', 'HarmonyOS'])
+    expect(macUnknownArch.otherMethods.map(m => m.label)).toEqual(['Linux / HarmonyOS', 'Windows (PowerShell)'])
 
-    // Symmetric: a Linux visitor sees macOS named as the sibling.
     const linux = computePlatformResult('Linux', 'arm64')
-    expect(linux.otherMethods.map(m => m.label)).toEqual(['macOS', 'Windows (PowerShell)', 'HarmonyOS'])
+    expect(linux.otherMethods.map(m => m.label)).toEqual(['macOS / HarmonyOS', 'Windows (PowerShell)'])
   })
 
   it('keeps every method in otherMethods when state is not ready', () => {
