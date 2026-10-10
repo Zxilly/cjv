@@ -1,0 +1,27 @@
+name: Set up Go-HMOS
+description: Load the pinned pure Go toolchain and build the host signing tool
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+      with:
+        go-version: 1.27.2-hmos-devel
+        go-download-base-url: https://github.com/ZxillyFork/go-hmos-build/releases/download/go1.27.2-hmos.4
+        token: ''
+        cache: false
+    - name: Prepare Go-HMOS and host signer
+      shell: bash
+      env:
+        GOENV: 'off'
+        GOTOOLCHAIN: local
+        CGO_ENABLED: '0'
+        GOOS: linux
+        GOARCH: amd64
+      run: |
+        test "$(go env GOVERSION)" = go1.27.2-hmos-devel
+        test "$(cat "$(go env GOROOT)/core-revision.txt")" = e6f73c93079c6bc3c41086632420af33bb3de631
+        go build -tags=hmos_sign -o "$RUNNER_TEMP/cjv-hmos-sign" ./scripts/harmonyos
+        {
+          echo "HMOS_GO=$(go env GOROOT)/bin/go"
+          echo "HMOS_SIGN=$RUNNER_TEMP/cjv-hmos-sign"
+        } >> "$GITHUB_ENV"

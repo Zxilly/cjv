@@ -13,7 +13,7 @@ Pushing a stable `vX.Y.Z` tag triggers `.github/workflows/release.yml`. Other `v
 
 ## Artifacts
 
-`.goreleaser.yml` defines `cjv` and `cjv-mirror`, the latter built with `-tags=mirror`. Each ships amd64 and arm64 on Linux/macOS, and amd64 on Windows.
+`.goreleaser.yml` defines `cjv` and `cjv-mirror`, the latter built with `-tags=mirror`. Each ships amd64 and arm64 on Linux/macOS/OpenHarmony, and amd64 on Windows.
 
 | Item | Name |
 | --- | --- |
@@ -25,6 +25,12 @@ Pushing a stable `vX.Y.Z` tag triggers `.github/workflows/release.yml`. Other `v
 Releases inject the version and update URL with ldflags. Mirror switches the default manifest and self-update backend; absolute artifact URLs in manifests are still used as written.
 
 When changing archive names or platforms, check the installers, `scripts/extract-init-binaries.sh`, generated frontend platform data, and CI matrix together.
+
+## OpenHarmony builds and signing
+
+GoReleaser builds `openharmony_arm64` and `openharmony_amd64` with `HMOS_GO` and calls `HMOS_SIGN` before archiving. `.github/actions/setup-hmos` installs `go1.27.2-hmos.4` and builds the host signer. The archives are included in GitCode synchronization and Pages extraction.
+
+Before a local snapshot, set `HMOS_GO` and `HMOS_SIGN` and build the host signer as described in [building](building.md#openharmony).
 
 ## Website installers
 

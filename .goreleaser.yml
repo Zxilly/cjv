@@ -1,4 +1,7 @@
 version: 2
+env:
+  - CGO_ENABLED=0
+  - GOTOOLCHAIN=local
 builds:
   - id: cjv
     main: ./cmd/cjv
@@ -9,11 +12,12 @@ builds:
       - -X main.commit={{.Commit}}
       - -X main.date={{.Date}}
       - -X main.updateURL=https://github.com/Zxilly/cjv/releases
-    goos: [linux, darwin, windows]
-    goarch: [amd64, arm64]
-    ignore:
-      - goos: windows
-        goarch: arm64
+    targets: [linux_amd64, linux_arm64, darwin_amd64, darwin_arm64, windows_amd64, openharmony_amd64, openharmony_arm64]
+    tool: '{{ if eq .Os "openharmony" }}{{ .Env.HMOS_GO }}{{ else }}go{{ end }}'
+    hooks:
+      post:
+        - cmd: >-
+            sh -c 'if [ "{{ .Os }}" = openharmony ]; then "{{ .Env.HMOS_SIGN }}" "{{ .Path }}" "{{ .Path }}"; fi'
 
   - id: cjv-mirror
     main: ./cmd/cjv
@@ -26,11 +30,12 @@ builds:
       - -X main.commit={{.Commit}}
       - -X main.date={{.Date}}
       - -X main.updateURL=https://gitcode.com/Zxilly/cjv/releases
-    goos: [linux, darwin, windows]
-    goarch: [amd64, arm64]
-    ignore:
-      - goos: windows
-        goarch: arm64
+    targets: [linux_amd64, linux_arm64, darwin_amd64, darwin_arm64, windows_amd64, openharmony_amd64, openharmony_arm64]
+    tool: '{{ if eq .Os "openharmony" }}{{ .Env.HMOS_GO }}{{ else }}go{{ end }}'
+    hooks:
+      post:
+        - cmd: >-
+            sh -c 'if [ "{{ .Os }}" = openharmony ]; then "{{ .Env.HMOS_SIGN }}" "{{ .Path }}" "{{ .Path }}"; fi'
 
 archives:
   - id: cjv

@@ -43,3 +43,11 @@ docs/*/book/
 
 # Vendor
 /vendor/
+
+# OpenHarmony prerelease validation
+/dist-hmos/
+/harmonyos-diagnostics/
+/emulator-diagnostics/
+/.sdk/
+/.hmos-sdk/
+__pycache__/

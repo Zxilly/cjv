@@ -55,6 +55,7 @@ func TestHostTuple(t *testing.T) {
 		{"linux", "arm64", "linux-arm64"},
 		{"linux", "amd64", "linux-x64"},
 		{"openharmony", "arm64", "ohos-arm64"},
+		{"openharmony", "amd64", "ohos-x64"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.goos+"-"+tt.goarch, func(t *testing.T) {
@@ -74,17 +75,20 @@ func TestCurrentHostTuple(t *testing.T) {
 	assert.Error(t, err)
 }
 
-func TestOpenHarmonyHostIsRecognizedButNotAdvertisedForDownload(t *testing.T) {
+func TestOpenHarmonyHostIdentity(t *testing.T) {
 	id, err := CurrentHostIdentity("openharmony-arm64")
 	require.NoError(t, err)
 	assert.Equal(t, "ohos-arm64", id.Tuple())
 	stdx, err := id.StdxPlatform()
 	require.NoError(t, err)
 	assert.Equal(t, "ohos-aarch64", stdx)
-	for _, platform := range SupportedHostPlatforms() {
-		assert.NotEqual(t, "openharmony", platform.GOOS)
-	}
-	_, err = HostIdentity("openharmony", "amd64")
+	x64, err := CurrentHostIdentity("openharmony-amd64")
+	require.NoError(t, err)
+	assert.Equal(t, "ohos-x64", x64.Tuple())
+	stdx, err = x64.StdxPlatform()
+	require.NoError(t, err)
+	assert.Equal(t, "ohos-x64", stdx)
+	_, err = HostIdentity("openharmony", "386")
 	assert.Error(t, err)
 }
 

@@ -4,7 +4,6 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"slices"
 	"sort"
 	"strings"
 	"testing"
@@ -61,64 +60,29 @@ func readRepoFile(t *testing.T, root, rel string) string {
 	return string(data)
 }
 
-// goreleaserPlatforms derives the build matrix from the goos/goarch arrays
-// minus the ignore pairs. .goreleaser.yml defines multiple build blocks (cjv
-// and cjv-mirror), each with its own goos/goarch; this parses ALL of them and
-// requires every block's matrix to be identical, so a divergence in any build
-// (not just the first) is caught.
+// Both release variants must publish exactly the catalogued targets.
 func goreleaserPlatforms(t *testing.T, root string) map[string]bool {
 	content := readRepoFile(t, root, ".goreleaser.yml")
-
-	listAll := func(key string) [][]string {
-		matches := regexp.MustCompile(key+`:\s*\[([^\]]*)\]`).FindAllStringSubmatch(content, -1)
-		if len(matches) == 0 {
-			t.Fatalf("could not find any %s array in .goreleaser.yml", key)
-		}
-		var lists [][]string
-		for _, m := range matches {
-			var out []string
-			for tok := range strings.SplitSeq(m[1], ",") {
-				if tok = strings.TrimSpace(tok); tok != "" {
-					out = append(out, tok)
-				}
+	matches := regexp.MustCompile(`targets:\s*\[([^\]]*)\]`).FindAllStringSubmatch(content, -1)
+	if len(matches) != 2 {
+		t.Fatalf("expected targets for both release variants, got %d", len(matches))
+	}
+	var common map[string]bool
+	for _, match := range matches {
+		set := map[string]bool{}
+		for token := range strings.SplitSeq(match[1], ",") {
+			parts := strings.Split(strings.TrimSpace(token), "_")
+			if len(parts) < 2 {
+				t.Fatalf("invalid release target %q", token)
 			}
-			lists = append(lists, out)
+			set[parts[0]+"_"+parts[1]] = true
 		}
-		return lists
-	}
-
-	// Every build block must declare the same matrix so cjv and cjv-mirror
-	// cannot drift apart unnoticed.
-	common := func(key string) []string {
-		lists := listAll(key)
-		for i := 1; i < len(lists); i++ {
-			if !slices.Equal(lists[i], lists[0]) {
-				t.Fatalf("%s arrays differ between goreleaser build blocks: %v vs %v", key, lists[0], lists[i])
-			}
+		if common != nil && !equalSets(common, set) {
+			t.Fatalf("release variants have different targets: %v vs %v", common, set)
 		}
-		return lists[0]
+		common = set
 	}
-	gooses := common("goos")
-	goarches := common("goarch")
-
-	// Ignore pairs are collected across all blocks; the matrix-equality check
-	// above already guarantees the blocks agree, so a merged ignore set is sound.
-	ignored := map[string]bool{}
-	ignoreRE := regexp.MustCompile(`-\s*goos:\s*(\S+)\s*\n\s*goarch:\s*(\S+)`)
-	for _, m := range ignoreRE.FindAllStringSubmatch(content, -1) {
-		ignored[m[1]+"_"+m[2]] = true
-	}
-
-	set := map[string]bool{}
-	for _, os := range gooses {
-		for _, arch := range goarches {
-			key := os + "_" + arch
-			if !ignored[key] {
-				set[key] = true
-			}
-		}
-	}
-	return set
+	return common
 }
 
 func webPlatforms(t *testing.T, root string) map[string]bool {

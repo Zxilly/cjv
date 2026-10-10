@@ -1,4 +1,4 @@
-//go:build openharmony
+//go:build openharmony || hmos_sign
 
 package selfsign
 

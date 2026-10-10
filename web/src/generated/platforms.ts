@@ -5,6 +5,8 @@ export const SUPPORTED_PLATFORMS = [
   { goos: 'darwin', goarch: 'arm64' },
   { goos: 'linux', goarch: 'amd64' },
   { goos: 'linux', goarch: 'arm64' },
+  { goos: 'openharmony', goarch: 'amd64' },
+  { goos: 'openharmony', goarch: 'arm64' },
   { goos: 'windows', goarch: 'amd64' },
 ] as const
 

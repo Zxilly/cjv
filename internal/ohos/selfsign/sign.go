@@ -1,8 +1,9 @@
-//go:build openharmony
+//go:build openharmony || hmos_sign
 
 // Package selfsign implements the OpenHarmony developer self-sign format.
 // The format and hash layout follow hqzing/ohos-selfsign (0BSD; see LICENSE).
 // ELF handling is independently implemented with debug/elf and encoding/binary.
+// Release tools also use this package to sign target ELFs on the host.
 package selfsign
 
 import (
