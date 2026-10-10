@@ -69,7 +69,7 @@ run_installer() {
 
     say "running install.sh through $TEST_SHELL"
     (
-        unset CJV_UPDATE_ROOT CJV_GITHUB_ROOT CJV_GITCODE_ROOT CJV_MIRROR CJV_FALLBACK_SETTINGS CJV_NO_PATH_SETUP
+        unset CJV_UPDATE_ROOT CJV_GITHUB_ROOT CJV_GITCODE_ROOT CJV_MIRROR CJV_VERSION CJV_FALLBACK_SETTINGS CJV_NO_PATH_SETUP
         export CJV_HOME="$cjv_home"
         export HOME="$cjv_home"
         export USERPROFILE="$cjv_home"
