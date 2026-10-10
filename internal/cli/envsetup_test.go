@@ -36,8 +36,11 @@ func setupFakeToolchainForCLI(t *testing.T, home, name string) string {
 
 func hostBackendFixture() string {
 	osName := runtime.GOOS
-	if osName == "darwin" {
+	switch osName {
+	case "darwin":
 		osName = "mac"
+	case "openharmony":
+		osName = "linux_ohos"
 	}
 	arch := runtime.GOARCH
 	switch arch {

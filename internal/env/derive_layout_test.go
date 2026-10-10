@@ -106,6 +106,24 @@ func TestOpenHarmonyRuntimeEnvironment(t *testing.T) {
 	assert.Equal(t, []string{filepath.Join(home, ".cjpm", "bin")}, cfg.PathAppend)
 }
 
+func TestNativeOpenHarmonySDKRuntimeDirectory(t *testing.T) {
+	for _, arch := range []string{"arm64", "amd64"} {
+		t.Run(arch, func(t *testing.T) {
+			sdk, home := t.TempDir(), t.TempDir()
+			backendArch := hostArchName(arch)
+			linuxLib := writeDir(t, sdk, "runtime", "lib", "linux_"+backendArch+"_cjnative")
+			ohosLib := writeDir(t, sdk, "runtime", "lib", "linux_ohos_"+backendArch+"_cjnative")
+			toolsLib := writeDir(t, sdk, "tools", "lib")
+
+			ohos := deriveToolchainEnvForHost(sdk, "openharmony", arch, home)
+			assert.Equal(t, []string{ohosLib, toolsLib}, ohos.LibraryPathPrepend)
+
+			linux := deriveToolchainEnvForHost(sdk, "linux", arch, home)
+			assert.Equal(t, []string{linuxLib, toolsLib}, linux.LibraryPathPrepend)
+		})
+	}
+}
+
 func TestLibraryPathEntriesReturnsExistingLibraryPaths(t *testing.T) {
 	sdk := t.TempDir()
 	runtimeLib := writeDir(t, sdk, "runtime", "lib", "linux_x86_64_cjnative")
