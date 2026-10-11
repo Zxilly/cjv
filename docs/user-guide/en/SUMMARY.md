@@ -6,6 +6,7 @@
 
 - [Install cjv](installation/index.md)
 - [Quick start](basic-usage.md)
+- [Running commands and setting the environment](runtime-environment.md)
 
 # Manage SDKs
 
@@ -14,7 +15,6 @@
 - [Components and offline documentation](concepts/components.md)
 - [Custom SDKs](install-from-url.md)
 - [Cross-compilation](cross-compilation.md)
-- [Running commands and setting the environment](runtime-environment.md)
 
 # Configure and deploy
 

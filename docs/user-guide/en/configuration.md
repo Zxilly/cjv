@@ -27,7 +27,11 @@ auto_install = true
 | `link_mode` | `hardlink` or `copy`; defaults to `hardlink` | Edit settings |
 | `overrides` | Directory-to-toolchain mapping | `cjv override` |
 
+## Automatic updates
+
 `auto_self_update` applies only to a full `cjv update` without names or a global `+name`. `enable` updates cjv, `check` reports available updates, and `disable` skips the check. Development builds skip release checks. `cjv self update` remains available for manual use.
+
+## Data directory and host platform
 
 `cjv set home` converts relative paths to absolute paths. `cjv set home ""` explicitly selects the default data directory. `default_host` uses Go platform names such as `linux-amd64`, unlike the `linux-x64` spelling in toolchain names.
 
@@ -52,6 +56,8 @@ Unknown keys produce warnings. Invalid settings and unsupported future format ve
 ```
 
 The settings file shares this location only when the default data directory is used. `cjv show home` reports the effective data directory and its source.
+
+### Download cache
 
 Downloads with SHA-256 retain resumable files after failure or interruption. A later download verifies the complete archive. Successful operations clean up their own downloads; a fully successful update of all toolchains also cleans leftover downloads.
 

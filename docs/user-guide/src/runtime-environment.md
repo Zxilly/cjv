@@ -34,7 +34,11 @@ cjv envsetup | Invoke-Expression
 
 可以用 `cjv envsetup +nightly` 指定版本，或用 `--shell=bash|fish|powershell|cmd` 指定输出格式。省略 `--shell` 时自动检测，检测失败时提示并回退到 POSIX 格式。`cjv --json envsetup` 输出结构化环境数据。
 
+### 设置的环境变量
+
 环境包含 `CANGJIE_HOME`、SDK 工具路径和运行时库路径。Linux 使用 `LD_LIBRARY_PATH`，macOS 使用 `DYLD_LIBRARY_PATH`，Windows 使用 `PATH`。已安装的 stdx 会提供 `CANGJIE_STDX_PATH_DYNAMIC` 和 `CANGJIE_STDX_PATH_STATIC`。
+
+### 切换项目
 
 执行 `envsetup` 的输出后，当前会话的 PATH 会指向具体 SDK。需要重新按项目选择工具链时，可打开新终端；也可以再次执行 `envsetup` 切换当前会话。
 

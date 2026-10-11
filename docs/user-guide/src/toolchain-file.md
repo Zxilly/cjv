@@ -37,6 +37,8 @@ components = ["stdx"]
 path = 'C:\SDKs\cangjie'
 ```
 
+### 组件与目标 SDK
+
 `targets` 只接受后缀，不接受 `linux-x64-ohos` 这样的完整平台名。大小写和下划线会被规范化，逗号分隔项会展开，重复项会去重；空目标会报错。
 
 ```toml
@@ -48,13 +50,15 @@ targets = ["ohos", "android"]
 
 这个声明准备宿主 SDK、宿主组件和目标 SDK。编译时怎样选择目标环境见[交叉编译](cross-compilation.md)。
 
-## 自动安装与配置错误
+## 自动安装
 
 `auto_install` 默认开启。运行 `cjc`、`cjpm` 等代理命令时，cjv 会补齐所选项目文件声明的缺失项。关闭后，缺失项会让命令报错：
 
 ```bash
 cjv set auto-install false
 ```
+
+## 项目文件错误
 
 未知键会打印警告，已识别字段继续解析。TOML 语法错误、未知组件，以及缺少有效 `channel` 或 `path` 都会报错。空文件也会报错；要恢复上级目录或默认选择，请删除文件。
 

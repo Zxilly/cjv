@@ -27,7 +27,11 @@ auto_install = true
 | `link_mode` | `hardlink` 或 `copy`，默认 `hardlink` | 编辑设置文件 |
 | `overrides` | 目录到工具链的映射 | `cjv override` |
 
+## 自动更新
+
 `auto_self_update` 只影响未指定名称和全局 `+name` 的全量 `cjv update`。`enable` 自动更新 cjv，`check` 查询并提示，`disable` 跳过。开发构建跳过发行检查；`cjv self update` 可手动执行。
+
+## 数据目录与主机平台
 
 `cjv set home` 将相对路径转为绝对路径。`cjv set home ""` 显式选择默认数据目录。`default_host` 使用 `linux-amd64` 这样的 Go 平台格式，和工具链名称中的 `linux-x64` 格式不同。
 
@@ -52,6 +56,8 @@ auto_install = true
 ```
 
 设置文件只有在使用默认数据目录时才与上述目录位于同一处。用 `cjv show home` 查看实际数据目录及来源。
+
+### 下载缓存
 
 带 SHA-256 的下载失败或中断时会保留可续传文件，下次完成后校验整个归档。成功的操作清理自己使用的下载；全量更新全部成功时还会清理残留下载。
 

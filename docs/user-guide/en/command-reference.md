@@ -17,16 +17,22 @@ Explicit `--toolchain` takes precedence over global `+name`. `exec` and `envsetu
 
 ## Install, update, and uninstall
 
+### install
+
 ```text
 cjv install [toolchain]... [-t target]... [-c component]... [--force | --no-update] [--allow-downgrade]
-cjv update [toolchain]... [--force] [--allow-downgrade] [--no-self-update]
-cjv uninstall <toolchain>... [-y]
-cjv check
 ```
 
 Without a name, `install` installs the current selection. Multiple names are processed individually. `-t/--target` and `-c/--component` accept repeated or comma-separated values.
 
-`update` processes the named toolchains. Without names, it uses global `+name` if present, otherwise all tracked channels. Concrete versions remain pinned; custom toolchains have no official update source. Only a full update checks or updates cjv according to `auto_self_update`; `--no-self-update` skips this.
+Install several channels, or include components during installation:
+
+```bash
+cjv install lts sts
+cjv install nightly -c stdx,docs
+```
+
+### Installation and update policies
 
 | Policy | Behavior |
 | --- | --- |
@@ -35,13 +41,42 @@ Without a name, `install` installs the current selection. Multiple names are pro
 | `install --no-update` | Keep the installed release and add targets or components; mutually exclusive with `--force` |
 | `--allow-downgrade` | Allow an older compatible nightly |
 
-Channel updates prepare the host, tracked targets, and components before publishing them together. Failures preserve or restore the previous installation. Pinned versions remain separate. `--no-update` with no new requirements can complete offline.
+`install --no-update` can complete offline when no additional components or targets are requested.
+
+### update
+
+```text
+cjv update [toolchain]... [--force] [--allow-downgrade] [--no-self-update]
+```
+
+`update` processes the named toolchains. Without names, it uses global `+name` if present, otherwise all tracked channels. Concrete versions remain pinned; custom toolchains have no official update source. Only a full update checks or updates cjv according to `auto_self_update`; `--no-self-update` skips this.
+
+Channel updates prepare the host SDK, tracked targets, and components before replacing the installation. Failures preserve or restore the previous installation. Pinned versions remain separate.
+
+```bash
+cjv update lts
+cjv update --no-self-update
+```
+
+The first command updates LTS only. The second updates all tracked channels and skips the check for cjv updates.
+
+### uninstall
+
+```text
+cjv uninstall <toolchain>... [-y]
+```
 
 `uninstall` also removes components, documentation, and related directory overrides. Removing the default toolchain tries to select another installed host. Interactive terminals ask for confirmation; `-y/--yes`, non-interactive input, and JSON mode proceed directly. `toolchain uninstall` is equivalent.
 
+### check
+
+```text
+cjv check
+```
+
 `check` only queries SDK and cjv updates. Development builds skip their own version comparison.
 
-## Inspect and run
+## Inspect toolchains
 
 | Command | Purpose |
 | --- | --- |
@@ -50,17 +85,53 @@ Channel updates prepare the host, tracked targets, and components before publish
 | `cjv show installed`, `cjv toolchain list` | Installed toolchains |
 | `cjv show home` | Data directory and its source |
 | `cjv which [command] [--toolchain <tc>]` | SDK tool path; SDK root when command is omitted |
-| `cjv run [--install] <toolchain> <command> [args...]` | Run with an explicit SDK; search SDK tools first, then that environment's PATH |
-| `cjv exec [+toolchain] <command> [args...]` | Run with the active or specified toolchain environment |
-| `cjv envsetup [+toolchain] [--target=SUFFIX] [--shell=TYPE]` | Print a shell environment script, or environment data in JSON mode |
 
-Put `run --install` before the toolchain argument to allow installation of a missing toolchain. `exec -- +command` runs a command starting with `+`. `envsetup` supports `bash`, `fish`, `powershell`, and `cmd`; `--target` requires an installed cross SDK. See [runtime environments](runtime-environment.md).
+### toolchain list-remote
 
 ```text
 cjv toolchain list-remote [--channel all|lts|sts|nightly] [-t suffix] [--all-platforms] [--limit N]
 ```
 
 Remote listing defaults to all channels on the current host platform. `--all-platforms` groups results by every platform. `--limit 0` leaves each group's version count unlimited. `-t/--target` filters by cross-target suffix.
+
+## Run commands and set the environment
+
+### run
+
+```text
+cjv run [--install] <toolchain> <command> [args...]
+```
+
+Run a command with an explicit toolchain. cjv searches SDK tools first, then that environment's PATH. Put `--install` before the toolchain argument to allow a missing toolchain to be installed:
+
+```bash
+cjv run --install sts cjc --version
+```
+
+### exec
+
+```text
+cjv exec [+toolchain] <command> [args...]
+```
+
+Run a command with the active toolchain's environment, or select a toolchain with `+name`. This is useful for compiled programs that need Cangjie runtime libraries:
+
+```bash
+cjv exec ./my_binary
+cjv exec +nightly ./my_binary
+```
+
+Use `cjv exec -- +command` to run a command whose name starts with `+`. Both `run` and `exec` forward child arguments and preserve exit codes.
+
+### envsetup
+
+```text
+cjv envsetup [+toolchain] [--target=SUFFIX] [--shell=TYPE]
+```
+
+Print a script that configures the current shell. Supported output formats are `bash`, `fish`, `powershell`, and `cmd`. `--target` requires an installed cross SDK. In JSON mode, the command returns environment data.
+
+The output must be evaluated in your shell to take effect. See [runtime environments](runtime-environment.md) for shell-specific examples and how to switch back to project-based toolchain selection.
 
 ## Custom toolchains
 
@@ -70,19 +141,26 @@ cjv toolchain link <name> <path|url> [--sha256 <hash>] [--force] [--no-stdx]
 
 A directory creates a reference; an archive or URL is extracted into a managed installation. The three flags apply only to archives: verify SHA-256, replace an existing name, and skip bundled stdx. See [custom SDKs](install-from-url.md) for layout and platform requirements.
 
-## Targets and components
+## Cross-compilation targets
 
 ```text
 cjv target list [--toolchain <tc>] [--installed]
 cjv target add <suffix>... [--toolchain <tc>]
 cjv target remove <suffix>... [--toolchain <tc>]
+```
+
+`target add` keeps the host release; `target remove` keeps the host installation. `target list --installed` works offline.
+
+## Components
+
+```text
 cjv component add <name>... [--toolchain <tc>] [--target <suffix>] [--force]
 cjv component link <name> <path> [--toolchain <tc>] [--target <suffix>] [--force]
 cjv component remove <name>... [--toolchain <tc>] [--target <suffix>]
 cjv component list [--toolchain <tc>] [--target <suffix>] [--installed] [-q]
 ```
 
-`target add` keeps the host release; `target remove` keeps the host installation. `target list --installed` works offline. Component `--target` selects an existing cross SDK and does not install it.
+Component `--target` selects an existing cross SDK and does not install it.
 
 Components are `stdx`, `docs`, and `stdx-docs`; names may be comma-separated. `component add --force` reinstalls a component, and `component link --force` replaces an existing one. Only stdx supports local links, with `dynamic/` and `static/` required in the source. External SDK directory links cannot be edited through component commands. See [components](concepts/components.md).
 
@@ -96,30 +174,61 @@ Topics are `std`, `dev-guide` (alias `book`), `tools`, and `stdx`. Omitting the 
 
 ## Selection and settings
 
+### default
+
 ```text
 cjv default [toolchain]
+```
+
+`default` displays the selection when no argument is supplied; `none` clears it. Selecting a missing official toolchain installs it first and preserves the old default on failure. A cross SDK cannot be the default.
+
+### override
+
+```text
 cjv override set <toolchain> [--path <dir>]
 cjv override unset [--path <dir>] [--nonexistent]
 cjv override list
+```
+
+Overrides apply to the current directory unless a path is specified. `--nonexistent` removes stale directory entries. Settings are saved to `~/.cjv/settings.toml`, regardless of `CJV_HOME`. See [configuration](configuration.md) for field meanings.
+
+### set
+
+```text
 cjv set auto-self-update <enable|disable|check>
 cjv set auto-install <true|false>
 cjv set default-host <goos-goarch>
 cjv set home <path>
 ```
 
-`default` displays the selection when no argument is supplied; `none` clears it. Selecting a missing official toolchain installs it first and preserves the old default on failure. A cross SDK cannot be the default.
-
-Overrides apply to the current directory unless a path is specified. `--nonexistent` removes stale directory entries. Settings are saved to `~/.cjv/settings.toml`, regardless of `CJV_HOME`. See [configuration](configuration.md) for field meanings.
+Change user settings. The command writes to `~/.cjv/settings.toml`. See [configuration](configuration.md) for defaults, inheritance, and environment overrides.
 
 ## Initialization and self-management
 
+### init
+
 ```text
 cjv init [-y] [--default-toolchain <name>] [-c component]... [--no-modify-path]
+```
+
+`init` installs cjv command entry points and configures PATH. It queries channels available for the current platform and selects the first available channel in the order `lts`, `sts`, then `nightly`. The interactive menu lists only available channels. If no channel can be confirmed, initialization fails.
+
+| Option | Effect |
+| --- | --- |
+| `--default-toolchain <name>` | Select a toolchain explicitly |
+| `--default-toolchain none` | Install cjv without an SDK |
+| `-c`, `--component` | Select components |
+| `-y`, `--yes` | Skip interaction |
+| `--no-modify-path` | Leave PATH unchanged |
+
+Non-terminal input uses non-interactive mode. If toolchain installation fails, the command returns a nonzero exit code and keeps the installed cjv. The error includes commands to retry with the same components and list compatible versions. Both use the installed binary's absolute path, so they work before PATH is reloaded.
+
+### self update / self uninstall
+
+```text
 cjv self update
 cjv self uninstall [-y]
 ```
-
-`init` installs cjv command entry points, sets up PATH, and automatically selects a channel available for the current platform, in order of `lts`, `sts`, then `nightly`. The interactive menu only lists available channels. For example, HarmonyOS currently selects `nightly`. If no channel can be confirmed, initialization fails. A toolchain installation failure also returns a nonzero exit code without reporting success; the installed cjv remains available. The error includes commands to retry with the same components and list compatible versions; both use the installed binary path so they work before PATH is reloaded. An explicit `--default-toolchain <name>` overrides automatic selection. `--default-toolchain none` skips the SDK, `-c/--component` selects components, `-y/--yes` skips interaction, and `--no-modify-path` leaves PATH unchanged. Non-terminal input uses non-interactive mode.
 
 `self update` updates cjv itself. `self uninstall` removes the data directory, toolchains, and components, and cleans up PATH. JSON mode requires `-y`.
 

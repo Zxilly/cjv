@@ -6,6 +6,7 @@
 
 - [安装 cjv](installation/index.md)
 - [快速上手](basic-usage.md)
+- [运行命令与配置环境](runtime-environment.md)
 
 # 管理 SDK
 
@@ -14,7 +15,6 @@
 - [组件与离线文档](concepts/components.md)
 - [自定义 SDK](install-from-url.md)
 - [交叉编译](cross-compilation.md)
-- [运行命令与配置环境](runtime-environment.md)
 
 # 配置与部署
 

@@ -22,6 +22,8 @@ cjv component remove stdx-docs
 
 可用制品取决于所选通道、版本和平台。自定义工具链没有官方组件下载源。项目也可在 [cangjie-sdk.toml](../toolchain-file.md) 中声明所需组件，由自动安装补齐。
 
+### 更新行为
+
 跟踪通道升级时，SDK 和所选组件一起更新，固定版本的组件不变。本地链接的 stdx 保留原来源。
 
 ## 链接本地 stdx
@@ -31,6 +33,8 @@ cjv component link stdx /path/to/local/stdx --toolchain lts --force
 ```
 
 源目录必须包含 `dynamic/` 和 `static/`。`--force` 替换已有组件；移除链接只删除 cjv 管理的条目，保留源目录。`docs` 和 `stdx-docs` 不支持本地链接。
+
+### 自定义 SDK 的组件
 
 组件修改要求 SDK 位于 cjv 管理的真实目录中。通过 `toolchain link` 引用的外部 SDK 目录不支持组件修改；需要 cjv 管理组件时，先从[本地归档或 URL](../install-from-url.md)安装 SDK：
 

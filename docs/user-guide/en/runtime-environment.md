@@ -34,7 +34,11 @@ cjv envsetup | Invoke-Expression
 
 Use `cjv envsetup +nightly` to select a version, or `--shell=bash|fish|powershell|cmd` to select an output format. Without `--shell`, cjv detects the shell; if detection fails, it reports this and falls back to POSIX syntax. `cjv --json envsetup` returns structured environment data.
 
+### Environment variables
+
 The environment includes `CANGJIE_HOME`, SDK tool paths, and runtime library paths. Linux uses `LD_LIBRARY_PATH`, macOS uses `DYLD_LIBRARY_PATH`, and Windows uses `PATH`. Installed stdx provides `CANGJIE_STDX_PATH_DYNAMIC` and `CANGJIE_STDX_PATH_STATIC`.
+
+### Switching projects
 
 After evaluating the output, the current session's PATH points to a specific SDK. Open a new terminal to return to project-based proxy selection, or run `envsetup` again to switch the session.
 

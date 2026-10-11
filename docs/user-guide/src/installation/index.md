@@ -4,7 +4,7 @@ cjv 是单文件程序，不需要预装仓颉 SDK。
 
 ## 安装脚本
 
-Linux / macOS：
+Linux / macOS / 鸿蒙 HiShell：
 
 ```bash
 curl -sSf https://cjv.zxilly.dev/install.sh | sh
@@ -27,6 +27,12 @@ curl -sSf https://cjv.zxilly.dev/install.sh | sh -s -- -y --default-toolchain no
 ```
 
 Unix 脚本将 `--mirror` 以外的参数传给 `cjv init`。PowerShell 脚本提供对应的 `-Yes`、`-DefaultToolchain`、`-NoModifyPath` 等参数。
+
+### SDK 选择
+
+`cjv init` 默认查询当前平台的可用通道，按 `lts`、`sts`、`nightly` 的顺序选择。可以用 `--default-toolchain <name>` 指定工具链，或用 `--default-toolchain none` 只安装 cjv。
+
+SDK 安装失败时，命令返回非零退出码，已安装的 cjv 会保留。可以按错误信息中的命令重试，或用 `cjv toolchain list-remote` 查询可用版本。
 
 ### GitCode 镜像
 
@@ -51,6 +57,8 @@ curl -sSf https://cjv.zxilly.dev/install.sh | sh -s -- --mirror
 | macOS Apple Silicon | `cjv_darwin_arm64.tar.gz` |
 | macOS Intel | `cjv_darwin_amd64.tar.gz` |
 | Windows x86_64 | `cjv_windows_amd64.zip` |
+| 鸿蒙 x86_64 | `cjv_openharmony_amd64.tar.gz` |
+| 鸿蒙 ARM64 | `cjv_openharmony_arm64.tar.gz` |
 
 [GitCode Releases](https://gitcode.com/Zxilly/cjv/releases) 提供前缀为 `cjv-mirror_` 的对应归档。下载页提供的 `cjv-init` 程序在启动时直接进入安装向导。
 

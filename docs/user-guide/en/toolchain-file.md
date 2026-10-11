@@ -37,6 +37,8 @@ Specify exactly one of `channel` and `path`. For a direct SDK path, the SDK owne
 path = 'C:\SDKs\cangjie'
 ```
 
+### Components and target SDKs
+
 `targets` accepts suffixes, not full platform names such as `linux-x64-ohos`. Case and underscores are normalized, comma-separated entries are expanded, and duplicates are removed. Empty targets are errors.
 
 ```toml
@@ -48,13 +50,15 @@ targets = ["ohos", "android"]
 
 This declaration prepares the host SDK, host components, and target SDKs. See [cross-compilation](cross-compilation.md) for selecting the target build environment.
 
-## Automatic installation and errors
+## Automatic installation
 
 `auto_install` is enabled by default. When a proxy command such as `cjc` or `cjpm` runs, cjv installs missing requirements from the selected project file. With this setting disabled, missing requirements cause an error:
 
 ```bash
 cjv set auto-install false
 ```
+
+## Invalid project files
 
 Unknown keys produce warnings while recognized fields are still parsed. Invalid TOML, unknown components, and a missing valid `channel` or `path` cause errors. An empty file also fails; delete the file to fall back to a parent directory or the default selection.
 

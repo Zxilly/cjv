@@ -4,7 +4,7 @@ cjv is a single executable and does not require an existing Cangjie SDK.
 
 ## Installer scripts
 
-Linux / macOS:
+Linux / macOS / HarmonyOS HiShell:
 
 ```bash
 curl -sSf https://cjv.zxilly.dev/install.sh | sh
@@ -27,6 +27,12 @@ curl -sSf https://cjv.zxilly.dev/install.sh | sh -s -- -y --default-toolchain no
 ```
 
 The Unix script forwards all arguments except `--mirror` to `cjv init`. The PowerShell script provides corresponding options such as `-Yes`, `-DefaultToolchain`, and `-NoModifyPath`.
+
+### SDK selection
+
+By default, `cjv init` queries channels for the current platform and selects the first available channel in the order `lts`, `sts`, then `nightly`. Use `--default-toolchain <name>` to select a specific toolchain, or `--default-toolchain none` to install cjv alone.
+
+If SDK installation fails, the command returns a nonzero exit code and keeps the installed cjv. Follow the retry command in the error message or check available versions with `cjv toolchain list-remote`.
 
 ### GitCode mirror
 
@@ -51,6 +57,8 @@ Download an archive from [GitHub Releases](https://github.com/Zxilly/cjv/release
 | macOS Apple Silicon | `cjv_darwin_arm64.tar.gz` |
 | macOS Intel | `cjv_darwin_amd64.tar.gz` |
 | Windows x86_64 | `cjv_windows_amd64.zip` |
+| HarmonyOS x86_64 | `cjv_openharmony_amd64.tar.gz` |
+| HarmonyOS ARM64 | `cjv_openharmony_arm64.tar.gz` |
 
 [GitCode Releases](https://gitcode.com/Zxilly/cjv/releases) provides equivalent archives prefixed with `cjv-mirror_`. The download page also offers `cjv-init` executables that start the installation wizard directly.
 

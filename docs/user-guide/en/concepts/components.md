@@ -22,6 +22,8 @@ Without `--toolchain`, commands use the current selection. `--target <suffix>` s
 
 Available artifacts depend on the channel, release, and platform. Custom toolchains have no official component download source. Projects can also declare components in [cangjie-sdk.toml](../toolchain-file.md) for automatic installation.
 
+### Updates
+
 Tracked channel updates replace the SDK and selected components together. Components of pinned versions remain unchanged. Locally linked stdx keeps its source.
 
 ## Link local stdx
@@ -31,6 +33,8 @@ cjv component link stdx /path/to/local/stdx --toolchain lts --force
 ```
 
 The source must contain `dynamic/` and `static/`. `--force` replaces an existing component. Removing a link deletes cjv's entries and preserves the source directory. `docs` and `stdx-docs` do not support local links.
+
+### Components for custom SDKs
 
 Component edits require an SDK in a real directory managed by cjv. An external SDK directory referenced by `toolchain link` cannot be edited through component commands. To let cjv manage its components, install the SDK from a [local archive or URL](../install-from-url.md):
 
