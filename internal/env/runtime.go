@@ -1,7 +1,11 @@
+// Package env builds the environment Cangjie SDK tools run in. Runtime merges
+// a toolchain's paths and component variables into an explicitly supplied
+// base environment and exposes it as a child-process environment, as the SDK
+// contributions alone, or as a shell script. Choosing the toolchain is the
+// caller's job; see resolve.ActiveRuntime.
 package env
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -9,15 +13,21 @@ import (
 	"strings"
 
 	"github.com/Zxilly/cjv/internal/config"
-	"github.com/Zxilly/cjv/internal/resolve"
 	"github.com/Zxilly/cjv/internal/sdktools"
 )
 
+// Toolchain identifies the installed SDK a Runtime is built from.
+type Toolchain struct {
+	Dir  string
+	Name string
+}
+
 // Runtime is the deep module for Cangjie runtime environment assembly. It
-// carries the active toolchain plus the derived SDK environment and exposes
-// narrow views for proxy children, direct toolchain execution, and shell output.
+// carries the toolchain plus the derived SDK environment and exposes narrow
+// views for proxy children, direct toolchain execution, and shell output.
+// Selecting the active toolchain is the caller's job (see resolve.Runtime).
 type Runtime struct {
-	Active    resolve.ActiveToolchain
+	Toolchain Toolchain
 	CjvBinDir string
 	cfg       *EnvConfig
 }
@@ -33,34 +43,14 @@ type Contributions struct {
 	LibraryPathPrepend []string
 }
 
-func ResolveRuntime(ctx context.Context, tcOverride string) (Runtime, error) {
-	active, err := resolve.Active(ctx, tcOverride)
-	if err != nil {
-		return Runtime{}, err
-	}
-	return runtimeForActive(active)
-}
-
-func ResolveTargetRuntime(ctx context.Context, tcOverride, target string) (Runtime, error) {
-	active, err := resolve.ActiveTarget(ctx, tcOverride, target)
-	if err != nil {
-		return Runtime{}, err
-	}
-	return runtimeForActive(active)
-}
-
 func RuntimeForToolchain(dir, name string) (Runtime, error) {
-	return runtimeForActive(resolve.ActiveToolchain{Dir: dir, Name: name})
-}
-
-func runtimeForActive(active resolve.ActiveToolchain) (Runtime, error) {
-	cfg := LoadToolchainEnv(active.Dir)
+	cfg := LoadToolchainEnv(dir)
 	binDir, err := config.BinDir()
 	if err != nil {
 		return Runtime{}, fmt.Errorf("failed to determine bin directory: %w", err)
 	}
 	return Runtime{
-		Active:    active,
+		Toolchain: Toolchain{Dir: dir, Name: name},
 		CjvBinDir: binDir,
 		cfg:       cfg,
 	}, nil
@@ -70,9 +60,9 @@ func (r Runtime) ProxyEnv(baseEnv []string, recursion int) []string {
 	return BuildProxyEnv(baseEnv, ProxyEnvContext{
 		Cfg:             r.cfg,
 		CjvBinDir:       r.CjvBinDir,
-		ToolchainBinDir: filepath.Join(r.Active.Dir, "bin"),
+		ToolchainBinDir: filepath.Join(r.Toolchain.Dir, "bin"),
 		Recursion:       recursion,
-		ToolchainName:   r.Active.Name,
+		ToolchainName:   r.Toolchain.Name,
 	})
 }
 

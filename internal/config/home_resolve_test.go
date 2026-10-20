@@ -12,7 +12,7 @@ import (
 // TestResolveHome_EnvWinsOverPersisted verifies CJV_HOME beats settings.home.
 func TestResolveHome_EnvWinsOverPersisted(t *testing.T) {
 	tmp := t.TempDir()
-	IsolateForTest(t, tmp)
+	isolateForTest(t, tmp)
 
 	// Persist a different home in settings.toml.
 	persisted := filepath.Join(tmp, "persisted-home")
@@ -34,7 +34,7 @@ func TestResolveHome_EnvWinsOverPersisted(t *testing.T) {
 // TestResolveHome_PersistedWinsOverDefault verifies settings.home is used when CJV_HOME is unset.
 func TestResolveHome_PersistedWinsOverDefault(t *testing.T) {
 	tmp := t.TempDir()
-	IsolateForTest(t, tmp)
+	isolateForTest(t, tmp)
 	t.Setenv(EnvHome, "") // override IsolateForTest
 
 	persisted := filepath.Join(tmp, "persisted-home")
@@ -55,7 +55,7 @@ func TestResolveHome_PersistedWinsOverDefault(t *testing.T) {
 // TestResolveHome_DefaultWhenNothingSet verifies the fallback to <user-home>/.cjv.
 func TestResolveHome_DefaultWhenNothingSet(t *testing.T) {
 	tmp := t.TempDir()
-	IsolateForTest(t, tmp)
+	isolateForTest(t, tmp)
 	t.Setenv(EnvHome, "")
 	// No settings.toml exists.
 
@@ -69,7 +69,7 @@ func TestResolveHome_DefaultWhenNothingSet(t *testing.T) {
 // OS user home, regardless of CJV_HOME.
 func TestSettingsPath_IgnoresCJVHome(t *testing.T) {
 	tmp := t.TempDir()
-	IsolateForTest(t, tmp)
+	isolateForTest(t, tmp)
 
 	// Override CJV_HOME to a different value than the user home, then check
 	// that SettingsPath() ignores it.

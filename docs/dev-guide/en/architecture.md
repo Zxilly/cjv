@@ -20,12 +20,13 @@ The CLI parses commands, `lifecycle` coordinates installation and updates, and l
 | `config` | Setting origins, project selection, and data layout |
 | `reachable`, `selfupdate` | Managed binary, proxies, PATH, and cjv updates |
 | `fstx`, `fsops` | Durable transactions, atomic file operations, and platform retries |
+| `ohos` | Preparing and self-signing native payloads for OpenHarmony hosts |
 
-`progress` defines events and output adapters. `i18n`, `cjverr`, and `logging` provide messages, structured errors, and logs. `testutil` supplies distribution fixtures, progress recording, and platform test helpers.
+`progress` defines events and output adapters. `i18n`, `cjverr`, and `logging` provide messages, structured errors, and logs. `retry` is the backoff loop behind the filesystem and download retry policies. `testutil` supplies distribution fixtures, progress recording, and platform test helpers; `config/configtest` isolates settings and `cli/clitest` runs command groups in tests.
 
 ## Command state and output
 
-Each `cli.Execute` creates a separate application, command tree, flags, and `output.Renderer`. Commands pass requests to business modules, which report events through `progress.Sink` instead of printing final results.
+Each `cli.Execute` creates a separate `clictx.Context` (renderer, `+toolchain` selector, root command) and command tree. Command groups live in their own packages (`showcmd`, `componentcmd`, `runcmd`, `initcmd`, `toolchaincmd`, `settingscmd`, `selfcmd`); each keeps its flags in its own struct and registers itself on the root. Commands pass requests to business modules, which report events through `progress.Sink` instead of printing final results.
 
 Text mode uses `progress.Text` and result `Text()` methods. JSON mode discards progress and emits structured results or errors. The CLI renders each error once; `main` sets the exit code. Proxy stdout belongs to the SDK tool, so automatic installation reports progress on stderr.
 
@@ -66,7 +67,7 @@ Derive data paths from `config/layout.go`. Use `fsops` for tree copies, merges, 
 
 `resolve.Active` supplies project requirements according to `auto_install`. `run --install` enables installation explicitly; status queries do not install. `toolchain.ReadHostTargets` combines host identity, actual release, and platform. Target commands, `component --target`, `resolve.ActiveTarget`, and proxy target preparation all use it to avoid selecting another host's or release's cross SDK.
 
-`env.Runtime` merges SDK paths and component variables into an explicitly supplied base environment, then creates a child environment or shell script. `sdktools` owns tool paths. Unix proxies replace the current process; Windows proxies, `run`, and `exec` use `process.Run` for child execution.
+`env.Runtime` merges SDK paths and component variables into an explicitly supplied base environment, then creates a child environment or shell script. `env` does not select toolchains; `resolve.ActiveRuntime` pairs the active selection with its `env.Runtime`. `sdktools` owns tool paths. Unix proxies replace the current process; Windows proxies, `run`, and `exec` use `process.Run` for child execution.
 
 ## Distribution and downloads
 

@@ -20,12 +20,13 @@ CLI 解析命令，`lifecycle` 编排安装与更新，底层模块负责分发�
 | `config` | 设置来源、项目选择规则和数据目录布局 |
 | `reachable`、`selfupdate` | 受管二进制、代理入口、PATH 及 cjv 更新 |
 | `fstx`、`fsops` | 持久化事务、原子文件操作和平台重试 |
+| `ohos` | 为 OpenHarmony 宿主准备原生载荷并自签名 |
 
-`progress` 定义事件和输出适配器；`i18n`、`cjverr`、`logging` 分别提供消息、结构化错误和日志。`testutil` 提供测试分发源、进度记录器及平台测试辅助。
+`progress` 定义事件和输出适配器；`i18n`、`cjverr`、`logging` 分别提供消息、结构化错误和日志。`retry` 是文件系统与下载重试策略共用的退避循环。`testutil` 提供测试分发源、进度记录器及平台测试辅助；`config/configtest` 隔离设置，`cli/clitest` 用于在测试中运行命令组。
 
 ## 命令状态与输出
 
-每次 `cli.Execute` 创建独立的 application、命令树、标志和 `output.Renderer`。子命令把请求交给业务模块，业务模块通过 `progress.Sink` 报告事件，不直接打印最终结果。
+每次 `cli.Execute` 创建独立的 `clictx.Context`（输出渲染器、`+toolchain` 选择、根命令）和命令树。命令组位于各自的包中（`showcmd`、`componentcmd`、`runcmd`、`initcmd`、`toolchaincmd`、`settingscmd`、`selfcmd`），各自在结构体中保存自己的标志，并注册到根命令。子命令把请求交给业务模块，业务模块通过 `progress.Sink` 报告事件，不直接打印最终结果。
 
 文本模式由 `progress.Text` 和结果的 `Text()` 方法渲染；JSON 模式丢弃进度，只输出结构化结果或错误。错误由 CLI 渲染一次，`main` 负责退出码。代理路径的 stdout 属于 SDK 工具，自动安装进度写入 stderr。
 
@@ -66,7 +67,7 @@ URL 和本地归档安装走 `resolved_install.go`。随包 stdx 在 SDK 提交�
 
 `resolve.Active` 根据 `auto_install` 补齐项目要求。`run --install` 显式允许安装，状态查询不安装。`toolchain.ReadHostTargets` 统一读取宿主身份、实际发行版和平台；`target` 命令、`component --target`、`resolve.ActiveTarget` 及代理补齐都使用它，避免关联到其他宿主或版本的交叉 SDK。
 
-`env.Runtime` 从显式传入的基础环境合并 SDK 路径与组件变量，再生成子进程环境或 shell 脚本。`sdktools` 统一工具路径。Unix 代理替换当前进程，Windows 代理与 `run`、`exec` 共用 `process.Run` 处理子进程。
+`env.Runtime` 从显式传入的基础环境合并 SDK 路径与组件变量，再生成子进程环境或 shell 脚本。`env` 不负责选择工具链；`resolve.ActiveRuntime` 将当前选择与对应的 `env.Runtime` 组合。`sdktools` 统一工具路径。Unix 代理替换当前进程，Windows 代理与 `run`、`exec` 共用 `process.Run` 处理子进程。
 
 ## 分发与下载
 

@@ -1,3 +1,7 @@
+// Command cjv is the Cangjie toolchain manager. The binary dispatches on the
+// name it was invoked as: SDK tool names (cjc, cjpm, ...) run the proxy,
+// cjv-init and cjv-setup prefixes run the installer, and anything else runs
+// the CLI.
 package main
 
 import (

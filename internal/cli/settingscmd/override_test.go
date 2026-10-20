@@ -1,0 +1,156 @@
+package settingscmd
+
+import (
+	"io"
+	"os"
+	"path/filepath"
+	"testing"
+
+	"github.com/Zxilly/cjv/internal/config"
+	"github.com/Zxilly/cjv/internal/config/configtest"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+func TestOverrideSetPreservesBareVersion(t *testing.T) {
+	tmp := t.TempDir()
+	dir := t.TempDir()
+	configtest.Isolate(t, tmp)
+
+	require.NoError(t, executeSettings(t, "override", "set", "1.0.5", "--path", dir))
+
+	settingsPath, err := config.SettingsPath()
+	require.NoError(t, err)
+	settings, err := config.LoadSettings(settingsPath)
+	require.NoError(t, err)
+	assert.Equal(t, "1.0.5", settings.Overrides[config.NormalizePath(dir)])
+}
+
+func TestOverrideSetRejectsTargetVariant(t *testing.T) {
+	tmp := t.TempDir()
+	dir := t.TempDir()
+	configtest.Isolate(t, tmp)
+
+	err := executeSettings(t, "override", "set", "sts-2.0.0-win32-x64-ohos", "--path", dir)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "target variant")
+
+	settingsPath, err := config.SettingsPath()
+	require.NoError(t, err)
+	settings, err := config.LoadSettings(settingsPath)
+	require.NoError(t, err)
+	assert.Empty(t, settings.Overrides)
+}
+
+func TestResolveOverrideDir_WithExplicitPath(t *testing.T) {
+	dir := t.TempDir()
+	resolved, err := resolveOverrideDir(dir)
+	require.NoError(t, err)
+	assert.NotEmpty(t, resolved)
+}
+
+func TestResolveOverrideDir_FallsBackToCwd(t *testing.T) {
+	cwd := t.TempDir()
+	origCwd, _ := os.Getwd()
+	os.Chdir(cwd)
+	defer os.Chdir(origCwd)
+
+	resolved, err := resolveOverrideDir("")
+	require.NoError(t, err)
+	assert.NotEmpty(t, resolved)
+}
+
+// Tests for unsetNonexistentOverrides -- cleans up overrides pointing
+// to directories that no longer exist on disk.
+
+func TestUnsetNonexistentOverrides_RemovesStale(t *testing.T) {
+	tmp := t.TempDir()
+	configtest.Isolate(t, tmp)
+
+	existingDir := t.TempDir() // this dir exists
+	goneDir := filepath.Join(t.TempDir(), "gone")
+	os.RemoveAll(goneDir) // ensure it doesn't exist
+
+	stg := config.DefaultSettings()
+	stg.Overrides[existingDir] = "lts-1.0.5"
+	stg.Overrides[goneDir] = "sts-2.0.0"
+	settingsPath, err := config.SettingsPath()
+	require.NoError(t, err)
+	require.NoError(t, config.SaveSettings(&stg, settingsPath))
+
+	sf := config.NewSettingsFile(settingsPath)
+	require.NoError(t, unsetNonexistentOverrides(io.Discard, &stg, sf))
+
+	assert.Contains(t, stg.Overrides, existingDir,
+		"override for existing dir should be preserved")
+	assert.NotContains(t, stg.Overrides, goneDir,
+		"override for gone dir should be removed")
+}
+
+func TestUnsetNonexistentOverrides_NoOpWhenAllExist(t *testing.T) {
+	tmp := t.TempDir()
+	configtest.Isolate(t, tmp)
+
+	dir1 := t.TempDir()
+	dir2 := t.TempDir()
+
+	stg := config.DefaultSettings()
+	stg.Overrides[dir1] = "lts-1.0.5"
+	stg.Overrides[dir2] = "sts-2.0.0"
+	settingsPath, err := config.SettingsPath()
+	require.NoError(t, err)
+	require.NoError(t, config.SaveSettings(&stg, settingsPath))
+
+	sf := config.NewSettingsFile(settingsPath)
+	require.NoError(t, unsetNonexistentOverrides(io.Discard, &stg, sf))
+
+	assert.Len(t, stg.Overrides, 2, "all overrides should be preserved")
+}
+
+func TestOverrideUnsetCommandRemovesMatchingNormalizedPath(t *testing.T) {
+	tmp := t.TempDir()
+	dir := t.TempDir()
+	configtest.Isolate(t, tmp)
+
+	settings := config.DefaultSettings()
+	settings.Overrides[config.NormalizePath(dir)] = "lts-1.0.5"
+	settingsPath, err := config.SettingsPath()
+	require.NoError(t, err)
+	require.NoError(t, config.SaveSettings(&settings, settingsPath))
+
+	require.NoError(t, executeSettings(t, "override", "unset", "--path", dir))
+
+	got, err := config.LoadSettings(settingsPath)
+	require.NoError(t, err)
+	assert.Empty(t, got.Overrides)
+}
+
+func TestOverrideUnsetCommandErrorsWhenMissing(t *testing.T) {
+	tmp := t.TempDir()
+	dir := t.TempDir()
+	configtest.Isolate(t, tmp)
+
+	err := executeSettings(t, "override", "unset", "--path", dir)
+	require.Error(t, err)
+	// The "no override set" message is localized; assert on the directory it
+	// references (present in every locale's template) rather than English text.
+	// NormalizePath because t.TempDir() can be an 8.3 short path on Windows.
+	assert.Contains(t, err.Error(), config.NormalizePath(dir))
+}
+
+func TestOverrideListCommandHandlesEmptyAndSortedEntries(t *testing.T) {
+	tmp := t.TempDir()
+	configtest.Isolate(t, tmp)
+
+	require.NoError(t, executeSettings(t, "override", "list"))
+
+	settings := config.DefaultSettings()
+	settings.Overrides[filepath.Join(tmp, "b")] = "sts"
+	settings.Overrides[filepath.Join(tmp, "a")] = "lts"
+	settingsPath, err := config.SettingsPath()
+	require.NoError(t, err)
+	require.NoError(t, config.SaveSettings(&settings, settingsPath))
+
+	config.ResetDefaultSettingsFileCache()
+	require.NoError(t, executeSettings(t, "override", "list"))
+}

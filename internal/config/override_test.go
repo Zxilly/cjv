@@ -87,9 +87,6 @@ func TestResolveOverrideNoneConfigured(t *testing.T) {
 	_, _, err := ResolveToolchain(&s, tmp)
 	assert.Error(t, err) // no toolchain configured
 }
-
-// --- Tests merged from resolve_edge_test.go ---
-
 func TestResolveToolchain_EnvVarWins(t *testing.T) {
 	home := t.TempDir()
 	cwd := t.TempDir()
@@ -159,9 +156,6 @@ func TestEnsureDirs_CreatesAll(t *testing.T) {
 	assert.DirExists(t, filepath.Join(home, "bin"))
 	assert.DirExists(t, filepath.Join(home, "downloads"))
 }
-
-// --- Tests merged from input_validation_test.go (OverrideSource.String) ---
-
 func TestOverrideSourceString_AllSourcesHaveDistinctLabels(t *testing.T) {
 	tests := []struct {
 		source OverrideSource

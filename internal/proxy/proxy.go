@@ -1,3 +1,7 @@
+// Package proxy runs an SDK tool (cjc, cjpm, ...) through cjv: cmd/cjv routes
+// here when the binary is invoked under a tool's name. It resolves the active
+// toolchain and its environment, guards against proxy recursion, and executes
+// the real tool.
 package proxy
 
 import (
@@ -12,7 +16,7 @@ import (
 
 	"github.com/Zxilly/cjv/internal/cjverr"
 	"github.com/Zxilly/cjv/internal/config"
-	"github.com/Zxilly/cjv/internal/env"
+	"github.com/Zxilly/cjv/internal/resolve"
 	"github.com/Zxilly/cjv/internal/sdktools"
 	"github.com/Zxilly/cjv/internal/toolchain"
 )
@@ -81,7 +85,7 @@ func Run(ctx context.Context, toolName string, args []string) error {
 		return err
 	}
 
-	rt, err := env.ResolveRuntime(ctx, tcOverride)
+	rt, err := resolve.ActiveRuntime(ctx, tcOverride)
 	if err != nil {
 		return err
 	}

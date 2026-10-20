@@ -1,3 +1,7 @@
+// Package selfupdate keeps the managed cjv executable current. Check queries
+// release metadata; Update downloads, verifies, and replaces the binary.
+// Default builds discover releases on GitHub (update_default.go), mirror
+// builds on GitCode (update_mirror.go).
 package selfupdate
 
 import (

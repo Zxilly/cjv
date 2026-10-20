@@ -11,9 +11,8 @@ import (
 	"strings"
 
 	"github.com/Zxilly/cjv/internal/dist"
-	goversion "github.com/hashicorp/go-version"
-
 	"github.com/Zxilly/cjv/internal/progress"
+	goversion "github.com/hashicorp/go-version"
 )
 
 type releaseArtifact struct {

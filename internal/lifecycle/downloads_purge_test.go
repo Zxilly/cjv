@@ -7,7 +7,7 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/Zxilly/cjv/internal/config"
+	"github.com/Zxilly/cjv/internal/config/configtest"
 	"github.com/Zxilly/cjv/internal/fsops"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -15,7 +15,7 @@ import (
 
 func TestPurgeDownloadsProtectsLiveInstallationAndHonorsCancellation(t *testing.T) {
 	home := t.TempDir()
-	config.IsolateForTest(t, home)
+	configtest.Isolate(t, home)
 	stage := filepath.Join(home, "downloads", ".cjv-components-live", "payload")
 	require.NoError(t, os.MkdirAll(filepath.Dir(stage), 0o755))
 	require.NoError(t, os.WriteFile(stage, []byte("live"), 0o644))
@@ -36,7 +36,7 @@ func TestPurgeDownloadsProtectsLiveInstallationAndHonorsCancellation(t *testing.
 
 func TestPurgeDownloadsDirRemovesAll(t *testing.T) {
 	home := t.TempDir()
-	config.IsolateForTest(t, home)
+	configtest.Isolate(t, home)
 
 	downloads := filepath.Join(home, "downloads")
 	require.NoError(t, os.MkdirAll(downloads, 0o755))
@@ -59,7 +59,7 @@ func TestPurgeDownloadsDirRemovesAll(t *testing.T) {
 
 func TestPurgeDownloadsDirEmptyOrMissing(t *testing.T) {
 	home := t.TempDir()
-	config.IsolateForTest(t, home)
+	configtest.Isolate(t, home)
 
 	assert.NotPanics(t, func() {
 		removed, err := purgeDownloadsDir()
@@ -74,7 +74,7 @@ func TestPurgeDownloadsDirRemovesReadonlyEntry(t *testing.T) {
 	}
 
 	home := t.TempDir()
-	config.IsolateForTest(t, home)
+	configtest.Isolate(t, home)
 
 	cacheFile := filepath.Join(home, "downloads", "archive.zip")
 	require.NoError(t, os.MkdirAll(filepath.Dir(cacheFile), 0o755))

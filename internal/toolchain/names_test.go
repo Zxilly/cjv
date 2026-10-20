@@ -112,8 +112,6 @@ func TestParseToolchainTargetVariantName(t *testing.T) {
 	assert.False(t, name.IsChannelOnly())
 }
 
-// --- Tests merged from parse_channel_test.go ---
-
 // Tests for ParseChannel -- parses user-supplied channel names.
 // Users type these in commands ("cjv install lts") and config files.
 

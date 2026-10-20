@@ -1,3 +1,8 @@
+// Package dist reads the SDK distribution and fetches its artifacts. Source
+// lazily loads and caches the channel manifests (versions.json for LTS and
+// STS, nightly.json for nightly). Downloads are resumable, checksum-verified,
+// and retried on transient failures. Preparation owns the installation lock,
+// staging space, and downloaded archives until publication.
 package dist
 
 import (
@@ -6,10 +11,8 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"net"
 	"net/http"
 	"net/url"
-	"os"
 	pathpkg "path"
 	"slices"
 	"strings"
@@ -162,15 +165,17 @@ func (s *Source) ResolveToolchain(ctx context.Context, channel toolchain.Channel
 		}
 		found := false
 		for _, candidate := range channels {
-			candidateManifest,err:=s.manifestForChannel(ctx,candidate)
-			if err!=nil { return ToolchainRelease{},err }
+			candidateManifest, err := s.manifestForChannel(ctx, candidate)
+			if err != nil {
+				return ToolchainRelease{}, err
+			}
 			versions, listErr := candidateManifest.ListVersions(candidate, tuple)
 			if listErr != nil {
 				continue
 			}
 			for _, concrete := range versions {
 				if toolchain.MatchesVersionSelector(version, concrete) {
-					manifest=candidateManifest
+					manifest = candidateManifest
 					channel, version, found = candidate, concrete, true
 					break
 				}
@@ -439,31 +444,4 @@ func FetchChannelManifest(ctx context.Context, manifestURL string, channel toolc
 		return aggregated.getChannel(channel)
 	}
 	return nil, channelErr
-}
-
-func validateHTTPURL(u *url.URL, label string) error {
-	if u == nil || u.Host == "" {
-		return fmt.Errorf("invalid %s URL", label)
-	}
-	switch u.Scheme {
-	case "https":
-		return nil
-	case "http":
-		if isLoopbackHost(u.Hostname()) || os.Getenv(config.EnvAllowInsecureManifest) == "1" {
-			return nil
-		}
-		return fmt.Errorf("refusing to use insecure HTTP %s %q: use HTTPS, or set %s=1 to trust an internal mirror", label, u.Host, config.EnvAllowInsecureManifest)
-	default:
-		return fmt.Errorf("invalid %s URL scheme %q: only https and http are supported", label, u.Scheme)
-	}
-}
-
-func isLoopbackHost(host string) bool {
-	if host == "localhost" {
-		return true
-	}
-	if ip := net.ParseIP(host); ip != nil {
-		return ip.IsLoopback()
-	}
-	return false
 }

@@ -13,6 +13,7 @@ import (
 
 	"github.com/Zxilly/cjv/internal/component"
 	"github.com/Zxilly/cjv/internal/config"
+	"github.com/Zxilly/cjv/internal/config/configtest"
 	"github.com/Zxilly/cjv/internal/lifecycle"
 	"github.com/Zxilly/cjv/internal/toolchain"
 	"github.com/stretchr/testify/assert"
@@ -51,7 +52,7 @@ func TestRetirementCrashHelper(t *testing.T) {
 	if home == "" {
 		t.Skip("subprocess helper")
 	}
-	config.IsolateForTest(t, home)
+	configtest.Isolate(t, home)
 	name := "lts-1.0.0"
 	roots, err := component.RootsFor(name)
 	require.NoError(t, err)

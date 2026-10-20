@@ -3,8 +3,9 @@
 package selfupdate
 
 import (
-	"github.com/stretchr/testify/require"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestCheckFetchesMetadataWithoutInstalling(t *testing.T) {

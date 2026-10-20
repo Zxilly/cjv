@@ -20,9 +20,6 @@ channel = "lts-1.0.5"
 	require.NoError(t, err)
 	assert.Equal(t, "lts-1.0.5", tc.Toolchain.Channel)
 }
-
-// --- Tests merged from toolchain_file_edge_test.go ---
-
 func TestParseToolchainFile_MalformedToml(t *testing.T) {
 	// Users might hand-edit cangjie-sdk.toml and introduce syntax errors.
 	// The error must be reported, not silently ignored.

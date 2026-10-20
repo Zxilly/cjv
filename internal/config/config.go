@@ -1,3 +1,9 @@
+// Package config resolves where cjv keeps its data and which settings apply:
+// the data layout under CJV_HOME (layout.go), the user settings file and the
+// administrator fallback file (settings_file.go, fallback.go), toolchain
+// selection from the environment, directory overrides, and cangjie-sdk.toml
+// project files (override.go, toolchain_file.go), and the manifest location
+// for regular and mirror builds.
 package config
 
 import (

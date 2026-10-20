@@ -17,6 +17,7 @@ import (
 
 	"github.com/Zxilly/cjv/internal/component"
 	"github.com/Zxilly/cjv/internal/config"
+	"github.com/Zxilly/cjv/internal/config/configtest"
 	"github.com/Zxilly/cjv/internal/dist"
 	"github.com/Zxilly/cjv/internal/lifecycle"
 	"github.com/Zxilly/cjv/internal/progress"
@@ -38,7 +39,7 @@ import (
 func installHome(t *testing.T, manifestURL string) string {
 	t.Helper()
 	home := t.TempDir()
-	config.IsolateForTest(t, home)
+	configtest.Isolate(t, home)
 	t.Setenv(config.EnvDistServer, "")
 	require.NoError(t, config.EnsureDirs())
 	settings := config.DefaultSettings()
@@ -51,7 +52,7 @@ func installHome(t *testing.T, manifestURL string) string {
 func distServerHome(t *testing.T, root string) string {
 	t.Helper()
 	home := t.TempDir()
-	config.IsolateForTest(t, home)
+	configtest.Isolate(t, home)
 	t.Setenv(config.EnvDistServer, "")
 	require.NoError(t, config.EnsureDirs())
 	settings := config.DefaultSettings()
@@ -491,7 +492,7 @@ func TestResolveTargetUsesManifestNightlyVersion(t *testing.T) {
 	defer server.Close()
 
 	home := t.TempDir()
-	config.IsolateForTest(t, home)
+	configtest.Isolate(t, home)
 	t.Setenv(config.EnvDistServer, "")
 	settings := config.DefaultSettings()
 	settings.DefaultHost = "linux-amd64"
@@ -518,7 +519,7 @@ func TestResolveTargetUsesManifestNightlyVersion(t *testing.T) {
 
 func TestOpenDistributionRejectsInvalidSource(t *testing.T) {
 	home := t.TempDir()
-	config.IsolateForTest(t, home)
+	configtest.Isolate(t, home)
 	t.Setenv(config.EnvDistServer, "")
 	settings := config.DefaultSettings()
 	settings.DistServer = "ftp://example.invalid/cjv"

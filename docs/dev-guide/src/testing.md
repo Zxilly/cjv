@@ -35,7 +35,7 @@ go test -race -tags integration -count=1 ./tests/integration/
 
 | 行为 | 测试位置与断言 |
 | --- | --- |
-| 参数、重复调用、JSON | `internal/cli`：真实命令树、独立 writer、单份结果或错误 |
+| 参数、重复调用、JSON | `internal/cli` 及各命令包：真实命令树（`clitest.Root`）、独立 writer、单份结果或错误 |
 | 安装、更新、卸载 | `internal/lifecycle`：本地分发源、最终内容、设置引用及失败恢复 |
 | 主机与目标隔离 | `internal/toolchain`、`internal/lifecycle`：安装身份、平台及发行版匹配 |
 | 组件所有权 | `internal/component`：共享文件、越界清单、链接及备份恢复 |

@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/Zxilly/cjv/internal/config"
+	"github.com/Zxilly/cjv/internal/config/configtest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -22,7 +23,7 @@ var shellRCFiles = []string{".profile", ".bashrc", ".zshrc", ".zprofile", ".conf
 func fakeUserHome(t *testing.T) (userHome, binDir string) {
 	t.Helper()
 	cjvHome := t.TempDir()
-	config.IsolateForTest(t, cjvHome)
+	configtest.Isolate(t, cjvHome)
 	userHome = t.TempDir()
 	t.Setenv("HOME", userHome)
 	t.Setenv(config.EnvNoPathSetup, "")

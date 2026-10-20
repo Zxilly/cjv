@@ -21,6 +21,7 @@ import (
 
 	"github.com/Zxilly/cjv/internal/component"
 	"github.com/Zxilly/cjv/internal/config"
+	"github.com/Zxilly/cjv/internal/config/configtest"
 	"github.com/Zxilly/cjv/internal/dist"
 	"github.com/Zxilly/cjv/internal/progress"
 	sdktarget "github.com/Zxilly/cjv/internal/target"
@@ -39,7 +40,7 @@ func quietLifecycleOptions() Options {
 func installedToolchainHome(t *testing.T, tcName string) string {
 	t.Helper()
 	home := t.TempDir()
-	config.IsolateForTest(t, home)
+	configtest.Isolate(t, home)
 	t.Setenv(config.EnvDistServer, "")
 	tcDir := filepath.Join(home, "toolchains", tcName)
 	require.NoError(t, os.MkdirAll(tcDir, 0o755))
@@ -198,7 +199,7 @@ func TestInstallComponentsForToolchainResolvesInstalledToolchain(t *testing.T) {
 
 func TestInstallComponentsPreparesWholeBatchBeforePublishing(t *testing.T) {
 	const toolchainName = "lts-1.0.5"
-	config.IsolateForTest(t, t.TempDir())
+	configtest.Isolate(t, t.TempDir())
 	t.Setenv(config.EnvDistServer, "")
 	roots, err := component.RootsFor(toolchainName)
 	require.NoError(t, err)

@@ -1,3 +1,6 @@
+// Package i18n localizes user-facing messages. Messages live in the embedded
+// locales/*.toml files; T and TP (with plural forms) look a message up in
+// the detected or configured language and fall back to English.
 package i18n
 
 import (

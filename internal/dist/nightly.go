@@ -7,67 +7,10 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
-	"strconv"
 	"strings"
-	"sync"
-	"time"
-
-	"github.com/Zxilly/cjv/internal/config"
 )
 
-// MaxResponseSize limits HTTP metadata reads.
-const MaxResponseSize = 10 << 20 // 10 MB
-
-// AppVersion is the running cjv's version as reported in the User-Agent of
-// every request the shared client makes. main sets it from the
-// linker-injected version before the first request; "dev" is the fallback.
-var AppVersion = "dev"
-
-var (
-	httpClient     *http.Client
-	httpClientOnce sync.Once
-)
-
-// HTTPClient returns the shared HTTP client with timeout and User-Agent.
-func HTTPClient() *http.Client {
-	httpClientOnce.Do(func() {
-		httpClient = newHTTPClient()
-	})
-	return httpClient
-}
-
-func newHTTPClient() *http.Client {
-	timeout := 180 * time.Second
-	if s := os.Getenv(config.EnvDownloadTimeout); s != "" {
-		if n, err := strconv.Atoi(s); err == nil && n > 0 {
-			timeout = time.Duration(n) * time.Second
-		}
-	}
-	return &http.Client{
-		Timeout: timeout,
-		Transport: &uaTransport{
-			base: http.DefaultTransport,
-			ua:   "cjv/" + AppVersion,
-		},
-	}
-}
-
-type uaTransport struct {
-	base http.RoundTripper
-	ua   string
-}
-
-func (t *uaTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	if req.Header.Get("User-Agent") == "" {
-		r2 := new(http.Request)
-		*r2 = *req
-		r2.Header = r2.Header.Clone()
-		r2.Header.Set("User-Agent", t.ua)
-		req = r2
-	}
-	return t.base.RoundTrip(req)
-}
+// 10 MB
 
 func parseSHA256(content string) string {
 	digest := strings.TrimSpace(content)

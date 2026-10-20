@@ -10,7 +10,7 @@ import (
 )
 
 func TestToolchainFileAbsolutePathResolution(t *testing.T) {
-	IsolateForTest(t, t.TempDir())
+	isolateForTest(t, t.TempDir())
 	project, sdk := t.TempDir(), t.TempDir()
 	path := filepath.Join(project, ToolchainFileName)
 	require.NoError(t, os.WriteFile(path, []byte(fmt.Sprintf("[toolchain]\npath = '%s'\ncomponents = ['invalid']\ntargets = ['invalid target']\n", sdk)), 0644))

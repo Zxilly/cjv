@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/Zxilly/cjv/internal/config"
+	"github.com/Zxilly/cjv/internal/config/configtest"
 	"github.com/Zxilly/cjv/internal/fstx"
 	"github.com/Zxilly/cjv/internal/lifecycle"
 	"github.com/Zxilly/cjv/internal/sdktools"
@@ -69,7 +70,7 @@ func recordPredecessor(t *testing.T, source, dest string) {
 func prepareInstallTest(t *testing.T) (string, *config.SettingsFile, string) {
 	t.Helper()
 	home := t.TempDir()
-	config.IsolateForTest(t, home)
+	configtest.Isolate(t, home)
 	t.Setenv(config.EnvDistServer, "")
 	require.NoError(t, toolchain.RecoverHome())
 	server := testutil.MockDistServer(t)
@@ -245,7 +246,7 @@ func TestSDKReplacementRetainsOldSDKUntilBlockedRecoveryCanFinish(t *testing.T) 
 
 func TestFirstInstallDefaultSurvivesInterruptionAfterPublication(t *testing.T) {
 	if os.Getenv("CJV_TEST_INTERRUPT_DEFAULT_PUBLICATION") == "1" {
-		config.IsolateForTest(t, os.Getenv(config.EnvHome))
+		configtest.Isolate(t, os.Getenv(config.EnvHome))
 		// Stop after the real settings update and before the transaction can
 		// write its final marker or run deferred rollback/cleanup.
 		lifecycle.SetAfterPublishHook(t, func() error {

@@ -477,3 +477,12 @@ func versionLess(a, b string) bool {
 	}
 	return a < b
 }
+
+func selectedIdentity(rt ResolvedToolchain, tracking bool) string {
+	if !tracking {
+		return rt.Name
+	}
+	name, _ := toolchain.ParseToolchainName(rt.Name)
+	name.Version = ""
+	return name.String()
+}

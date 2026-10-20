@@ -78,9 +78,6 @@ auto_install = true
 	require.NoError(t, err)
 	assert.NotNil(t, s.Overrides)
 }
-
-// --- Tests merged from settings_edge_test.go ---
-
 func TestLoadSettings_MalformedToml(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "settings.toml")
 	require.NoError(t, os.WriteFile(path, []byte("[broken\nno closing"), 0o644))
@@ -163,9 +160,6 @@ func TestSave_PersistsVersion(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 1, loaded.Version)
 }
-
-// --- Tests merged from input_validation_test.go (ValidAutoSelfUpdate) ---
-
 func TestValidAutoSelfUpdate_AcceptsDefinedValues(t *testing.T) {
 	assert.True(t, ValidAutoSelfUpdate("enable"))
 	assert.True(t, ValidAutoSelfUpdate("disable"))
@@ -184,12 +178,9 @@ func TestValidAutoSelfUpdate_RejectsArbitraryStrings(t *testing.T) {
 		assert.False(t, ValidAutoSelfUpdate(bad), "%q should be rejected", bad)
 	}
 }
-
-// --- Tests merged from input_validation_test.go (LoadSettings via SettingsPath) ---
-
 func TestLoadSettings_ReturnsDefaultsWhenNoFile(t *testing.T) {
 	tmpDir := t.TempDir()
-	IsolateForTest(t, tmpDir)
+	isolateForTest(t, tmpDir)
 
 	path, err := SettingsPath()
 	require.NoError(t, err)
@@ -201,7 +192,7 @@ func TestLoadSettings_ReturnsDefaultsWhenNoFile(t *testing.T) {
 func TestLoadSettings_PathMatchesSettingsPath(t *testing.T) {
 	// SettingsPath() should return a consistent path that points to settings.toml.
 	tmpDir := t.TempDir()
-	IsolateForTest(t, tmpDir)
+	isolateForTest(t, tmpDir)
 
 	path, err := SettingsPath()
 	require.NoError(t, err)

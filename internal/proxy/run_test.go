@@ -14,6 +14,7 @@ import (
 	"testing"
 
 	"github.com/Zxilly/cjv/internal/config"
+	"github.com/Zxilly/cjv/internal/config/configtest"
 	"github.com/Zxilly/cjv/internal/resolve"
 	"github.com/Zxilly/cjv/internal/sdktools"
 	sdktarget "github.com/Zxilly/cjv/internal/target"
@@ -38,7 +39,7 @@ func TestRun_RecursionLimitExceeded(t *testing.T) {
 func TestRun_NoToolchainConfigured(t *testing.T) {
 	home := t.TempDir()
 	cwd := t.TempDir()
-	config.IsolateForTest(t, home)
+	configtest.Isolate(t, home)
 
 	t.Setenv("CJV_TOOLCHAIN", "")
 	t.Setenv("CJV_RECURSION_COUNT", "")
@@ -57,7 +58,7 @@ func TestRun_NoToolchainConfigured(t *testing.T) {
 func TestRun_ToolchainNotInstalledNoAutoInstall(t *testing.T) {
 	home := t.TempDir()
 	cwd := t.TempDir()
-	config.IsolateForTest(t, home)
+	configtest.Isolate(t, home)
 
 	t.Setenv("CJV_TOOLCHAIN", "")
 	t.Setenv("CJV_RECURSION_COUNT", "")
@@ -78,7 +79,7 @@ func TestRun_ToolchainNotInstalledNoAutoInstall(t *testing.T) {
 func TestRun_ToolNotFoundInToolchain(t *testing.T) {
 	home := t.TempDir()
 	cwd := t.TempDir()
-	config.IsolateForTest(t, home)
+	configtest.Isolate(t, home)
 
 	t.Setenv("CJV_TOOLCHAIN", "")
 	t.Setenv("CJV_RECURSION_COUNT", "")
@@ -98,7 +99,7 @@ func TestRun_ToolNotFoundInToolchain(t *testing.T) {
 func TestRun_PlusToolchainOverride(t *testing.T) {
 	home := t.TempDir()
 	cwd := t.TempDir()
-	config.IsolateForTest(t, home)
+	configtest.Isolate(t, home)
 
 	t.Setenv("CJV_RECURSION_COUNT", "")
 
@@ -123,7 +124,7 @@ func TestRun_ReachesBinaryExecution(t *testing.T) {
 	// will fail, but all the setup code should be covered.
 	home := t.TempDir()
 	cwd := t.TempDir()
-	config.IsolateForTest(t, home)
+	configtest.Isolate(t, home)
 
 	t.Setenv("CJV_TOOLCHAIN", "")
 	t.Setenv("CJV_RECURSION_COUNT", "")
@@ -206,7 +207,7 @@ func TestRun_AutoInstallPath(t *testing.T) {
 	// This tests the auto-install code path in the proxy pipeline.
 	home := t.TempDir()
 	cwd := t.TempDir()
-	config.IsolateForTest(t, home)
+	configtest.Isolate(t, home)
 
 	t.Setenv("CJV_TOOLCHAIN", "")
 	t.Setenv("CJV_RECURSION_COUNT", "")
@@ -233,7 +234,7 @@ func TestRun_AutoInstallPath(t *testing.T) {
 func TestRun_ToolchainFileTargetsTriggerAutoInstall(t *testing.T) {
 	home := t.TempDir()
 	cwd := t.TempDir()
-	config.IsolateForTest(t, home)
+	configtest.Isolate(t, home)
 	t.Setenv("CJV_TOOLCHAIN", "")
 	t.Setenv("CJV_RECURSION_COUNT", "")
 	t.Chdir(cwd)
@@ -282,7 +283,7 @@ targets = ["ohos", "android"]
 func TestRun_ToolchainFileTargetsMissingWithoutAutoInstallErrors(t *testing.T) {
 	home := t.TempDir()
 	cwd := t.TempDir()
-	config.IsolateForTest(t, home)
+	configtest.Isolate(t, home)
 	t.Setenv("CJV_TOOLCHAIN", "")
 	t.Setenv("CJV_RECURSION_COUNT", "")
 	t.Chdir(cwd)

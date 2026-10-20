@@ -1,5 +1,16 @@
 version: "2"
 
+formatters:
+  enable:
+    - gofmt
+    - gci
+  settings:
+    gci:
+      # Two import groups: the standard library, then everything else.
+      sections:
+        - standard
+        - default
+
 linters:
   default: standard
   enable:

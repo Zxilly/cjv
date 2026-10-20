@@ -35,7 +35,7 @@ Isolate the user home, `CJV_HOME`, and fallback settings in tests. Setting only 
 
 | Behavior | Location and assertions |
 | --- | --- |
-| Arguments, repeated invocations, JSON | `internal/cli`: real command trees, isolated writers, one result or error |
+| Arguments, repeated invocations, JSON | `internal/cli` and its command packages: real command trees (`clitest.Root`), isolated writers, one result or error |
 | Install, update, remove | `internal/lifecycle`: local distribution, final contents, settings references, and recovery |
 | Host-target isolation | `internal/toolchain`, `internal/lifecycle`: identity, platform, and release matching |
 | Component ownership | `internal/component`: shared files, escaping manifests, links, and backup restoration |
