@@ -6,11 +6,9 @@ import (
 	"errors"
 	"fmt"
 	"sort"
-	"strings"
 
 	"github.com/Zxilly/cjv/internal/cjverr"
 	"github.com/Zxilly/cjv/internal/toolchain"
-	goversion "github.com/hashicorp/go-version"
 )
 
 type DownloadInfo struct {
@@ -212,27 +210,8 @@ func (m *Manifest) VersionsByTuple(channel toolchain.Channel) (map[string][]stri
 
 func sortVersionsDesc(versions []string) {
 	sort.SliceStable(versions, func(i, j int) bool {
-		return compareSemVerDesc(versions[i], versions[j])
+		return toolchain.CompareVersions(versions[i], versions[j]) > 0
 	})
-}
-
-// compareSemVerDesc reports whether a should sort before b in a descending
-// listing. Mirrors internal/toolchain/toolchain.go:compareSemVer semantics:
-// values that parse as semver are compared as such; unparseable values fall
-// back to string comparison; parseable values sort ahead of unparseable ones.
-func compareSemVerDesc(a, b string) bool {
-	va, aErr := goversion.NewVersion(a)
-	vb, bErr := goversion.NewVersion(b)
-	switch {
-	case aErr == nil && bErr == nil:
-		return va.Compare(vb) > 0
-	case aErr == nil:
-		return true
-	case bErr == nil:
-		return false
-	default:
-		return strings.Compare(a, b) > 0
-	}
 }
 
 // FindVersionChannel searches for a version across channels (LTS first, then STS).

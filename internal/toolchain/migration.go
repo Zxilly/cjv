@@ -37,7 +37,7 @@ func (lock *HomeLock) MigrateLegacy() error {
 		}
 		key := ToolchainName{Channel: parsed.Channel, Target: parsed.Target, Host: parsed.Host}.String()
 		versions[parsed.String()] = parsed
-		if old, ok := latest[key]; !ok || compareSemVer(parsed.Version, old.Version) > 0 {
+		if old, ok := latest[key]; !ok || CompareVersions(parsed.Version, old.Version) > 0 {
 			latest[key] = parsed
 		}
 	}

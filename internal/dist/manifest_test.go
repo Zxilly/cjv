@@ -333,7 +333,7 @@ func TestValidateDownloadInfo_Valid(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-// --- Tests for ListVersions / VersionsByTuple / compareSemVerDesc ---
+// --- Tests for ListVersions / VersionsByTuple ---
 
 func loadFixtureManifest(t *testing.T) *Manifest {
 	t.Helper()

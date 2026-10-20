@@ -7,6 +7,7 @@ import (
 
 	"github.com/Zxilly/cjv/internal/config/configtest"
 	"github.com/Zxilly/cjv/internal/target"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -41,4 +42,36 @@ func TestExplicitHostSelectorsFindLegacyIdentity(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, dir, actual)
 	}
+}
+
+func TestCompareVersionsStandard(t *testing.T) {
+	assert.Equal(t, 0, CompareVersions("1.0.0", "1.0.0"))
+	assert.Equal(t, -1, CompareVersions("1.0.0", "2.0.0"))
+	assert.Equal(t, 1, CompareVersions("2.0.0", "1.0.0"))
+	assert.Equal(t, -1, CompareVersions("1.0.0", "1.1.0"))
+	assert.Equal(t, -1, CompareVersions("1.0.0", "1.0.1"))
+}
+
+func TestCompareVersionsPreRelease(t *testing.T) {
+	// Pre-release versions come before release
+	assert.Equal(t, -1, CompareVersions("1.0.0-beta.1", "1.0.0"))
+	assert.Equal(t, 1, CompareVersions("1.0.0", "1.0.0-beta.1"))
+}
+
+func TestCompareVersionsOneValidOneInvalid(t *testing.T) {
+	// A valid semver sorts after an invalid string
+	assert.Equal(t, 1, CompareVersions("1.0.0", "not-a-version"))
+	assert.Equal(t, -1, CompareVersions("not-a-version", "1.0.0"))
+}
+
+func TestCompareVersionsBothInvalid(t *testing.T) {
+	// Falls back to lexicographic string comparison
+	assert.Equal(t, -1, CompareVersions("aaa", "bbb"))
+	assert.Equal(t, 1, CompareVersions("bbb", "aaa"))
+	assert.Equal(t, 0, CompareVersions("same", "same"))
+}
+
+func TestCompareVersionsPrefersReleaseOverPrerelease(t *testing.T) {
+	assert.Greater(t, CompareVersions("1.8.0", "1.8.0-beta.2"), 0)
+	assert.Less(t, CompareVersions("1.8.0-beta.2", "1.8.0"), 0)
 }

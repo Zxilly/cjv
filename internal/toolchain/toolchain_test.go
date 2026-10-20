@@ -194,11 +194,6 @@ func TestFindInstalledByName_WorksWithNonStandardNames(t *testing.T) {
 
 // --- SemVer ordering and sort tests ---
 
-func TestCompareSemVerPrefersReleaseOverPrerelease(t *testing.T) {
-	assert.Greater(t, compareSemVer("1.8.0", "1.8.0-beta.2"), 0)
-	assert.Less(t, compareSemVer("1.8.0-beta.2", "1.8.0"), 0)
-}
-
 func TestFindInstalledUsesSemVerOrdering(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv(config.EnvHome, home)

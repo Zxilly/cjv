@@ -4,6 +4,8 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	goversion "github.com/hashicorp/go-version"
 )
 
 var minorSelector = regexp.MustCompile(`^[0-9]+\.[0-9]+$`)
@@ -30,4 +32,22 @@ func MatchesVersionSelector(selector, version string) bool {
 		return len(match) > 1 && match[1] == date.Format("20060102")
 	}
 	return selector == version
+}
+
+// CompareVersions orders two version strings: -1, 0, or 1 as a is older,
+// equal, or newer than b. Valid semantic versions compare numerically and
+// sort above unparsable strings, which compare lexically.
+func CompareVersions(a, b string) int {
+	va, aErr := goversion.NewVersion(a)
+	vb, bErr := goversion.NewVersion(b)
+	switch {
+	case aErr == nil && bErr == nil:
+		return va.Compare(vb)
+	case aErr == nil:
+		return 1
+	case bErr == nil:
+		return -1
+	default:
+		return strings.Compare(a, b)
+	}
 }

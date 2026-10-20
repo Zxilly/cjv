@@ -163,35 +163,3 @@ func TestResolveActiveToolchain_NoConfig(t *testing.T) {
 	_, _, _, err := ResolveActiveToolchain()
 	assert.Error(t, err, "should error when no toolchain is configured")
 }
-
-// --- Tests merged from semver_test.go ---
-
-// Tests for compareSemVer -- ensures correct version ordering across
-// standard semver, pre-release, and non-standard version strings.
-
-func TestCompareSemVer_StandardVersions(t *testing.T) {
-	assert.Equal(t, 0, compareSemVer("1.0.0", "1.0.0"))
-	assert.Equal(t, -1, compareSemVer("1.0.0", "2.0.0"))
-	assert.Equal(t, 1, compareSemVer("2.0.0", "1.0.0"))
-	assert.Equal(t, -1, compareSemVer("1.0.0", "1.1.0"))
-	assert.Equal(t, -1, compareSemVer("1.0.0", "1.0.1"))
-}
-
-func TestCompareSemVer_PreRelease(t *testing.T) {
-	// Pre-release versions come before release
-	assert.Equal(t, -1, compareSemVer("1.0.0-beta.1", "1.0.0"))
-	assert.Equal(t, 1, compareSemVer("1.0.0", "1.0.0-beta.1"))
-}
-
-func TestCompareSemVer_OneValidOneInvalid(t *testing.T) {
-	// A valid semver sorts after an invalid string
-	assert.Equal(t, 1, compareSemVer("1.0.0", "not-a-version"))
-	assert.Equal(t, -1, compareSemVer("not-a-version", "1.0.0"))
-}
-
-func TestCompareSemVer_BothInvalid(t *testing.T) {
-	// Falls back to lexicographic string comparison
-	assert.Equal(t, -1, compareSemVer("aaa", "bbb"))
-	assert.Equal(t, 1, compareSemVer("bbb", "aaa"))
-	assert.Equal(t, 0, compareSemVer("same", "same"))
-}
