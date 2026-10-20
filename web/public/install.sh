@@ -1,7 +1,7 @@
 #!/bin/sh
 # cjv installer script
-# Usage: curl -sSf https://cjv.zxilly.dev/install.sh | sh
-# Or:    curl -sSf https://cjv.zxilly.dev/install.sh | sh -s -- --mirror -y
+# Usage: curl -sSf https://cjv.zxilly.com/install.sh | sh
+# Or:    curl -sSf https://cjv.zxilly.com/install.sh | sh -s -- --mirror -y
 # Prerelease: ... | sh -s -- --version v0.0.0-hmos.1 -y
 #
 # `--mirror` switches the installer to download the cjv-mirror archive from

@@ -13,9 +13,9 @@
 .PARAMETER NoModifyPath
     Do not modify PATH
 .EXAMPLE
-    irm https://cjv.zxilly.dev/install.ps1 | iex
+    irm https://cjv.zxilly.com/install.ps1 | iex
 .EXAMPLE
-    & ([scriptblock]::Create((irm https://cjv.zxilly.dev/install.ps1))) -Mirror -Yes
+    & ([scriptblock]::Create((irm https://cjv.zxilly.com/install.ps1))) -Mirror -Yes
 #>
 param(
     [switch]$Mirror,

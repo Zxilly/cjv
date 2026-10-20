@@ -30,7 +30,7 @@ describe('App (ready / Windows)', () => {
     render(<App />)
     await user.click(screen.getByRole('button', { name: /^其他平台/ }))
     const label = await screen.findByText('Linux / macOS / HarmonyOS')
-    expect(label.parentElement).toHaveTextContent('curl -sSf https://cjv.zxilly.dev/install.sh | sh')
+    expect(label.parentElement).toHaveTextContent('curl -sSf https://cjv.zxilly.com/install.sh | sh')
     await user.click(screen.getByRole('switch'))
     await waitFor(() => expect(screen.getByText('Linux / macOS / HarmonyOS').parentElement).toHaveTextContent('sh -s -- --mirror'))
   })
