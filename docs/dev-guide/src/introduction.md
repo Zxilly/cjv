@@ -1,6 +1,6 @@
 # cjv 开发指南
 
-本指南说明 cjv 的构建、代码结构、测试和发布。安装 SDK 与日常使用请看[用户手册](https://cjv.zxilly.dev/book/user-guide/zh-CN/)。
+本指南说明 cjv 的构建、代码结构、测试和发布。安装 SDK 与日常使用请看[用户手册](https://cjv.zxilly.com/book/user-guide/zh-CN/)。
 
 | 目录 | 内容 |
 | --- | --- |

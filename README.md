@@ -18,13 +18,13 @@ cjv 是 [仓颉](https://cangjie-lang.cn/) SDK 的版本管理器。它可以安
 Linux / macOS / 鸿蒙 HiShell：
 
 ```bash
-curl -sSf https://cjv.zxilly.dev/install.sh | sh
+curl -sSf https://cjv.zxilly.com/install.sh | sh
 ```
 
 Windows PowerShell：
 
 ```powershell
-irm https://cjv.zxilly.dev/install.ps1 | iex
+irm https://cjv.zxilly.com/install.ps1 | iex
 ```
 
 安装脚本会下载并校验 cjv，运行安装向导，配置命令路径。向导根据当前平台选择可用的 SDK 通道。安装完成后打开新终端，使 `PATH` 生效。
@@ -32,14 +32,14 @@ irm https://cjv.zxilly.dev/install.ps1 | iex
 GitHub 访问不稳定时，可以使用 GitCode 镜像：
 
 ```bash
-curl -sSf https://cjv.zxilly.dev/install.sh | sh -s -- --mirror
+curl -sSf https://cjv.zxilly.com/install.sh | sh -s -- --mirror
 ```
 
 ```powershell
-& ([scriptblock]::Create((irm https://cjv.zxilly.dev/install.ps1))) -Mirror
+& ([scriptblock]::Create((irm https://cjv.zxilly.com/install.ps1))) -Mirror
 ```
 
-也可以从 [GitHub Releases](https://github.com/Zxilly/cjv/releases) 下载当前平台的归档，解压后运行 `cjv init`。手动安装、从源码编译和自动化安装的步骤见[安装说明](https://cjv.zxilly.dev/book/user-guide/zh-CN/installation/)。
+也可以从 [GitHub Releases](https://github.com/Zxilly/cjv/releases) 下载当前平台的归档，解压后运行 `cjv init`。手动安装、从源码编译和自动化安装的步骤见[安装说明](https://cjv.zxilly.com/book/user-guide/zh-CN/installation/)。
 
 ## 快速上手
 
@@ -77,14 +77,14 @@ components = ["stdx"]
 cjv run --install sts cjc --version
 ```
 
-`--install` 允许安装缺失的工具链。版本选择顺序和目录覆盖见[项目工具链](https://cjv.zxilly.dev/book/user-guide/zh-CN/toolchain-file.html)。
+`--install` 允许安装缺失的工具链。版本选择顺序和目录覆盖见[项目工具链](https://cjv.zxilly.com/book/user-guide/zh-CN/toolchain-file.html)。
 
 ## 文档
 
-- [用户手册](https://cjv.zxilly.dev/book/user-guide/zh-CN/)：安装、项目配置、组件和交叉编译。
-- [命令参考](https://cjv.zxilly.dev/book/user-guide/zh-CN/command-reference.html)：命令参数与默认行为。
-- [企业与离线部署](https://cjv.zxilly.dev/book/user-guide/zh-CN/enterprise/)：内部分发源与受管终端配置。
-- [开发指南](https://cjv.zxilly.dev/book/dev-guide/zh-CN/)：构建、测试、架构和发布。
+- [用户手册](https://cjv.zxilly.com/book/user-guide/zh-CN/)：安装、项目配置、组件和交叉编译。
+- [命令参考](https://cjv.zxilly.com/book/user-guide/zh-CN/command-reference.html)：命令参数与默认行为。
+- [企业与离线部署](https://cjv.zxilly.com/book/user-guide/zh-CN/enterprise/)：内部分发源与受管终端配置。
+- [开发指南](https://cjv.zxilly.com/book/dev-guide/zh-CN/)：构建、测试、架构和发布。
 
 ## 编码代理
 
@@ -113,7 +113,7 @@ go build ./cmd/cjv
 go test -race -count=1 ./...
 ```
 
-开发环境与检查要求见[开发指南](https://cjv.zxilly.dev/book/dev-guide/zh-CN/)。
+开发环境与检查要求见[开发指南](https://cjv.zxilly.com/book/dev-guide/zh-CN/)。
 
 ## 许可证
 

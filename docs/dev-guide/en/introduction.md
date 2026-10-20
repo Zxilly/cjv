@@ -1,6 +1,6 @@
 # cjv developer guide
 
-This guide covers building cjv, its code structure, tests, and releases. For SDK installation and daily use, see the [user guide](https://cjv.zxilly.dev/book/user-guide/en/).
+This guide covers building cjv, its code structure, tests, and releases. For SDK installation and daily use, see the [user guide](https://cjv.zxilly.com/book/user-guide/en/).
 
 | Directory | Contents |
 | --- | --- |

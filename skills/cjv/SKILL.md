@@ -13,8 +13,8 @@ requested outcome. Match the user's language.
 - For an existing setup, start with the relevant subset of `cjv --version`,
   `cjv show active`, `cjv show installed`, and `cjv show home`.
 - Treat the installed `cjv <command> --help` as authoritative. Use the
-  [Chinese](https://cjv.zxilly.dev/book/user-guide/zh-CN/) or
-  [English](https://cjv.zxilly.dev/book/user-guide/en/) manual for more detail.
+  [Chinese](https://cjv.zxilly.com/book/user-guide/zh-CN/) or
+  [English](https://cjv.zxilly.com/book/user-guide/en/) manual for more detail.
 - Match action to authorization: use read-only inspection for explanation and
   diagnosis, and make persistent changes when the user requests them.
 

@@ -1,6 +1,6 @@
 # Landing page
 
-`web/` is the static site at [cjv.zxilly.dev](https://cjv.zxilly.dev), providing installer commands and platform downloads. It uses React, Vite, TypeScript, Tailwind CSS, and Lingui. `web/package.json` defines dependencies and the pnpm version.
+`web/` is the static site at [cjv.zxilly.com](https://cjv.zxilly.com), providing installer commands and platform downloads. It uses React, Vite, TypeScript, Tailwind CSS, and Lingui. `web/package.json` defines dependencies and the pnpm version.
 
 ## Development and files
 

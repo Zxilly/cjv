@@ -1,6 +1,6 @@
 # 落地页
 
-`web/` 是部署在 [cjv.zxilly.dev](https://cjv.zxilly.dev) 的静态页面，提供安装命令和平台下载。它使用 React、Vite、TypeScript、Tailwind CSS 和 Lingui；依赖及 pnpm 版本以 `web/package.json` 为准。
+`web/` 是部署在 [cjv.zxilly.com](https://cjv.zxilly.com) 的静态页面，提供安装命令和平台下载。它使用 React、Vite、TypeScript、Tailwind CSS 和 Lingui；依赖及 pnpm 版本以 `web/package.json` 为准。
 
 ## 开发与文件位置
 

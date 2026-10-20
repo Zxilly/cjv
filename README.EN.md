@@ -18,13 +18,13 @@ cjv is a version manager for the [Cangjie](https://cangjie-lang.cn/) SDK. It ins
 Linux / macOS / HarmonyOS HiShell:
 
 ```bash
-curl -sSf https://cjv.zxilly.dev/install.sh | sh
+curl -sSf https://cjv.zxilly.com/install.sh | sh
 ```
 
 Windows PowerShell:
 
 ```powershell
-irm https://cjv.zxilly.dev/install.ps1 | iex
+irm https://cjv.zxilly.com/install.ps1 | iex
 ```
 
 The script downloads and verifies cjv, runs the installation wizard, and configures the command path. The wizard selects a channel available for your platform. Open a new terminal after installation to load the updated `PATH`.
@@ -32,14 +32,14 @@ The script downloads and verifies cjv, runs the installation wizard, and configu
 If GitHub access is unreliable, use the GitCode mirror:
 
 ```bash
-curl -sSf https://cjv.zxilly.dev/install.sh | sh -s -- --mirror
+curl -sSf https://cjv.zxilly.com/install.sh | sh -s -- --mirror
 ```
 
 ```powershell
-& ([scriptblock]::Create((irm https://cjv.zxilly.dev/install.ps1))) -Mirror
+& ([scriptblock]::Create((irm https://cjv.zxilly.com/install.ps1))) -Mirror
 ```
 
-You can also download your platform's archive from [GitHub Releases](https://github.com/Zxilly/cjv/releases), extract it, and run `cjv init`. See [installation](https://cjv.zxilly.dev/book/user-guide/en/installation/) for manual setup, source builds, and automated installation.
+You can also download your platform's archive from [GitHub Releases](https://github.com/Zxilly/cjv/releases), extract it, and run `cjv init`. See [installation](https://cjv.zxilly.com/book/user-guide/en/installation/) for manual setup, source builds, and automated installation.
 
 ## Quick start
 
@@ -77,14 +77,14 @@ To run a command with another version temporarily:
 cjv run --install sts cjc --version
 ```
 
-`--install` allows a missing toolchain to be installed. See [project toolchains](https://cjv.zxilly.dev/book/user-guide/en/toolchain-file.html) for selection order and directory overrides.
+`--install` allows a missing toolchain to be installed. See [project toolchains](https://cjv.zxilly.com/book/user-guide/en/toolchain-file.html) for selection order and directory overrides.
 
 ## Documentation
 
-- [User guide](https://cjv.zxilly.dev/book/user-guide/en/): installation, project configuration, components, and cross-compilation.
-- [Command reference](https://cjv.zxilly.dev/book/user-guide/en/command-reference.html): command options and default behavior.
-- [Enterprise and offline deployment](https://cjv.zxilly.dev/book/user-guide/en/enterprise/): internal distribution sources and managed client settings.
-- [Developer guide](https://cjv.zxilly.dev/book/dev-guide/en/): builds, tests, architecture, and releases.
+- [User guide](https://cjv.zxilly.com/book/user-guide/en/): installation, project configuration, components, and cross-compilation.
+- [Command reference](https://cjv.zxilly.com/book/user-guide/en/command-reference.html): command options and default behavior.
+- [Enterprise and offline deployment](https://cjv.zxilly.com/book/user-guide/en/enterprise/): internal distribution sources and managed client settings.
+- [Developer guide](https://cjv.zxilly.com/book/dev-guide/en/): builds, tests, architecture, and releases.
 
 ## Coding agents
 
@@ -113,7 +113,7 @@ go build ./cmd/cjv
 go test -race -count=1 ./...
 ```
 
-See the [developer guide](https://cjv.zxilly.dev/book/dev-guide/en/) for development setup and required checks.
+See the [developer guide](https://cjv.zxilly.com/book/dev-guide/en/) for development setup and required checks.
 
 ## License
 

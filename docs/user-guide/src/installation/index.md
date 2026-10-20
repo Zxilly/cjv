@@ -7,23 +7,23 @@ cjv 是单文件程序，不需要预装仓颉 SDK。
 Linux / macOS / 鸿蒙 HiShell：
 
 ```bash
-curl -sSf https://cjv.zxilly.dev/install.sh | sh
+curl -sSf https://cjv.zxilly.com/install.sh | sh
 ```
 
 Windows PowerShell：
 
 ```powershell
-irm https://cjv.zxilly.dev/install.ps1 | iex
+irm https://cjv.zxilly.com/install.ps1 | iex
 ```
 
 脚本检测平台、下载并校验 cjv，再运行 `cjv init`。交互终端会显示向导，非交互输入使用默认选项。自动化安装可以显式跳过确认，或先只安装 cjv：
 
 ```bash
-curl -sSf https://cjv.zxilly.dev/install.sh | sh -s -- -y --default-toolchain none
+curl -sSf https://cjv.zxilly.com/install.sh | sh -s -- -y --default-toolchain none
 ```
 
 ```powershell
-& ([scriptblock]::Create((irm https://cjv.zxilly.dev/install.ps1))) -Yes -DefaultToolchain none
+& ([scriptblock]::Create((irm https://cjv.zxilly.com/install.ps1))) -Yes -DefaultToolchain none
 ```
 
 Unix 脚本将 `--mirror` 以外的参数传给 `cjv init`。PowerShell 脚本提供对应的 `-Yes`、`-DefaultToolchain`、`-NoModifyPath` 等参数。
@@ -37,11 +37,11 @@ SDK 安装失败时，命令返回非零退出码，已安装的 cjv 会保留�
 ### GitCode 镜像
 
 ```bash
-curl -sSf https://cjv.zxilly.dev/install.sh | sh -s -- --mirror
+curl -sSf https://cjv.zxilly.com/install.sh | sh -s -- --mirror
 ```
 
 ```powershell
-& ([scriptblock]::Create((irm https://cjv.zxilly.dev/install.ps1))) -Mirror
+& ([scriptblock]::Create((irm https://cjv.zxilly.com/install.ps1))) -Mirror
 ```
 
 镜像版使用 GitCode 的默认版本清单和 cjv 自更新源。内部制品库的配置见[企业部署](../enterprise/index.md)。

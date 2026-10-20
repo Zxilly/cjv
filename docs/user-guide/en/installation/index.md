@@ -7,23 +7,23 @@ cjv is a single executable and does not require an existing Cangjie SDK.
 Linux / macOS / HarmonyOS HiShell:
 
 ```bash
-curl -sSf https://cjv.zxilly.dev/install.sh | sh
+curl -sSf https://cjv.zxilly.com/install.sh | sh
 ```
 
 Windows PowerShell:
 
 ```powershell
-irm https://cjv.zxilly.dev/install.ps1 | iex
+irm https://cjv.zxilly.com/install.ps1 | iex
 ```
 
 The script detects the platform, downloads and verifies cjv, then runs `cjv init`. Interactive terminals show a wizard; non-interactive input uses defaults. For automation, skip confirmation explicitly or install cjv without an SDK:
 
 ```bash
-curl -sSf https://cjv.zxilly.dev/install.sh | sh -s -- -y --default-toolchain none
+curl -sSf https://cjv.zxilly.com/install.sh | sh -s -- -y --default-toolchain none
 ```
 
 ```powershell
-& ([scriptblock]::Create((irm https://cjv.zxilly.dev/install.ps1))) -Yes -DefaultToolchain none
+& ([scriptblock]::Create((irm https://cjv.zxilly.com/install.ps1))) -Yes -DefaultToolchain none
 ```
 
 The Unix script forwards all arguments except `--mirror` to `cjv init`. The PowerShell script provides corresponding options such as `-Yes`, `-DefaultToolchain`, and `-NoModifyPath`.
@@ -37,11 +37,11 @@ If SDK installation fails, the command returns a nonzero exit code and keeps the
 ### GitCode mirror
 
 ```bash
-curl -sSf https://cjv.zxilly.dev/install.sh | sh -s -- --mirror
+curl -sSf https://cjv.zxilly.com/install.sh | sh -s -- --mirror
 ```
 
 ```powershell
-& ([scriptblock]::Create((irm https://cjv.zxilly.dev/install.ps1))) -Mirror
+& ([scriptblock]::Create((irm https://cjv.zxilly.com/install.ps1))) -Mirror
 ```
 
 The mirror build uses GitCode for its default version manifest and cjv updates. See [enterprise deployment](../enterprise/index.md) for internal artifact servers.
