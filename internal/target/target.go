@@ -1,3 +1,7 @@
+// Package target names platforms. It parses and normalizes host tuples
+// (linux-x64, win32-x64, ...) and target variants (<host>-ohos), maps them to
+// SDK and stdx artifacts, and lists the host platforms cjv supports
+// (catalog.go).
 package target
 
 import (

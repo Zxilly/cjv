@@ -1,3 +1,8 @@
+// Package toolchain models installed toolchains: names and channels (lts,
+// sts, nightly, custom), installation records, host and target associations,
+// and the home lock. It selects the active toolchain (SelectActive,
+// PrepareActive), recovers interrupted transactions, and migrates legacy
+// layouts.
 package toolchain
 
 import (

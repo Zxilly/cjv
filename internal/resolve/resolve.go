@@ -1,3 +1,7 @@
+// Package resolve finds the toolchain a command should use and makes it
+// ready. Active and ActiveTarget select the active toolchain and, according
+// to auto_install, install a project's missing toolchain, targets, and
+// components. ActiveRuntime pairs that selection with its env.Runtime.
 package resolve
 
 import (

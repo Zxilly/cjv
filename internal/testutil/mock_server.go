@@ -1,3 +1,6 @@
+// Package testutil provides fixtures shared by cjv's tests: mock distribution
+// servers serving manifests and SDK archives, a progress recorder, and a
+// guard that restores the Windows registry PATH.
 package testutil
 
 import (

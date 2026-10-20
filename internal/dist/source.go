@@ -1,3 +1,8 @@
+// Package dist reads the SDK distribution and fetches its artifacts. Source
+// lazily loads and caches the channel manifests (versions.json for LTS and
+// STS, nightly.json for nightly). Downloads are resumable, checksum-verified,
+// and retried on transient failures. Preparation owns the installation lock,
+// staging space, and downloaded archives until publication.
 package dist
 
 import (

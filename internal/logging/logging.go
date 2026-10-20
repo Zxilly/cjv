@@ -1,3 +1,4 @@
+// Package logging configures the process-wide slog logger from CJV_LOG.
 package logging
 
 import (

@@ -1,3 +1,9 @@
+// Package lifecycle orchestrates every change to installed toolchains:
+// installing SDKs with their targets and components (Install,
+// InstallComponents), custom toolchains from a URL, archive, or directory
+// (custom_install.go), updates (update.go), and removal (remove.go).
+// Managed installations prepare outside the home lock, then revalidate and
+// publish through an fstx transaction so an interruption can be recovered.
 package lifecycle
 
 import (

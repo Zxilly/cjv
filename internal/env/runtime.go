@@ -1,3 +1,8 @@
+// Package env builds the environment Cangjie SDK tools run in. Runtime merges
+// a toolchain's paths and component variables into an explicitly supplied
+// base environment and exposes it as a child-process environment, as the SDK
+// contributions alone, or as a shell script. Choosing the toolchain is the
+// caller's job; see resolve.ActiveRuntime.
 package env
 
 import (

@@ -1,3 +1,7 @@
+// Package proxy runs an SDK tool (cjc, cjpm, ...) through cjv: cmd/cjv routes
+// here when the binary is invoked under a tool's name. It resolves the active
+// toolchain and its environment, guards against proxy recursion, and executes
+// the real tool.
 package proxy
 
 import (

@@ -1,3 +1,6 @@
+// Package cjverr defines cjv's structured errors. Each error carries a
+// stable ErrorCode and machine-readable Details, which the CLI renders as
+// the JSON error envelope; messages are localized through i18n.
 package cjverr
 
 import (
