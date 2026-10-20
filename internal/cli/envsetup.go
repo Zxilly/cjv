@@ -10,6 +10,7 @@ import (
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/env"
 	"github.com/Zxilly/cjv/internal/i18n"
+	"github.com/Zxilly/cjv/internal/resolve"
 	"github.com/spf13/cobra"
 )
 
@@ -102,7 +103,7 @@ func (app *application) envsetupRun(cmd *cobra.Command, args []string) error {
 }
 
 type envsetupData struct {
-	runtime env.Runtime
+	runtime resolve.Runtime
 	home    string
 	source  string
 }
@@ -150,12 +151,12 @@ func loadEnvsetupData(ctx context.Context, tcOverride, target string) (envsetupD
 		ctx = context.Background()
 	}
 
-	var rt env.Runtime
+	var rt resolve.Runtime
 	var err error
 	if target != "" {
-		rt, err = env.ResolveTargetRuntime(ctx, tcOverride, target)
+		rt, err = resolve.ActiveTargetRuntime(ctx, tcOverride, target)
 	} else {
-		rt, err = env.ResolveRuntime(ctx, tcOverride)
+		rt, err = resolve.ActiveRuntime(ctx, tcOverride)
 	}
 	if err != nil {
 		return envsetupData{}, err

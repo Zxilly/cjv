@@ -1,4 +1,4 @@
-package env_test
+package resolve_test
 
 import (
 	"context"
@@ -11,7 +11,6 @@ import (
 	"github.com/Zxilly/cjv/internal/config/configtest"
 
 	"github.com/Zxilly/cjv/internal/config"
-	"github.com/Zxilly/cjv/internal/env"
 	"github.com/Zxilly/cjv/internal/resolve"
 	sdktarget "github.com/Zxilly/cjv/internal/target"
 	"github.com/Zxilly/cjv/internal/toolchain"
@@ -51,7 +50,7 @@ func setupFakeToolchain(t *testing.T, home, name string) string {
 	return tcDir
 }
 
-func TestResolveRuntimeEnv_DefaultToolchain(t *testing.T) {
+func TestActiveRuntimeEnv_DefaultToolchain(t *testing.T) {
 	home := t.TempDir()
 	configtest.Isolate(t, home)
 	t.Setenv("CJV_TOOLCHAIN", "")
@@ -62,7 +61,7 @@ func TestResolveRuntimeEnv_DefaultToolchain(t *testing.T) {
 	settings.DefaultToolchain = "lts-1.0.5"
 	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 
-	result, err := env.ResolveRuntimeEnv(context.Background(), "")
+	result, err := resolve.ActiveRuntimeEnv(context.Background(), "")
 	require.NoError(t, err)
 	assert.NotEmpty(t, result)
 
@@ -72,7 +71,7 @@ func TestResolveRuntimeEnv_DefaultToolchain(t *testing.T) {
 	assert.Contains(t, val, "lts-1.0.5")
 }
 
-func TestResolveRuntimeEnv_WithOverride(t *testing.T) {
+func TestActiveRuntimeEnv_WithOverride(t *testing.T) {
 	home := t.TempDir()
 	configtest.Isolate(t, home)
 	t.Setenv("CJV_TOOLCHAIN", "")
@@ -83,7 +82,7 @@ func TestResolveRuntimeEnv_WithOverride(t *testing.T) {
 	settings.DefaultToolchain = "lts-1.0.5"
 	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 
-	result, err := env.ResolveRuntimeEnv(context.Background(), "sts-1.0.3")
+	result, err := resolve.ActiveRuntimeEnv(context.Background(), "sts-1.0.3")
 	require.NoError(t, err)
 
 	// Should use sts-1.0.3, not the default lts-1.0.5
@@ -92,7 +91,7 @@ func TestResolveRuntimeEnv_WithOverride(t *testing.T) {
 	assert.Contains(t, val, "sts-1.0.3")
 }
 
-func TestResolveRuntimeEnv_NoToolchain(t *testing.T) {
+func TestActiveRuntimeEnv_NoToolchain(t *testing.T) {
 	home := t.TempDir()
 	configtest.Isolate(t, home)
 	t.Setenv("CJV_TOOLCHAIN", "")
@@ -100,11 +99,11 @@ func TestResolveRuntimeEnv_NoToolchain(t *testing.T) {
 	settings := config.DefaultSettings()
 	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 
-	_, err := env.ResolveRuntimeEnv(context.Background(), "")
+	_, err := resolve.ActiveRuntimeEnv(context.Background(), "")
 	assert.Error(t, err)
 }
 
-func TestResolveRuntimeEnv_ToolchainFileTargetsTriggerAutoInstall(t *testing.T) {
+func TestActiveRuntimeEnv_ToolchainFileTargetsTriggerAutoInstall(t *testing.T) {
 	home := t.TempDir()
 	cwd := t.TempDir()
 	configtest.Isolate(t, home)
@@ -141,7 +140,7 @@ targets = ["ohos"]
 	}
 	t.Cleanup(func() { resolve.AutoInstallFunc = oldAutoInstall })
 
-	_, err := env.ResolveRuntimeEnv(context.Background(), "")
+	_, err := resolve.ActiveRuntimeEnv(context.Background(), "")
 	require.NoError(t, err)
 	assert.Equal(t, "sts", gotInput)
 	assert.Equal(t, []string{"ohos"}, gotTargets)

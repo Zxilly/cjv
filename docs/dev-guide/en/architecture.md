@@ -66,7 +66,7 @@ Derive data paths from `config/layout.go`. Use `fsops` for tree copies, merges, 
 
 `resolve.Active` supplies project requirements according to `auto_install`. `run --install` enables installation explicitly; status queries do not install. `toolchain.ReadHostTargets` combines host identity, actual release, and platform. Target commands, `component --target`, `resolve.ActiveTarget`, and proxy target preparation all use it to avoid selecting another host's or release's cross SDK.
 
-`env.Runtime` merges SDK paths and component variables into an explicitly supplied base environment, then creates a child environment or shell script. `sdktools` owns tool paths. Unix proxies replace the current process; Windows proxies, `run`, and `exec` use `process.Run` for child execution.
+`env.Runtime` merges SDK paths and component variables into an explicitly supplied base environment, then creates a child environment or shell script. `env` does not select toolchains; `resolve.ActiveRuntime` pairs the active selection with its `env.Runtime`. `sdktools` owns tool paths. Unix proxies replace the current process; Windows proxies, `run`, and `exec` use `process.Run` for child execution.
 
 ## Distribution and downloads
 

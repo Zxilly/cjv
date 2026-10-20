@@ -6,6 +6,8 @@ import (
 	"os"
 	"os/exec"
 
+	"github.com/Zxilly/cjv/internal/resolve"
+
 	"github.com/Zxilly/cjv/internal/cjverr"
 	"github.com/Zxilly/cjv/internal/env"
 	"github.com/Zxilly/cjv/internal/i18n"
@@ -51,7 +53,7 @@ func (app *application) execRun(cmd *cobra.Command, args []string) error {
 	command := remaining[0]
 	commandArgs := remaining[1:]
 
-	runtimeEnv, err := env.ResolveRuntimeEnv(ctx, tcOverride)
+	runtimeEnv, err := resolve.ActiveRuntimeEnv(ctx, tcOverride)
 	if err != nil {
 		return err
 	}

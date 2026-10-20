@@ -66,7 +66,7 @@ URL 和本地归档安装走 `resolved_install.go`。随包 stdx 在 SDK 提交�
 
 `resolve.Active` 根据 `auto_install` 补齐项目要求。`run --install` 显式允许安装，状态查询不安装。`toolchain.ReadHostTargets` 统一读取宿主身份、实际发行版和平台；`target` 命令、`component --target`、`resolve.ActiveTarget` 及代理补齐都使用它，避免关联到其他宿主或版本的交叉 SDK。
 
-`env.Runtime` 从显式传入的基础环境合并 SDK 路径与组件变量，再生成子进程环境或 shell 脚本。`sdktools` 统一工具路径。Unix 代理替换当前进程，Windows 代理与 `run`、`exec` 共用 `process.Run` 处理子进程。
+`env.Runtime` 从显式传入的基础环境合并 SDK 路径与组件变量，再生成子进程环境或 shell 脚本。`env` 不负责选择工具链；`resolve.ActiveRuntime` 将当前选择与对应的 `env.Runtime` 组合。`sdktools` 统一工具路径。Unix 代理替换当前进程，Windows 代理与 `run`、`exec` 共用 `process.Run` 处理子进程。
 
 ## 分发与下载
 
