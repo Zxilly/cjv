@@ -14,9 +14,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// When a toolchain is removed,
-// settings must be cleaned up: overrides referencing it removed, and
-// a new default selected if needed.
+// When a toolchain is removed, settings must be cleaned up: overrides
+// referencing it removed, and a new default selected if needed.
 
 func TestUpdateSettingsAfterUninstall_RemovesOverrides(t *testing.T) {
 	home := t.TempDir()
@@ -100,4 +99,26 @@ func TestUpdateSettingsAfterUninstall_NoChangeWhenUnrelated(t *testing.T) {
 	reloaded, _ := config.LoadSettings(filepath.Join(home, ".cjv", "settings.toml"))
 	assert.Equal(t, "sts-2.0.0", reloaded.DefaultToolchain)
 	assert.Equal(t, "sts-2.0.0", reloaded.Overrides["C:\\dir"])
+}
+
+func TestUpdateSettingsAfterUninstallDoesNotPromoteTargetVariantToDefault(t *testing.T) {
+	home := t.TempDir()
+	configtest.Isolate(t, home)
+	require.NoError(t, toolchain.RecoverHome())
+	require.NoError(t, config.EnsureDirs())
+
+	name := "lts-1.0.5"
+	targetVariant := "lts-1.0.5-linux-x64-ohos"
+	require.NoError(t, os.MkdirAll(filepath.Join(home, "toolchains", name), 0o755))
+	require.NoError(t, os.MkdirAll(filepath.Join(home, "toolchains", targetVariant), 0o755))
+
+	settings := config.DefaultSettings()
+	settings.DefaultToolchain = name
+	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
+
+	require.NoError(t, lifecycle.RemoveToolchain(name))
+
+	loaded, err := config.LoadSettings(filepath.Join(home, ".cjv", "settings.toml"))
+	require.NoError(t, err)
+	assert.Empty(t, loaded.DefaultToolchain)
 }

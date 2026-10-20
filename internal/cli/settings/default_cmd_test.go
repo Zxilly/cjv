@@ -1,11 +1,16 @@
 package settings
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
 
+	"github.com/Zxilly/cjv/internal/cli/clictx"
+	"github.com/Zxilly/cjv/internal/cli/clitest"
 	"github.com/Zxilly/cjv/internal/config/configtest"
+	"github.com/Zxilly/cjv/internal/testutil"
+	"github.com/spf13/cobra"
 
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/stretchr/testify/assert"
@@ -119,4 +124,24 @@ func TestShowDefault_NoSettingsFile(t *testing.T) {
 	// No settings file — LoadSettings returns defaults
 	err := executeSettings(t, "default")
 	assert.NoError(t, err)
+}
+
+func TestDefaultInstallsMissingSDKAndPreservesLegacyOffline(t *testing.T) {
+	server := testutil.ValidMockServer(t)
+	home := clitest.UseManifest(t, server.URL)
+	run := func(args ...string) (string, error) {
+		return clitest.Execute(t, clitest.Root(func(root *cobra.Command, _ *clictx.Context) { RegisterCommands(root) }), args...)
+	}
+	text, err := run("default", "lts", "--json", "--quiet")
+	require.NoError(t, err)
+	require.True(t, json.Valid([]byte(text)))
+	require.DirExists(t, filepath.Join(home, "toolchains", "lts"))
+	server.Close()
+	legacy := filepath.Join(home, "toolchains", "sts-1.0.0")
+	require.NoError(t, os.MkdirAll(legacy, 0o755))
+	// Simulate a published layout before the one-time migration marker.
+	require.NoError(t, os.Remove(filepath.Join(home, ".cjv", "layout-v2")))
+	text, err = run("default", "sts", "--json")
+	require.NoError(t, err)
+	require.True(t, json.Valid([]byte(text)))
 }

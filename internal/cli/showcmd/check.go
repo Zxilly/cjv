@@ -1,0 +1,166 @@
+package showcmd
+
+import (
+	"errors"
+	"fmt"
+	"slices"
+	"strings"
+
+	"github.com/Zxilly/cjv/internal/cli/clictx"
+
+	"github.com/Zxilly/cjv/internal/cjverr"
+	"github.com/Zxilly/cjv/internal/i18n"
+	"github.com/Zxilly/cjv/internal/lifecycle"
+	"github.com/Zxilly/cjv/internal/selfupdate"
+	"github.com/Zxilly/cjv/internal/toolchain"
+	"github.com/fatih/color"
+	"github.com/spf13/cobra"
+)
+
+type checkEntry struct {
+	Name            string `json:"name"`
+	Latest          string `json:"latest,omitempty"`
+	UpdateAvailable bool   `json:"update_available"`
+	NotForTarget    bool   `json:"not_for_target,omitempty"`
+	Target          string `json:"target,omitempty"`
+	Error           string `json:"error,omitempty"`
+}
+
+type checkResult struct {
+	LatestCjvVersion string       `json:"latest_cjv_version,omitempty"`
+	SelfUpdateError  string       `json:"self_update_error,omitempty"`
+	Toolchains       []checkEntry `json:"toolchains"`
+	CjvVersion       string       `json:"cjv_version"`
+	HasUpdates       bool         `json:"has_updates"`
+	NoneInstalled    bool         `json:"none_installed,omitempty"`
+}
+
+func (r checkResult) Text() string {
+	if r.NoneInstalled && r.LatestCjvVersion == "" && r.SelfUpdateError == "" {
+		return i18n.T("NoToolchainsInstalled", nil)
+	}
+	var b strings.Builder
+	for _, e := range r.Toolchains {
+		switch {
+		case e.Error != "":
+			fmt.Fprintf(&b, "  %s: %s\n", e.Name, e.Error)
+		case e.NotForTarget:
+			fmt.Fprintf(&b, "  %s: %s\n", e.Name, i18n.T("UpdateAvailableButNotForTarget", i18n.MsgData{
+				"Current": e.Name,
+				"Latest":  e.Latest,
+				"Target":  e.Target,
+			}))
+		case e.UpdateAvailable:
+			b.WriteString(color.YellowString("  %s → %s", e.Name, e.Latest))
+			b.WriteByte('\n')
+		default:
+			b.WriteString(color.GreenString("  %s ✓", e.Name))
+			b.WriteByte('\n')
+		}
+	}
+	fmt.Fprintf(&b, "\n  cjv %s\n", r.CjvVersion)
+	if r.LatestCjvVersion != "" && r.LatestCjvVersion != r.CjvVersion {
+		fmt.Fprintf(&b, "  cjv %s → %s\n", r.CjvVersion, r.LatestCjvVersion)
+	}
+	if r.SelfUpdateError != "" {
+		fmt.Fprintf(&b, "  cjv: %s\n", r.SelfUpdateError)
+	}
+	if !r.HasUpdates && r.SelfUpdateError == "" && !slices.ContainsFunc(r.Toolchains, func(e checkEntry) bool { return e.Error != "" || e.NotForTarget }) {
+		b.WriteString(color.GreenString(i18n.T("AllUpToDate", nil)))
+		b.WriteByte('\n')
+	}
+	return b.String()
+}
+
+func (c *commands) runCheck(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	if err := toolchain.RecoverHomeContext(ctx); err != nil {
+		return err
+	}
+	installed, err := toolchain.ListInstalled()
+	if err != nil {
+		return err
+	}
+	result := checkResult{CjvVersion: c.ctx.Version, NoneInstalled: len(installed) == 0}
+	checked, checkErr := selfupdate.Check(ctx, c.ctx.UpdateURL, c.ctx.Version)
+	if checkErr != nil {
+		result.SelfUpdateError = checkErr.Error()
+	} else if checked.Status == selfupdate.StatusAvailable || checked.Status == selfupdate.StatusUpToDate {
+		result.LatestCjvVersion = checked.Version
+		result.HasUpdates = checked.Status == selfupdate.StatusAvailable
+	}
+	if len(installed) == 0 {
+		return c.ctx.Output.RenderTo(clictx.Out(cmd), result)
+	}
+
+	d, err := lifecycle.OpenDistribution(c.ctx.LifecycleOptions())
+	if err != nil {
+		return err
+	}
+	source, tuple := d.Source, d.HostTuple
+
+	for _, name := range installed {
+		parsed, err := toolchain.ParseToolchainName(name)
+		if err != nil || parsed.IsCustom() || parsed.Channel == toolchain.UnknownChannel {
+			continue
+		}
+		if parsed.Version != "" {
+			result.Toolchains = append(result.Toolchains, checkEntry{Name: name})
+			continue
+		}
+		dir, err := toolchain.FindInstalled(parsed)
+		if err != nil {
+			return err
+		}
+		current, err := toolchain.InstalledRelease(dir)
+		if err != nil {
+			result.Toolchains = append(result.Toolchains, checkEntry{Name: name, Error: err.Error()})
+			continue
+		}
+
+		infoTuple := tuple
+		if parsed.Host != "" {
+			infoTuple = parsed.Host
+		}
+		target := ""
+		if parsed.Target != "" {
+			infoTuple = parsed.Target
+			target = parsed.Target
+		}
+
+		latest, err := source.LatestAvailableVersion(ctx, parsed.Channel, infoTuple)
+		if err != nil {
+			entry := checkEntry{Name: name}
+			if unavailable, ok := errors.AsType[*cjverr.VersionNotAvailableError](err); ok {
+				entry.Latest = toolchain.ToolchainName{Channel: parsed.Channel, Version: unavailable.Version, Target: target}.String()
+				entry.NotForTarget = true
+				entry.Target = infoTuple
+			} else {
+				// Don't silently drop the toolchain on an unexpected error
+				// (e.g. a malformed/missing 'latest' for the channel) — surface
+				// it per-entry like the nightly branch does.
+				entry.Error = err.Error()
+			}
+			result.Toolchains = append(result.Toolchains, entry)
+			continue
+		}
+
+		latestName := toolchain.ToolchainName{Channel: parsed.Channel, Version: latest, Target: target, Host: parsed.Host}.String()
+		entry := checkEntry{Name: name, Latest: latestName}
+		if latestName != current.String() {
+			entry.UpdateAvailable = true
+			result.HasUpdates = true
+		}
+		result.Toolchains = append(result.Toolchains, entry)
+	}
+
+	return c.ctx.Output.RenderTo(clictx.Out(cmd), result)
+}
+
+func (c *commands) checkCommand() *cobra.Command {
+	return &cobra.Command{
+		Use:   "check",
+		Short: i18n.T("CheckCmdShort", nil),
+		RunE:  c.runCheck,
+	}
+}

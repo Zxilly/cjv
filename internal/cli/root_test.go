@@ -128,3 +128,28 @@ func TestRootCommandRunWithNoToolchains(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, stdout, "cjv install lts")
 }
+
+func TestGlobalSelectorAndBatchJSON(t *testing.T) {
+	home := t.TempDir()
+	configtest.Isolate(t, home)
+	for _, name := range []string{"sts-1.0.0", "lts-1.0.5"} {
+		require.NoError(t, os.MkdirAll(filepath.Join(home, "toolchains", name), 0o755))
+	}
+	sf, err := config.DefaultSettingsFile()
+	require.NoError(t, err)
+	name := "lts-1.0.5"
+	_, err = sf.Update(config.SettingsUpdate{DefaultToolchain: &name})
+	require.NoError(t, err)
+	text, err := executeWithOutput(t, newApplication("dev", ""), []string{"+sts-1.0.0", "--json"})
+	require.NoError(t, err)
+	var status rootResult
+	require.NoError(t, json.Unmarshal([]byte(text), &status))
+	require.Equal(t, "sts-1.0.0", status.Active)
+	text, err = executeWithOutput(t, newApplication("dev", ""), []string{"uninstall", "sts-1.0", "lts-1.0.5", "--yes", "--json"})
+	require.NoError(t, err)
+	var removed struct {
+		Removed []struct{ Name string } `json:"removed"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(text), &removed))
+	require.Len(t, removed.Removed, 2)
+}
