@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/Zxilly/cjv/internal/config/configtest"
-
 	"github.com/Zxilly/cjv/internal/env"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

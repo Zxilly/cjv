@@ -6,7 +6,6 @@ import (
 	"os"
 
 	"github.com/Zxilly/cjv/internal/cli/clictx"
-
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/env"
 	"github.com/Zxilly/cjv/internal/i18n"

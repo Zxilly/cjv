@@ -10,10 +10,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/Zxilly/cjv/internal/resolve"
-
 	"github.com/Zxilly/cjv/internal/cjverr"
 	"github.com/Zxilly/cjv/internal/config"
+	"github.com/Zxilly/cjv/internal/resolve"
 	"github.com/Zxilly/cjv/internal/sdktools"
 	"github.com/Zxilly/cjv/internal/toolchain"
 )

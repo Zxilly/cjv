@@ -13,10 +13,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Zxilly/cjv/internal/config/configtest"
-
 	"github.com/Zxilly/cjv/internal/cjverr"
 	"github.com/Zxilly/cjv/internal/config"
+	"github.com/Zxilly/cjv/internal/config/configtest"
 	"github.com/Zxilly/cjv/internal/fsops"
 	"github.com/Zxilly/cjv/internal/lifecycle"
 	"github.com/Zxilly/cjv/internal/progress"

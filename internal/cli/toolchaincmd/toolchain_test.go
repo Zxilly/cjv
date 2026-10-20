@@ -7,10 +7,9 @@ import (
 	"testing"
 
 	"github.com/Zxilly/cjv/internal/config/configtest"
-	"github.com/spf13/cobra"
-
 	"github.com/Zxilly/cjv/internal/sdktools"
 	"github.com/Zxilly/cjv/internal/testutil"
+	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

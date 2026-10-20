@@ -8,13 +8,12 @@ import (
 	"testing"
 
 	"github.com/Zxilly/cjv/internal/cli/clitest"
-	"github.com/Zxilly/cjv/internal/config/configtest"
-	"github.com/Zxilly/cjv/internal/progress"
-	"github.com/Zxilly/cjv/internal/testutil"
-
 	componentlib "github.com/Zxilly/cjv/internal/component"
 	"github.com/Zxilly/cjv/internal/config"
+	"github.com/Zxilly/cjv/internal/config/configtest"
 	"github.com/Zxilly/cjv/internal/lifecycle"
+	"github.com/Zxilly/cjv/internal/progress"
+	"github.com/Zxilly/cjv/internal/testutil"
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

@@ -11,9 +11,8 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/Zxilly/cjv/internal/config/configtest"
-
 	"github.com/Zxilly/cjv/internal/config"
+	"github.com/Zxilly/cjv/internal/config/configtest"
 	"github.com/Zxilly/cjv/internal/fstx"
 	"github.com/Zxilly/cjv/internal/lifecycle"
 	"github.com/Zxilly/cjv/internal/sdktools"

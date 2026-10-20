@@ -11,10 +11,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Zxilly/cjv/internal/config/configtest"
-
 	"github.com/Zxilly/cjv/internal/component"
 	"github.com/Zxilly/cjv/internal/config"
+	"github.com/Zxilly/cjv/internal/config/configtest"
 	"github.com/Zxilly/cjv/internal/lifecycle"
 	"github.com/Zxilly/cjv/internal/toolchain"
 	"github.com/stretchr/testify/assert"

@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/Zxilly/cjv/internal/cli/clictx"
-
 	"github.com/Zxilly/cjv/internal/dist"
 	"github.com/Zxilly/cjv/internal/i18n"
 	"github.com/Zxilly/cjv/internal/lifecycle"

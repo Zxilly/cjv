@@ -6,11 +6,10 @@ import (
 	"os"
 	"os/exec"
 
-	"github.com/Zxilly/cjv/internal/resolve"
-
 	"github.com/Zxilly/cjv/internal/cjverr"
 	"github.com/Zxilly/cjv/internal/env"
 	"github.com/Zxilly/cjv/internal/process"
+	"github.com/Zxilly/cjv/internal/resolve"
 	"github.com/spf13/cobra"
 )
 

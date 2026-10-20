@@ -14,7 +14,6 @@ import (
 	"github.com/Zxilly/cjv/internal/config/configtest"
 	"github.com/Zxilly/cjv/internal/dist"
 	"github.com/Zxilly/cjv/internal/target"
-	sdktarget "github.com/Zxilly/cjv/internal/target"
 	"github.com/Zxilly/cjv/internal/testutil"
 	"github.com/Zxilly/cjv/internal/toolchain"
 	"github.com/stretchr/testify/require"
@@ -26,7 +25,7 @@ func TestChannelGroupRetainsEverySDKWhenTargetIsUnavailable(t *testing.T) {
 			home := updateHome(t)
 			selectRelease(t, "1.0.0", "ohos")
 			require.NoError(t, Install(t.Context(), InstallRequest{Toolchain: "sts", Targets: []string{"ohos"}}, quietLifecycleOptions()))
-			tuple, err := sdktarget.CurrentTargetTuple("", "ohos")
+			tuple, err := target.CurrentTargetTuple("", "ohos")
 			require.NoError(t, err)
 			selectRelease(t, "2.0.0")
 			switch operation {

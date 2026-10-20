@@ -6,9 +6,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/codeclysm/extract/v4"
-
 	"github.com/Zxilly/cjv/internal/fsops"
+	"github.com/codeclysm/extract/v4"
 )
 
 var prepareExtractedTree = preparePlatformTree

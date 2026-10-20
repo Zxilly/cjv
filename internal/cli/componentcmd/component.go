@@ -8,9 +8,8 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/Zxilly/cjv/internal/cli/clictx"
-
 	"github.com/Zxilly/cjv/internal/cjverr"
+	"github.com/Zxilly/cjv/internal/cli/clictx"
 	"github.com/Zxilly/cjv/internal/cli/output"
 	componentlib "github.com/Zxilly/cjv/internal/component"
 	"github.com/Zxilly/cjv/internal/config"

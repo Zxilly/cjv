@@ -162,15 +162,17 @@ func (s *Source) ResolveToolchain(ctx context.Context, channel toolchain.Channel
 		}
 		found := false
 		for _, candidate := range channels {
-			candidateManifest,err:=s.manifestForChannel(ctx,candidate)
-			if err!=nil { return ToolchainRelease{},err }
+			candidateManifest, err := s.manifestForChannel(ctx, candidate)
+			if err != nil {
+				return ToolchainRelease{}, err
+			}
 			versions, listErr := candidateManifest.ListVersions(candidate, tuple)
 			if listErr != nil {
 				continue
 			}
 			for _, concrete := range versions {
 				if toolchain.MatchesVersionSelector(version, concrete) {
-					manifest=candidateManifest
+					manifest = candidateManifest
 					channel, version, found = candidate, concrete, true
 					break
 				}

@@ -10,13 +10,11 @@ import (
 	"testing"
 	"time"
 
-	settingscmd "github.com/Zxilly/cjv/internal/cli/settings"
-
 	"github.com/Zxilly/cjv/internal/cli/clictx"
 	"github.com/Zxilly/cjv/internal/cli/clitest"
-	"github.com/Zxilly/cjv/internal/config/configtest"
-
+	settingscmd "github.com/Zxilly/cjv/internal/cli/settings"
 	"github.com/Zxilly/cjv/internal/config"
+	"github.com/Zxilly/cjv/internal/config/configtest"
 	"github.com/Zxilly/cjv/internal/i18n"
 	"github.com/Zxilly/cjv/internal/sdktools"
 	"github.com/Zxilly/cjv/internal/testutil"

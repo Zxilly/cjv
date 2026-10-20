@@ -8,7 +8,6 @@ import (
 	"runtime"
 
 	"github.com/Zxilly/cjv/internal/cli/clictx"
-
 	componentlib "github.com/Zxilly/cjv/internal/component"
 	"github.com/Zxilly/cjv/internal/i18n"
 	"github.com/spf13/cobra"

@@ -8,11 +8,10 @@ import (
 	"testing"
 
 	"github.com/Zxilly/cjv/internal/cli/clitest"
-	"github.com/Zxilly/cjv/internal/config/configtest"
-	"github.com/Zxilly/cjv/internal/sdktools"
-
 	"github.com/Zxilly/cjv/internal/config"
+	"github.com/Zxilly/cjv/internal/config/configtest"
 	"github.com/Zxilly/cjv/internal/resolve"
+	"github.com/Zxilly/cjv/internal/sdktools"
 	sdktarget "github.com/Zxilly/cjv/internal/target"
 	"github.com/Zxilly/cjv/internal/testutil"
 	"github.com/Zxilly/cjv/internal/toolchain"
