@@ -1,4 +1,4 @@
-package cli
+package lifecycle_test
 
 import (
 	"os"
@@ -14,7 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// Tests for removal through the lifecycle module. When a toolchain is removed,
+// When a toolchain is removed,
 // settings must be cleaned up: overrides referencing it removed, and
 // a new default selected if needed.
 
