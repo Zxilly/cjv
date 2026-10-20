@@ -1,4 +1,4 @@
-package selfmgmt
+package selfcmd
 
 import (
 	"bytes"
@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/Zxilly/cjv/internal/cjverr"
+	"github.com/Zxilly/cjv/internal/cli/clictx"
 	"github.com/Zxilly/cjv/internal/cli/output"
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/config/configtest"
@@ -44,7 +45,7 @@ func TestSelfUpdateJSONReportsSkippedBuildWithoutLeakingText(t *testing.T) {
 				_ = leaked.Close()
 			})
 			var stdout bytes.Buffer
-			cmd := NewSelfCommand(tc.version, tc.updateURL, renderer)
+			cmd := newTestSelfCommand(tc.version, tc.updateURL, renderer)
 			cmd.SetOut(&stdout)
 			cmd.SetArgs([]string{"update"})
 			require.NoError(t, cmd.Execute())
@@ -64,11 +65,11 @@ func TestSelfUpdateJSONReportsSkippedBuildWithoutLeakingText(t *testing.T) {
 	}
 }
 
-func TestNewSelfCommandWiresSubcommandsAndUpdate(t *testing.T) {
+func TestSelfCommandWiresSubcommandsAndUpdate(t *testing.T) {
 	home := t.TempDir()
 	configtest.Isolate(t, home)
 
-	cmd := NewSelfCommand("dev", "", &output.Renderer{})
+	cmd := newTestSelfCommand("dev", "", &output.Renderer{})
 
 	assert.NotNil(t, cmd)
 	assert.NotNil(t, findSubcommand(cmd, "update"))
@@ -125,7 +126,7 @@ func TestSelfUninstallDoesNotCleanPathWhenRemoveHomeFails(t *testing.T) {
 		cleanupSelfPathEntries = oldCleanup
 	})
 
-	cmd := NewSelfCommand("dev", "", &output.Renderer{})
+	cmd := newTestSelfCommand("dev", "", &output.Renderer{})
 	cmd.SetOut(io.Discard)
 	cmd.SetErr(io.Discard)
 	cmd.SetArgs([]string{"uninstall", "--yes"})
@@ -140,8 +141,8 @@ func TestSelfCommandsKeepUninstallConfirmationPerInvocation(t *testing.T) {
 	ensureSelfManagedExecutable = func() (string, error) { return "", stopBeforeRemoval }
 	t.Cleanup(func() { ensureSelfManagedExecutable = oldEnsure })
 
-	first := NewSelfCommand("dev", "", &output.Renderer{JSON: true})
-	second := NewSelfCommand("dev", "", &output.Renderer{JSON: true})
+	first := newTestSelfCommand("dev", "", &output.Renderer{JSON: true})
+	second := newTestSelfCommand("dev", "", &output.Renderer{JSON: true})
 	for _, cmd := range []*cobra.Command{first, second} {
 		cmd.SetOut(io.Discard)
 		cmd.SetErr(io.Discard)
@@ -153,6 +154,13 @@ func TestSelfCommandsKeepUninstallConfirmationPerInvocation(t *testing.T) {
 	second.SetArgs([]string{"uninstall"})
 	var unsupported *cjverr.UnsupportedForJSONError
 	require.ErrorAs(t, second.Execute(), &unsupported)
+}
+
+// newTestSelfCommand builds the self command for one invocation's context.
+func newTestSelfCommand(version, updateURL string, renderer *output.Renderer) *cobra.Command {
+	ctx := clictx.New(version, updateURL)
+	ctx.Output = renderer
+	return newCommand(ctx)
 }
 
 func findSubcommand(cmd *cobra.Command, name string) *cobra.Command {

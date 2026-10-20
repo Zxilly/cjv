@@ -1,4 +1,4 @@
-package selfmgmt
+package selfcmd
 
 import (
 	"context"

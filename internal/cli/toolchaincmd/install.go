@@ -7,7 +7,6 @@ import (
 
 	"github.com/Zxilly/cjv/internal/cli/clictx"
 	"github.com/Zxilly/cjv/internal/cli/output"
-	"github.com/Zxilly/cjv/internal/cli/selfmgmt"
 	"github.com/Zxilly/cjv/internal/i18n"
 	"github.com/Zxilly/cjv/internal/lifecycle"
 	"github.com/spf13/cobra"
@@ -59,7 +58,7 @@ func (c *install) lifecycleOptions() lifecycle.Options {
 }
 
 func (c *install) run(cmd *cobra.Command, args []string) error {
-	selfmgmt.CheckSudoSafety()
+	clictx.CheckSudoSafety()
 	if len(args) == 0 {
 		name, err := c.ctx.SelectedToolchain("")
 		if err != nil {

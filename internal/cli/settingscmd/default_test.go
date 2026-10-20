@@ -1,4 +1,4 @@
-package settings
+package settingscmd
 
 import (
 	"encoding/json"
@@ -6,17 +6,16 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/Zxilly/cjv/internal/cli/clictx"
 	"github.com/Zxilly/cjv/internal/cli/clitest"
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/config/configtest"
+	"github.com/Zxilly/cjv/internal/i18n"
 	"github.com/Zxilly/cjv/internal/testutil"
-	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-// Tests for runDefault — sets, shows, or clears the default toolchain.
+// Tests for the default command: it sets, shows, or clears the default toolchain.
 
 func TestRunDefault_SetsDefault(t *testing.T) {
 	tmp := t.TempDir()
@@ -72,64 +71,48 @@ func TestRunDefault_ClearsDefault(t *testing.T) {
 	assert.Empty(t, reloaded.DefaultToolchain)
 }
 
-func TestRunDefault_ShowsCurrentDefault(t *testing.T) {
-	tmp := t.TempDir()
-	configtest.Isolate(t, tmp)
+func TestShowDefault(t *testing.T) {
+	for _, tc := range []struct {
+		name         string
+		settings     bool
+		defaultName  string
+		wantText     string
+		wantJSONName string
+	}{
+		{name: "set", settings: true, defaultName: "lts-1.0.5", wantText: "lts-1.0.5", wantJSONName: "lts-1.0.5"},
+		{name: "unset", settings: true, wantText: i18n.T("NoDefaultToolchain", nil)},
+		{name: "no settings file", wantText: i18n.T("NoDefaultToolchain", nil)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			configtest.Isolate(t, t.TempDir())
+			if tc.settings {
+				settings := config.DefaultSettings()
+				settings.DefaultToolchain = tc.defaultName
+				settingsPath, err := config.SettingsPath()
+				require.NoError(t, err)
+				require.NoError(t, config.SaveSettings(&settings, settingsPath))
+			}
 
-	settings := config.DefaultSettings()
-	settings.DefaultToolchain = "lts-1.0.5"
-	settingsPath, err := config.SettingsPath()
-	require.NoError(t, err)
-	require.NoError(t, config.SaveSettings(&settings, settingsPath))
+			out, err := executeSettingsOutput(t, "default")
+			require.NoError(t, err, "showing the default is never an error")
+			assert.Contains(t, out, tc.wantText)
 
-	err = executeSettings(t, "default")
-	assert.NoError(t, err)
-}
-
-func TestShowDefault_WithDefaultSet(t *testing.T) {
-	tmp := t.TempDir()
-	configtest.Isolate(t, tmp)
-
-	settings := config.DefaultSettings()
-	settings.DefaultToolchain = "lts-1.0.5"
-	settingsPath, err := config.SettingsPath()
-	require.NoError(t, err)
-	require.NoError(t, config.SaveSettings(&settings, settingsPath))
-
-	// Should succeed without error
-	err = executeSettings(t, "default")
-	assert.NoError(t, err)
-}
-
-func TestShowDefault_NoDefaultSet(t *testing.T) {
-	tmp := t.TempDir()
-	configtest.Isolate(t, tmp)
-
-	settings := config.DefaultSettings()
-	settings.DefaultToolchain = ""
-	settingsPath, err := config.SettingsPath()
-	require.NoError(t, err)
-	require.NoError(t, config.SaveSettings(&settings, settingsPath))
-
-	// Should succeed (prints "no default" message, not an error)
-	err = executeSettings(t, "default")
-	assert.NoError(t, err)
-}
-
-func TestShowDefault_NoSettingsFile(t *testing.T) {
-	tmp := t.TempDir()
-	configtest.Isolate(t, tmp)
-
-	// No settings file — LoadSettings returns defaults
-	err := executeSettings(t, "default")
-	assert.NoError(t, err)
+			out, err = executeSettingsOutput(t, "default", "--json")
+			require.NoError(t, err)
+			var result struct {
+				Toolchain string `json:"default_toolchain"`
+			}
+			require.NoError(t, json.Unmarshal([]byte(out), &result), out)
+			assert.Equal(t, tc.wantJSONName, result.Toolchain)
+		})
+	}
 }
 
 func TestDefaultInstallsMissingSDKAndPreservesLegacyOffline(t *testing.T) {
 	server := testutil.ValidMockServer(t)
 	home := clitest.UseManifest(t, server.URL)
 	run := func(args ...string) (string, error) {
-		return clitest.Execute(t, clitest.Root(func(root *cobra.Command, _ *clictx.Context) { RegisterCommands(root) }), args...)
+		return clitest.Execute(t, clitest.Root(Register), args...)
 	}
 	text, err := run("default", "lts", "--json", "--quiet")
 	require.NoError(t, err)

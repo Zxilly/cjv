@@ -1,6 +1,6 @@
 //go:build !windows
 
-package selfmgmt
+package selfcmd
 
 import (
 	"fmt"

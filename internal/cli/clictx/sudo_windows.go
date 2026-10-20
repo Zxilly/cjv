@@ -1,6 +1,6 @@
 //go:build windows
 
-package selfmgmt
+package clictx
 
 // CheckSudoSafety is a no-op on Windows.
 func CheckSudoSafety() {}

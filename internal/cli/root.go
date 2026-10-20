@@ -16,8 +16,8 @@ import (
 	"github.com/Zxilly/cjv/internal/cli/componentcmd"
 	"github.com/Zxilly/cjv/internal/cli/initcmd"
 	"github.com/Zxilly/cjv/internal/cli/runcmd"
-	"github.com/Zxilly/cjv/internal/cli/selfmgmt"
-	"github.com/Zxilly/cjv/internal/cli/settings"
+	"github.com/Zxilly/cjv/internal/cli/selfcmd"
+	"github.com/Zxilly/cjv/internal/cli/settingscmd"
 	"github.com/Zxilly/cjv/internal/cli/showcmd"
 	"github.com/Zxilly/cjv/internal/cli/toolchaincmd"
 	"github.com/Zxilly/cjv/internal/i18n"
@@ -68,11 +68,11 @@ func newApplication(ver, updURL string) *application {
 		runcmd.Register,
 		initcmd.Register,
 		toolchaincmd.Register,
+		settingscmd.Register,
+		selfcmd.Register,
 	} {
 		register(root, ctx)
 	}
-	settings.RegisterCommands(root)
-	root.AddCommand(selfmgmt.NewSelfCommand(ver, updURL, ctx.Output))
 	configureCobraHelp(root)
 	return &application{ctx: ctx, rootCmd: root}
 }

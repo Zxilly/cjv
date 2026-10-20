@@ -1,6 +1,6 @@
 //go:build windows
 
-package selfmgmt
+package clictx
 
 import (
 	"testing"

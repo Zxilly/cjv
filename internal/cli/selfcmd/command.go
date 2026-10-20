@@ -1,8 +1,10 @@
-package selfmgmt
+// Package selfcmd implements `cjv self`: updating and uninstalling cjv
+// itself.
+package selfcmd
 
 import (
 	"github.com/Zxilly/cjv/internal/cjverr"
-	"github.com/Zxilly/cjv/internal/cli/output"
+	"github.com/Zxilly/cjv/internal/cli/clictx"
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/i18n"
 	"github.com/Zxilly/cjv/internal/reachable"
@@ -28,8 +30,13 @@ var (
 	cleanupSelfPathEntries      = reachable.RemovePath
 )
 
-// NewSelfCommand creates the "self" command with its subcommands.
-func NewSelfCommand(ver, updURL string, renderer *output.Renderer) *cobra.Command {
+// Register adds self and its subcommands to root.
+func Register(root *cobra.Command, ctx *clictx.Context) {
+	root.AddCommand(newCommand(ctx))
+}
+
+func newCommand(ctx *clictx.Context) *cobra.Command {
+	renderer := ctx.Output
 	var uninstallYes bool
 	selfCmd := &cobra.Command{
 		Use:   "self",
@@ -40,7 +47,7 @@ func NewSelfCommand(ver, updURL string, renderer *output.Renderer) *cobra.Comman
 		Use:   "update",
 		Short: i18n.T("SelfUpdateShort", nil),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			result, err := UpdateManaged(cmd.Context(), updURL, ver, renderer.Progress(cmd.OutOrStdout()))
+			result, err := UpdateManaged(cmd.Context(), ctx.UpdateURL, ctx.Version, renderer.Progress(cmd.OutOrStdout()))
 			if err != nil {
 				return err
 			}

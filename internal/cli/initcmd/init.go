@@ -13,7 +13,6 @@ import (
 
 	"github.com/Zxilly/cjv/internal/cjverr"
 	"github.com/Zxilly/cjv/internal/cli/clictx"
-	"github.com/Zxilly/cjv/internal/cli/selfmgmt"
 	componentlib "github.com/Zxilly/cjv/internal/component"
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/i18n"
@@ -249,7 +248,7 @@ func (c *commands) run(cmd *cobra.Command, _ []string) error {
 	if c.ctx.Output.IsJSON() {
 		return &cjverr.UnsupportedForJSONError{Command: "init"}
 	}
-	selfmgmt.CheckSudoSafety()
+	clictx.CheckSudoSafety()
 	con := newInitConsole(cmd)
 	ctx := cmd.Context()
 	if ctx == nil {

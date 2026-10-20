@@ -1,10 +1,12 @@
-package settings
+package settingscmd
 
 import (
 	"io"
 	"path/filepath"
 	"testing"
 
+	"github.com/Zxilly/cjv/internal/cli/clictx"
+	"github.com/Zxilly/cjv/internal/cli/clitest"
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/config/configtest"
 	"github.com/spf13/cobra"
@@ -12,10 +14,10 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestRegisterCommandsAddsSettingsCommands(t *testing.T) {
+func TestRegisterAddsSettingsCommands(t *testing.T) {
 	root := &cobra.Command{Use: "cjv"}
 
-	RegisterCommands(root)
+	Register(root, clictx.New("dev", ""))
 
 	var names []string
 	for _, cmd := range root.Commands() {
@@ -35,8 +37,8 @@ func TestRegisteredCommandsKeepFlagStatePerRoot(t *testing.T) {
 	second := &cobra.Command{Use: "cjv", SilenceErrors: true, SilenceUsage: true}
 	first.SetOut(io.Discard)
 	second.SetOut(io.Discard)
-	RegisterCommands(first)
-	RegisterCommands(second)
+	Register(first, clictx.New("dev", ""))
+	Register(second, clictx.New("dev", ""))
 	first.SetArgs([]string{"override", "set", "lts", "--path", explicitDir})
 	second.SetArgs([]string{"override", "set", "sts"})
 	require.NoError(t, first.Execute())
@@ -60,8 +62,8 @@ func TestRegisteredUnsetCommandsKeepModesPerRoot(t *testing.T) {
 	second := &cobra.Command{Use: "cjv", SilenceErrors: true, SilenceUsage: true}
 	first.SetOut(io.Discard)
 	second.SetOut(io.Discard)
-	RegisterCommands(first)
-	RegisterCommands(second)
+	Register(first, clictx.New("dev", ""))
+	Register(second, clictx.New("dev", ""))
 	first.SetArgs([]string{"override", "unset", "--nonexistent"})
 	second.SetArgs([]string{"override", "unset", "--path", existingDir})
 	require.NoError(t, first.Execute())
@@ -71,12 +73,16 @@ func TestRegisteredUnsetCommandsKeepModesPerRoot(t *testing.T) {
 	assert.Empty(t, settings.Overrides)
 }
 
+// executeSettings runs args through a root holding the settings commands.
 func executeSettings(t *testing.T, args ...string) error {
 	t.Helper()
-	root := &cobra.Command{Use: "cjv", SilenceErrors: true, SilenceUsage: true}
-	root.SetOut(io.Discard)
-	root.SetErr(io.Discard)
-	RegisterCommands(root)
-	root.SetArgs(args)
-	return root.Execute()
+	_, err := executeSettingsOutput(t, args...)
+	return err
+}
+
+func executeSettingsOutput(t *testing.T, args ...string) (string, error) {
+	t.Helper()
+	ctx := clitest.Root(Register)
+	ctx.Root.SetErr(io.Discard)
+	return clitest.Execute(t, ctx, args...)
 }

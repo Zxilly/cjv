@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	"github.com/Zxilly/cjv/internal/cli/clictx"
-	"github.com/Zxilly/cjv/internal/cli/selfmgmt"
+	"github.com/Zxilly/cjv/internal/cli/selfcmd"
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/i18n"
 	"github.com/Zxilly/cjv/internal/lifecycle"
@@ -23,9 +23,9 @@ type updateEntry struct {
 }
 
 type updateResult struct {
-	Updates       []updateEntry          `json:"updates"`
-	NoneInstalled bool                   `json:"none_installed,omitempty"`
-	SelfUpdate    *selfmgmt.UpdateResult `json:"self_update,omitempty"`
+	Updates       []updateEntry         `json:"updates"`
+	NoneInstalled bool                  `json:"none_installed,omitempty"`
+	SelfUpdate    *selfcmd.UpdateResult `json:"self_update,omitempty"`
 
 	// Text mode: the toolchain updates were already reported as progress;
 	// what remains is the empty-home hint and the self-update outcome, either
@@ -131,7 +131,7 @@ func (c *update) autoSelfUpdate(ctx context.Context, result *updateResult) {
 	}
 	switch settings.AutoSelfUpdate {
 	case config.AutoSelfUpdateEnable:
-		selfResult, selfErr := selfmgmt.UpdateManaged(ctx, c.ctx.UpdateURL, c.ctx.Version, c.ctx.Progress())
+		selfResult, selfErr := selfcmd.UpdateManaged(ctx, c.ctx.UpdateURL, c.ctx.Version, c.ctx.Progress())
 		if selfResult.Status != "" {
 			result.SelfUpdate = &selfResult
 		}
@@ -150,7 +150,7 @@ func (c *update) autoSelfUpdate(ctx context.Context, result *updateResult) {
 			slog.Warn("self-update check failed", "error", checkErr)
 			return
 		}
-		result.SelfUpdate = &selfmgmt.UpdateResult{Version: checked.Version, Status: checked.Status}
+		result.SelfUpdate = &selfcmd.UpdateResult{Version: checked.Version, Status: checked.Status}
 		if checked.Status == selfupdate.StatusAvailable {
 			result.selfUpdateText = fmt.Sprintf("  cjv %s → %s", c.ctx.Version, checked.Version)
 			result.checkedVersion = ""

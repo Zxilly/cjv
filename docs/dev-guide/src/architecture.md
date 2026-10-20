@@ -25,7 +25,7 @@ CLI 解析命令，`lifecycle` 编排安装与更新，底层模块负责分发�
 
 ## 命令状态与输出
 
-每次 `cli.Execute` 创建独立的 `clictx.Context`（输出渲染器、`+toolchain` 选择、根命令）和命令树。命令组位于各自的包中（`showcmd`、`componentcmd`、`runcmd`、`initcmd`、`toolchaincmd`、`settings`、`selfmgmt`），各自在结构体中保存自己的标志，并注册到根命令。子命令把请求交给业务模块，业务模块通过 `progress.Sink` 报告事件，不直接打印最终结果。
+每次 `cli.Execute` 创建独立的 `clictx.Context`（输出渲染器、`+toolchain` 选择、根命令）和命令树。命令组位于各自的包中（`showcmd`、`componentcmd`、`runcmd`、`initcmd`、`toolchaincmd`、`settingscmd`、`selfcmd`），各自在结构体中保存自己的标志，并注册到根命令。子命令把请求交给业务模块，业务模块通过 `progress.Sink` 报告事件，不直接打印最终结果。
 
 文本模式由 `progress.Text` 和结果的 `Text()` 方法渲染；JSON 模式丢弃进度，只输出结构化结果或错误。错误由 CLI 渲染一次，`main` 负责退出码。代理路径的 stdout 属于 SDK 工具，自动安装进度写入 stderr。
 

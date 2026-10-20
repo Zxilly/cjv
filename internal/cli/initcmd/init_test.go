@@ -10,9 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Zxilly/cjv/internal/cli/clictx"
 	"github.com/Zxilly/cjv/internal/cli/clitest"
-	settingscmd "github.com/Zxilly/cjv/internal/cli/settings"
+	"github.com/Zxilly/cjv/internal/cli/settingscmd"
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/config/configtest"
 	"github.com/Zxilly/cjv/internal/i18n"
@@ -122,7 +121,7 @@ func TestInstallInitRestoresHomeEnvironment(t *testing.T) {
 				// without an environment override left behind by init masking it.
 				if state != "custom" {
 					nextHome := filepath.Join(userHome, "next")
-					next := clitest.Root(func(root *cobra.Command, _ *clictx.Context) { settingscmd.RegisterCommands(root) })
+					next := clitest.Root(settingscmd.Register)
 					next.Root.SetOut(io.Discard)
 					require.NoError(t, next.Execute([]string{"set", "home", nextHome}))
 					resolved, source, resolveErr := config.ResolveHomeWithSource()

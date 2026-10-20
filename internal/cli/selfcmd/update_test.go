@@ -1,4 +1,4 @@
-package selfmgmt
+package selfcmd
 
 import (
 	"archive/zip"
@@ -42,7 +42,7 @@ func TestSelfUpdateReportsAppliedVersionAfterProxyRefresh(t *testing.T) {
 			updateURL := serveManagedUpdate(t)
 			renderer := &output.Renderer{JSON: true}
 			var stdout, stderr bytes.Buffer
-			cmd := NewSelfCommand("1.0.0", updateURL, renderer)
+			cmd := newTestSelfCommand("1.0.0", updateURL, renderer)
 			cmd.SetOut(&stdout)
 			cmd.SetErr(&stderr)
 			cmd.SilenceErrors = true
