@@ -51,3 +51,9 @@ docs/*/book/
 /.sdk/
 /.hmos-sdk/
 __pycache__/
+
+# Tencent Cloud EdgeOne
+.env
+.edgeone/
+.tef_dist/
+.cloudflare/

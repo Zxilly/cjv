@@ -1,9 +1,12 @@
-name: Deploy static content to Pages
+name: Deploy website to GitHub Pages and EdgeOne
 
 on:
   push:
     branches: ["master"]
   workflow_call:
+    secrets:
+      EDGEONE_API_TOKEN:
+        required: true
   workflow_dispatch:
 
 permissions:
@@ -87,3 +90,47 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
+
+  edgeone:
+    name: Deploy to EdgeOne Makers
+    needs: deploy
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+    env:
+      EDGEONE_PROJECT_NAME: ${{ vars.EDGEONE_PROJECT_NAME }}
+      EDGEONE_API_TOKEN: ${{ secrets.EDGEONE_API_TOKEN }}
+    steps:
+      - name: Check deployment configuration
+        run: |
+          test -n "$EDGEONE_PROJECT_NAME"
+          test -n "$EDGEONE_API_TOKEN"
+      - name: Checkout deployment configuration
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Download the shared website artifact
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: github-pages
+          path: ${{ runner.temp }}/edgeone-artifact
+      - name: Extract website
+        run: |
+          mkdir -p "$RUNNER_TEMP/edgeone-site"
+          tar -xf "$RUNNER_TEMP/edgeone-artifact/artifact.tar" -C "$RUNNER_TEMP/edgeone-site"
+          test -f "$RUNNER_TEMP/edgeone-site/index.html"
+          test -f "$RUNNER_TEMP/edgeone-site/install.sh"
+          test -d "$RUNNER_TEMP/edgeone-site/book"
+          test -d "$RUNNER_TEMP/edgeone-site/dl"
+          test -f "$RUNNER_TEMP/edgeone-site/404.html"
+          mkdir -p "$RUNNER_TEMP/edgeone-site/.edgeone"
+          cp deployment/edgeone/routes.json "$RUNNER_TEMP/edgeone-site/.edgeone/routes.json"
+      - name: Setup Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: lts/*
+      - name: Login to Tencent Cloud China
+        run: npx --yes edgeone@1.6.44 login --site china --token "$EDGEONE_API_TOKEN"
+      - name: Deploy the shared website to Makers
+        run: >-
+          npx --yes edgeone@1.6.44 makers deploy "$RUNNER_TEMP/edgeone-site"
+          --name "$EDGEONE_PROJECT_NAME" --env production --skip-ai-gateway-sync
