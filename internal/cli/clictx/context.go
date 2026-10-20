@@ -39,7 +39,7 @@ func New(version, updateURL string) *Context {
 // Progress is the adapter this invocation's operations report to: the
 // renderer picks text on the root command writer or nothing in JSON mode.
 func (c *Context) Progress() progress.Sink {
-	return c.Output.Progress(c.Root.OutOrStdout())
+	return c.Output.ProgressTo(c.Root.OutOrStdout(), c.Root.ErrOrStderr())
 }
 
 // LifecycleOptions returns the lifecycle adapters for this invocation.

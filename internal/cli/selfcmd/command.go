@@ -47,7 +47,7 @@ func newCommand(ctx *clictx.Context) *cobra.Command {
 		Use:   "update",
 		Short: i18n.T("SelfUpdateShort", nil),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			result, err := UpdateManaged(cmd.Context(), ctx.UpdateURL, ctx.Version, renderer.Progress(cmd.OutOrStdout()))
+			result, err := UpdateManaged(cmd.Context(), ctx.UpdateURL, ctx.Version, renderer.ProgressTo(cmd.OutOrStdout(), cmd.ErrOrStderr()))
 			if err != nil {
 				return err
 			}

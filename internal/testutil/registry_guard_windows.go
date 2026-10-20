@@ -3,11 +3,14 @@
 package testutil
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
+	"github.com/Zxilly/cjv/internal/fsops"
 	"golang.org/x/sys/windows/registry"
 )
 
@@ -19,28 +22,55 @@ type RegistryPathGuard struct {
 	value   string // original PATH content
 	valType uint32 // original value type (REG_SZ or REG_EXPAND_SZ)
 	existed bool   // whether the value existed before
+	lock    *os.File
 }
 
-// SaveRegistryPath snapshots the current HKCU\Environment\Path value.
+// SaveRegistryPath locks and snapshots the current HKCU\Environment\Path
+// value. Other test processes wait until Restore has restored it and released
+// the lock, so they never snapshot another test's temporary PATH.
 func SaveRegistryPath() (*RegistryPathGuard, error) {
+	return saveRegistryPath(context.Background())
+}
+
+func saveRegistryPath(ctx context.Context) (*RegistryPathGuard, error) {
+	lock, err := fsops.LockFile(ctx, filepath.Join(os.TempDir(), "cjv-test-registry-path.lock"))
+	if err != nil {
+		return nil, err
+	}
+	guard := &RegistryPathGuard{name: "Path", lock: lock}
 	key, err := registry.OpenKey(registry.CURRENT_USER, `Environment`, registry.QUERY_VALUE)
 	if err != nil {
-		// Key does not exist — nothing to save.
-		return &RegistryPathGuard{name: "Path"}, nil
+		if errors.Is(err, registry.ErrNotExist) {
+			return guard, nil
+		}
+		_ = lock.Close()
+		return nil, err
 	}
 	defer func() { _ = key.Close() }()
 
 	name := findRegistryPathName(key)
+	guard.name = name
 	val, valType, err := key.GetStringValue(name)
 	if err != nil {
-		// Value does not exist under this key.
-		return &RegistryPathGuard{name: name}, nil
+		if errors.Is(err, registry.ErrNotExist) {
+			return guard, nil
+		}
+		_ = lock.Close()
+		return nil, err
 	}
-	return &RegistryPathGuard{name: name, value: val, valType: valType, existed: true}, nil
+	guard.value, guard.valType, guard.existed = val, valType, true
+	return guard, nil
 }
 
 // Restore writes back the original registry value.
 func (g *RegistryPathGuard) Restore() {
+	if g.lock == nil {
+		return
+	}
+	defer func() {
+		_ = g.lock.Close()
+		g.lock = nil
+	}()
 	key, _, err := registry.CreateKey(registry.CURRENT_USER, `Environment`, registry.SET_VALUE|registry.QUERY_VALUE)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "RegistryPathGuard: failed to open registry for restore: %v\n", err)
