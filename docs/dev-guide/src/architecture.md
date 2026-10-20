@@ -20,8 +20,9 @@ CLI 解析命令，`lifecycle` 编排安装与更新，底层模块负责分发�
 | `config` | 设置来源、项目选择规则和数据目录布局 |
 | `reachable`、`selfupdate` | 受管二进制、代理入口、PATH 及 cjv 更新 |
 | `fstx`、`fsops` | 持久化事务、原子文件操作和平台重试 |
+| `ohos` | 为 OpenHarmony 宿主准备原生载荷并自签名 |
 
-`progress` 定义事件和输出适配器；`i18n`、`cjverr`、`logging` 分别提供消息、结构化错误和日志。`testutil` 提供测试分发源、进度记录器及平台测试辅助。
+`progress` 定义事件和输出适配器；`i18n`、`cjverr`、`logging` 分别提供消息、结构化错误和日志。`retry` 是文件系统与下载重试策略共用的退避循环。`testutil` 提供测试分发源、进度记录器及平台测试辅助；`config/configtest` 隔离设置，`cli/clitest` 用于在测试中运行命令组。
 
 ## 命令状态与输出
 

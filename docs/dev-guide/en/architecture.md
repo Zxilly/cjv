@@ -20,8 +20,9 @@ The CLI parses commands, `lifecycle` coordinates installation and updates, and l
 | `config` | Setting origins, project selection, and data layout |
 | `reachable`, `selfupdate` | Managed binary, proxies, PATH, and cjv updates |
 | `fstx`, `fsops` | Durable transactions, atomic file operations, and platform retries |
+| `ohos` | Preparing and self-signing native payloads for OpenHarmony hosts |
 
-`progress` defines events and output adapters. `i18n`, `cjverr`, and `logging` provide messages, structured errors, and logs. `testutil` supplies distribution fixtures, progress recording, and platform test helpers.
+`progress` defines events and output adapters. `i18n`, `cjverr`, and `logging` provide messages, structured errors, and logs. `retry` is the backoff loop behind the filesystem and download retry policies. `testutil` supplies distribution fixtures, progress recording, and platform test helpers; `config/configtest` isolates settings and `cli/clitest` runs command groups in tests.
 
 ## Command state and output
 
