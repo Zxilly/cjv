@@ -12,6 +12,8 @@ import (
 
 var prepareExtractedTree = preparePlatformTree
 
+// InstallSDK extracts an SDK archive into destDir, unwrapping the single
+// top-level directory SDK archives are shipped in.
 func InstallSDK(ctx context.Context, archivePath, destDir string) error {
 	_, err := ExtractFlattened(ctx, archivePath, destDir, true)
 	return err
