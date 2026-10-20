@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/Zxilly/cjv/internal/config/configtest"
+
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/lifecycle"
 	"github.com/Zxilly/cjv/internal/testutil"
@@ -23,7 +25,7 @@ import (
 func TestRunUpdate_NoArgs(t *testing.T) {
 	app := newApplication("dev", "")
 	home := t.TempDir()
-	config.IsolateForTest(t, home)
+	configtest.Isolate(t, home)
 
 	cmd := &cobra.Command{}
 	err := app.runUpdate(cmd, nil)
@@ -33,7 +35,7 @@ func TestRunUpdate_NoArgs(t *testing.T) {
 func TestRunUpdate_WithToolchain(t *testing.T) {
 	app := newApplication("dev", "")
 	home := t.TempDir()
-	config.IsolateForTest(t, home)
+	configtest.Isolate(t, home)
 	require.NoError(t, config.EnsureDirs())
 
 	server := testutil.ValidMockServer(t)
@@ -50,7 +52,7 @@ func TestRunUpdate_WithToolchain(t *testing.T) {
 func TestRunUpdateRunsSelfCheckWhenSettingsAvailable(t *testing.T) {
 	app := newApplication("dev", "")
 	home := t.TempDir()
-	config.IsolateForTest(t, home)
+	configtest.Isolate(t, home)
 	require.NoError(t, config.EnsureDirs())
 	require.NoError(t, os.MkdirAll(filepath.Join(home, "toolchains", "local-sdk"), 0o755))
 	settings := config.DefaultSettings()
@@ -67,7 +69,7 @@ func TestRunUpdateRunsSelfCheckWhenSettingsAvailable(t *testing.T) {
 func TestRunUpdate_WithSpecificName(t *testing.T) {
 	app := newApplication("dev", "")
 	home := t.TempDir()
-	config.IsolateForTest(t, home)
+	configtest.Isolate(t, home)
 	require.NoError(t, config.EnsureDirs())
 
 	server := testutil.ValidMockServer(t)
@@ -85,7 +87,7 @@ func TestRunUpdate_WithSpecificName(t *testing.T) {
 func TestRunUpdate_SingleToolchain(t *testing.T) {
 	app := newApplication("dev", "")
 	home := t.TempDir()
-	config.IsolateForTest(t, home)
+	configtest.Isolate(t, home)
 	require.NoError(t, config.EnsureDirs())
 
 	server := testutil.ValidMockServer(t)
@@ -102,7 +104,7 @@ func TestRunUpdate_SingleToolchain(t *testing.T) {
 func TestRunUpdateRejectsInvalidAndUnknownNames(t *testing.T) {
 	app := newApplication("dev", "")
 	home := t.TempDir()
-	config.IsolateForTest(t, home)
+	configtest.Isolate(t, home)
 
 	cmd := &cobra.Command{}
 	require.Error(t, app.runUpdate(cmd, []string{"+bad"}))
@@ -115,7 +117,7 @@ func TestRunUpdateRendersJSONResult(t *testing.T) {
 	app.output.SetJSONMode(true)
 	app.noSelfUpdate = true
 	home := t.TempDir()
-	config.IsolateForTest(t, home)
+	configtest.Isolate(t, home)
 	require.NoError(t, config.EnsureDirs())
 	require.NoError(t, os.MkdirAll(filepath.Join(home, "toolchains", "lts-1.0.0"), 0o755))
 	server := testutil.ValidMockServer(t)

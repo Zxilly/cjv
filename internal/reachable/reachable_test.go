@@ -6,6 +6,8 @@ import (
 	"runtime"
 	"testing"
 
+	"github.com/Zxilly/cjv/internal/config/configtest"
+
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/sdktools"
 	"github.com/stretchr/testify/assert"
@@ -21,7 +23,7 @@ func envScriptNames() []string {
 
 func TestEnsureEstablishesManagedBinaryAndProxyLinks(t *testing.T) {
 	home := t.TempDir()
-	config.IsolateForTest(t, home)
+	configtest.Isolate(t, home)
 	t.Setenv(config.EnvNoPathSetup, "1")
 
 	require.NoError(t, Ensure(Policy{}))
@@ -38,7 +40,7 @@ func TestEnsureEstablishesManagedBinaryAndProxyLinks(t *testing.T) {
 
 func TestEnsureWritesEnvScriptsOnRequest(t *testing.T) {
 	home := t.TempDir()
-	config.IsolateForTest(t, home)
+	configtest.Isolate(t, home)
 	t.Setenv(config.EnvNoPathSetup, "1")
 
 	require.NoError(t, Ensure(Policy{EnvScripts: true}))
@@ -50,7 +52,7 @@ func TestEnsureWritesEnvScriptsOnRequest(t *testing.T) {
 
 func TestEnsureKeepsOrReplacesManagedBinaryPerPolicy(t *testing.T) {
 	home := t.TempDir()
-	config.IsolateForTest(t, home)
+	configtest.Isolate(t, home)
 	t.Setenv(config.EnvNoPathSetup, "1")
 	binDir := filepath.Join(home, "bin")
 	require.NoError(t, os.MkdirAll(binDir, 0o755))

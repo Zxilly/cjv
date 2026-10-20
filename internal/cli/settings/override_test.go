@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/Zxilly/cjv/internal/config/configtest"
+
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -14,7 +16,7 @@ import (
 func TestOverrideSetPreservesBareVersion(t *testing.T) {
 	tmp := t.TempDir()
 	dir := t.TempDir()
-	config.IsolateForTest(t, tmp)
+	configtest.Isolate(t, tmp)
 
 	require.NoError(t, executeSettings(t, "override", "set", "1.0.5", "--path", dir))
 
@@ -28,7 +30,7 @@ func TestOverrideSetPreservesBareVersion(t *testing.T) {
 func TestOverrideSetRejectsTargetVariant(t *testing.T) {
 	tmp := t.TempDir()
 	dir := t.TempDir()
-	config.IsolateForTest(t, tmp)
+	configtest.Isolate(t, tmp)
 
 	err := executeSettings(t, "override", "set", "sts-2.0.0-win32-x64-ohos", "--path", dir)
 	require.Error(t, err)
@@ -64,7 +66,7 @@ func TestResolveOverrideDir_FallsBackToCwd(t *testing.T) {
 
 func TestUnsetNonexistentOverrides_RemovesStale(t *testing.T) {
 	tmp := t.TempDir()
-	config.IsolateForTest(t, tmp)
+	configtest.Isolate(t, tmp)
 
 	existingDir := t.TempDir() // this dir exists
 	goneDir := filepath.Join(t.TempDir(), "gone")
@@ -88,7 +90,7 @@ func TestUnsetNonexistentOverrides_RemovesStale(t *testing.T) {
 
 func TestUnsetNonexistentOverrides_NoOpWhenAllExist(t *testing.T) {
 	tmp := t.TempDir()
-	config.IsolateForTest(t, tmp)
+	configtest.Isolate(t, tmp)
 
 	dir1 := t.TempDir()
 	dir2 := t.TempDir()
@@ -109,7 +111,7 @@ func TestUnsetNonexistentOverrides_NoOpWhenAllExist(t *testing.T) {
 func TestOverrideUnsetCommandRemovesMatchingNormalizedPath(t *testing.T) {
 	tmp := t.TempDir()
 	dir := t.TempDir()
-	config.IsolateForTest(t, tmp)
+	configtest.Isolate(t, tmp)
 
 	settings := config.DefaultSettings()
 	settings.Overrides[config.NormalizePath(dir)] = "lts-1.0.5"
@@ -127,7 +129,7 @@ func TestOverrideUnsetCommandRemovesMatchingNormalizedPath(t *testing.T) {
 func TestOverrideUnsetCommandErrorsWhenMissing(t *testing.T) {
 	tmp := t.TempDir()
 	dir := t.TempDir()
-	config.IsolateForTest(t, tmp)
+	configtest.Isolate(t, tmp)
 
 	err := executeSettings(t, "override", "unset", "--path", dir)
 	require.Error(t, err)
@@ -139,7 +141,7 @@ func TestOverrideUnsetCommandErrorsWhenMissing(t *testing.T) {
 
 func TestOverrideListCommandHandlesEmptyAndSortedEntries(t *testing.T) {
 	tmp := t.TempDir()
-	config.IsolateForTest(t, tmp)
+	configtest.Isolate(t, tmp)
 
 	require.NoError(t, executeSettings(t, "override", "list"))
 

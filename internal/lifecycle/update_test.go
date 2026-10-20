@@ -9,6 +9,8 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/Zxilly/cjv/internal/config/configtest"
+
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/dist"
 	"github.com/Zxilly/cjv/internal/progress"
@@ -25,7 +27,7 @@ import (
 func updateHome(t *testing.T) string {
 	t.Helper()
 	home := t.TempDir()
-	config.IsolateForTest(t, home)
+	configtest.Isolate(t, home)
 	t.Setenv(config.EnvDistServer, "")
 	require.NoError(t, config.EnsureDirs())
 	return home

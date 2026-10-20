@@ -5,14 +5,15 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/Zxilly/cjv/internal/config"
+	"github.com/Zxilly/cjv/internal/config/configtest"
+
 	"github.com/Zxilly/cjv/internal/target"
 	"github.com/stretchr/testify/require"
 )
 
 func TestVersionSelectorsChooseInstalledConcreteRelease(t *testing.T) {
 	home := t.TempDir()
-	config.IsolateForTest(t, home)
+	configtest.Isolate(t, home)
 	for _, name := range []string{"sts-1.2.1", "sts-1.2.10", "sts-1.2.11-beta.1", "nightly-1.3.0-alpha.20261004001050", "nightly-1.3.0-alpha.20261005001050"} {
 		require.NoError(t, os.MkdirAll(filepath.Join(home, "toolchains", name), 0755))
 	}
@@ -28,7 +29,7 @@ func TestVersionSelectorsChooseInstalledConcreteRelease(t *testing.T) {
 
 func TestExplicitHostSelectorsFindLegacyIdentity(t *testing.T) {
 	home := t.TempDir()
-	config.IsolateForTest(t, home)
+	configtest.Isolate(t, home)
 	host, err := target.CurrentHostTuple("")
 	require.NoError(t, err)
 	dir := filepath.Join(home, "toolchains", "sts-1.0.0")

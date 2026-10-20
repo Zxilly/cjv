@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/Zxilly/cjv/internal/config/configtest"
+
 	"github.com/Zxilly/cjv/internal/component"
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/lifecycle"
@@ -17,7 +19,7 @@ import (
 
 func TestGlobalSelectorAndBatchJSON(t *testing.T) {
 	home := t.TempDir()
-	config.IsolateForTest(t, home)
+	configtest.Isolate(t, home)
 	for _, name := range []string{"sts-1.0.0", "lts-1.0.5"} {
 		require.NoError(t, os.MkdirAll(filepath.Join(home, "toolchains", name), 0755))
 	}
@@ -40,7 +42,7 @@ func TestGlobalSelectorAndBatchJSON(t *testing.T) {
 
 func TestTargetManagementPinsHostAndReturnsJSON(t *testing.T) {
 	home := t.TempDir()
-	config.IsolateForTest(t, home)
+	configtest.Isolate(t, home)
 	server := testutil.MockServerWithTargetSDKs(t, toolchain.STS, "1.0.0", "ohos")
 	sf, err := config.DefaultSettingsFile()
 	require.NoError(t, err)
@@ -68,7 +70,7 @@ func TestTargetManagementPinsHostAndReturnsJSON(t *testing.T) {
 
 func TestAbsoluteSDKComponentsCannotMutateNamesake(t *testing.T) {
 	home := t.TempDir()
-	config.IsolateForTest(t, home)
+	configtest.Isolate(t, home)
 	external := filepath.Join(t.TempDir(), "outside-sdk")
 	require.NoError(t, os.MkdirAll(external, 0755))
 	roots, err := component.RootsFor("outside-sdk")
@@ -87,7 +89,7 @@ func TestAbsoluteSDKComponentsCannotMutateNamesake(t *testing.T) {
 
 func TestDefaultInstallsMissingSDKAndPreservesLegacyOffline(t *testing.T) {
 	home := t.TempDir()
-	config.IsolateForTest(t, home)
+	configtest.Isolate(t, home)
 	server := testutil.ValidMockServer(t)
 	sf, err := config.DefaultSettingsFile()
 	require.NoError(t, err)

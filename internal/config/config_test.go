@@ -127,14 +127,14 @@ func TestDefaultSettingsFileCachesByResolvedPath(t *testing.T) {
 	home1 := t.TempDir()
 	home2 := t.TempDir()
 
-	IsolateForTest(t, home1)
+	isolateForTest(t, home1)
 	sf1, err := DefaultSettingsFile()
 	require.NoError(t, err)
 	sf1Again, err := DefaultSettingsFile()
 	require.NoError(t, err)
 	assert.Same(t, sf1, sf1Again)
 
-	IsolateForTest(t, home2)
+	isolateForTest(t, home2)
 	sf2, err := DefaultSettingsFile()
 	require.NoError(t, err)
 	assert.NotSame(t, sf1, sf2)

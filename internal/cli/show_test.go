@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/Zxilly/cjv/internal/config/configtest"
+
 	"github.com/Zxilly/cjv/internal/cjverr"
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/i18n"
@@ -18,7 +20,7 @@ func TestRunShowActiveShowsNotInstalledGracefully(t *testing.T) {
 	app := newApplication("dev", "")
 	home := t.TempDir()
 	cwd := t.TempDir()
-	config.IsolateForTest(t, home)
+	configtest.Isolate(t, home)
 	t.Chdir(cwd)
 
 	settings := config.DefaultSettings()
@@ -33,7 +35,7 @@ func TestRunShowActiveShowsNotInstalledGracefully(t *testing.T) {
 func TestRunShowInstalled_ListsToolchains(t *testing.T) {
 	app := newApplication("dev", "")
 	home := t.TempDir()
-	config.IsolateForTest(t, home)
+	configtest.Isolate(t, home)
 
 	tcDir := filepath.Join(home, "toolchains")
 	require.NoError(t, os.MkdirAll(filepath.Join(tcDir, "lts-1.0.5"), 0o755))
@@ -47,7 +49,7 @@ func TestRunShowInstalled_ListsToolchains(t *testing.T) {
 func TestRunShowInstalled_NoToolchains(t *testing.T) {
 	app := newApplication("dev", "")
 	home := t.TempDir()
-	config.IsolateForTest(t, home)
+	configtest.Isolate(t, home)
 
 	cmd := &cobra.Command{}
 	err := app.runShowInstalled(cmd, nil)
@@ -57,7 +59,7 @@ func TestRunShowInstalled_NoToolchains(t *testing.T) {
 func TestRunShowDefault_WithDefault(t *testing.T) {
 	app := newApplication("dev", "")
 	home := t.TempDir()
-	config.IsolateForTest(t, home)
+	configtest.Isolate(t, home)
 	require.NoError(t, os.MkdirAll(filepath.Join(home, "toolchains", "lts-1.0.5"), 0o755))
 
 	settings := config.DefaultSettings()
@@ -72,7 +74,7 @@ func TestRunShowDefault_WithDefault(t *testing.T) {
 func TestRunShowDefault_NoToolchains(t *testing.T) {
 	app := newApplication("dev", "")
 	home := t.TempDir()
-	config.IsolateForTest(t, home)
+	configtest.Isolate(t, home)
 
 	var stdout, stderr bytes.Buffer
 	cmd := &cobra.Command{}
@@ -95,7 +97,7 @@ func TestRunShowActive_WithActiveToolchain(t *testing.T) {
 	app := newApplication("dev", "")
 	home := t.TempDir()
 	cwd := t.TempDir()
-	config.IsolateForTest(t, home)
+	configtest.Isolate(t, home)
 
 	t.Chdir(cwd)
 
@@ -113,7 +115,7 @@ func TestRunShowActive_NoActiveToolchain(t *testing.T) {
 	app := newApplication("dev", "")
 	home := t.TempDir()
 	cwd := t.TempDir()
-	config.IsolateForTest(t, home)
+	configtest.Isolate(t, home)
 	t.Setenv("CJV_TOOLCHAIN", "")
 
 	t.Chdir(cwd)

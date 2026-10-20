@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Zxilly/cjv/internal/config/configtest"
+
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/testutil"
 	"github.com/stretchr/testify/assert"
@@ -24,7 +26,7 @@ func guardedRegistry(t *testing.T) (binDir string) {
 		t.Skip("registry PATH writes run only on CI")
 	}
 	home := t.TempDir()
-	config.IsolateForTest(t, home)
+	configtest.Isolate(t, home)
 	t.Setenv(config.EnvNoPathSetup, "")
 	guard, err := testutil.SaveRegistryPath()
 	require.NoError(t, err)

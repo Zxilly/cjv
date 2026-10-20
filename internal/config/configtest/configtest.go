@@ -1,8 +1,15 @@
-package config
+// Package configtest provides test helpers for code that reads cjv settings
+// and data layout. It lives outside package config so production builds do
+// not depend on the testing package.
+package configtest
 
-import "testing"
+import (
+	"testing"
 
-// IsolateForTest points CJV_HOME at tmpDir and redirects the resolved user
+	"github.com/Zxilly/cjv/internal/config"
+)
+
+// Isolate points CJV_HOME at tmpDir and redirects the resolved user
 // home dir (used by SettingsPath() and the default-home branch of Home())
 // to the same tmpDir, then resets the package's caches so subsequent calls
 // observe the new layout.
@@ -19,13 +26,13 @@ import "testing"
 //
 // The helper registers a t.Cleanup that clears the override and resets the
 // caches, so later tests in the same binary do not observe stale state.
-func IsolateForTest(t *testing.T, tmpDir string) {
+func Isolate(t *testing.T, tmpDir string) {
 	t.Helper()
-	t.Setenv(EnvHome, tmpDir)
-	SetUserHomeDirOverrideForTest(tmpDir)
-	ResetDefaultSettingsFileCache()
+	t.Setenv(config.EnvHome, tmpDir)
+	config.SetUserHomeDirOverrideForTest(tmpDir)
+	config.ResetDefaultSettingsFileCache()
 	t.Cleanup(func() {
-		SetUserHomeDirOverrideForTest("")
-		ResetDefaultSettingsFileCache()
+		config.SetUserHomeDirOverrideForTest("")
+		config.ResetDefaultSettingsFileCache()
 	})
 }

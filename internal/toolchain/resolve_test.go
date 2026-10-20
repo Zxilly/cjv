@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/Zxilly/cjv/internal/config/configtest"
+
 	"github.com/Zxilly/cjv/internal/cjverr"
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/stretchr/testify/assert"
@@ -17,7 +19,7 @@ func TestPrepareActiveRevalidatesInstallerResult(t *testing.T) {
 	for _, installed := range []bool{false, true} {
 		t.Run(map[bool]string{false: "empty-success", true: "published-host"}[installed], func(t *testing.T) {
 			home := t.TempDir()
-			config.IsolateForTest(t, home)
+			configtest.Isolate(t, home)
 			calls := 0
 			dir, name, err := PrepareActive(t.Context(), "lts-1.0.5", func(ctx context.Context) error {
 				calls++
@@ -42,7 +44,7 @@ func TestPrepareActiveRevalidatesInstallerResult(t *testing.T) {
 
 func TestPrepareActivePreservesInstallationAndFilesystemErrors(t *testing.T) {
 	home := t.TempDir()
-	config.IsolateForTest(t, home)
+	configtest.Isolate(t, home)
 	expected := errors.New("download failed")
 	_, _, err := PrepareActive(t.Context(), "lts-1.0.5", func(ctx context.Context) error { return expected })
 	require.ErrorIs(t, err, expected)
@@ -82,7 +84,7 @@ func TestSelectActiveReturnsSettingsErrorWhenNoOverride(t *testing.T) {
 func TestResolveActiveToolchain_UsesDefault(t *testing.T) {
 	home := t.TempDir()
 	cwd := t.TempDir()
-	config.IsolateForTest(t, home)
+	configtest.Isolate(t, home)
 
 	t.Setenv("CJV_TOOLCHAIN", "")
 
@@ -106,7 +108,7 @@ func TestResolveActiveToolchain_UsesDefault(t *testing.T) {
 func TestResolveActiveToolchain_EnvVarOverridesDefault(t *testing.T) {
 	home := t.TempDir()
 	cwd := t.TempDir()
-	config.IsolateForTest(t, home)
+	configtest.Isolate(t, home)
 
 	t.Chdir(cwd)
 
@@ -131,7 +133,7 @@ func TestResolveActiveToolchain_EnvVarOverridesDefault(t *testing.T) {
 func TestResolveActiveToolchain_RejectsTargetVariant(t *testing.T) {
 	home := t.TempDir()
 	cwd := t.TempDir()
-	config.IsolateForTest(t, home)
+	configtest.Isolate(t, home)
 	t.Chdir(cwd)
 
 	name := "sts-2.0.0-win32-x64-ohos"
@@ -149,7 +151,7 @@ func TestResolveActiveToolchain_RejectsTargetVariant(t *testing.T) {
 func TestResolveActiveToolchain_NoConfig(t *testing.T) {
 	home := t.TempDir()
 	cwd := t.TempDir()
-	config.IsolateForTest(t, home)
+	configtest.Isolate(t, home)
 
 	t.Setenv("CJV_TOOLCHAIN", "")
 

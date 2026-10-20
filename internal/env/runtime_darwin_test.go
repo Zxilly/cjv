@@ -5,14 +5,15 @@ package env_test
 import (
 	"testing"
 
-	"github.com/Zxilly/cjv/internal/config"
+	"github.com/Zxilly/cjv/internal/config/configtest"
+
 	"github.com/Zxilly/cjv/internal/env"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func TestRuntimePreservesExplicitSDKRoot(t *testing.T) {
-	config.IsolateForTest(t, t.TempDir())
+	configtest.Isolate(t, t.TempDir())
 	for _, constructionRoot := range []string{"/construction-sdk", ""} {
 		t.Setenv("SDKROOT", constructionRoot)
 		rt, err := env.RuntimeForToolchain(t.TempDir(), "lts-1.0.5")

@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/Zxilly/cjv/internal/config/configtest"
+
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/testutil"
 	"github.com/spf13/cobra"
@@ -21,7 +23,7 @@ import (
 func TestRunCheck_NoToolchains(t *testing.T) {
 	app := newApplication("dev", "")
 	home := t.TempDir()
-	config.IsolateForTest(t, home)
+	configtest.Isolate(t, home)
 
 	cmd := &cobra.Command{}
 	err := app.runCheck(cmd, nil)
@@ -31,7 +33,7 @@ func TestRunCheck_NoToolchains(t *testing.T) {
 func TestRunCheck_WithInstalledToolchain(t *testing.T) {
 	app := newApplication("dev", "")
 	home := t.TempDir()
-	config.IsolateForTest(t, home)
+	configtest.Isolate(t, home)
 	require.NoError(t, config.EnsureDirs())
 
 	// Install a toolchain first
@@ -51,7 +53,7 @@ func TestRunCheck_WithInstalledToolchain(t *testing.T) {
 func TestRunCheck_NightlyUsesUnifiedDistServer(t *testing.T) {
 	app := newApplication("dev", "")
 	home := t.TempDir()
-	config.IsolateForTest(t, home)
+	configtest.Isolate(t, home)
 	require.NoError(t, config.EnsureDirs())
 
 	server := testutil.SplitNightlyMockServer(t)
@@ -80,7 +82,7 @@ func TestRunCheck_UpToDate(t *testing.T) {
 	app := newApplication("dev", "")
 
 	home := t.TempDir()
-	config.IsolateForTest(t, home)
+	configtest.Isolate(t, home)
 	require.NoError(t, config.EnsureDirs())
 
 	server := testutil.ValidMockServer(t)
@@ -102,7 +104,7 @@ func TestRunCheck_MixedVersions(t *testing.T) {
 	app := newApplication("dev", "")
 
 	home := t.TempDir()
-	config.IsolateForTest(t, home)
+	configtest.Isolate(t, home)
 	require.NoError(t, config.EnsureDirs())
 
 	server := testutil.ValidMockServer(t)
@@ -127,7 +129,7 @@ func TestRunCheck_UpdateAvailable(t *testing.T) {
 	app := newApplication("dev", "")
 
 	home := t.TempDir()
-	config.IsolateForTest(t, home)
+	configtest.Isolate(t, home)
 	require.NoError(t, config.EnsureDirs())
 
 	// Create a fake old installed LTS toolchain
@@ -148,7 +150,7 @@ func TestRunCheck_UpdateAvailable(t *testing.T) {
 func TestRunCheck_MultipleToolchains(t *testing.T) {
 	app := newApplication("dev", "")
 	home := t.TempDir()
-	config.IsolateForTest(t, home)
+	configtest.Isolate(t, home)
 	require.NoError(t, config.EnsureDirs())
 
 	// Create both LTS and STS old versions
@@ -169,7 +171,7 @@ func TestRunCheck_MultipleToolchains(t *testing.T) {
 func TestRunCheck_CustomToolchainSkipped(t *testing.T) {
 	app := newApplication("dev", "")
 	home := t.TempDir()
-	config.IsolateForTest(t, home)
+	configtest.Isolate(t, home)
 	require.NoError(t, config.EnsureDirs())
 
 	// Custom toolchains (non-standard names) should be skipped by check

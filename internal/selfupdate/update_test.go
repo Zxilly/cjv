@@ -10,6 +10,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Zxilly/cjv/internal/config/configtest"
+
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/sdktools"
 	"github.com/stretchr/testify/assert"
@@ -39,7 +41,7 @@ func TestUpdateReportsInstalledRelease(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			home := t.TempDir()
-			config.IsolateForTest(t, home)
+			configtest.Isolate(t, home)
 			t.Setenv(config.EnvMaxRetries, "0")
 			managed := filepath.Join(home, "bin", sdktools.CjvBinaryName())
 			require.NoError(t, os.MkdirAll(filepath.Dir(managed), 0o755))

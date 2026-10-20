@@ -4,6 +4,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/Zxilly/cjv/internal/config/configtest"
+
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -14,7 +16,7 @@ import (
 // Home() resolution picks it up when CJV_HOME is unset.
 func TestSetHomeCommandPersists(t *testing.T) {
 	tmp := t.TempDir()
-	config.IsolateForTest(t, tmp)
+	configtest.Isolate(t, tmp)
 	t.Setenv(config.EnvHome, "") // ensure persisted source wins
 
 	target := filepath.Join(tmp, "data")
@@ -40,7 +42,7 @@ func TestSetHomeCommandPersists(t *testing.T) {
 // CJV_HOME continues to override.
 func TestSetHomeCommandEnvStillWins(t *testing.T) {
 	tmp := t.TempDir()
-	config.IsolateForTest(t, tmp)
+	configtest.Isolate(t, tmp)
 	t.Setenv(config.EnvHome, "") // first persist without env
 
 	persisted := filepath.Join(tmp, "persisted")
@@ -61,7 +63,7 @@ func TestSetHomeCommandEnvStillWins(t *testing.T) {
 // TestSetHomeCommandEmptyClears verifies passing "" clears the persisted home.
 func TestSetHomeCommandEmptyClears(t *testing.T) {
 	tmp := t.TempDir()
-	config.IsolateForTest(t, tmp)
+	configtest.Isolate(t, tmp)
 	t.Setenv(config.EnvHome, "")
 
 	// First persist a value.

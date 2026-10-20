@@ -6,7 +6,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/Zxilly/cjv/internal/config"
+	"github.com/Zxilly/cjv/internal/config/configtest"
+
 	"github.com/Zxilly/cjv/internal/sdktools"
 	"github.com/Zxilly/cjv/internal/testutil"
 	"github.com/stretchr/testify/assert"
@@ -35,7 +36,7 @@ func TestToolchainLinkCommandCreatesCustomLinkAndProxyLinks(t *testing.T) {
 	app := newApplication("dev", "")
 	home := t.TempDir()
 	target := sdkDirForLink(t)
-	config.IsolateForTest(t, home)
+	configtest.Isolate(t, home)
 
 	require.NoError(t, app.link(t, "my-sdk", target))
 	assert.FileExists(t, filepath.Join(home, "bin", sdktools.CjvBinaryName()))
@@ -49,7 +50,7 @@ func TestToolchainLinkCommandCreatesCustomLinkAndProxyLinks(t *testing.T) {
 func TestToolchainLinkCommandRejectsInvalidInputs(t *testing.T) {
 	app := newApplication("dev", "")
 	home := t.TempDir()
-	config.IsolateForTest(t, home)
+	configtest.Isolate(t, home)
 
 	require.Error(t, app.link(t, "lts", t.TempDir()))
 	require.Error(t, app.link(t, "bad/path", t.TempDir()))
@@ -62,7 +63,7 @@ func TestToolchainLinkCommandRejectsInvalidInputs(t *testing.T) {
 func TestToolchainLinkCommandRejectsArchiveFlagsOnDirectory(t *testing.T) {
 	app := newApplication("dev", "")
 	home := t.TempDir()
-	config.IsolateForTest(t, home)
+	configtest.Isolate(t, home)
 
 	// Explicitly setting a URL/archive-only flag with a directory is rejected
 	// rather than silently ignored.
@@ -74,7 +75,7 @@ func TestToolchainLinkCommandRejectsArchiveFlagsOnDirectory(t *testing.T) {
 func TestToolchainLinkCommandRendersArchiveResultAsJSON(t *testing.T) {
 	app := newApplication("dev", "")
 	home := t.TempDir()
-	config.IsolateForTest(t, home)
+	configtest.Isolate(t, home)
 	sdkData, _ := testutil.MockSDKZip()
 	src := filepath.Join(t.TempDir(), "sdk.zip")
 	require.NoError(t, os.WriteFile(src, sdkData, 0o644))
@@ -91,7 +92,7 @@ func TestToolchainLinkCommandRendersArchiveResultAsJSON(t *testing.T) {
 func TestToolchainLinkCommandNormalizesNameInResult(t *testing.T) {
 	app := newApplication("dev", "")
 	home := t.TempDir()
-	config.IsolateForTest(t, home)
+	configtest.Isolate(t, home)
 	stdout, err := executeWithOutput(t, app, []string{"--json", "toolchain", "link", " my-sdk/ ", sdkDirForLink(t)})
 	require.NoError(t, err)
 	var result toolchainLinkResult

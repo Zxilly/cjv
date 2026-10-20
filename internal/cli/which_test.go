@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/Zxilly/cjv/internal/config/configtest"
+
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/resolve"
 	sdktarget "github.com/Zxilly/cjv/internal/target"
@@ -22,7 +24,7 @@ func TestRunWhich_FindsTool(t *testing.T) {
 	app := newApplication("dev", "")
 	home := t.TempDir()
 	cwd := t.TempDir()
-	config.IsolateForTest(t, home)
+	configtest.Isolate(t, home)
 	require.NoError(t, config.EnsureDirs())
 
 	t.Chdir(cwd)
@@ -43,7 +45,7 @@ func TestRunWhich_NoActiveToolchain(t *testing.T) {
 	app := newApplication("dev", "")
 	home := t.TempDir()
 	cwd := t.TempDir()
-	config.IsolateForTest(t, home)
+	configtest.Isolate(t, home)
 	t.Setenv("CJV_TOOLCHAIN", "")
 
 	t.Chdir(cwd)
@@ -60,7 +62,7 @@ func TestRunWhich_ToolchainFileTargetsTriggerAutoInstall(t *testing.T) {
 	app := newApplication("dev", "")
 	home := t.TempDir()
 	cwd := t.TempDir()
-	config.IsolateForTest(t, home)
+	configtest.Isolate(t, home)
 	t.Setenv("CJV_TOOLCHAIN", "")
 	require.NoError(t, config.EnsureDirs())
 	t.Chdir(cwd)

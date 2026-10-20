@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/Zxilly/cjv/internal/config/configtest"
+
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/lifecycle"
 	"github.com/Zxilly/cjv/internal/target"
@@ -18,7 +20,7 @@ func TestForceKeepsAlreadyInstalledSDKs(t *testing.T) {
 		for _, identity := range []string{"sts", "sts-1.0.0"} {
 			t.Run(operation+"/"+identity, func(t *testing.T) {
 				home := t.TempDir()
-				config.IsolateForTest(t, home)
+				configtest.Isolate(t, home)
 				server := testutil.MockServerWithTargetSDKs(t, toolchain.STS, "1.0.0", "ohos")
 				sf, err := config.DefaultSettingsFile()
 				require.NoError(t, err)
@@ -48,7 +50,7 @@ func TestForceAllowsMissingTargetsForInstallAndUpdate(t *testing.T) {
 	for _, operation := range []string{"install", "update"} {
 		t.Run(operation, func(t *testing.T) {
 			home := t.TempDir()
-			config.IsolateForTest(t, home)
+			configtest.Isolate(t, home)
 			old := testutil.MockServerWithTargetSDKs(t, toolchain.STS, "1.0.0", "ohos")
 			latest := testutil.MockServerWithTargetSDKs(t, toolchain.STS, "2.0.0")
 			sf, err := config.DefaultSettingsFile()
@@ -76,7 +78,7 @@ func TestForceAllowsMissingComponentsOnDirectTargets(t *testing.T) {
 	for _, fixed := range []bool{false, true} {
 		t.Run(map[bool]string{false: "tracking", true: "fixed"}[fixed], func(t *testing.T) {
 			home := t.TempDir()
-			config.IsolateForTest(t, home)
+			configtest.Isolate(t, home)
 			server := testutil.MockServerWithTargetSDKs(t, toolchain.STS, "1.0.0", "ohos")
 			sf, err := config.DefaultSettingsFile()
 			require.NoError(t, err)

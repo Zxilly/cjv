@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/Zxilly/cjv/internal/config/configtest"
+
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -14,7 +16,7 @@ import (
 
 func TestRunDefault_SetsDefault(t *testing.T) {
 	tmp := t.TempDir()
-	config.IsolateForTest(t, tmp)
+	configtest.Isolate(t, tmp)
 
 	require.NoError(t, os.MkdirAll(filepath.Join(tmp, "toolchains", "lts-1.0.5"), 0o755))
 	settings := config.DefaultSettings()
@@ -31,7 +33,7 @@ func TestRunDefault_SetsDefault(t *testing.T) {
 
 func TestRunDefault_RejectsTargetVariant(t *testing.T) {
 	tmp := t.TempDir()
-	config.IsolateForTest(t, tmp)
+	configtest.Isolate(t, tmp)
 
 	name := "sts-2.0.0-win32-x64-ohos"
 	require.NoError(t, os.MkdirAll(filepath.Join(tmp, "toolchains", name), 0o755))
@@ -51,7 +53,7 @@ func TestRunDefault_RejectsTargetVariant(t *testing.T) {
 
 func TestRunDefault_ClearsDefault(t *testing.T) {
 	tmp := t.TempDir()
-	config.IsolateForTest(t, tmp)
+	configtest.Isolate(t, tmp)
 
 	settings := config.DefaultSettings()
 	settings.DefaultToolchain = "lts-1.0.5"
@@ -68,7 +70,7 @@ func TestRunDefault_ClearsDefault(t *testing.T) {
 
 func TestRunDefault_ShowsCurrentDefault(t *testing.T) {
 	tmp := t.TempDir()
-	config.IsolateForTest(t, tmp)
+	configtest.Isolate(t, tmp)
 
 	settings := config.DefaultSettings()
 	settings.DefaultToolchain = "lts-1.0.5"
@@ -82,7 +84,7 @@ func TestRunDefault_ShowsCurrentDefault(t *testing.T) {
 
 func TestShowDefault_WithDefaultSet(t *testing.T) {
 	tmp := t.TempDir()
-	config.IsolateForTest(t, tmp)
+	configtest.Isolate(t, tmp)
 
 	settings := config.DefaultSettings()
 	settings.DefaultToolchain = "lts-1.0.5"
@@ -97,7 +99,7 @@ func TestShowDefault_WithDefaultSet(t *testing.T) {
 
 func TestShowDefault_NoDefaultSet(t *testing.T) {
 	tmp := t.TempDir()
-	config.IsolateForTest(t, tmp)
+	configtest.Isolate(t, tmp)
 
 	settings := config.DefaultSettings()
 	settings.DefaultToolchain = ""
@@ -112,7 +114,7 @@ func TestShowDefault_NoDefaultSet(t *testing.T) {
 
 func TestShowDefault_NoSettingsFile(t *testing.T) {
 	tmp := t.TempDir()
-	config.IsolateForTest(t, tmp)
+	configtest.Isolate(t, tmp)
 
 	// No settings file — LoadSettings returns defaults
 	err := executeSettings(t, "default")

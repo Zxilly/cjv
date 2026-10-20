@@ -16,6 +16,8 @@ import (
 	"runtime"
 	"testing"
 
+	"github.com/Zxilly/cjv/internal/config/configtest"
+
 	"github.com/Zxilly/cjv/internal/component"
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/dist"
@@ -43,7 +45,7 @@ type upgradeFixture struct {
 func newUpgradeFixture(t *testing.T, targetVariant, missingComponent bool) upgradeFixture {
 	t.Helper()
 	home := t.TempDir()
-	config.IsolateForTest(t, home)
+	configtest.Isolate(t, home)
 	t.Setenv(config.EnvDistServer, "")
 	tuple, err := sdktarget.CurrentHostTuple("")
 	require.NoError(t, err)
@@ -249,7 +251,7 @@ func TestChannelComponentChoicesDoNotAffectFixedInstall(t *testing.T) {
 
 func TestChannelUpgradeRecoversRealCrashWithAllComponents(t *testing.T) {
 	if os.Getenv("CJV_TEST_CHANNEL_CRASH") == "1" {
-		config.IsolateForTest(t, os.Getenv(config.EnvHome))
+		configtest.Isolate(t, os.Getenv(config.EnvHome))
 		lifecycle.SetAfterFinalizeHook(t, func() error { os.Exit(73); return nil })
 		_, err := lifecycle.UpdateInstalled(t.Context(), toolchain.ToolchainName{Channel: toolchain.LTS}, lifecycle.Options{})
 		t.Fatalf("expected interruption, got %v", err)

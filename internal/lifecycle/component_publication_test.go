@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/Zxilly/cjv/internal/config/configtest"
+
 	"github.com/Zxilly/cjv/internal/component"
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/fsops"
@@ -86,7 +88,7 @@ func assertUntouchedComponents(t *testing.T, roots component.Roots) {
 
 func TestComponentBatchRecoversRealProcessInterruption(t *testing.T) {
 	if phase := os.Getenv("CJV_TEST_COMPONENT_CRASH"); phase != "" {
-		config.IsolateForTest(t, os.Getenv(config.EnvHome))
+		configtest.Isolate(t, os.Getenv(config.EnvHome))
 		afterComponentRootHook = func(path string) error {
 			if phase == "first" || filepath.Base(path) == "components" {
 				os.Exit(73)

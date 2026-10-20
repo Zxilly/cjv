@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/Zxilly/cjv/internal/config/configtest"
+
 	"github.com/BurntSushi/toml"
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/stretchr/testify/assert"
@@ -13,7 +15,7 @@ import (
 
 func TestSettingChangePreservesFallback(t *testing.T) {
 	dir := t.TempDir()
-	config.IsolateForTest(t, dir)
+	configtest.Isolate(t, dir)
 	fallback := filepath.Join(dir, "fallback.toml")
 	t.Setenv(config.EnvFallbackSettings, fallback)
 	require.NoError(t, os.WriteFile(fallback, []byte(`dist_server = "https://old.example/cjv"
@@ -49,7 +51,7 @@ auto_install = false
 
 func TestSetPinsValueEqualToFallback(t *testing.T) {
 	dir := t.TempDir()
-	config.IsolateForTest(t, dir)
+	configtest.Isolate(t, dir)
 	fallback := filepath.Join(dir, "fallback.toml")
 	t.Setenv(config.EnvFallbackSettings, fallback)
 	require.NoError(t, os.WriteFile(fallback, []byte("auto_install = false\n"), 0o600))
@@ -64,7 +66,7 @@ func TestSetPinsValueEqualToFallback(t *testing.T) {
 
 func TestSetEmptyHomeSuppressesFallback(t *testing.T) {
 	dir := t.TempDir()
-	config.IsolateForTest(t, dir)
+	configtest.Isolate(t, dir)
 	t.Setenv(config.EnvHome, "")
 	fallback := filepath.Join(dir, "fallback.toml")
 	t.Setenv(config.EnvFallbackSettings, fallback)
@@ -79,7 +81,7 @@ func TestSetEmptyHomeSuppressesFallback(t *testing.T) {
 
 func TestDefaultAndOverrideKeepUnrelatedFallback(t *testing.T) {
 	dir := t.TempDir()
-	config.IsolateForTest(t, dir)
+	configtest.Isolate(t, dir)
 	fallback := filepath.Join(dir, "fallback.toml")
 	t.Setenv(config.EnvFallbackSettings, fallback)
 	require.NoError(t, os.WriteFile(fallback, []byte("default_toolchain = 'lts-1.0.5'\nauto_install = false\n"), 0o600))

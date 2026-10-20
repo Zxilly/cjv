@@ -1,10 +1,12 @@
 package lifecycle
 
 import (
-	"github.com/Zxilly/cjv/internal/config"
 	"os"
 	"os/exec"
 	"testing"
+
+	"github.com/Zxilly/cjv/internal/config"
+	"github.com/Zxilly/cjv/internal/config/configtest"
 
 	"github.com/Zxilly/cjv/internal/target"
 	"github.com/Zxilly/cjv/internal/toolchain"
@@ -40,7 +42,7 @@ func TestExplicitCurrentHostHasOneTargetOwner(t *testing.T) {
 
 func TestChannelGroupRecoversRealProcessInterruption(t *testing.T) {
 	if os.Getenv("CJV_TEST_GROUP_CRASH") == "1" {
-		config.IsolateForTest(t, os.Getenv(config.EnvHome))
+		configtest.Isolate(t, os.Getenv(config.EnvHome))
 		afterFinalizeHook = func() error { os.Exit(73); return nil }
 		_ = Install(t.Context(), InstallRequest{Toolchain: "sts"}, Options{})
 		os.Exit(74)

@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Zxilly/cjv/internal/config/configtest"
+
 	"github.com/Zxilly/cjv/internal/component"
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/env"
@@ -19,7 +21,7 @@ func TestRuntimeHonorsBaseLibraryPath(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("Windows loads SDK libraries through PATH")
 	}
-	config.IsolateForTest(t, t.TempDir())
+	configtest.Isolate(t, t.TempDir())
 	key := "LD_LIBRARY_PATH"
 	if runtime.GOOS == "darwin" {
 		key = "DYLD_LIBRARY_PATH"
@@ -73,7 +75,7 @@ func TestRuntimeHonorsBaseLibraryPath(t *testing.T) {
 }
 
 func TestRuntimeContributionsExcludeInheritedEnvironment(t *testing.T) {
-	config.IsolateForTest(t, t.TempDir())
+	configtest.Isolate(t, t.TempDir())
 	sdk := t.TempDir()
 	bin := filepath.Join(sdk, "bin")
 	libraryDir := filepath.Join(sdk, "tools", "lib")
@@ -120,7 +122,7 @@ func TestRuntimePreservesUnixPathKeyCasing(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("environment keys are case insensitive on Windows")
 	}
-	config.IsolateForTest(t, t.TempDir())
+	configtest.Isolate(t, t.TempDir())
 	sdk := t.TempDir()
 	bin := filepath.Join(sdk, "bin")
 	require.NoError(t, os.MkdirAll(bin, 0o755))
@@ -138,7 +140,7 @@ func TestRuntimePreservesUnixPathKeyCasing(t *testing.T) {
 
 func TestRuntimePreservesProxyAndToolchainEnvironmentModes(t *testing.T) {
 	home := t.TempDir()
-	config.IsolateForTest(t, home)
+	configtest.Isolate(t, home)
 	sdk := filepath.Join(home, "toolchains", "lts-1.0.5")
 	bin := filepath.Join(sdk, "bin")
 	require.NoError(t, os.MkdirAll(bin, 0o755))
@@ -184,7 +186,7 @@ func TestRuntimePreservesWindowsEnvironmentCasing(t *testing.T) {
 	if runtime.GOOS != "windows" {
 		t.Skip("environment keys are case sensitive on Unix")
 	}
-	config.IsolateForTest(t, t.TempDir())
+	configtest.Isolate(t, t.TempDir())
 	rt, err := env.RuntimeForToolchain(t.TempDir(), "lts-1.0.5")
 	require.NoError(t, err)
 	base := []string{"Path=C:\\old", "path=C:\\caller", "cangjie_home=C:\\old-sdk", "=D:=D:\\work"}

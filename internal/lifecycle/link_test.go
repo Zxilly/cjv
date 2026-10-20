@@ -13,6 +13,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Zxilly/cjv/internal/config/configtest"
+
 	"github.com/Zxilly/cjv/internal/cjverr"
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/fsops"
@@ -131,7 +133,7 @@ func writeArchive(t *testing.T, body []byte) string {
 func linkHome(t *testing.T) string {
 	t.Helper()
 	home := t.TempDir()
-	config.IsolateForTest(t, home)
+	configtest.Isolate(t, home)
 	t.Setenv(config.EnvDistServer, "")
 	return home
 }

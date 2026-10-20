@@ -3,13 +3,15 @@ package cli
 import (
 	"context"
 	"fmt"
-	"github.com/Zxilly/cjv/internal/config"
-	"github.com/Zxilly/cjv/internal/testutil"
-	"github.com/spf13/cobra"
-	"github.com/stretchr/testify/require"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/Zxilly/cjv/internal/config"
+	"github.com/Zxilly/cjv/internal/config/configtest"
+	"github.com/Zxilly/cjv/internal/testutil"
+	"github.com/spf13/cobra"
+	"github.com/stretchr/testify/require"
 )
 
 func TestUpdateExistingLatestAcrossRenderModes(t *testing.T) {
@@ -18,7 +20,7 @@ func TestUpdateExistingLatestAcrossRenderModes(t *testing.T) {
 			app := newApplication("dev", "")
 			app.output.SetJSONMode(jsonMode)
 			home := t.TempDir()
-			config.IsolateForTest(t, home)
+			configtest.Isolate(t, home)
 			t.Setenv(config.EnvNoPathSetup, "1")
 			require.NoError(t, config.EnsureDirs())
 			for _, name := range []string{"lts-1.0.0", "lts-1.0.5"} {

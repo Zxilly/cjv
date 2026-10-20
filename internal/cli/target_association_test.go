@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/Zxilly/cjv/internal/config/configtest"
+
 	"github.com/Zxilly/cjv/internal/cjverr"
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/resolve"
@@ -34,7 +36,7 @@ func TestCrossSDKAssociationAcrossCommands(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			home := t.TempDir()
-			config.IsolateForTest(t, home)
+			configtest.Isolate(t, home)
 			t.Setenv(config.EnvToolchain, "")
 			require.NoError(t, toolchain.RecoverHome())
 			current, err := target.CurrentHostTuple("")

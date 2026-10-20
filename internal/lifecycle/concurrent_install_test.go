@@ -9,6 +9,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Zxilly/cjv/internal/config/configtest"
+
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/lifecycle"
 	"github.com/Zxilly/cjv/internal/toolchain"
@@ -22,7 +24,7 @@ import (
 func TestConcurrentInstallAndRecovery(t *testing.T) {
 	if role := os.Getenv("CJV_TEST_CONCURRENT_ROLE"); role != "" {
 		home := os.Getenv(config.EnvHome)
-		config.IsolateForTest(t, home)
+		configtest.Isolate(t, home)
 		if role == "owner" {
 			pause := func() error {
 				require.NoError(t, os.WriteFile(filepath.Join(home, "owner-ready"), nil, 0o600))

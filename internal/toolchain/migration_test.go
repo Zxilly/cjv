@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/Zxilly/cjv/internal/config/configtest"
+
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -12,7 +14,7 @@ import (
 
 func TestLegacyMigrationPreservesSelectorsAndIndependentComponentRoots(t *testing.T) {
 	home := t.TempDir()
-	config.IsolateForTest(t, home)
+	configtest.Isolate(t, home)
 	require.NoError(t, config.EnsureDirs())
 	settings := config.DefaultSettings()
 	settings.DefaultToolchain = "sts-1.0.0"
@@ -59,7 +61,7 @@ func TestLegacyMigrationPreservesSelectorsAndIndependentComponentRoots(t *testin
 
 func TestLegacyMigrationFailureRollsBackAndRetries(t *testing.T) {
 	home := t.TempDir()
-	config.IsolateForTest(t, home)
+	configtest.Isolate(t, home)
 	require.NoError(t, config.EnsureDirs())
 	for _, root := range []string{"toolchains", "docs"} {
 		path := filepath.Join(home, root, "sts-1.0.0")

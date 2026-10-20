@@ -12,6 +12,8 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/Zxilly/cjv/internal/config/configtest"
+
 	"github.com/Zxilly/cjv/internal/cjverr"
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/testutil"
@@ -49,7 +51,7 @@ func TestRunPreparationRejectsInvalidSelectionsWithoutInstalling(t *testing.T) {
 		} {
 			t.Run(fmt.Sprintf("%s/install=%t", selection.name, install), func(t *testing.T) {
 				home := t.TempDir()
-				config.IsolateForTest(t, home)
+				configtest.Isolate(t, home)
 				var requests atomic.Int32
 				server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 					requests.Add(1)
@@ -81,7 +83,7 @@ func TestRunPreparationRejectsInvalidSelectionsWithoutInstalling(t *testing.T) {
 
 func TestRunPreparationInstallsOnlyMissingOfficialToolchain(t *testing.T) {
 	home := t.TempDir()
-	config.IsolateForTest(t, home)
+	configtest.Isolate(t, home)
 	upstream := testutil.ValidMockServer(t)
 	var requests atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -126,7 +128,7 @@ func TestRunRun_NoToolchain(t *testing.T) {
 	app := newApplication("dev", "")
 	home := t.TempDir()
 	cwd := t.TempDir()
-	config.IsolateForTest(t, home)
+	configtest.Isolate(t, home)
 	t.Setenv("CJV_TOOLCHAIN", "")
 
 	t.Chdir(cwd)
@@ -143,7 +145,7 @@ func TestRunRun_NoToolchain(t *testing.T) {
 func TestRunRunExecutesFallbackCommandForInstalledToolchain(t *testing.T) {
 	app := newApplication("dev", "")
 	home := t.TempDir()
-	config.IsolateForTest(t, home)
+	configtest.Isolate(t, home)
 	t.Setenv(config.EnvToolchain, "")
 	require.NoError(t, config.EnsureDirs())
 	require.NoError(t, os.MkdirAll(filepath.Join(home, "toolchains", "lts-1.0.5"), 0o755))

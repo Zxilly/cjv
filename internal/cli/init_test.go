@@ -10,6 +10,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Zxilly/cjv/internal/config/configtest"
+
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/i18n"
 	"github.com/Zxilly/cjv/internal/sdktools"
@@ -24,7 +26,7 @@ import (
 func TestRunInitNonInteractiveNoToolchainWritesManagedFiles(t *testing.T) {
 	app := newApplication("dev", "")
 	home := t.TempDir()
-	config.IsolateForTest(t, home)
+	configtest.Isolate(t, home)
 	config.ResetDefaultSettingsFileCache()
 
 	app.initYes = true
@@ -71,7 +73,7 @@ func TestInstallInitRestoresHomeEnvironment(t *testing.T) {
 			}
 			t.Run(name, func(t *testing.T) {
 				userHome := t.TempDir()
-				config.IsolateForTest(t, userHome)
+				configtest.Isolate(t, userHome)
 				t.Setenv(config.EnvNoPathSetup, "1")
 				t.Setenv(config.EnvHome, "")
 				switch state {
@@ -134,7 +136,7 @@ func TestInstallInitRestoresHomeEnvironment(t *testing.T) {
 func TestRunInitReturnsErrorWhenDefaultToolchainInstallFails(t *testing.T) {
 	app := newApplication("dev", "")
 	home := t.TempDir()
-	config.IsolateForTest(t, home)
+	configtest.Isolate(t, home)
 	config.ResetDefaultSettingsFileCache()
 
 	app.initYes = true
@@ -202,7 +204,7 @@ func observeInitPathSetup(t *testing.T, cjvHome string) func() {
 func TestRunInitCoversAlreadyInstalledAndModifyPathBranches(t *testing.T) {
 	app := newApplication("dev", "")
 	home := t.TempDir()
-	config.IsolateForTest(t, home)
+	configtest.Isolate(t, home)
 	config.ResetDefaultSettingsFileCache()
 
 	app.initYes = true
@@ -228,7 +230,7 @@ func TestRunInitCoversAlreadyInstalledAndModifyPathBranches(t *testing.T) {
 func TestRunInitPassesConfiguredComponentsToDefaultToolchainInstall(t *testing.T) {
 	app := newApplication("dev", "")
 	home := t.TempDir()
-	config.IsolateForTest(t, home)
+	configtest.Isolate(t, home)
 	t.Setenv(config.EnvDistServer, "")
 	t.Setenv(config.EnvNoPathSetup, "1")
 	server := testutil.SplitNightlyMockServer(t)
@@ -311,7 +313,7 @@ func TestInitCustomizeFormEndToEnd(t *testing.T) {
 
 func TestInitHomePathValidationAndActivation(t *testing.T) {
 	userHome := t.TempDir()
-	config.IsolateForTest(t, userHome)
+	configtest.Isolate(t, userHome)
 	config.ResetDefaultSettingsFileCache()
 	t.Cleanup(config.ResetDefaultSettingsFileCache)
 

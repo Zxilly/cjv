@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/Zxilly/cjv/internal/config/configtest"
+
 	"github.com/Zxilly/cjv/internal/cjverr"
 	"github.com/Zxilly/cjv/internal/component"
 	"github.com/Zxilly/cjv/internal/config"
@@ -31,7 +33,7 @@ func TestShouldAutoInstall_RespectsExplicitSetting(t *testing.T) {
 
 func TestActivePreparesHostThroughProductionInstaller(t *testing.T) {
 	home := t.TempDir()
-	config.IsolateForTest(t, home)
+	configtest.Isolate(t, home)
 	t.Setenv(config.EnvNoPathSetup, "1")
 	server := testutil.ValidMockServer(t)
 	sf, err := config.DefaultSettingsFile()
@@ -55,7 +57,7 @@ func TestLegacyMigrationKeepsTargetsAlignedWithSelectedHost(t *testing.T) {
 	for _, matching := range []bool{false, true} {
 		t.Run(map[bool]string{false: "missing", true: "installed"}[matching], func(t *testing.T) {
 			home := t.TempDir()
-			config.IsolateForTest(t, home)
+			configtest.Isolate(t, home)
 			require.NoError(t, config.EnsureDirs())
 			tuple, err := sdktarget.CurrentTargetTuple("", "ohos")
 			require.NoError(t, err)
@@ -161,7 +163,7 @@ func TestActiveTargetErrorsWhenTargetSDKMissing(t *testing.T) {
 
 func TestActiveDoesNotAutoInstallOverBrokenTargetRecord(t *testing.T) {
 	home := t.TempDir()
-	config.IsolateForTest(t, home)
+	configtest.Isolate(t, home)
 	t.Setenv(config.EnvToolchain, "")
 	t.Chdir(home)
 	require.NoError(t, toolchain.RecoverHome())
@@ -196,7 +198,7 @@ func TestActiveDoesNotAutoInstallOverBrokenTargetRecord(t *testing.T) {
 func TestActiveAutoInstallsMissingTargetsAndComponents(t *testing.T) {
 	home := t.TempDir()
 	cwd := t.TempDir()
-	config.IsolateForTest(t, home)
+	configtest.Isolate(t, home)
 	t.Setenv(config.EnvToolchain, "")
 	require.NoError(t, config.EnsureDirs())
 	t.Chdir(cwd)
@@ -257,7 +259,7 @@ components = ["docs"]
 
 func TestActiveReportsMissingComponentWhenAutoInstallDisabled(t *testing.T) {
 	home := t.TempDir()
-	config.IsolateForTest(t, home)
+	configtest.Isolate(t, home)
 	t.Setenv(config.EnvToolchain, "")
 	require.NoError(t, config.EnsureDirs())
 
@@ -276,7 +278,7 @@ func TestActiveReportsMissingComponentWhenAutoInstallDisabled(t *testing.T) {
 
 func TestActiveAutoInstallsMissingHostToolchain(t *testing.T) {
 	home := t.TempDir()
-	config.IsolateForTest(t, home)
+	configtest.Isolate(t, home)
 	t.Setenv(config.EnvToolchain, "")
 	require.NoError(t, config.EnsureDirs())
 
@@ -305,7 +307,7 @@ func TestActiveAutoInstallsMissingHostToolchain(t *testing.T) {
 // directory, so the freshly installed toolchain is reachable through bin/.
 func TestActiveAutoInstallCreatesManagedBinaryAndProxyLinks(t *testing.T) {
 	home := t.TempDir()
-	config.IsolateForTest(t, home)
+	configtest.Isolate(t, home)
 	t.Setenv(config.EnvToolchain, "")
 	t.Setenv(config.EnvDistServer, "")
 	require.NoError(t, config.EnsureDirs())
@@ -330,7 +332,7 @@ func TestActiveAutoInstallCreatesManagedBinaryAndProxyLinks(t *testing.T) {
 
 func TestActiveRunsToolchainRecoveryBeforeResolving(t *testing.T) {
 	home := t.TempDir()
-	config.IsolateForTest(t, home)
+	configtest.Isolate(t, home)
 	t.Setenv(config.EnvToolchain, "")
 	require.NoError(t, config.EnsureDirs())
 
@@ -352,7 +354,7 @@ func TestActiveRunsToolchainRecoveryBeforeResolving(t *testing.T) {
 
 func TestActiveAutoInstallFailureReportsToolchainMissing(t *testing.T) {
 	home := t.TempDir()
-	config.IsolateForTest(t, home)
+	configtest.Isolate(t, home)
 	t.Setenv(config.EnvToolchain, "")
 	require.NoError(t, config.EnsureDirs())
 

@@ -11,6 +11,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Zxilly/cjv/internal/config/configtest"
+
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/toolchain"
 	"github.com/stretchr/testify/assert"
@@ -25,7 +27,7 @@ func TestUpdateCancellationWhileHomeLocked(t *testing.T) {
 	} {
 		t.Run(fmt.Sprint(args), func(t *testing.T) {
 			home := t.TempDir()
-			config.IsolateForTest(t, home)
+			configtest.Isolate(t, home)
 			t.Setenv(config.EnvNoPathSetup, "1")
 			var requests atomic.Int32
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

@@ -15,6 +15,8 @@ import (
 	"runtime"
 	"testing"
 
+	"github.com/Zxilly/cjv/internal/config/configtest"
+
 	"github.com/Zxilly/cjv/internal/cli/output"
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/dist"
@@ -27,7 +29,7 @@ func TestSelfUpdateReportsAppliedVersionAfterProxyRefresh(t *testing.T) {
 	for _, blocked := range []bool{false, true} {
 		t.Run(fmt.Sprintf("proxy-blocked=%t", blocked), func(t *testing.T) {
 			home := t.TempDir()
-			config.IsolateForTest(t, home)
+			configtest.Isolate(t, home)
 			t.Setenv(config.EnvMaxRetries, "0")
 			binDir := filepath.Join(home, "bin")
 			require.NoError(t, os.MkdirAll(binDir, 0o755))

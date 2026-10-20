@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Zxilly/cjv/internal/config/configtest"
+
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -36,7 +38,7 @@ func TestExecuteRepeatedInvocations(t *testing.T) {
 }
 
 func TestExecuteInvocationsDoNotShareJSONMode(t *testing.T) {
-	config.IsolateForTest(t, t.TempDir())
+	configtest.Isolate(t, t.TempDir())
 	for _, args := range [][]string{{"--json"}, {}} {
 		app := newApplication("dev", "")
 		var stdout, stderr bytes.Buffer
@@ -54,7 +56,7 @@ func TestExecuteInvocationsDoNotShareJSONMode(t *testing.T) {
 }
 
 func TestExecuteArgumentFailureDoesNotAffectNextInvocation(t *testing.T) {
-	config.IsolateForTest(t, t.TempDir())
+	configtest.Isolate(t, t.TempDir())
 	failed := newApplication("dev", "")
 	var failureOutput, failureErrors bytes.Buffer
 	failed.rootCmd.SetOut(&failureOutput)
@@ -101,7 +103,7 @@ func TestExecuteUnknownCommandJSONDoesNotAffectNextHelp(t *testing.T) {
 func TestRootCommandRunListsInstalledAndMarksActive(t *testing.T) {
 	app := newApplication("dev", "")
 	home := t.TempDir()
-	config.IsolateForTest(t, home)
+	configtest.Isolate(t, home)
 	require.NoError(t, os.MkdirAll(filepath.Join(home, "toolchains", "lts-1.0.5"), 0o755))
 	require.NoError(t, os.MkdirAll(filepath.Join(home, "toolchains", "sts-2.0.0"), 0o755))
 	settings := config.DefaultSettings()
@@ -119,7 +121,7 @@ func TestRootCommandRunListsInstalledAndMarksActive(t *testing.T) {
 func TestRootCommandRunWithNoToolchains(t *testing.T) {
 	app := newApplication("dev", "")
 	home := t.TempDir()
-	config.IsolateForTest(t, home)
+	configtest.Isolate(t, home)
 
 	stdout, err := runWithRootOutput(t, app)
 

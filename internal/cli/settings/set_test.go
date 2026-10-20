@@ -3,6 +3,8 @@ package settings
 import (
 	"testing"
 
+	"github.com/Zxilly/cjv/internal/config/configtest"
+
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -10,7 +12,7 @@ import (
 
 func TestSetCommandsUpdateSettings(t *testing.T) {
 	tmp := t.TempDir()
-	config.IsolateForTest(t, tmp)
+	configtest.Isolate(t, tmp)
 
 	require.NoError(t, executeSettings(t, "set", "auto-self-update", config.AutoSelfUpdateDisable))
 	require.NoError(t, executeSettings(t, "set", "auto-install", "false"))
@@ -27,7 +29,7 @@ func TestSetCommandsUpdateSettings(t *testing.T) {
 
 func TestSetCommandsRejectInvalidValues(t *testing.T) {
 	tmp := t.TempDir()
-	config.IsolateForTest(t, tmp)
+	configtest.Isolate(t, tmp)
 
 	require.Error(t, executeSettings(t, "set", "auto-self-update", "sometimes"))
 	require.Error(t, executeSettings(t, "set", "auto-install", "maybe"))

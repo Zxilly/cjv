@@ -9,6 +9,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Zxilly/cjv/internal/config/configtest"
+
 	"github.com/Zxilly/cjv/internal/cjverr"
 	componentlib "github.com/Zxilly/cjv/internal/component"
 	"github.com/Zxilly/cjv/internal/config"
@@ -68,7 +70,7 @@ func executeEnvsetup(t *testing.T, args ...string) (string, error) {
 
 func TestEnvsetupRun_NoToolchain(t *testing.T) {
 	home := t.TempDir()
-	config.IsolateForTest(t, home)
+	configtest.Isolate(t, home)
 	t.Setenv("CJV_TOOLCHAIN", "")
 	config.ResetDefaultSettingsFileCache()
 	config.ResetCachedUserHomeDir()
@@ -85,7 +87,7 @@ func TestEnvsetupRun_NoToolchain(t *testing.T) {
 
 func TestEnvsetupRun_OutputContainsExport(t *testing.T) {
 	home := t.TempDir()
-	config.IsolateForTest(t, home)
+	configtest.Isolate(t, home)
 	t.Setenv("CJV_TOOLCHAIN", "")
 	config.ResetDefaultSettingsFileCache()
 	config.ResetCachedUserHomeDir()
@@ -111,7 +113,7 @@ func TestEnvsetupRun_OutputContainsExport(t *testing.T) {
 
 func TestEnvsetupRunJSONOutputsIngredients(t *testing.T) {
 	home := t.TempDir()
-	config.IsolateForTest(t, home)
+	configtest.Isolate(t, home)
 	t.Setenv("CJV_TOOLCHAIN", "")
 	t.Setenv("LD_LIBRARY_PATH", "/inherited-library")
 	t.Setenv("DYLD_LIBRARY_PATH", "/inherited-library")
@@ -177,7 +179,7 @@ func TestEnvsetupRunJSONOutputsIngredients(t *testing.T) {
 
 func TestEnvsetupRunJSONTargetSDK(t *testing.T) {
 	home := t.TempDir()
-	config.IsolateForTest(t, home)
+	configtest.Isolate(t, home)
 	t.Setenv("CJV_TOOLCHAIN", "")
 	config.ResetDefaultSettingsFileCache()
 	config.ResetCachedUserHomeDir()
@@ -214,7 +216,7 @@ func TestEnvsetupRunJSONTargetSDK(t *testing.T) {
 
 func TestEnvsetupRunJSONUsesDefaultSource(t *testing.T) {
 	home := t.TempDir()
-	config.IsolateForTest(t, home)
+	configtest.Isolate(t, home)
 	t.Setenv("CJV_TOOLCHAIN", "")
 	config.ResetDefaultSettingsFileCache()
 	config.ResetCachedUserHomeDir()
@@ -241,7 +243,7 @@ func TestEnvsetupRunJSONUsesDefaultSource(t *testing.T) {
 
 func TestEnvsetupRunJSONErrorEnvelope(t *testing.T) {
 	home := t.TempDir()
-	config.IsolateForTest(t, home)
+	configtest.Isolate(t, home)
 	t.Setenv("CJV_TOOLCHAIN", "")
 	config.ResetDefaultSettingsFileCache()
 	config.ResetCachedUserHomeDir()

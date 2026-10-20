@@ -4,6 +4,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/Zxilly/cjv/internal/config/configtest"
+
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/testutil"
 	"github.com/spf13/cobra"
@@ -17,7 +19,7 @@ import (
 func TestRunInstall_WithoutForce(t *testing.T) {
 	app := newApplication("dev", "")
 	home := t.TempDir()
-	config.IsolateForTest(t, home)
+	configtest.Isolate(t, home)
 	assert.NoError(t, config.EnsureDirs())
 
 	server := testutil.ValidMockServer(t)
@@ -34,7 +36,7 @@ func TestRunInstall_WithoutForce(t *testing.T) {
 func TestRunInstall_InvalidName(t *testing.T) {
 	app := newApplication("dev", "")
 	home := t.TempDir()
-	config.IsolateForTest(t, home)
+	configtest.Isolate(t, home)
 
 	cmd := &cobra.Command{}
 	cmd.Flags().BoolP("force", "f", false, "")

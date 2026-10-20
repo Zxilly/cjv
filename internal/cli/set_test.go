@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/Zxilly/cjv/internal/config/configtest"
+
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/lifecycle"
 	"github.com/Zxilly/cjv/internal/toolchain"
@@ -18,7 +20,7 @@ import (
 
 func TestUpdateSettingsAfterUninstall_RemovesOverrides(t *testing.T) {
 	home := t.TempDir()
-	config.IsolateForTest(t, home)
+	configtest.Isolate(t, home)
 	require.NoError(t, toolchain.RecoverHome())
 	require.NoError(t, os.MkdirAll(filepath.Join(home, "toolchains", "lts-1.0.5"), 0o755))
 
@@ -42,7 +44,7 @@ func TestUpdateSettingsAfterUninstall_RemovesOverrides(t *testing.T) {
 
 func TestUpdateSettingsAfterUninstall_SelectsNewDefault(t *testing.T) {
 	home := t.TempDir()
-	config.IsolateForTest(t, home)
+	configtest.Isolate(t, home)
 	require.NoError(t, toolchain.RecoverHome())
 	require.NoError(t, os.MkdirAll(filepath.Join(home, "toolchains", "lts-1.0.5"), 0o755))
 
@@ -63,7 +65,7 @@ func TestUpdateSettingsAfterUninstall_SelectsNewDefault(t *testing.T) {
 
 func TestUpdateSettingsAfterUninstall_ClearsDefaultWhenNoneRemain(t *testing.T) {
 	home := t.TempDir()
-	config.IsolateForTest(t, home)
+	configtest.Isolate(t, home)
 	require.NoError(t, toolchain.RecoverHome())
 	require.NoError(t, os.MkdirAll(filepath.Join(home, "toolchains", "lts-1.0.5"), 0o755))
 
@@ -83,7 +85,7 @@ func TestUpdateSettingsAfterUninstall_ClearsDefaultWhenNoneRemain(t *testing.T) 
 
 func TestUpdateSettingsAfterUninstall_NoChangeWhenUnrelated(t *testing.T) {
 	home := t.TempDir()
-	config.IsolateForTest(t, home)
+	configtest.Isolate(t, home)
 	require.NoError(t, toolchain.RecoverHome())
 	require.NoError(t, os.MkdirAll(filepath.Join(home, "toolchains", "lts-1.0.5"), 0o755))
 

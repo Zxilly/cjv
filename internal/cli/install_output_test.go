@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/Zxilly/cjv/internal/config/configtest"
+
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/lifecycle"
 	"github.com/Zxilly/cjv/internal/progress"
@@ -17,7 +19,7 @@ import (
 func setupComponentOutputTest(t *testing.T) (string, string) {
 	t.Helper()
 	home := t.TempDir()
-	config.IsolateForTest(t, home)
+	configtest.Isolate(t, home)
 	t.Setenv(config.EnvNoPathSetup, "1")
 	t.Setenv(config.EnvDistServer, "")
 	t.Setenv(config.EnvFallbackSettings, filepath.Join(home, "missing-fallback.toml"))

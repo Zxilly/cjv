@@ -10,6 +10,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Zxilly/cjv/internal/config/configtest"
+
 	"github.com/Zxilly/cjv/internal/component"
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/toolchain"
@@ -32,7 +34,7 @@ type linkedRemovalFixture struct {
 func newLinkedRemovalFixture(t *testing.T, kind string) linkedRemovalFixture {
 	t.Helper()
 	f := linkedRemovalFixture{home: t.TempDir(), source: t.TempDir()}
-	config.IsolateForTest(t, f.home)
+	configtest.Isolate(t, f.home)
 	require.NoError(t, config.EnsureDirs())
 	var err error
 	f.roots, err = component.RootsFor(linkedRemovalName)
@@ -379,7 +381,7 @@ func TestLinkedToolchainUnlinkIsFileOnlyAndScoped(t *testing.T) {
 
 func TestLinkedToolchainUnlinkCrashLeavesReferencesCleared(t *testing.T) {
 	if home := os.Getenv("CJV_TEST_UNLINK_HOME"); home != "" {
-		config.IsolateForTest(t, home)
+		configtest.Isolate(t, home)
 		roots, err := component.RootsFor(linkedRemovalName)
 		require.NoError(t, err)
 		sf, before, err := config.LoadDefaultSettings()

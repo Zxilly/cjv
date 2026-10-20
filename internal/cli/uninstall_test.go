@@ -6,6 +6,8 @@ import (
 	"runtime"
 	"testing"
 
+	"github.com/Zxilly/cjv/internal/config/configtest"
+
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/fstx"
 	"github.com/Zxilly/cjv/internal/lifecycle"
@@ -21,7 +23,7 @@ import (
 func TestRunUninstall_RemovesToolchain(t *testing.T) {
 	app := newApplication("dev", "")
 	home := t.TempDir()
-	config.IsolateForTest(t, home)
+	configtest.Isolate(t, home)
 	require.NoError(t, toolchain.RecoverHome())
 	require.NoError(t, config.EnsureDirs())
 
@@ -48,7 +50,7 @@ func TestRunUninstall_RemovesToolchain(t *testing.T) {
 func TestRunUninstall_NotInstalled(t *testing.T) {
 	app := newApplication("dev", "")
 	home := t.TempDir()
-	config.IsolateForTest(t, home)
+	configtest.Isolate(t, home)
 	require.NoError(t, toolchain.RecoverHome())
 	require.NoError(t, os.MkdirAll(filepath.Join(home, "toolchains"), 0o755))
 
@@ -59,7 +61,7 @@ func TestRunUninstall_NotInstalled(t *testing.T) {
 func TestRunUninstallRecoversBeforeCheckingInstallation(t *testing.T) {
 	app := newApplication("dev", "")
 	home := t.TempDir()
-	config.IsolateForTest(t, home)
+	configtest.Isolate(t, home)
 	require.NoError(t, toolchain.RecoverHome())
 	require.NoError(t, config.EnsureDirs())
 	name := "lts-1.0.5"
@@ -86,7 +88,7 @@ func TestRunUninstall_PreservesSettingsWhenRemoveFails(t *testing.T) {
 	}
 
 	home := t.TempDir()
-	config.IsolateForTest(t, home)
+	configtest.Isolate(t, home)
 	require.NoError(t, toolchain.RecoverHome())
 	require.NoError(t, config.EnsureDirs())
 
@@ -120,7 +122,7 @@ func TestRunUninstall_PreservesSettingsWhenRemoveFails(t *testing.T) {
 
 func TestUpdateSettingsAfterUninstallDoesNotPromoteTargetVariantToDefault(t *testing.T) {
 	home := t.TempDir()
-	config.IsolateForTest(t, home)
+	configtest.Isolate(t, home)
 	require.NoError(t, toolchain.RecoverHome())
 	config.ResetDefaultSettingsFileCache()
 	t.Cleanup(config.ResetDefaultSettingsFileCache)
@@ -145,7 +147,7 @@ func TestUpdateSettingsAfterUninstallDoesNotPromoteTargetVariantToDefault(t *tes
 func TestRunUninstall_MultipleInstalled(t *testing.T) {
 	app := newApplication("dev", "")
 	home := t.TempDir()
-	config.IsolateForTest(t, home)
+	configtest.Isolate(t, home)
 	require.NoError(t, toolchain.RecoverHome())
 	require.NoError(t, config.EnsureDirs())
 

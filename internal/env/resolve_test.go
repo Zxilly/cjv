@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Zxilly/cjv/internal/config/configtest"
+
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/env"
 	"github.com/Zxilly/cjv/internal/resolve"
@@ -51,7 +53,7 @@ func setupFakeToolchain(t *testing.T, home, name string) string {
 
 func TestResolveRuntimeEnv_DefaultToolchain(t *testing.T) {
 	home := t.TempDir()
-	config.IsolateForTest(t, home)
+	configtest.Isolate(t, home)
 	t.Setenv("CJV_TOOLCHAIN", "")
 
 	setupFakeToolchain(t, home, "lts-1.0.5")
@@ -72,7 +74,7 @@ func TestResolveRuntimeEnv_DefaultToolchain(t *testing.T) {
 
 func TestResolveRuntimeEnv_WithOverride(t *testing.T) {
 	home := t.TempDir()
-	config.IsolateForTest(t, home)
+	configtest.Isolate(t, home)
 	t.Setenv("CJV_TOOLCHAIN", "")
 
 	setupFakeToolchain(t, home, "sts-1.0.3")
@@ -92,7 +94,7 @@ func TestResolveRuntimeEnv_WithOverride(t *testing.T) {
 
 func TestResolveRuntimeEnv_NoToolchain(t *testing.T) {
 	home := t.TempDir()
-	config.IsolateForTest(t, home)
+	configtest.Isolate(t, home)
 	t.Setenv("CJV_TOOLCHAIN", "")
 
 	settings := config.DefaultSettings()
@@ -105,7 +107,7 @@ func TestResolveRuntimeEnv_NoToolchain(t *testing.T) {
 func TestResolveRuntimeEnv_ToolchainFileTargetsTriggerAutoInstall(t *testing.T) {
 	home := t.TempDir()
 	cwd := t.TempDir()
-	config.IsolateForTest(t, home)
+	configtest.Isolate(t, home)
 	t.Setenv("CJV_TOOLCHAIN", "")
 	t.Chdir(cwd)
 

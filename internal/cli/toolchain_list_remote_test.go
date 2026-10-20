@@ -11,6 +11,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Zxilly/cjv/internal/config/configtest"
+
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/dist"
 	sdktarget "github.com/Zxilly/cjv/internal/target"
@@ -94,7 +96,7 @@ func listRemoteMockServer(t *testing.T) *httptest.Server {
 func setupListRemote(t *testing.T) {
 	t.Helper()
 	home := t.TempDir()
-	config.IsolateForTest(t, home)
+	configtest.Isolate(t, home)
 	require.NoError(t, config.EnsureDirs())
 	server := listRemoteMockServer(t)
 	settings := config.DefaultSettings()
@@ -258,7 +260,7 @@ func TestRunToolchainListRemote_AllChannelsIncludeNightly(t *testing.T) {
 func TestRunToolchainListRemote_NightlyUsesDistServerManifest(t *testing.T) {
 	app := newApplication("dev", "")
 	home := t.TempDir()
-	config.IsolateForTest(t, home)
+	configtest.Isolate(t, home)
 	require.NoError(t, config.EnsureDirs())
 
 	server := testutil.SplitNightlyMockServer(t)
@@ -288,7 +290,7 @@ func TestRunToolchainListRemote_NightlyUsesDistServerManifest(t *testing.T) {
 func TestRunToolchainListRemote_AllPlatformsNightlyDistServerText(t *testing.T) {
 	app := newApplication("dev", "")
 	home := t.TempDir()
-	config.IsolateForTest(t, home)
+	configtest.Isolate(t, home)
 	require.NoError(t, config.EnsureDirs())
 	server := testutil.SplitNightlyMockServer(t)
 	settings := config.DefaultSettings()
@@ -448,7 +450,7 @@ func TestParseListRemoteChannel(t *testing.T) {
 func TestRunToolchainListRemote_TargetMutuallyExclusiveWithAllPlatforms(t *testing.T) {
 	app := newApplication("dev", "")
 	home := t.TempDir()
-	config.IsolateForTest(t, home)
+	configtest.Isolate(t, home)
 	require.NoError(t, config.EnsureDirs())
 
 	app.rootCmd.SetArgs([]string{"toolchain", "list-remote", "--all-platforms", "--target", "ohos"})

@@ -7,6 +7,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Zxilly/cjv/internal/config/configtest"
+
 	"github.com/Zxilly/cjv/internal/cjverr"
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/dist"
@@ -18,7 +20,7 @@ import (
 
 func TestPlacementDoesNotBlockRecoveryDuringPreparation(t *testing.T) {
 	home := t.TempDir()
-	config.IsolateForTest(t, home)
+	configtest.Isolate(t, home)
 	preparation, err := dist.BeginPreparation(t.Context(), filepath.Join(home, "downloads"))
 	require.NoError(t, err)
 	defer preparation.Close()
@@ -48,7 +50,7 @@ func TestPlacementDoesNotBlockRecoveryDuringPreparation(t *testing.T) {
 
 func TestPlacementRechecksDestinationAfterPreparation(t *testing.T) {
 	home := t.TempDir()
-	config.IsolateForTest(t, home)
+	configtest.Isolate(t, home)
 	preparation, err := dist.BeginPreparation(t.Context(), filepath.Join(home, "downloads"))
 	require.NoError(t, err)
 	defer preparation.Close()

@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/Zxilly/cjv/internal/config/configtest"
+
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
@@ -22,7 +24,7 @@ func TestExecRun_NoArgs(t *testing.T) {
 func TestExecRun_NoToolchain(t *testing.T) {
 	app := newApplication("dev", "")
 	home := t.TempDir()
-	config.IsolateForTest(t, home)
+	configtest.Isolate(t, home)
 	t.Setenv("CJV_TOOLCHAIN", "")
 	config.ResetDefaultSettingsFileCache()
 	config.ResetCachedUserHomeDir()
@@ -58,7 +60,7 @@ func TestExtractPlusToolchainFromExecArgs(t *testing.T) {
 func TestExecRunExecutesCommandWithActiveToolchain(t *testing.T) {
 	app := newApplication("dev", "")
 	home := t.TempDir()
-	config.IsolateForTest(t, home)
+	configtest.Isolate(t, home)
 	t.Setenv(config.EnvToolchain, "")
 	config.ResetDefaultSettingsFileCache()
 	require.NoError(t, config.EnsureDirs())

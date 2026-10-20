@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Zxilly/cjv/internal/config/configtest"
+
 	componentlib "github.com/Zxilly/cjv/internal/component"
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/lifecycle"
@@ -17,7 +19,7 @@ import (
 func setupComponentCLITest(t *testing.T, tcName string) string {
 	t.Helper()
 	home := t.TempDir()
-	config.IsolateForTest(t, home)
+	configtest.Isolate(t, home)
 	config.ResetDefaultSettingsFileCache()
 	tcDir := filepath.Join(home, "toolchains", tcName)
 	require.NoError(t, os.MkdirAll(tcDir, 0o755))
@@ -50,7 +52,7 @@ func TestResolveToolchainArgValidationAndActiveFallback(t *testing.T) {
 	require.Error(t, err)
 
 	home := t.TempDir()
-	config.IsolateForTest(t, home)
+	configtest.Isolate(t, home)
 	config.ResetDefaultSettingsFileCache()
 	t.Cleanup(config.ResetDefaultSettingsFileCache)
 	require.NoError(t, config.EnsureDirs())

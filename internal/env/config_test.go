@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/Zxilly/cjv/internal/config/configtest"
+
 	"github.com/Zxilly/cjv/internal/component"
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/stretchr/testify/assert"
@@ -13,7 +15,7 @@ import (
 
 func TestLoadToolchainEnvAppliesComponentEnv(t *testing.T) {
 	home := t.TempDir()
-	config.IsolateForTest(t, home)
+	configtest.Isolate(t, home)
 	tcDir := filepath.Join(home, "toolchains", "lts-1.0.5")
 	require.NoError(t, os.MkdirAll(tcDir, 0o755))
 	require.NoError(t, component.WriteManifest(tcDir, component.Stdx, []string{"dynamic/libfoo.so"}))

@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/Zxilly/cjv/internal/config/configtest"
+
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
@@ -26,7 +28,7 @@ func TestRegisterCommandsAddsSettingsCommands(t *testing.T) {
 }
 
 func TestRegisteredCommandsKeepFlagStatePerRoot(t *testing.T) {
-	config.IsolateForTest(t, t.TempDir())
+	configtest.Isolate(t, t.TempDir())
 	explicitDir := t.TempDir()
 	currentDir := t.TempDir()
 	t.Chdir(currentDir)
@@ -48,7 +50,7 @@ func TestRegisteredCommandsKeepFlagStatePerRoot(t *testing.T) {
 
 func TestRegisteredUnsetCommandsKeepModesPerRoot(t *testing.T) {
 	home := t.TempDir()
-	config.IsolateForTest(t, home)
+	configtest.Isolate(t, home)
 	existingDir := t.TempDir()
 	sf, settings, err := config.LoadDefaultSettings()
 	require.NoError(t, err)

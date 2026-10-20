@@ -9,6 +9,8 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/Zxilly/cjv/internal/config/configtest"
+
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/dist"
 	sdktarget "github.com/Zxilly/cjv/internal/target"
@@ -21,7 +23,7 @@ func TestLegacyTargetComponentInstallKeepsCrossPlatform(t *testing.T) {
 	for _, operation := range []string{"migrated-channel-no-update", "fixed-target"} {
 		t.Run(operation, func(t *testing.T) {
 			home := t.TempDir()
-			config.IsolateForTest(t, home)
+			configtest.Isolate(t, home)
 			t.Setenv(config.EnvDistServer, "")
 			host, err := sdktarget.CurrentHostTuple("")
 			require.NoError(t, err)

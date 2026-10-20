@@ -11,6 +11,8 @@ import (
 	"runtime"
 	"testing"
 
+	"github.com/Zxilly/cjv/internal/config/configtest"
+
 	"github.com/Zxilly/cjv/internal/cjverr"
 	"github.com/Zxilly/cjv/internal/cli/output"
 	"github.com/Zxilly/cjv/internal/config"
@@ -28,7 +30,7 @@ func TestSelfUpdateJSONReportsSkippedBuildWithoutLeakingText(t *testing.T) {
 		{"development", "dev", "https://example.invalid/owner/repo/releases", "dev"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			config.IsolateForTest(t, t.TempDir())
+			configtest.Isolate(t, t.TempDir())
 			t.Setenv(config.EnvNoPathSetup, "1")
 			renderer := &output.Renderer{JSON: true}
 
@@ -65,7 +67,7 @@ func TestSelfUpdateJSONReportsSkippedBuildWithoutLeakingText(t *testing.T) {
 
 func TestNewSelfCommandWiresSubcommandsAndUpdate(t *testing.T) {
 	home := t.TempDir()
-	config.IsolateForTest(t, home)
+	configtest.Isolate(t, home)
 
 	cmd := NewSelfCommand("dev", "", &output.Renderer{})
 
@@ -81,7 +83,7 @@ func TestNewSelfCommandWiresSubcommandsAndUpdate(t *testing.T) {
 
 func TestUpdateManagedRegeneratesEnvScripts(t *testing.T) {
 	home := t.TempDir()
-	config.IsolateForTest(t, home)
+	configtest.Isolate(t, home)
 
 	scripts := []string{"env"}
 	if runtime.GOOS == "windows" {
@@ -103,7 +105,7 @@ func TestUpdateManagedRegeneratesEnvScripts(t *testing.T) {
 
 func TestSelfUninstallDoesNotCleanPathWhenRemoveHomeFails(t *testing.T) {
 	home := t.TempDir()
-	config.IsolateForTest(t, home)
+	configtest.Isolate(t, home)
 
 	oldEnsure := ensureSelfManagedExecutable
 	oldRemove := removeSelfHomeDir
@@ -133,7 +135,7 @@ func TestSelfUninstallDoesNotCleanPathWhenRemoveHomeFails(t *testing.T) {
 }
 
 func TestSelfCommandsKeepUninstallConfirmationPerInvocation(t *testing.T) {
-	config.IsolateForTest(t, t.TempDir())
+	configtest.Isolate(t, t.TempDir())
 	oldEnsure := ensureSelfManagedExecutable
 	stopBeforeRemoval := errors.New("stop before removal")
 	ensureSelfManagedExecutable = func() (string, error) { return "", stopBeforeRemoval }

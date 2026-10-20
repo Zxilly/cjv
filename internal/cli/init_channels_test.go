@@ -10,6 +10,8 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/Zxilly/cjv/internal/config/configtest"
+
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/dist"
 	"github.com/Zxilly/cjv/internal/sdktools"
@@ -97,7 +99,7 @@ func TestRunInitAutoWithoutAvailableChannel(t *testing.T) {
 	for _, canceled := range []bool{false, true} {
 		t.Run(map[bool]string{false: "no-compatible-build", true: "canceled"}[canceled], func(t *testing.T) {
 			home := t.TempDir()
-			config.IsolateForTest(t, home)
+			configtest.Isolate(t, home)
 			t.Setenv(config.EnvDistServer, "")
 			t.Setenv(config.EnvNoPathSetup, "1")
 			server, downloads := initChannelServer(t, false)
@@ -141,7 +143,7 @@ func TestRunInitAutoInstallsNightlyForHarmonyHost(t *testing.T) {
 	for _, failStable := range []bool{false, true} {
 		t.Run(map[bool]string{false: "nightly-only-host", true: "stable-manifest-failed"}[failStable], func(t *testing.T) {
 			home := t.TempDir()
-			config.IsolateForTest(t, home)
+			configtest.Isolate(t, home)
 			t.Setenv(config.EnvDistServer, "")
 			t.Setenv(config.EnvNoPathSetup, "1")
 			server, downloads := initChannelServer(t, failStable)
