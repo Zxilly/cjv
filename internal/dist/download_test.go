@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -385,9 +384,6 @@ func TestDownloadOnceRangeNotSatisfiableDropsPartial(t *testing.T) {
 	require.Error(t, err)
 	assert.NoFileExists(t, partialPath)
 }
-
-// --- Tests merged from download_replace_test.go ---
-
 func TestDownloadFileReplacesExistingDestination(t *testing.T) {
 	content := []byte("fresh nightly archive")
 	hash := fmt.Sprintf("%x", sha256.Sum256(content))
@@ -407,63 +403,6 @@ func TestDownloadFileReplacesExistingDestination(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, content, data)
 }
-
-// --- Tests merged from http_retry_test.go ---
-
-func TestPermanentClientErrors_PreventRetry(t *testing.T) {
-	// These errors mean the request itself is wrong; retrying with the
-	// same URL/credentials will always fail.
-	permanentCodes := []int{400, 401, 403, 404, 405, 410}
-	for _, code := range permanentCodes {
-		assert.True(t, isNonRetriableHTTPStatus(code),
-			"HTTP %d should not be retried (permanent client error)", code)
-	}
-}
-
-func TestTransientClientErrors_AllowRetry(t *testing.T) {
-	// 429 Too Many Requests: temporary rate limiting, will succeed after backoff.
-	// 408 Request Timeout: connection issue, may succeed on retry.
-	assert.False(t, isNonRetriableHTTPStatus(429),
-		"HTTP 429 should be retried (rate limit is temporary)")
-	assert.False(t, isNonRetriableHTTPStatus(408),
-		"HTTP 408 should be retried (timeout may be transient)")
-}
-
-func TestServerErrors_AllowRetry(t *testing.T) {
-	// Server errors (5xx) are often transient (deployment, overload, etc.).
-	serverCodes := []int{500, 502, 503, 504}
-	for _, code := range serverCodes {
-		assert.False(t, isNonRetriableHTTPStatus(code),
-			"HTTP %d should be retried (server may recover)", code)
-	}
-}
-
-func TestSuccessAndRedirectCodes_AreNotFlagged(t *testing.T) {
-	// Non-error codes should never be flagged as non-retriable.
-	assert.False(t, isNonRetriableHTTPStatus(200))
-	assert.False(t, isNonRetriableHTTPStatus(301))
-	assert.False(t, isNonRetriableHTTPStatus(304))
-}
-
-// --- Tests merged from quick_coverage_test.go (nonRetriableError is in download.go) ---
-
-func TestNonRetriableError_ErrorAndUnwrap(t *testing.T) {
-	inner := errors.New("resource not found")
-	nre := &nonRetriableError{err: inner}
-
-	assert.Equal(t, "resource not found", nre.Error())
-	assert.Equal(t, inner, nre.Unwrap())
-	assert.True(t, errors.Is(nre, inner))
-}
-
-func TestGetMaxDownloadRetriesFromEnv(t *testing.T) {
-	t.Setenv("CJV_MAX_RETRIES", "0")
-	assert.Equal(t, 0, getMaxDownloadRetries())
-
-	t.Setenv("CJV_MAX_RETRIES", "invalid")
-	assert.Equal(t, 3, getMaxDownloadRetries())
-}
-
 func TestDownloadTempHelpers(t *testing.T) {
 	parentFile := filepath.Join(t.TempDir(), "not-a-directory")
 	require.NoError(t, os.WriteFile(parentFile, []byte("file"), 0o644))

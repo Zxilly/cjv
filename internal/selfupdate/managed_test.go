@@ -32,8 +32,6 @@ func TestManagedExecutablePathRequiresManagedBinary(t *testing.T) {
 	require.Error(t, err)
 }
 
-// --- Tests merged from managed_binary_test.go ---
-
 // Tests for ManagedExecutablePath -- locates the managed cjv binary
 // under CJV_HOME/bin. Self-update and uninstall need this path to
 // know which binary to replace or remove.

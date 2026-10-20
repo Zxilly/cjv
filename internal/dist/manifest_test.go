@@ -197,9 +197,6 @@ func TestParseManifestInvalidJSON(t *testing.T) {
 	_, err := ParseManifest([]byte("not json"))
 	assert.Error(t, err)
 }
-
-// --- Tests merged from manifest_edge_test.go ---
-
 func TestValidateChannel_LatestNotInVersions(t *testing.T) {
 	validHash := strings.Repeat("ab", 32)
 	json := `{
@@ -275,9 +272,6 @@ func TestGetLatestVersion_UnknownChannel(t *testing.T) {
 	_, err = m.GetLatestVersion(toolchain.Nightly)
 	assert.Error(t, err, "unknown channel should error")
 }
-
-// --- Tests merged from manifest_validation_test.go ---
-
 func TestParseManifestRejectsMissingLatestVersion(t *testing.T) {
 	_, err := ParseManifest([]byte(`{
 		"channels": {
@@ -298,9 +292,6 @@ func TestParseManifestRejectsIncompleteDownloadInfo(t *testing.T) {
 	}`))
 	require.Error(t, err)
 }
-
-// --- Tests merged from validate_edge_test.go ---
-
 func TestValidateDownloadInfo_InvalidSHA256Length(t *testing.T) {
 	// SHA256 must be exactly 64 hex characters
 	short := strings.Repeat("a", 63)

@@ -34,9 +34,6 @@ func TestEnsureDirs(t *testing.T) {
 	assert.DirExists(t, filepath.Join(tmp, "bin"))
 	assert.DirExists(t, filepath.Join(tmp, "downloads"))
 }
-
-// --- Tests merged from home_test.go ---
-
 func TestHome_WithCJVHome(t *testing.T) {
 	// Use a platform-appropriate absolute path (a forward-slash path like
 	// "/custom/cjv" is volume-relative, not absolute, on Windows).
@@ -76,9 +73,6 @@ func TestHome_FallbackToUserHome(t *testing.T) {
 	assert.NotEmpty(t, home)
 	assert.Contains(t, home, ".cjv")
 }
-
-// --- Tests merged from home_paths_test.go ---
-
 func TestPathFunctions_ConstructCorrectPaths(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("CJV_HOME", home)

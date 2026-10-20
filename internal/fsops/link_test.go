@@ -235,8 +235,6 @@ func requireProxyEntries(t *testing.T, dir string, want ...string) {
 	assert.ElementsMatch(t, want, names, "proxy installation must not leave scratch paths")
 }
 
-// --- Tests merged from copy_file_test.go ---
-
 // CopyFile remains available for managed executable and SDK file copying;
 // proxy links do not use it as a fallback.
 
