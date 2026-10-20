@@ -58,10 +58,16 @@ func (ProgressDriven) Text() string { return "" }
 // mode: messages on out and the download bar on stderr for humans, nothing
 // in JSON mode so stdout stays a single document.
 func (renderer *Renderer) Progress(out io.Writer) progress.Sink {
+	return renderer.ProgressTo(out, os.Stderr)
+}
+
+// ProgressTo uses the command's configured writers for messages and the
+// download bar, while respecting JSON and quiet modes.
+func (renderer *Renderer) ProgressTo(out, stderr io.Writer) progress.Sink {
 	if renderer.JSON || renderer.Quiet {
 		return progress.Discard
 	}
-	return progress.NewText(out, os.Stderr)
+	return progress.NewText(out, stderr)
 }
 
 // Note writes a human-facing aside to stderr in text mode. JSON consumers
