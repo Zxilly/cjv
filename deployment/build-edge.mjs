@@ -14,11 +14,17 @@ export async function buildEdge(provider, siteDir, outputDir) {
   if (provider === 'edgeone') {
     const html = await readFile(path.join(siteDir, 'index.html'), 'utf8')
     if (!html.includes('<html ')) throw new Error('Missing HTML element in the built homepage')
-    const source = `const html = ${JSON.stringify(html)};\n${homeResponse.toString()}\n`
+    const source = `import 'hooks';\nconst html = ${JSON.stringify(html)};\n${homeResponse.toString()}\n`
     await cp(siteDir, path.join(outputDir, 'assets'), { recursive: true })
     await mkdir(path.join(outputDir, 'edge-functions'), { recursive: true })
     await writeFile(path.join(outputDir, 'edge-functions/index.js'), source + `
-addEventListener('fetch', event => {
+addEventListener('fetch', (event, hookCtx) => {
+  const pathname = new URL(event.request.url).pathname;
+  if (pathname !== '/' && pathname !== '/index.html') {
+    const forward = hookCtx?.fetch || globalThis.fetch;
+    event.respondWith(forward(event.request));
+    return;
+  }
   event.respondWith(homeResponse(html, event.request.eo?.geo?.countryCodeAlpha2, event.request.method));
 });
 `)

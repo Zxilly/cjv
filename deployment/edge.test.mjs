@@ -23,8 +23,10 @@ before(async () => {
   await buildEdge('edgeone', siteDir, edgeDir)
   await buildEdge('cloudflare', '-', cfDir)
   const bundle = await readFile(path.join(edgeDir, 'edge-functions/index.js'), 'utf8')
-  vm.runInNewContext(bundle, {
+  assert.ok(bundle.startsWith("import 'hooks';"))
+  vm.runInNewContext(bundle.replace("import 'hooks';", ''), {
     Response,
+    URL,
     addEventListener(event, handler) {
       assert.equal(event, 'fetch')
       edgeHandler = handler
@@ -90,6 +92,22 @@ test('EdgeOne rejects unsupported methods', () => {
   assert.equal(response.status, 405)
   assert.equal(response.headers.get('allow'), 'GET, HEAD')
 })
+
+for (const pathname of ['/assets/app.js', '/book/user-guide/zh-CN/', '/missing']) {
+  test(`EdgeOne forwards ${pathname} through the platform origin hook`, async () => {
+    let response
+    const request = new Request(`https://example.com${pathname}`)
+    const original = new Response('origin content', { status: pathname === '/missing' ? 404 : 200 })
+    edgeHandler({ request, respondWith(value) { response = value } }, {
+      fetch(forwarded) {
+        assert.equal(forwarded, request)
+        return original
+      },
+    })
+    assert.equal(await response, original)
+    assert.equal(await (await response).text(), 'origin content')
+  })
+}
 
 test('Cloudflare strips conditional headers and stale body metadata, preserves security headers, and uses fresh origin HTML', async t => {
   const fresh = html.replace('<body>', '<body>latest origin')
