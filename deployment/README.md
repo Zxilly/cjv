@@ -32,6 +32,23 @@ The route Worker wraps GitHub Pages on `cjv.zxilly.dev` and uses
 ordinary website deployments do not require redeploying the Worker. Deploy it
 again when the shared response logic, Worker, or route configuration changes.
 
+The `Deploy Cloudflare Worker` GitHub Actions workflow watches the Cloudflare
+adapter, shared response logic, builder, verifier, and its workflow file. It
+compares a SHA-256 fingerprint of the complete build output with the active
+deployment's message before uploading. Matching output is skipped, including on
+manual workflow runs; reverting to an older bundle still deploys when it differs
+from the currently active version.
+
+The workflow uses the repository secret `CLOUDFLARE_API_TOKEN` and variable
+`CLOUDFLARE_ACCOUNT_ID`. The token needs Workers Scripts Write for the account,
+plus Workers Routes Write and Zone Read for `zxilly.dev`. The current CI token
+expires on October 21, 2027; rotate it before that date.
+
+The website workflow watches only its build inputs and deployment configuration.
+Go-only changes do not redeploy either website. Release workflows can still call
+it to publish new download binaries. EdgeOne publishes its static files and
+embedded homepage function together, so a new homepage also updates that bundle.
+
 Build the output and deploy with the npm `cf` CLI, version `1.0.0-beta.6`:
 
 ```sh

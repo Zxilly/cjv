@@ -3,6 +3,16 @@ name: Deploy website to GitHub Pages and EdgeOne
 on:
   push:
     branches: ["master"]
+    paths:
+      - .github/workflows/pages.yml
+      - web/**
+      - docs/user-guide/**
+      - docs/dev-guide/**
+      - scripts/extract-init-binaries.sh
+      - deployment/build-edge.mjs
+      - deployment/home-response.mjs
+      - deployment/edgeone/**
+      - deployment/verify-site.mjs
   workflow_call:
     secrets:
       EDGEONE_API_TOKEN:

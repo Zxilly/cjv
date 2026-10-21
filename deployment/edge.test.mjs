@@ -6,6 +6,7 @@ import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 import vm from 'node:vm'
 import { buildEdge } from './build-edge.mjs'
+import { deploymentMessage, matchesActiveDeployment } from './cloudflare/deployment-state.mjs'
 
 const workspace = await mkdtemp(path.join(tmpdir(), 'cjv-edge-test-'))
 const siteDir = path.join(workspace, 'site')
@@ -141,4 +142,39 @@ test('Cloudflare HEAD does not send a response body', async t => {
   const response = await worker.fetch(new Request('https://example.com/', { method: 'HEAD' }))
   assert.equal(await response.text(), '')
   assert.equal(response.headers.get('cache-control'), 'private, no-store')
+})
+
+test('Cloudflare deployment fingerprint covers both code and configuration', async () => {
+  const outputDir = path.join(workspace, 'fingerprint')
+  await buildEdge('cloudflare', '-', outputDir)
+  const original = await deploymentMessage(outputDir)
+  await buildEdge('cloudflare', '-', outputDir)
+  assert.equal(await deploymentMessage(outputDir), original)
+  const bundlePath = path.join(outputDir, 'workers/default/bundle/worker.mjs')
+  const code = await readFile(bundlePath, 'utf8')
+  await writeFile(bundlePath, code + '\n// changed edge code\n')
+  assert.notEqual(await deploymentMessage(outputDir), original)
+  await writeFile(bundlePath, code)
+  const configPath = path.join(outputDir, 'workers/default/worker.config.json')
+  const config = JSON.parse(await readFile(configPath, 'utf8'))
+  config.compatibilityDate = '2026-10-20'
+  await writeFile(configPath, JSON.stringify(config))
+  assert.notEqual(await deploymentMessage(outputDir), original)
+})
+
+test('Cloudflare skips only the matching, fully active deployment and handles code rollbacks', () => {
+  const deployment = (created_on, message, versions = [{ version_id: 'v1', percentage: 100 }]) => ({
+    created_on, annotations: { 'workers/message': message }, versions,
+  })
+  const old = deployment('2026-10-20T00:00:00Z', 'old digest')
+  const current = deployment('2026-10-21T00:00:00Z', 'current digest')
+  assert.equal(matchesActiveDeployment([old, current], 'current digest'), true)
+  assert.equal(matchesActiveDeployment([old, current], 'old digest'), false)
+  assert.equal(matchesActiveDeployment([current], 'changed digest'), false)
+  assert.equal(matchesActiveDeployment([], 'current digest'), false)
+  const split = deployment('2026-10-21T00:00:00Z', 'current digest', [
+    { version_id: 'v1', percentage: 50 }, { version_id: 'v2', percentage: 50 },
+  ])
+  assert.equal(matchesActiveDeployment([split], 'current digest'), false)
+  assert.throws(() => matchesActiveDeployment(undefined, 'current digest'), /missing deployments/)
 })

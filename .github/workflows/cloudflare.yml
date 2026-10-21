@@ -1,0 +1,62 @@
+name: Deploy Cloudflare Worker
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - .github/workflows/cloudflare.yml
+      - deployment/cloudflare/**
+      - deployment/build-edge.mjs
+      - deployment/home-response.mjs
+      - deployment/verify-site.mjs
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cloudflare-worker-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy changed Worker
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+      - name: Check deployment credentials
+        run: |
+          test -n "$CLOUDFLARE_ACCOUNT_ID"
+          test -n "$CLOUDFLARE_API_TOKEN"
+      - name: Install Cloudflare CLI
+        run: npm install --global cf@1.0.0-beta.6 --no-audit --no-fund
+      - name: Test and build edge bundles
+        run: |
+          node --test deployment/edge.test.mjs
+          node deployment/build-edge.mjs cloudflare - .cloudflare/output/v0
+      - name: Compare with the active deployment
+        id: state
+        run: |
+          worker_name=$(node -p "require('./deployment/cloudflare/worker.config.json').name")
+          cf workers deployments list --worker "$worker_name" --per-page 1 > "$RUNNER_TEMP/cloudflare-deployments.json"
+          node deployment/cloudflare/deployment-state.mjs \
+            .cloudflare/output/v0 "$RUNNER_TEMP/cloudflare-deployments.json" >> "$GITHUB_OUTPUT"
+      - name: Deploy changed edge code and configuration
+        if: steps.state.outputs.changed == 'true'
+        env:
+          DEPLOYMENT_MESSAGE: ${{ steps.state.outputs.message }}
+        run: cf deploy --prebuilt --message "$DEPLOYMENT_MESSAGE" --tag "${GITHUB_SHA:0:12}"
+      - name: Report unchanged deployment
+        if: steps.state.outputs.changed != 'true'
+        run: echo "Worker bundle and configuration match the active deployment; skipping upload."
+      - name: Verify production website
+        run: node deployment/verify-site.mjs https://cjv.zxilly.dev/
