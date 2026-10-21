@@ -13,6 +13,7 @@ import { LangSwitch } from '@/components/lang-switch'
 import { SlidingTabIndicator } from '@/components/sliding-tab-indicator'
 import { usePlatform, type InstallMethod } from '@/hooks/use-platform'
 import { useLanguageSwitch } from '@/hooks/use-language-switch'
+import { useMirror } from '@/hooks/use-mirror'
 import { INSTALL_TABS, getInstallTabDirection, type InstallTab } from '@/lib/tab-motion'
 import { i18n } from '@/lib/i18n'
 
@@ -69,7 +70,7 @@ function AppContent() {
   const prefersReducedMotion = useReducedMotion()
   const [tab, setTab] = useState<InstallTab>('command')
   const [slideDirection, setSlideDirection] = useState(0)
-  const [mirror, setMirror] = useState(false)
+  const [mirror, setMirror] = useMirror()
   const [otherMethodsOpen, setOtherMethodsOpen] = useState(false)
 
   const slideTransition = prefersReducedMotion ? NO_MOTION : SLIDE_SPRING

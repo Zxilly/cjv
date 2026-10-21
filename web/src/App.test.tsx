@@ -19,6 +19,18 @@ function setPlatform(os: string, arch: string): void {
 describe('App (ready / Windows)', () => {
   beforeEach(() => setPlatform('Windows', 'amd64'))
 
+  it('automatically enables mirror commands and downloads for CN visitors', async () => {
+    vi.mocked(fetch).mockResolvedValue(Response.json({ country: 'CN' }))
+    const user = userEvent.setup()
+    render(<App />)
+    await waitFor(() => expect(screen.getByRole('switch')).toBeChecked())
+    expect(await screen.findByText(/CJV_MIRROR/)).toBeInTheDocument()
+    await user.click(screen.getByRole('tab', { name: '下载安装' }))
+    expect(screen.getByRole('link', { name: /cjv-init\.exe/ })).toHaveAttribute('href', '/dl/mirror/windows_amd64/cjv-init.exe')
+    await user.click(screen.getByRole('switch'))
+    expect(screen.getByRole('link', { name: /cjv-init\.exe/ })).toHaveAttribute('href', '/dl/official/windows_amd64/cjv-init.exe')
+  })
+
   it('shows the detected platform and primary command on mount', () => {
     render(<App />)
     expect(screen.getByText(/检测到你的平台：Windows x86_64/)).toBeInTheDocument()
