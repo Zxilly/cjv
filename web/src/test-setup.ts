@@ -11,12 +11,12 @@ Object.defineProperty(navigator, 'clipboard', {
 // Tests assert the Chinese (source) strings, so pin the active locale to zh.
 beforeEach(() => {
   activateLang('zh')
-  vi.spyOn(globalThis, 'fetch').mockResolvedValue(Response.json({ country: 'US' }))
+  delete document.documentElement.dataset.defaultMirror
 })
 
 afterEach(() => {
   cleanup()
   vi.clearAllMocks()
-  vi.restoreAllMocks()
+  delete document.documentElement.dataset.defaultMirror
   localStorage.removeItem('cjv-lang')
 })

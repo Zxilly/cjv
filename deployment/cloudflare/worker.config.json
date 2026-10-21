@@ -1,0 +1,14 @@
+{
+  "name": "cjv-web-regional-default",
+  "compatibilityDate": "2026-10-21",
+  "workersDev": false,
+  "triggers": [
+    { "type": "fetch", "pattern": "cjv.zxilly.dev/", "zone": "zxilly.dev" },
+    { "type": "fetch", "pattern": "cjv.zxilly.dev/index.html", "zone": "zxilly.dev" }
+  ],
+  "manifest": {
+    "type": "complete",
+    "mainModule": "worker.mjs",
+    "modules": { "worker.mjs": { "type": "esm" } }
+  }
+}

@@ -162,6 +162,8 @@ jobs:
       - name: Build web
         working-directory: web
         run: pnpm build
+      - name: Test edge deployment bundles
+        run: node --test deployment/edge.test.mjs
 
   web-test:
     name: Web test

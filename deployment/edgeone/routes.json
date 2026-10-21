@@ -1,6 +1,7 @@
 {
   "version": 3,
   "routes": [
+    { "src": "^/(index\\.html)?$", "server-name": "edge" },
     { "handle": "filesystem" },
     {
       "src": "/.*",
