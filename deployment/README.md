@@ -16,9 +16,14 @@ The homepage route precedes static-file lookup so it also runs when `index.html`
 exists. The function uses `request.eo.geo.countryCodeAlpha2`.
 
 ```sh
-node deployment/build-edge.mjs edgeone web/dist /path/to/edgeone-output
-edgeone makers deploy /path/to/edgeone-output --name cjv-web-global --env production
+node deployment/build-edge.mjs edgeone web/dist /path/to/edgeone-output/.edgeone
+edgeone makers deploy /path/to/edgeone-output/.edgeone --name cjv-web-global --env production
 ```
+
+The output directory must be named `.edgeone`. The CLI treats other directory
+names as plain static uploads, leaving functions inactive and assets under the
+wrong URL prefix. The workflow also checks the public homepage and static routes
+after deployment.
 
 ## Cloudflare
 

@@ -129,8 +129,10 @@ jobs:
       - name: Login to Tencent Cloud China
         run: npx --yes edgeone@1.6.44 login --site china --token "$EDGEONE_API_TOKEN"
       - name: Build regional homepage edge function
-        run: node deployment/build-edge.mjs edgeone "$RUNNER_TEMP/edgeone-site" "$RUNNER_TEMP/edgeone-output"
+        run: node deployment/build-edge.mjs edgeone "$RUNNER_TEMP/edgeone-site" "$RUNNER_TEMP/edgeone-output/.edgeone"
       - name: Deploy the shared website to Makers
         run: >-
-          npx --yes edgeone@1.6.44 makers deploy "$RUNNER_TEMP/edgeone-output"
+          npx --yes edgeone@1.6.44 makers deploy "$RUNNER_TEMP/edgeone-output/.edgeone"
           --name "$EDGEONE_PROJECT_NAME" --env production --skip-ai-gateway-sync
+      - name: Verify production websites
+        run: node deployment/verify-site.mjs https://cjv.zxilly.dev/ https://cjv.zxilly.com/

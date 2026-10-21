@@ -9,7 +9,7 @@ import { buildEdge } from './build-edge.mjs'
 
 const workspace = await mkdtemp(path.join(tmpdir(), 'cjv-edge-test-'))
 const siteDir = path.join(workspace, 'site')
-const edgeDir = path.join(workspace, 'edgeone')
+const edgeDir = path.join(workspace, 'edgeone', '.edgeone')
 const cfDir = path.join(workspace, 'cloudflare')
 const html = '<!doctype html><html lang="zh-CN"><body><script src="/assets/app.js"></script></body></html>'
 let edgeHandler
@@ -70,6 +70,10 @@ test('EdgeOne routes the homepage to the function before static files, preservin
   assert.equal(routes[2].status, 404)
   assert.equal(await readFile(path.join(edgeDir, 'assets/assets/app.js'), 'utf8'), 'console.log("app")')
   assert.equal(await readFile(path.join(edgeDir, 'assets/404.html'), 'utf8'), 'Missing')
+})
+
+test('EdgeOne rejects upload roots that the CLI would interpret as plain static files', async () => {
+  await assert.rejects(buildEdge('edgeone', siteDir, path.join(workspace, 'plain-output')), /must be named \.edgeone/)
 })
 
 test('EdgeOne HEAD returns the same cache policy without a body', async () => {

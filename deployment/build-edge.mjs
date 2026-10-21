@@ -5,6 +5,10 @@ import { homeResponse } from './home-response.mjs'
 
 export async function buildEdge(provider, siteDir, outputDir) {
   if (!['edgeone', 'cloudflare'].includes(provider)) throw new Error(`Unknown provider: ${provider}`)
+  // The CLI recognizes prebuilt functions only when the upload root is .edgeone.
+  if (provider === 'edgeone' && path.basename(outputDir) !== '.edgeone') {
+    throw new Error('EdgeOne prebuilt output directory must be named .edgeone')
+  }
   await mkdir(outputDir, { recursive: true })
 
   if (provider === 'edgeone') {
