@@ -33,11 +33,9 @@ ordinary website deployments do not require redeploying the Worker. Deploy it
 again when the shared response logic, Worker, or route configuration changes.
 
 The `Deploy Cloudflare Worker` GitHub Actions workflow watches the Cloudflare
-adapter, shared response logic, builder, verifier, and its workflow file. It
-compares a SHA-256 fingerprint of the complete build output with the active
-deployment's message before uploading. Matching output is skipped, including on
-manual workflow runs; reverting to an older bundle still deploys when it differs
-from the currently active version.
+adapter, shared response logic, builder, verifier, and its workflow file. Each
+matching push builds and deploys the Worker. Manual workflow runs also build and
+deploy it. Unrelated file changes do not trigger this workflow.
 
 The workflow uses the repository secret `CLOUDFLARE_API_TOKEN` and variable
 `CLOUDFLARE_ACCOUNT_ID`. The token needs Workers Scripts Write for the account,

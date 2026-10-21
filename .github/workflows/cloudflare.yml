@@ -5,7 +5,8 @@ on:
     branches: [master]
     paths:
       - .github/workflows/cloudflare.yml
-      - deployment/cloudflare/**
+      - deployment/cloudflare/worker.mjs
+      - deployment/cloudflare/worker.config.json
       - deployment/build-edge.mjs
       - deployment/home-response.mjs
       - deployment/verify-site.mjs
@@ -20,7 +21,7 @@ concurrency:
 
 jobs:
   deploy:
-    name: Deploy changed Worker
+    name: Deploy Worker
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     env:
@@ -43,20 +44,7 @@ jobs:
         run: |
           node --test deployment/edge.test.mjs
           node deployment/build-edge.mjs cloudflare - .cloudflare/output/v0
-      - name: Compare with the active deployment
-        id: state
-        run: |
-          worker_name=$(node -p "require('./deployment/cloudflare/worker.config.json').name")
-          cf workers deployments list --worker "$worker_name" --per-page 1 > "$RUNNER_TEMP/cloudflare-deployments.json"
-          node deployment/cloudflare/deployment-state.mjs \
-            .cloudflare/output/v0 "$RUNNER_TEMP/cloudflare-deployments.json" >> "$GITHUB_OUTPUT"
-      - name: Deploy changed edge code and configuration
-        if: steps.state.outputs.changed == 'true'
-        env:
-          DEPLOYMENT_MESSAGE: ${{ steps.state.outputs.message }}
-        run: cf deploy --prebuilt --message "$DEPLOYMENT_MESSAGE" --tag "${GITHUB_SHA:0:12}"
-      - name: Report unchanged deployment
-        if: steps.state.outputs.changed != 'true'
-        run: echo "Worker bundle and configuration match the active deployment; skipping upload."
+      - name: Deploy edge code and configuration
+        run: cf deploy --prebuilt --message "GitHub Actions ${GITHUB_SHA}" --tag "${GITHUB_SHA:0:12}"
       - name: Verify production website
         run: node deployment/verify-site.mjs https://cjv.zxilly.dev/
