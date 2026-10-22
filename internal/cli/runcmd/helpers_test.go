@@ -1,13 +1,21 @@
 package runcmd
 
 import (
+	"os"
 	"testing"
 
 	"github.com/Zxilly/cjv/internal/cli/clictx"
 	"github.com/Zxilly/cjv/internal/cli/clitest"
 )
 
-func TestMain(m *testing.M) { clitest.Main(m) }
+func TestMain(m *testing.M) {
+	if os.Getenv("CJV_TEST_INVOCATION_REPORT") != "" {
+		// This child only reports arguments and environment. Its parent already
+		// holds the Windows PATH guard, so acquiring it again would deadlock.
+		os.Exit(m.Run())
+	}
+	clitest.Main(m)
+}
 
 func newTestCommands() *commands {
 	return &commands{ctx: clictx.New("dev", "")}
