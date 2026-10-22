@@ -17,19 +17,19 @@ import (
 )
 
 func (c *commands) runRun(cmd *cobra.Command, args []string) error {
-	ctx := cmd.Context()
+	defer c.ctx.RestoreEnvironment()
 
 	// Manual flag parsing since DisableFlagParsing is true.
 	// Consume all flags before the positional <toolchain> argument.
 	install := false
 flagLoop:
 	for len(args) > 0 {
-		matched, err := c.ctx.ApplyJSONModeFlag(args[0])
+		consumed, err := c.ctx.ApplyGlobalFlag(args)
 		if err != nil {
 			return err
 		}
-		if matched {
-			args = args[1:]
+		if consumed > 0 {
+			args = args[consumed:]
 			continue
 		}
 		switch args[0] {
@@ -45,6 +45,10 @@ flagLoop:
 			break flagLoop
 		}
 	}
+	if err := c.ctx.ApplyInvocation(cmd); err != nil {
+		return err
+	}
+	ctx := cmd.Context()
 	if c.ctx.Output.IsJSON() {
 		return &cjverr.UnsupportedForJSONError{Command: "run"}
 	}

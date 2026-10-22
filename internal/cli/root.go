@@ -12,9 +12,11 @@ import (
 	"strings"
 
 	"github.com/Zxilly/cjv/internal/cjverr"
+	"github.com/Zxilly/cjv/internal/cli/cachecmd"
 	"github.com/Zxilly/cjv/internal/cli/clictx"
 	"github.com/Zxilly/cjv/internal/cli/componentcmd"
 	"github.com/Zxilly/cjv/internal/cli/initcmd"
+	"github.com/Zxilly/cjv/internal/cli/projectcmd"
 	"github.com/Zxilly/cjv/internal/cli/runcmd"
 	"github.com/Zxilly/cjv/internal/cli/selfcmd"
 	"github.com/Zxilly/cjv/internal/cli/settingscmd"
@@ -63,10 +65,12 @@ func newApplication(ver, updURL string) *application {
 	root := newRootCommand(ctx)
 	ctx.ConfigureRoot(root)
 	for _, register := range []func(*cobra.Command, *clictx.Context){
+		cachecmd.Register,
 		showcmd.Register,
 		componentcmd.Register,
 		runcmd.Register,
 		initcmd.Register,
+		projectcmd.Register,
 		toolchaincmd.Register,
 		settingscmd.Register,
 		selfcmd.Register,

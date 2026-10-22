@@ -14,12 +14,16 @@ import (
 )
 
 func (c *commands) execRun(cmd *cobra.Command, args []string) error {
-	tcOverride, remaining, err := c.ctx.StripJSONModeFlagPrefix(args, true)
+	defer c.ctx.RestoreEnvironment()
+	tcOverride, remaining, err := c.ctx.StripGlobalFlagPrefix(args, true)
 	if err != nil {
 		return err
 	}
 	if tcOverride == "" {
 		tcOverride = c.ctx.Selector
+	}
+	if err := c.ctx.ApplyInvocation(cmd); err != nil {
+		return err
 	}
 	if c.ctx.Output.IsJSON() {
 		return &cjverr.UnsupportedForJSONError{Command: "exec"}
@@ -28,7 +32,6 @@ func (c *commands) execRun(cmd *cobra.Command, args []string) error {
 	if ctx == nil {
 		ctx = context.Background()
 	}
-
 	if len(remaining) > 0 && (remaining[0] == "--help" || remaining[0] == "-h") {
 		return cmd.Help()
 	}

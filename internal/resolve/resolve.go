@@ -31,7 +31,18 @@ var AutoInstallComponentsFunc func(ctx context.Context, input string, components
 // autoInstallProgress is the adapter auto-install reports to. The proxy path
 // runs before any renderer exists and its stdout belongs to the proxied
 // tool, so every message and the download bar go to stderr.
-func autoInstallProgress() progress.Sink {
+type progressKey struct{}
+
+// WithProgress lets CLI callers honor their output policy during automatic
+// installation. Proxy callers retain the default stderr-only progress sink.
+func WithProgress(ctx context.Context, sink progress.Sink) context.Context {
+	return context.WithValue(ctx, progressKey{}, progress.Or(sink))
+}
+
+func autoInstallProgress(ctx context.Context) progress.Sink {
+	if sink, ok := ctx.Value(progressKey{}).(progress.Sink); ok {
+		return sink
+	}
 	return progress.NewText(os.Stderr, os.Stderr)
 }
 
@@ -57,9 +68,13 @@ func Active(ctx context.Context, tcOverride string) (ActiveToolchain, error) {
 	}
 
 	tcName, source, targets, components := selected.Name, selected.Source, selected.Targets, selected.Components
-	sink := autoInstallProgress()
+	sink := autoInstallProgress(ctx)
+	autoInstall, err := shouldAutoInstall(settings)
+	if err != nil {
+		return ActiveToolchain{}, err
+	}
 	var install func(context.Context) error
-	if installFunc := autoInstallFunc(sink); shouldAutoInstall(settings) && installFunc != nil {
+	if installFunc := autoInstallFunc(sink); autoInstall && installFunc != nil {
 		install = func(ctx context.Context) error {
 			sink.Report(progress.Event{Kind: progress.AutoInstalling, Subject: tcName})
 			if installErr := installFunc(ctx, tcName, targets); installErr != nil {
@@ -165,7 +180,11 @@ func ensureTargets(ctx context.Context, tcInput, tcDir string, settings *config.
 	}
 
 	installFunc := autoInstallTargetsFunc(sink)
-	if !shouldAutoInstall(settings) || installFunc == nil {
+	autoInstall, err := shouldAutoInstall(settings)
+	if err != nil {
+		return err
+	}
+	if !autoInstall || installFunc == nil {
 		return &cjverr.ToolchainNotInstalledError{Name: missingNames[0]}
 	}
 
@@ -184,8 +203,8 @@ func ensureTargets(ctx context.Context, tcInput, tcDir string, settings *config.
 	return nil
 }
 
-func shouldAutoInstall(settings *config.Settings) bool {
-	return settings != nil && settings.AutoInstall
+func shouldAutoInstall(settings *config.Settings) (bool, error) {
+	return config.ResolveAutoInstall(settings != nil && settings.AutoInstall)
 }
 
 func autoInstallFunc(sink progress.Sink) func(context.Context, string, []string) error {
@@ -241,7 +260,11 @@ func ensureComponents(ctx context.Context, tcInput, tcDir string, settings *conf
 	}
 
 	installComponentsFunc := autoInstallComponentsFunc(sink)
-	if !shouldAutoInstall(settings) || installComponentsFunc == nil {
+	autoInstall, err := shouldAutoInstall(settings)
+	if err != nil {
+		return err
+	}
+	if !autoInstall || installComponentsFunc == nil {
 		return &cjverr.ComponentNotInstalledError{
 			Toolchain: filepath.Base(tcDir),
 			Component: asStrings[0],

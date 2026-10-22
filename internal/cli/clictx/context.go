@@ -23,6 +23,14 @@ type Context struct {
 	UpdateURL string
 	// Selector is the toolchain named by a leading +toolchain argument.
 	Selector string
+	// Global invocation policies. Environment overrides are scoped to Execute
+	// and inherited by child tools that invoke cjv's proxies again.
+	Offline       bool
+	ConfigFile    string
+	NoAutoInstall bool
+	Quiet         bool
+	Verbose       bool
+	environment   map[string]*string
 }
 
 // New returns a Context with a fresh renderer and a placeholder root

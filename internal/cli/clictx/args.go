@@ -10,64 +10,95 @@ import (
 	"github.com/mattn/go-isatty"
 )
 
-const jsonFlagName = "json"
-
-// ParseJSONModeFlag reports whether arg is a --json flag and, if so, the
-// value it sets. Commands with DisableFlagParsing use it to honor --json.
-func ParseJSONModeFlag(arg string) (bool, bool, error) {
-	if arg == "--"+jsonFlagName {
-		return true, true, nil
+// ApplyGlobalFlag consumes one recognized global option and its value. It is
+// shared by root-prefix parsing and commands that forward child arguments.
+// A zero count means the token belongs to the command or its positional args.
+func (c *Context) ApplyGlobalFlag(args []string) (int, error) {
+	if len(args) == 0 {
+		return 0, nil
 	}
-	prefix := "--" + jsonFlagName + "="
-	if !strings.HasPrefix(arg, prefix) {
-		return false, false, nil
+	name, value, hasValue := strings.Cut(args[0], "=")
+	if name == "-q" {
+		name = "--quiet"
 	}
-	value, err := strconv.ParseBool(strings.TrimPrefix(arg, prefix))
+	if name == "--config" {
+		count := 1
+		if !hasValue {
+			if len(args) < 2 {
+				return 0, fmt.Errorf("flag needs an argument: --config")
+			}
+			value, count = args[1], 2
+		}
+		if strings.TrimSpace(value) == "" {
+			return 0, fmt.Errorf("--config requires a non-empty path")
+		}
+		c.ConfigFile = value
+		return count, c.setGlobalFlag("config", value)
+	}
+	var target *bool
+	switch name {
+	case "--json":
+		target = &c.Output.JSON
+	case "--quiet":
+		target = &c.Quiet
+	case "--verbose":
+		target = &c.Verbose
+	case "--offline":
+		target = &c.Offline
+	case "--no-auto-install":
+		target = &c.NoAutoInstall
+	default:
+		return 0, nil
+	}
+	if !hasValue {
+		value = "true"
+	}
+	enabled, err := strconv.ParseBool(value)
 	if err != nil {
-		return true, false, fmt.Errorf("invalid --%s value %q", jsonFlagName, strings.TrimPrefix(arg, prefix))
+		return 0, fmt.Errorf("invalid %s value %q", name, value)
 	}
-	return true, value, nil
+	*target = enabled
+	return 1, c.setGlobalFlag(strings.TrimPrefix(name, "--"), value)
 }
 
-// ApplyJSONModeFlag applies arg to the renderer when it is a --json flag.
-func (c *Context) ApplyJSONModeFlag(arg string) (bool, error) {
-	matched, value, err := ParseJSONModeFlag(arg)
-	if err != nil || !matched {
-		return matched, err
+func (c *Context) setGlobalFlag(name, value string) error {
+	if c.Root.PersistentFlags().Lookup(name) == nil {
+		return nil // Direct command tests may not configure a root flag set.
 	}
-	c.Output.SetJSONMode(value)
-	return true, nil
+	return c.Root.PersistentFlags().Set(name, value)
 }
 
-// StripJSONModeFlagPrefix consumes leading --json flags and, when
-// allowPlusToolchain is set, an optional +toolchain selector. It applies JSON
-// mode as a side effect and returns the extracted toolchain (empty if none)
+// StripGlobalFlagPrefix consumes leading global flags and, when
+// allowPlusToolchain is set, an optional +toolchain selector. It applies the
+// global options and returns the extracted toolchain (empty if none)
 // together with the remaining args.
 //
 // A "--" terminator stops all interpretation: everything after it is returned
 // verbatim. This lets a literal command that begins with "+" be run via
 // `cjv exec -- +cmd` without it being mistaken for a toolchain override.
-func (c *Context) StripJSONModeFlagPrefix(args []string, allowPlusToolchain bool) (toolchain string, rest []string, err error) {
-	for i := range args {
-		arg := args[i]
+func (c *Context) StripGlobalFlagPrefix(args []string, allowPlusToolchain bool) (toolchain string, rest []string, err error) {
+	for len(args) > 0 {
+		arg := args[0]
 		if arg == "--" {
-			rest = append(rest, args[i+1:]...)
+			rest = append(rest, args[1:]...)
 			return toolchain, rest, nil
 		}
-		matched, ferr := c.ApplyJSONModeFlag(arg)
+		consumed, ferr := c.ApplyGlobalFlag(args)
 		if ferr != nil {
 			return "", nil, ferr
 		}
-		if matched {
+		if consumed > 0 {
+			args = args[consumed:]
 			continue
 		}
 		if allowPlusToolchain && toolchain == "" && strings.HasPrefix(arg, "+") && len(arg) > 1 {
 			toolchain = arg[1:]
+			args = args[1:]
 			continue
 		}
 		// First token that is neither a recognized flag nor the +toolchain
 		// selector: the rest is the command and its arguments, verbatim.
-		rest = append(rest, args[i:]...)
+		rest = append(rest, args...)
 		return toolchain, rest, nil
 	}
 	return toolchain, rest, nil

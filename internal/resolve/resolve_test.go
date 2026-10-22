@@ -24,10 +24,14 @@ func TestShouldAutoInstall_RespectsExplicitSetting(t *testing.T) {
 	s := config.DefaultSettings()
 
 	s.AutoInstall = true
-	assert.True(t, shouldAutoInstall(&s), "should auto-install when explicitly enabled")
+	enabled, err := shouldAutoInstall(&s)
+	require.NoError(t, err)
+	assert.True(t, enabled, "should auto-install when explicitly enabled")
 
 	s.AutoInstall = false
-	assert.False(t, shouldAutoInstall(&s), "should not auto-install when explicitly disabled")
+	enabled, err = shouldAutoInstall(&s)
+	require.NoError(t, err)
+	assert.False(t, enabled, "should not auto-install when explicitly disabled")
 }
 
 func TestActivePreparesHostThroughProductionInstaller(t *testing.T) {
@@ -85,7 +89,9 @@ func TestLegacyMigrationKeepsTargetsAlignedWithSelectedHost(t *testing.T) {
 }
 
 func TestShouldAutoInstall_NilSettingsReturnsFalse(t *testing.T) {
-	assert.False(t, shouldAutoInstall(nil), "should return false when settings is nil")
+	enabled, err := shouldAutoInstall(nil)
+	require.NoError(t, err)
+	assert.False(t, enabled, "should return false when settings is nil")
 }
 
 func TestActiveRejectsTargetVariantAsActiveToolchain(t *testing.T) {

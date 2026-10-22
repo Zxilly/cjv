@@ -171,6 +171,10 @@ func runCJVEnv(t *testing.T, binary, cjvHome string, extraEnv []string, args ...
 		"CJV_HOME="+cjvHome,
 		"HOME="+cjvHome,
 		"USERPROFILE="+cjvHome,
+		"CJV_CONFIG_FILE=",
+		"CJV_AUTO_INSTALL=",
+		"CJV_OFFLINE=",
+		"CJV_FALLBACK_SETTINGS="+filepath.Join(cjvHome, "missing-fallback.toml"),
 		"CJV_LANG=en",
 		"CJV_TOOLCHAIN=",
 	)
@@ -194,6 +198,10 @@ func installScriptEnv(serverURL, cjvHome string, extra ...string) []string {
 		"CJV_HOME="+cjvHome,
 		"HOME="+cjvHome,
 		"USERPROFILE="+cjvHome,
+		"CJV_CONFIG_FILE=",
+		"CJV_AUTO_INSTALL=",
+		"CJV_OFFLINE=",
+		"CJV_FALLBACK_SETTINGS="+filepath.Join(cjvHome, "missing-fallback.toml"),
 		"CJV_LANG=en",
 		"CJV_NO_PATH_SETUP=1",
 	)
