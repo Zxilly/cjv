@@ -5,12 +5,9 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"strings"
 )
-
-// 10 MB
 
 func parseSHA256(content string) string {
 	digest := strings.TrimSpace(content)
@@ -25,42 +22,38 @@ func parseSHA256(content string) string {
 
 var errChecksumSidecarMalformed = errors.New("nightly checksum sidecar is malformed (expected 64 hex chars)")
 
-// FetchNightlySHA256 fetches the optional sha256 sidecar for assetURL. A 404
-// represents an upstream release that relies on TLS transport integrity.
-func FetchNightlySHA256(ctx context.Context, assetURL string) (string, error) {
-	var sha string
-	err := retryTransfer(ctx, func() error {
-		var fetchErr error
-		sha, fetchErr = fetchNightlySHA256Once(ctx, assetURL)
-		return fetchErr
-	})
-	return sha, err
-}
+// Only a confirmed HTTP 404 creates this cache marker. An empty or malformed
+// 200 response must still fail validation, including one containing this marker.
+const nightlyChecksumMissingCache = `{"status_code":404}`
 
-func fetchNightlySHA256Once(ctx context.Context, assetURL string) (string, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, assetURL+".sha256", nil)
-	if err != nil {
-		return "", &nonRetriableError{err: err}
-	}
-	resp, err := HTTPClient().Do(req)
+// FetchNightlySHA256 fetches the optional sha256 sidecar for assetURL. A 404
+// represents an upstream release that relies on TLS transport integrity. Cache
+// that absence as well so offline metadata operations retain the same behavior.
+func FetchNightlySHA256(ctx context.Context, assetURL string) (string, error) {
+	sidecarURL := assetURL + ".sha256"
+	body, err := cachedMetadata(ctx, sidecarURL, func() ([]byte, error) {
+		data, err := fetchMetadata(ctx, sidecarURL)
+		if err != nil {
+			var fetchErr *ManifestFetchError
+			if errors.As(err, &fetchErr) && fetchErr.StatusCode == http.StatusNotFound {
+				return []byte(nightlyChecksumMissingCache), nil
+			}
+			return nil, err
+		}
+		if parseSHA256(string(data)) == "" {
+			return nil, errChecksumSidecarMalformed
+		}
+		return data, nil
+	})
 	if err != nil {
 		return "", fmt.Errorf("failed to fetch nightly checksum: %w", err)
 	}
-	defer resp.Body.Close() //nolint:errcheck
-
-	if resp.StatusCode == http.StatusNotFound {
+	if string(body) == nightlyChecksumMissingCache {
 		return "", nil
-	}
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("failed to fetch nightly checksum: %w", transferHTTPError(resp.StatusCode, assetURL+".sha256"))
-	}
-	body, err := io.ReadAll(io.LimitReader(resp.Body, MaxResponseSize))
-	if err != nil {
-		return "", err
 	}
 	sha := parseSHA256(string(body))
 	if sha == "" {
-		return "", &nonRetriableError{err: errChecksumSidecarMalformed}
+		return "", errChecksumSidecarMalformed
 	}
 	return sha, nil
 }

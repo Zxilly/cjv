@@ -8,9 +8,9 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"time"
 
 	"github.com/Zxilly/cjv/internal/config"
-	"github.com/Zxilly/cjv/internal/retry"
 )
 
 // nonRetriableError marks failures that another transfer cannot repair.
@@ -34,23 +34,70 @@ func getMaxDownloadRetries() int {
 // checksum metadata. Each operation retains its own partial-file lifecycle.
 func retryTransfer(ctx context.Context, transfer func() error) error {
 	maxAttempts := getMaxDownloadRetries() + 1
-	attempt := 0
-	return retry.DoContext(ctx, maxAttempts, func(err error) bool {
-		var permanent *nonRetriableError
-		return !errors.As(err, &permanent)
-	}, func() error {
-		attempt++
-		if attempt > 1 {
-			slog.Info("retrying download", "attempt", attempt, "max", maxAttempts)
+	var err error
+	for attempt := 0; attempt < maxAttempts; attempt++ {
+		if ctx.Err() != nil {
+			return ctx.Err()
 		}
-		return transfer()
-	})
+		if attempt > 0 {
+			slog.Info("retrying download", "attempt", attempt+1, "max", maxAttempts)
+		}
+		err = transfer()
+		if err == nil {
+			return nil
+		}
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		var permanent *nonRetriableError
+		if errors.As(err, &permanent) || attempt == maxAttempts-1 {
+			return err
+		}
+		delay := 250 * time.Millisecond * time.Duration(1<<min(attempt, 5))
+		var requested *retryAfterError
+		if errors.As(err, &requested) && requested.delay > delay {
+			delay = requested.delay
+		}
+		timer := time.NewTimer(delay)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return ctx.Err()
+		case <-timer.C:
+		}
+	}
+	return err
+}
+
+type retryAfterError struct {
+	err   error
+	delay time.Duration
+}
+
+func (e *retryAfterError) Error() string { return e.err.Error() }
+func (e *retryAfterError) Unwrap() error { return e.err }
+func retryAfter(value string) time.Duration {
+	if seconds, err := strconv.Atoi(value); err == nil && seconds > 0 {
+		return time.Duration(min(seconds, 60)) * time.Second
+	}
+	if deadline, err := http.ParseTime(value); err == nil {
+		return min(max(time.Until(deadline), 0), time.Minute)
+	}
+	return 0
 }
 
 func transferHTTPError(status int, url string) error {
 	err := fmt.Errorf("HTTP %d for %s", status, url)
 	if isNonRetriableHTTPStatus(status) {
 		return &nonRetriableError{err: err}
+	}
+	return err
+}
+
+func transferResponseError(resp *http.Response, url string) error {
+	err := transferHTTPError(resp.StatusCode, url)
+	if !isNonRetriableHTTPStatus(resp.StatusCode) {
+		return &retryAfterError{err: err, delay: retryAfter(resp.Header.Get("Retry-After"))}
 	}
 	return err
 }

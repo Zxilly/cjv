@@ -5,12 +5,11 @@ package selfupdate
 import (
 	"context"
 	"fmt"
-	"net/http"
 	"net/url"
 	"runtime"
 	"strings"
-	"time"
 
+	"github.com/Zxilly/cjv/internal/dist"
 	"github.com/Zxilly/cjv/internal/progress"
 )
 
@@ -67,29 +66,9 @@ func gitCodeReleasesBase(rawURL string) (string, error) {
 }
 
 func fetchGitCodeLatestTag(ctx context.Context, latestURL string) (string, error) {
-	// http.ErrUseLastResponse stops redirect following without producing an
-	// error, leaving the 3xx response with its Location header for inspection.
-	client := &http.Client{
-		Timeout: 30 * time.Second,
-		CheckRedirect: func(*http.Request, []*http.Request) error {
-			return http.ErrUseLastResponse
-		},
-	}
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodHead, latestURL, nil)
+	loc, err := dist.FetchRedirectLocation(ctx, latestURL)
 	if err != nil {
 		return "", err
-	}
-
-	resp, err := client.Do(req)
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close() //nolint:errcheck // best-effort cleanup
-
-	loc := resp.Header.Get("Location")
-	if loc == "" {
-		return "", fmt.Errorf("no redirect location from %s (HTTP %d)", latestURL, resp.StatusCode)
 	}
 
 	if locURL, perr := url.Parse(loc); perr == nil && !locURL.IsAbs() {

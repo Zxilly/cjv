@@ -77,10 +77,30 @@ func DownloadCachedWithName(ctx context.Context, url, sha256Hex, cacheDir, displ
 		return stagedPath, nil
 	}
 
+	partialPath := stagedPath + ".partial"
+	if sha256Hex != "" {
+		if info, err := os.Lstat(partialPath); err == nil {
+			if !info.Mode().IsRegular() {
+				return "", fmt.Errorf("partial download %s is not a regular file", partialPath)
+			}
+		} else if !errors.Is(err, os.ErrNotExist) {
+			return "", err
+		}
+		if err := verifyStagedFile(partialPath, sha256Hex); err == nil {
+			if err := fsops.RenameRetry(partialPath, stagedPath); err != nil {
+				return "", err
+			}
+			return stagedPath, nil
+		}
+	}
+	if Offline(ctx) {
+		// An offline miss says nothing about an existing partial download's
+		// validity. Preserve it so the next online attempt can resume.
+		return "", fmt.Errorf("offline mode: no verified cached download for %s", url)
+	}
 	if err := os.MkdirAll(cacheDir, 0o755); err != nil {
 		return "", err
 	}
-	partialPath := stagedPath + ".partial"
 	if sha256Hex == "" {
 		if err := removeLegacyPartial(partialPath); err != nil {
 			return "", err
@@ -88,20 +108,6 @@ func DownloadCachedWithName(ctx context.Context, url, sha256Hex, cacheDir, displ
 		partialPath, err = newDownloadTempPath(stagedPath)
 		if err != nil {
 			return "", err
-		}
-	} else if info, err := os.Lstat(partialPath); err == nil {
-		if !info.Mode().IsRegular() {
-			return "", fmt.Errorf("partial download %s is not a regular file", partialPath)
-		}
-	} else if !errors.Is(err, os.ErrNotExist) {
-		return "", err
-	}
-	if sha256Hex != "" {
-		if err := verifyStagedFile(partialPath, sha256Hex); err == nil {
-			if err := fsops.RenameRetry(partialPath, stagedPath); err != nil {
-				return "", err
-			}
-			return stagedPath, nil
 		}
 	}
 
@@ -222,7 +228,7 @@ func VerifyArchive(path, sha256Hex string) error {
 
 func verifyStagedFile(path, sha256Hex string) error {
 	if sha256Hex == "" {
-		// No checksum available (e.g. nightly builds). Verify the staged
+		// No checksum was published for this artifact. Verify the staged
 		// file is non-empty and has a valid archive magic header to catch
 		// corrupt or truncated downloads.
 		info, err := os.Stat(path)
@@ -251,7 +257,7 @@ func verifyStagedFile(path, sha256Hex string) error {
 }
 
 // DownloadFile downloads url to dest, optionally verifying the SHA256 checksum.
-// An empty sha256Hex skips verification (used for nightly builds).
+// An empty sha256Hex skips digest verification for artifacts without a hash.
 // Retries on transient failures. Transfer progress is reported to sink; nil
 // reports nothing.
 func DownloadFile(ctx context.Context, url, dest, sha256Hex string, sink progress.Sink) error {
@@ -350,19 +356,19 @@ func downloadOnce(ctx context.Context, url, tmpPath, displayName, sha256Hex stri
 		cleanupDownloadTemp(tmpPath)
 		// Verify the partial file was actually removed. If it still exists
 		// (e.g. file locked on Windows), we must not continue — the stale
-		// content could produce a corrupt file that nightly builds (which
-		// lack SHA256 checksums) would silently accept.
+		// content could produce a corrupt file that artifacts without a
+		// published SHA256 checksum would silently accept.
 		if _, statErr := os.Stat(tmpPath); statErr == nil {
 			return fmt.Errorf("cannot resume download: failed to remove stale partial file %s", tmpPath)
 		}
 		return fmt.Errorf("cannot resume download: server rejected range for %s", url)
 	default:
-		return transferHTTPError(resp.StatusCode, url)
+		return transferResponseError(resp, url)
 	}
 
 	// For SHA256 verification we need to hash the *complete* file, including
 	// the already-downloaded portion when resuming. This is only done when
-	// sha256Hex is non-empty; nightly builds skip checksum verification so
+	// sha256Hex is non-empty; artifacts without a digest skip verification so
 	// the hasher starts empty and verifyChecksum returns nil for them.
 	hasher := sha256.New()
 

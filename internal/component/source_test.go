@@ -24,6 +24,7 @@ import (
 // exactly as a split distribution publishes it.
 func sourceWithComponents(t *testing.T, channel toolchain.Channel, version string, set dist.ComponentSet) *dist.Source {
 	t.Helper()
+	t.Setenv(config.EnvHome, t.TempDir())
 	const sha = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 	placeholder := func(v string) dist.ChannelInfo {
 		return dist.ChannelInfo{Latest: v, Versions: map[string]map[string]dist.DownloadInfo{

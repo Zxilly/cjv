@@ -4,8 +4,6 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
-	"io"
-	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -73,19 +71,7 @@ func checksumForAsset(data []byte, assetName string) (string, error) {
 const sha256HexLength = 64
 
 func fetchReleaseFile(ctx context.Context, rawURL string) ([]byte, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
-	if err != nil {
-		return nil, err
-	}
-	resp, err := dist.HTTPClient().Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close() //nolint:errcheck // best-effort cleanup
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("download %s: HTTP %d", rawURL, resp.StatusCode)
-	}
-	return io.ReadAll(io.LimitReader(resp.Body, dist.MaxResponseSize))
+	return dist.FetchMetadata(ctx, rawURL)
 }
 
 func installReleaseArtifact(ctx context.Context, artifact releaseArtifact) error {

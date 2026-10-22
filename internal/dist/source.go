@@ -9,10 +9,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"log/slog"
 	"net/http"
 	"net/url"
+	"os"
 	pathpkg "path"
 	"slices"
 	"strings"
@@ -123,7 +123,7 @@ func (s *Source) Manifest(ctx context.Context) (*Manifest, error) {
 		return nil, fmt.Errorf("distribution source is nil")
 	}
 	s.once.Do(func() {
-		s.manifest, s.err = FetchManifest(ctx, s.manifestURL)
+		s.manifest, s.err = FetchManifest(withMetadataCache(ctx), s.manifestURL)
 		if s.err == nil {
 			s.err = s.resolveManifestURLs(s.manifest)
 		}
@@ -137,10 +137,11 @@ func (s *Source) manifestForChannel(ctx context.Context, channel toolchain.Chann
 	}
 	s.nightlyOnce.Do(func() {
 		var channelInfo *ChannelInfo
-		channelInfo, s.nightlyErr = FetchChannelManifest(ctx, s.nightlyURL, toolchain.Nightly)
+		channelInfo, s.nightlyErr = FetchChannelManifest(withMetadataCache(ctx), s.nightlyURL, toolchain.Nightly)
 		if s.nightlyErr != nil {
 			var fetchErr *ManifestFetchError
-			if errors.As(s.nightlyErr, &fetchErr) && fetchErr.StatusCode == http.StatusNotFound {
+			if (errors.As(s.nightlyErr, &fetchErr) && fetchErr.StatusCode == http.StatusNotFound) ||
+				(Offline(ctx) && errors.Is(s.nightlyErr, os.ErrNotExist)) {
 				s.nightlyManifest, s.nightlyErr = s.Manifest(ctx)
 			}
 			return
@@ -332,6 +333,7 @@ func (s *Source) resolveManifestURLs(m *Manifest) error {
 					return fmt.Errorf("toolchain %s for %s: %w", version, platform, err)
 				}
 				info.URL = resolved
+				info.SHA256 = strings.ToLower(info.SHA256)
 				platforms[platform] = info
 			}
 		}
@@ -342,6 +344,7 @@ func (s *Source) resolveManifestURLs(m *Manifest) error {
 					return fmt.Errorf("docs %s: %w", version, err)
 				}
 				components.Docs.URL = resolved
+				components.Docs.SHA256 = strings.ToLower(components.Docs.SHA256)
 			}
 			if components.StdxDocs != nil {
 				resolved, err := s.resolveArtifactURL(components.StdxDocs.URL)
@@ -349,6 +352,7 @@ func (s *Source) resolveManifestURLs(m *Manifest) error {
 					return fmt.Errorf("stdx-docs %s: %w", version, err)
 				}
 				components.StdxDocs.URL = resolved
+				components.StdxDocs.SHA256 = strings.ToLower(components.StdxDocs.SHA256)
 			}
 			for platform, info := range components.Stdx {
 				resolved, err := s.resolveArtifactURL(info.URL)
@@ -356,6 +360,7 @@ func (s *Source) resolveManifestURLs(m *Manifest) error {
 					return fmt.Errorf("stdx %s for %s: %w", version, platform, err)
 				}
 				info.URL = resolved
+				info.SHA256 = strings.ToLower(info.SHA256)
 				components.Stdx[platform] = info
 			}
 			channel.Components[version] = components
@@ -388,19 +393,10 @@ func FetchManifest(ctx context.Context, manifestURL string) (*Manifest, error) {
 		slog.Warn("fetching manifest over insecure HTTP", "url", manifestURL)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, manifestURL, nil)
-	if err != nil {
-		return nil, fmt.Errorf("create manifest request: %w", err)
-	}
-	resp, err := HTTPClient().Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to fetch manifest: %w", err)
-	}
-	defer resp.Body.Close() //nolint:errcheck
-	if resp.StatusCode != http.StatusOK {
-		return nil, &ManifestFetchError{URL: manifestURL, StatusCode: resp.StatusCode}
-	}
-	data, err := io.ReadAll(io.LimitReader(resp.Body, MaxResponseSize))
+	data, err := fetchValidatedMetadata(ctx, manifestURL, func(data []byte) error {
+		_, err := ParseManifest(data)
+		return err
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -419,22 +415,17 @@ func FetchChannelManifest(ctx context.Context, manifestURL string, channel toolc
 	if u.Scheme == "http" {
 		slog.Warn("fetching manifest over insecure HTTP", "url", manifestURL)
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, manifestURL, nil)
-	if err != nil {
-		return nil, fmt.Errorf("create manifest request: %w", err)
-	}
-	resp, err := HTTPClient().Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to fetch manifest: %w", err)
-	}
-	defer resp.Body.Close() //nolint:errcheck
-	if resp.StatusCode != http.StatusOK {
-		return nil, &ManifestFetchError{URL: manifestURL, StatusCode: resp.StatusCode}
-	}
-	data, err := io.ReadAll(io.LimitReader(resp.Body, MaxResponseSize))
+	data, err := fetchValidatedMetadata(ctx, manifestURL, func(data []byte) error {
+		_, err := parseChannelOrAggregate(data, channel)
+		return err
+	})
 	if err != nil {
 		return nil, err
 	}
+	return parseChannelOrAggregate(data, channel)
+}
+
+func parseChannelOrAggregate(data []byte, channel toolchain.Channel) (*ChannelInfo, error) {
 	channelInfo, channelErr := ParseChannelManifest(data, channel)
 	if channelErr == nil {
 		return channelInfo, nil

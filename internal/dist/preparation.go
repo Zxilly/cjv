@@ -61,7 +61,7 @@ func (p *Preparation) TempDir(pattern string) (string, error) {
 // Download retains a verified archive for retries until the entire operation
 // completes. Local user-supplied archives never enter this ownership set.
 func (p *Preparation) Download(ctx context.Context, url, sha256, displayName string, sink progress.Sink) (string, error) {
-	archive, err := DownloadCachedWithName(ctx, url, sha256, p.directory, displayName, sink)
+	archive, err := downloadPersistent(ctx, filepath.Join(filepath.Dir(p.directory), "cache"), p.directory, url, sha256, displayName, sink)
 	if err != nil {
 		return "", err
 	}
@@ -80,8 +80,16 @@ func (p *Preparation) Close() error {
 		return nil
 	}
 	var errs []error
-	for _, dir := range p.scratch {
-		errs = append(errs, fsops.RemoveAllRetry(dir))
+	if len(p.scratch) > 0 {
+		root, err := os.OpenRoot(p.directory)
+		if err == nil {
+			for _, dir := range p.scratch {
+				errs = append(errs, fsops.RemoveOwnedTree(root, filepath.Base(dir)))
+			}
+			errs = append(errs, root.Close())
+		} else if !errors.Is(err, os.ErrNotExist) {
+			errs = append(errs, err)
+		}
 	}
 	if p.complete {
 		for archive := range p.archives {

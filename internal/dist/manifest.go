@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
 	"sort"
+	"strings"
 
 	"github.com/Zxilly/cjv/internal/cjverr"
 	"github.com/Zxilly/cjv/internal/toolchain"
@@ -272,6 +274,11 @@ func validateChannel(channel toolchain.Channel, ch ChannelInfo) error {
 			return fmt.Errorf("channel %s version %s has no platforms", label, version)
 		}
 		for platform, info := range platforms {
+			if info.URL != "" {
+				if err := validateArtifactReference(info.URL); err != nil {
+					return fmt.Errorf("channel %s version %s platform %s: %w", label, version, platform, err)
+				}
+			}
 			if channel == toolchain.Nightly && info.SHA256 == "" {
 				if info.Name == "" {
 					return fmt.Errorf("channel %s version %s platform %s has empty name", label, version, platform)
@@ -310,6 +317,9 @@ func validateComponentInfo(channel, version, component string, info ComponentInf
 	if info.URL == "" {
 		return fmt.Errorf("channel %s version %s component %s has empty url", channel, version, component)
 	}
+	if err := validateArtifactReference(info.URL); err != nil {
+		return fmt.Errorf("channel %s version %s component %s: %w", channel, version, component, err)
+	}
 	if info.SHA256 == "" {
 		return nil
 	}
@@ -318,6 +328,17 @@ func validateComponentInfo(channel, version, component string, info ComponentInf
 	}
 	if _, err := hex.DecodeString(info.SHA256); err != nil {
 		return fmt.Errorf("channel %s version %s component %s has invalid sha256: %w", channel, version, component, err)
+	}
+	return nil
+}
+
+func validateArtifactReference(raw string) error {
+	u, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil {
+		return fmt.Errorf("invalid artifact URL: %w", err)
+	}
+	if strings.TrimSpace(raw) == "" || u.IsAbs() && (u.Host == "" || u.Scheme != "http" && u.Scheme != "https") {
+		return fmt.Errorf("invalid artifact URL %q: expected an HTTP(S) URL or relative reference", raw)
 	}
 	return nil
 }

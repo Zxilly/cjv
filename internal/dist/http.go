@@ -56,6 +56,9 @@ type uaTransport struct {
 }
 
 func (t *uaTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	if Offline(req.Context()) {
+		return nil, &nonRetriableError{err: fmt.Errorf("offline mode: network access to %s is disabled", req.URL.Redacted())}
+	}
 	if req.Header.Get("User-Agent") == "" {
 		r2 := new(http.Request)
 		*r2 = *req

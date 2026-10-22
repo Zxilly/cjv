@@ -59,6 +59,7 @@ func initChannelServer(t *testing.T, failStable bool) (*httptest.Server, *atomic
 }
 
 func TestInitChannelsUseNativeHostManifestAvailability(t *testing.T) {
+	configtest.Isolate(t, t.TempDir())
 	server, downloads := initChannelServer(t, false)
 	settings := config.DefaultSettings()
 	t.Setenv(config.EnvDistServer, "")
