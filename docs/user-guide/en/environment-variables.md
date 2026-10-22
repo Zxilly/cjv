@@ -14,6 +14,9 @@ cjv show active
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `CJV_HOME` | `~/.cjv`, or the `home` setting | Absolute data directory; does not move user settings |
+| `CJV_CONFIG_FILE` | `~/.cjv/settings.toml` | User settings file; `--config` takes precedence; system fallback and project selection still apply |
+| `CJV_AUTO_INSTALL` | The `auto_install` setting | `0` disables or `1` enables automatic installation without saving settings |
+| `CJV_OFFLINE` | Unset | Disable cjv network requests when exactly `1`; cached files remain available |
 | `CJV_TOOLCHAIN` | Unset | Toolchain name or absolute SDK path; overrides directory and default settings |
 | `CJV_DIST_SERVER` | Unset | Override the [toolchain distribution root](enterprise/distribution-server.md) |
 | `CJV_LOG` | `warn` | `debug`, `info`, `warn`, or `error`; unknown values use `warn`; logs go to stderr |
@@ -28,4 +31,4 @@ Invalid retry counts and timeouts fall back to defaults. Manifests supply both a
 
 When stdx is installed, cjv injects `CANGJIE_STDX_PATH_DYNAMIC` and `CANGJIE_STDX_PATH_STATIC` into the selected SDK's environment, pointing to its component's `dynamic/` and `static/` directories. They normally need no manual configuration.
 
-See [network proxies](network-proxies.md) for HTTP(S) proxy variables. `CJV_UPDATE_ROOT` belongs to the installer scripts and selects the initial cjv download location; it does not override self-updates of an installed cjv binary.
+See [network proxies](network-proxies.md) for HTTP(S) proxy variables. Both installer scripts read `CJV_VERSION` to select a cjv release tag; command-line `--version` / `-Version` takes precedence. `CJV_UPDATE_ROOT` selects the initial cjv download location and takes precedence over version selection; it does not override self-updates for an installed cjv. See [installation](installation/index.md#pin-the-cjv-version) for examples.

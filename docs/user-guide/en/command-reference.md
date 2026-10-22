@@ -9,6 +9,9 @@ Use `cjv <command> --help` for the installed version's help. See [toolchains and
 | `--json` | Write structured results to stdout; unavailable for `run`, `exec`, and `init` |
 | `--quiet`, `-q` | Hide progress; `component list -q` prints names in one column |
 | `--verbose` | Enable debug logs when `CJV_LOG` is unset; mutually exclusive with global quiet |
+| `--offline` | Disable cjv network access and use local installations and cached files |
+| `--config <path>` | Select user settings; system fallback and project selection still apply |
+| `--no-auto-install` | Disable automatic installation for this invocation |
 | `--help`, `-h` | Show help |
 | `--version`, `-v` | Show the cjv version |
 | `+name` | Select an SDK before a subcommand that supports toolchain selection |
@@ -20,7 +23,7 @@ Explicit `--toolchain` takes precedence over global `+name`. `exec` and `envsetu
 ### install
 
 ```text
-cjv install [toolchain]... [-t target]... [-c component]... [--force | --no-update] [--allow-downgrade]
+cjv install [toolchain]... [-t target]... [-c component]... [--force | --no-update] [--allow-downgrade] [--reinstall]
 ```
 
 Without a name, `install` installs the current selection. Multiple names are processed individually. `-t/--target` and `-c/--component` accept repeated or comma-separated values.
@@ -39,6 +42,7 @@ cjv install nightly -c stdx,docs
 | Default | Preserve required components and targets; missing artifacts block updates, while nightly can search compatible history |
 | `--force` | Allow unavailable optional components or targets to be skipped and removed; do not reinstall unchanged SDKs |
 | `install --no-update` | Keep the installed release and add targets or components; mutually exclusive with `--force` |
+| `install --reinstall` | Reinstall the existing release and retain components and targets to repair a damaged SDK |
 | `--allow-downgrade` | Allow an older compatible nightly |
 
 `install --no-update` can complete offline when no additional components or targets are requested.
@@ -46,7 +50,7 @@ cjv install nightly -c stdx,docs
 ### update
 
 ```text
-cjv update [toolchain]... [--force] [--allow-downgrade] [--no-self-update]
+cjv update [toolchain]... [--force] [--allow-downgrade] [--no-self-update] [--dry-run]
 ```
 
 `update` processes the named toolchains. Without names, it uses global `+name` if present, otherwise all tracked channels. Concrete versions remain pinned; custom toolchains have no official update source. Only a full update checks or updates cjv according to `auto_self_update`; `--no-self-update` skips this.
@@ -59,6 +63,8 @@ cjv update --no-self-update
 ```
 
 The first command updates LTS only. The second updates all tracked channels and skips the check for cjv updates.
+
+`--dry-run` resolves the update plan and reports the newest release, the compatible release, and blockers without installing or writing caches. Add `--json` for CI use.
 
 ### uninstall
 
@@ -74,7 +80,30 @@ cjv uninstall <toolchain>... [-y]
 cjv check
 ```
 
-`check` only queries SDK and cjv updates. Development builds skip their own version comparison.
+`check` only queries SDK and cjv updates. SDK results use the same component and target compatibility rules as installation. Development builds skip their own version comparison.
+
+### Update history and rollback
+
+```text
+cjv toolchain history [toolchain]
+cjv toolchain history list [toolchain]
+cjv toolchain history prune [toolchain] [--keep 2]
+cjv toolchain rollback <toolchain> [snapshot]
+```
+
+History retains a tracking host, its targets, and components as one group, keeping the two most recent snapshots after updates. Listing or pruning without a toolchain selects all history groups; `--keep 0` clears history. Rollback uses the newest snapshot by default, verifies its contents, and saves the current group before restoring. See [update history and rollback](automation.md#update-history-and-rollback).
+
+### doctor and cache
+
+```text
+cjv doctor
+cjv cache dir
+cjv cache list
+cjv cache clean
+cjv cache prune [--max-age 720h]
+```
+
+`doctor` reads configuration, command entry points, and SDK integrity, and exits nonzero when it finds a problem. Cache commands manage verified archives and manifests; removing cached files does not delete installed SDKs. See [automation](automation.md) for JSON conventions and offline use.
 
 ## Inspect toolchains
 
@@ -174,6 +203,14 @@ Topics are `std`, `dev-guide` (alias `book`), `tools`, and `stdx`. Omitting the 
 
 ## Selection and settings
 
+### pin
+
+```text
+cjv pin [toolchain] [--check]
+```
+
+Write `cangjie-sdk.toml` in the current directory with a concrete release, preserving existing components and targets. `--check` only verifies that the project file pins a concrete release. See [automation](automation.md#pin-a-project-version).
+
 ### default
 
 ```text
@@ -190,7 +227,7 @@ cjv override unset [--path <dir>] [--nonexistent]
 cjv override list
 ```
 
-Overrides apply to the current directory unless a path is specified. `--nonexistent` removes stale directory entries. Settings are saved to `~/.cjv/settings.toml`, regardless of `CJV_HOME`. See [configuration](configuration.md) for field meanings.
+Overrides apply to the current directory unless a path is specified. `--nonexistent` removes stale directory entries. Settings are saved to the selected user settings file, defaulting to `~/.cjv/settings.toml`, regardless of `CJV_HOME`. See [configuration](configuration.md) for field meanings.
 
 ### set
 
@@ -201,7 +238,7 @@ cjv set default-host <goos-goarch>
 cjv set home <path>
 ```
 
-Change user settings. The command writes to `~/.cjv/settings.toml`. See [configuration](configuration.md) for defaults, inheritance, and environment overrides.
+Change the selected user settings file, which defaults to `~/.cjv/settings.toml`. See [configuration](configuration.md) for defaults, inheritance, and environment overrides.
 
 ## Initialization and self-management
 

@@ -14,6 +14,9 @@ cjv show active
 | 变量 | 默认值 | 作用 |
 | --- | --- | --- |
 | `CJV_HOME` | `~/.cjv`，或设置中的 `home` | 数据目录，必须为绝对路径；不改变用户设置文件位置 |
+| `CJV_CONFIG_FILE` | `~/.cjv/settings.toml` | 用户设置文件，`--config` 优先；保留系统后备配置和项目选择 |
+| `CJV_AUTO_INSTALL` | 设置中的 `auto_install` | `0` 禁止、`1` 允许自动补装；不写入设置 |
+| `CJV_OFFLINE` | 无 | 恰好为 `1` 时禁止 cjv 发起网络请求，允许读取缓存 |
 | `CJV_TOOLCHAIN` | 无 | 指定工具链名或 SDK 绝对路径；优先于目录和默认设置 |
 | `CJV_DIST_SERVER` | 无 | 覆盖[工具链分发根](enterprise/distribution-server.md) |
 | `CJV_LOG` | `warn` | `debug`、`info`、`warn`、`error`，未知值回退为 `warn`；输出到 stderr |
@@ -28,4 +31,4 @@ cjv show active
 
 安装 stdx 后，cjv 为所选 SDK 的运行环境注入 `CANGJIE_STDX_PATH_DYNAMIC` 和 `CANGJIE_STDX_PATH_STATIC`，分别指向组件的 `dynamic/` 与 `static/`，通常无需手动设置。
 
-HTTP(S) 代理变量见[网络代理](network-proxies.md)。`CJV_UPDATE_ROOT` 属于安装脚本，用于选择 cjv 本体的首次下载地址；它不覆盖已安装 cjv 的自更新源。
+HTTP(S) 代理变量见[网络代理](network-proxies.md)。两个安装脚本读取 `CJV_VERSION` 来选择 cjv 本体的发布 tag，命令行 `--version` / `-Version` 优先。`CJV_UPDATE_ROOT` 选择本体的首次下载地址，优先于版本选择；它不覆盖已安装 cjv 的自更新源。具体用法见[安装说明](installation/index.md#固定-cjv-版本)。

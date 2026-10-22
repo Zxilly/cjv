@@ -26,7 +26,21 @@ curl -sSf https://cjv.zxilly.com/install.sh | sh -s -- -y --default-toolchain no
 & ([scriptblock]::Create((irm https://cjv.zxilly.com/install.ps1))) -Yes -DefaultToolchain none
 ```
 
-The Unix script forwards all arguments except `--mirror` to `cjv init`. The PowerShell script provides corresponding options such as `-Yes`, `-DefaultToolchain`, and `-NoModifyPath`.
+The Unix script handles `--mirror` and `--version`, then forwards the remaining arguments to `cjv init`. The PowerShell script provides `-Mirror`, `-Version`, `-Yes`, `-DefaultToolchain`, and `-NoModifyPath`.
+
+### Pin the cjv version
+
+Automated installations can select an exact cjv release tag, including prereleases:
+
+```bash
+curl -sSf https://cjv.zxilly.com/install.sh | sh -s -- --version v0.4.1 -y --default-toolchain none
+```
+
+```powershell
+& ([scriptblock]::Create((irm https://cjv.zxilly.com/install.ps1))) -Version v0.4.1 -Yes -DefaultToolchain none
+```
+
+Replace the example tag with the required version. Both scripts also read `CJV_VERSION`; the command-line version takes precedence. Without either, they download the latest stable release. This option selects cjv itself; `--default-toolchain` / `-DefaultToolchain` independently selects the Cangjie SDK. Explicit `CJV_UPDATE_ROOT`, `CJV_GITHUB_ROOT`, and `CJV_GITCODE_ROOT` download URLs take precedence over the version option. For an internal source, point the URL directly at the required version's artifact directory.
 
 ### SDK selection
 

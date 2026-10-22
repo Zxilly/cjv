@@ -13,9 +13,7 @@ git-repository-url = "https://github.com/Zxilly/cjv"
 edit-url-template = "https://github.com/Zxilly/cjv/edit/master/docs/dev-guide/{path}"
 default-theme = "light"
 preferred-dark-theme = "navy"
-# 右上角语言切换器(地球图标下拉)。
-additional-js = ["theme/cjv-i18n.js"]
-additional-css = ["theme/cjv-i18n.css"]
+# scripts/build-docs.py adds the shared docs/theme assets for site builds.
 
 [output.html.redirect]
 "linting.html" = "testing.html"

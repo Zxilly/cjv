@@ -1,6 +1,6 @@
 # Configuration
 
-User settings always live in `~/.cjv/settings.toml`. `CJV_HOME` and `home` change the data directory, not this file's location.
+User settings default to `~/.cjv/settings.toml`. Select another file with `--config <path>` or `CJV_CONFIG_FILE`; the command-line option takes precedence. `CJV_HOME` and `home` only change the data directory.
 
 ```toml
 version = 1
@@ -43,6 +43,8 @@ Data directory precedence is `CJV_HOME`, then `home`, then `~/.cjv`. Distributio
 
 Unknown keys produce warnings. Invalid settings and unsupported future format versions cause errors.
 
+`--config` replaces only the user settings file. System fallback settings, project toolchain files, and environment variables still apply. `--no-auto-install` disables automatic installation for this invocation; `CJV_AUTO_INSTALL=0` or `1` temporarily overrides `auto_install`. These options do not modify settings and are passed to child processes started through cjv.
+
 ## Data layout
 
 ```text
@@ -52,7 +54,9 @@ Unknown keys produce warnings. Invalid settings and unsupported future format ve
   stdx/<tc>/        # dynamic/ and static/
   docs/<tc>/main/   # Main documentation
   docs/<tc>/stdx/   # Extension library documentation
-  downloads/        # Archives and resumable partial downloads
+  downloads/        # Installation staging and resumable partial downloads
+  cache/            # Manifests and verified archives
+  history/<tc>/    # Complete group snapshots from tracking-channel updates
 ```
 
 The settings file shares this location only when the default data directory is used. `cjv show home` reports the effective data directory and its source.
@@ -60,6 +64,10 @@ The settings file shares this location only when the default data directory is u
 ### Download cache
 
 Downloads with SHA-256 retain resumable files after failure or interruption. A later download verifies the complete archive. Successful operations clean up their own downloads; a fully successful update of all toolchains also cleans leftover downloads.
+
+`cache/` separately retains manifests and verified archives with SHA-256 after successful installation. Archives are keyed by source URL and digest and verified again on reuse. `--offline` or `CJV_OFFLINE=1` prevents cjv from making network requests; missing metadata or archives cause an error. Cached metadata reflects the last successful fetch and may not include the latest release. Archives without checksums are not retained in the reusable cache.
+
+Use `cjv cache dir` to find the cache, `cjv cache list` to inspect it, `cjv cache clean` to clear it, or `cjv cache prune --max-age 720h` to remove entries older than the given duration. Removing cached files does not remove installed SDKs. See [automation](automation.md) for CI examples.
 
 ## SDK file reuse
 

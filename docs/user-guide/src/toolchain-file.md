@@ -10,6 +10,8 @@ components = ["stdx"]
 
 版本是示例；完整名称格式见[工具链与版本](concepts/toolchains.md)。
 
+也可以运行 `cjv pin lts` 写入解析后的具体发行版，或运行 `cjv pin` 固定当前选择，已有组件与目标列表会保留。`cjv pin --check` 只验证当前目录的项目文件是否固定了具体发行版，适合 CI。详见[自动化](automation.md)。
+
 ## 选择顺序
 
 1. 命令中显式指定的工具链，例如全局 `+name` 或命令支持的 `--toolchain`。
@@ -57,6 +59,8 @@ targets = ["ohos", "android"]
 ```bash
 cjv set auto-install false
 ```
+
+只对本次调用关闭自动补装，可用 `cjv --no-auto-install exec cjc --version`；代理命令可以设置 `CJV_AUTO_INSTALL=0`。显式 `cjv install` 不受这个选项影响。
 
 ## 项目文件错误
 

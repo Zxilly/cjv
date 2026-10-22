@@ -1,6 +1,6 @@
 # 配置
 
-用户设置始终保存在 `~/.cjv/settings.toml`。`CJV_HOME` 和 `home` 只改变数据目录，不改变这个文件的位置。
+用户设置默认保存在 `~/.cjv/settings.toml`。`--config <path>` 或 `CJV_CONFIG_FILE` 可以选择另一个设置文件，命令行优先。`CJV_HOME` 和 `home` 只改变数据目录。
 
 ```toml
 version = 1
@@ -43,6 +43,8 @@ auto_install = true
 
 未知设置键会警告。无法解析的设置和高于当前支持范围的格式版本会报错。
 
+`--config` 只替换用户设置文件，系统后备配置、项目工具链文件和环境变量仍然生效。`--no-auto-install` 临时关闭自动补装；`CJV_AUTO_INSTALL=0` 或 `1` 临时覆盖 `auto_install`。这些选项不会写入设置文件，并传递给通过 cjv 启动的子进程。
+
 ## 数据布局
 
 ```text
@@ -52,7 +54,9 @@ auto_install = true
   stdx/<tc>/        # dynamic/ 与 static/
   docs/<tc>/main/   # 主体文档
   docs/<tc>/stdx/   # 扩展库文档
-  downloads/        # 下载归档与可续传部分文件
+  downloads/        # 安装暂存与可续传部分文件
+  cache/            # 清单与已验证的归档
+  history/<tc>/    # 通道更新前的完整组快照
 ```
 
 设置文件只有在使用默认数据目录时才与上述目录位于同一处。用 `cjv show home` 查看实际数据目录及来源。
@@ -60,6 +64,10 @@ auto_install = true
 ### 下载缓存
 
 带 SHA-256 的下载失败或中断时会保留可续传文件，下次完成后校验整个归档。成功的操作清理自己使用的下载；全量更新全部成功时还会清理残留下载。
+
+`cache/` 独立保留清单和带 SHA-256 的已验证归档，成功安装后仍可复用。归档按来源 URL 和摘要区分，每次复用都会重新校验。`--offline` 或 `CJV_OFFLINE=1` 禁止 cjv 发起网络请求；所需清单或归档不在缓存中时会报错。缓存以下载时的内容为准，不保证包含最新发行版。没有校验和的归档不会进入可复用缓存。
+
+使用 `cjv cache dir` 查看位置，`cjv cache list` 查看内容，`cjv cache clean` 清空，或用 `cjv cache prune --max-age 720h` 删除超过指定时间的条目。清理缓存不会移除已安装 SDK。更多 CI 用法见[自动化](automation.md)。
 
 ## SDK 文件复用
 

@@ -10,6 +10,8 @@ components = ["stdx"]
 
 The version is an example. See [toolchains and versions](concepts/toolchains.md) for name syntax.
 
+Run `cjv pin lts` to write the resolved concrete release, or `cjv pin` to pin the active selection. Existing component and target lists are preserved. `cjv pin --check` verifies that the current directory's project file pins a concrete release without changing it, for use in CI. See [automation](automation.md).
+
 ## Selection order
 
 1. An explicit command selection, such as global `+name` or a supported `--toolchain` option.
@@ -57,6 +59,8 @@ This declaration prepares the host SDK, host components, and target SDKs. See [c
 ```bash
 cjv set auto-install false
 ```
+
+Use `cjv --no-auto-install exec cjc --version` to disable automatic installation for one invocation, or set `CJV_AUTO_INSTALL=0` for proxy commands. Explicit `cjv install` is unaffected.
 
 ## Invalid project files
 

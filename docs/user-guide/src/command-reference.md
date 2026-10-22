@@ -9,6 +9,9 @@
 | `--json` | 结构化结果写入 stdout；`run`、`exec`、`init` 不支持 |
 | `--quiet`、`-q` | 隐藏进度；`component list -q` 单列打印名称 |
 | `--verbose` | 未设置 `CJV_LOG` 时启用 debug 日志，与全局 quiet 互斥 |
+| `--offline` | 禁止 cjv 联网，只使用本地安装和缓存 |
+| `--config <path>` | 选择用户设置文件，保留系统后备配置和项目选择 |
+| `--no-auto-install` | 本次调用禁止自动补装 |
 | `--help`、`-h` | 显示帮助 |
 | `--version`、`-v` | 显示 cjv 版本 |
 | `+name` | 放在子命令前，为支持选择工具链的命令指定 SDK |
@@ -20,7 +23,7 @@
 ### install
 
 ```text
-cjv install [toolchain]... [-t target]... [-c component]... [--force | --no-update] [--allow-downgrade]
+cjv install [toolchain]... [-t target]... [-c component]... [--force | --no-update] [--allow-downgrade] [--reinstall]
 ```
 
 `install` 省略名称时安装当前选择，指定多个名称时逐项处理。`-t/--target` 和 `-c/--component` 可重复或逗号分隔。
@@ -39,6 +42,7 @@ cjv install nightly -c stdx,docs
 | 默认 | 保留所需组件和目标；缺少制品时阻止更新，nightly 可查找兼容历史版本 |
 | `--force` | 允许跳过并移除未发布的可选组件或目标，不重装未变化的 SDK |
 | `install --no-update` | 保留已有发行版，只补齐目标或组件，与 `--force` 互斥 |
+| `install --reinstall` | 重新安装已有发行版并保留组件和目标，用于修复损坏的 SDK |
 | `--allow-downgrade` | 允许选择更旧的兼容 nightly |
 
 没有新增组件或目标需求时，`install --no-update` 可离线完成。
@@ -46,7 +50,7 @@ cjv install nightly -c stdx,docs
 ### update
 
 ```text
-cjv update [toolchain]... [--force] [--allow-downgrade] [--no-self-update]
+cjv update [toolchain]... [--force] [--allow-downgrade] [--no-self-update] [--dry-run]
 ```
 
 `update` 指定名称时处理这些工具链；无名称时使用全局 `+name`，否则更新所有已跟踪通道。具体版本保持固定，自定义工具链没有官方更新。只有全量更新会按 `auto_self_update` 检查或更新 cjv，`--no-self-update` 可跳过。
@@ -59,6 +63,8 @@ cjv update --no-self-update
 ```
 
 第一条命令只更新 LTS；第二条更新所有已跟踪通道，并跳过 cjv 本体的更新检查。
+
+`--dry-run` 只解析更新计划，报告最新发行版、实际兼容版本与阻塞原因，不安装或写入缓存。配合 `--json` 可供 CI 检查。
 
 ### uninstall
 
@@ -74,7 +80,30 @@ cjv uninstall <toolchain>... [-y]
 cjv check
 ```
 
-`check` 只查询 SDK 和 cjv 的可用更新。开发构建跳过自身版本比较。
+`check` 只查询 SDK 和 cjv 的可用更新。SDK 结果与实际更新使用相同的组件、目标兼容性规则。开发构建跳过自身版本比较。
+
+### 更新历史与回退
+
+```text
+cjv toolchain history [toolchain]
+cjv toolchain history list [toolchain]
+cjv toolchain history prune [toolchain] [--keep 2]
+cjv toolchain rollback <toolchain> [snapshot]
+```
+
+历史按跟踪宿主与其目标、组件整组保存，更新后默认保留两份。省略查询或清理的工具链时处理所有历史组；`--keep 0` 清空历史。回退省略快照 ID 时使用最新快照，恢复前校验内容并保存当前组。详见[更新历史与回退](automation.md#更新历史与回退)。
+
+### doctor 与缓存
+
+```text
+cjv doctor
+cjv cache dir
+cjv cache list
+cjv cache clean
+cjv cache prune [--max-age 720h]
+```
+
+`doctor` 只读检查配置、命令入口及 SDK 完整性，发现问题时返回非零退出码。缓存命令管理已验证的下载归档和清单，清理缓存不会删除已安装 SDK。JSON 约定和离线用法见[自动化](automation.md)。
 
 ## 查询工具链
 
@@ -174,6 +203,14 @@ cjv doc [topic] [--path] [--toolchain <tc>]
 
 ## 选择与设置
 
+### pin
+
+```text
+cjv pin [toolchain] [--check]
+```
+
+写入当前目录的 `cangjie-sdk.toml`，固定具体发行版并保留已有组件和目标。`--check` 只验证项目文件是否固定了具体发行版。详见[自动化](automation.md#固定项目版本)。
+
 ### default
 
 ```text
@@ -190,7 +227,7 @@ cjv override unset [--path <dir>] [--nonexistent]
 cjv override list
 ```
 
-目录覆盖默认作用于当前目录，`--nonexistent` 清理已不存在目录。设置写入 `~/.cjv/settings.toml`，不随 `CJV_HOME` 改变。字段含义见[配置](configuration.md)。
+目录覆盖默认作用于当前目录，`--nonexistent` 清理已不存在目录。设置写入所选用户设置文件，默认 `~/.cjv/settings.toml`，不随 `CJV_HOME` 改变。字段含义见[配置](configuration.md)。
 
 ### set
 
@@ -201,7 +238,7 @@ cjv set default-host <goos-goarch>
 cjv set home <path>
 ```
 
-修改用户设置，写入 `~/.cjv/settings.toml`。默认值、继承规则和环境变量覆盖见[配置](configuration.md)。
+修改所选用户设置文件，默认 `~/.cjv/settings.toml`。默认值、继承规则和环境变量覆盖见[配置](configuration.md)。
 
 ## 初始化与自管理
 

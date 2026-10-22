@@ -76,13 +76,14 @@ Vitest uses real browsers. `VITEST_BROWSER` selects chromium, firefox, or webkit
 
 ```bash
 npx --yes markdownlint-cli2@0.22.1
+python3 scripts/build-docs.py
 go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
 go mod verify
 ```
 
-After dependency changes, run `go mod tidy` and review `go.mod` and `go.sum`. CI reruns tidy and requires no changes. Use the vulnerability scanner version in `.github/workflows/ci.yml`; it currently pins `govulncheck@v1.3.0` to avoid a Go 1.26 compatibility issue.
+After dependency changes, run `go mod tidy` and review `go.mod` and `go.sum`. CI reruns tidy and requires no changes. Vulnerability checks use the pinned `govulncheck` version in `.github/workflows/ci.yml` with the current stable Go release. Check the project's supported Go versions when upgrading the scanner.
 
-Documentation changes also require both language builds; see [documentation](documentation.md).
+The shared documentation script builds all four books and checks internal pages, assets, and anchors. Pull requests and deployments use the same entry point; see [documentation](documentation.md).
 
 ## Real downloads and CI
 

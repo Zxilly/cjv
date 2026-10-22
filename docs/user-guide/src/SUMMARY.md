@@ -19,6 +19,7 @@
 # 配置与部署
 
 - [配置](configuration.md)
+- [自动化与 JSON 接口](automation.md)
 - [环境变量](environment-variables.md)
 - [网络代理](network-proxies.md)
 - [企业与离线部署](enterprise/index.md)

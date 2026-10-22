@@ -19,6 +19,7 @@
 # Configure and deploy
 
 - [Configuration](configuration.md)
+- [Automation and JSON interfaces](automation.md)
 - [Environment variables](environment-variables.md)
 - [Network proxies](network-proxies.md)
 - [Enterprise and offline deployment](enterprise/index.md)

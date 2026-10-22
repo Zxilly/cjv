@@ -26,7 +26,21 @@ curl -sSf https://cjv.zxilly.com/install.sh | sh -s -- -y --default-toolchain no
 & ([scriptblock]::Create((irm https://cjv.zxilly.com/install.ps1))) -Yes -DefaultToolchain none
 ```
 
-Unix 脚本将 `--mirror` 以外的参数传给 `cjv init`。PowerShell 脚本提供对应的 `-Yes`、`-DefaultToolchain`、`-NoModifyPath` 等参数。
+Unix 脚本消费 `--mirror` 和 `--version`，其余参数传给 `cjv init`。PowerShell 脚本提供对应的 `-Mirror`、`-Version`、`-Yes`、`-DefaultToolchain`、`-NoModifyPath` 参数。
+
+### 固定 cjv 版本
+
+自动化安装可指定 cjv 的发布 tag，包括预发布版本：
+
+```bash
+curl -sSf https://cjv.zxilly.com/install.sh | sh -s -- --version v0.4.1 -y --default-toolchain none
+```
+
+```powershell
+& ([scriptblock]::Create((irm https://cjv.zxilly.com/install.ps1))) -Version v0.4.1 -Yes -DefaultToolchain none
+```
+
+将示例 tag 替换为需要的版本。两个脚本也读取 `CJV_VERSION`；命令行版本参数优先。未指定时下载最新稳定版。这个选项选择 cjv 本体，`--default-toolchain` / `-DefaultToolchain` 选择仓颉 SDK，两者独立。显式的 `CJV_UPDATE_ROOT`、`CJV_GITHUB_ROOT`、`CJV_GITCODE_ROOT` 下载地址优先于版本参数；使用内部源时，应把地址直接指向所选版本的制品目录。
 
 ### SDK 选择
 

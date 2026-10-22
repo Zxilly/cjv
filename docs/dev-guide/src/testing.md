@@ -76,13 +76,14 @@ Vitest 使用真实浏览器，`VITEST_BROWSER` 可选择 chromium、firefox 或
 
 ```bash
 npx --yes markdownlint-cli2@0.22.1
+python3 scripts/build-docs.py
 go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
 go mod verify
 ```
 
-修改依赖后运行 `go mod tidy` 并审查 `go.mod`、`go.sum` 差异。CI 会再次 tidy 并要求无变化。漏洞检查的工具版本以 `.github/workflows/ci.yml` 为准；当前固定 `govulncheck@v1.3.0` 以避开 Go 1.26 兼容问题。
+修改依赖后运行 `go mod tidy` 并审查 `go.mod`、`go.sum` 差异。CI 会再次 tidy 并要求无变化。漏洞检查使用 `.github/workflows/ci.yml` 中固定的 `govulncheck` 版本，并在当前稳定 Go 上运行。升级扫描器时同时检查本项目支持的 Go 版本。
 
-文档还需构建两个语言版本，见[文档站](documentation.md)。
+共享文档脚本构建四份手册并检查内部页面、资源和锚点；PR 和发布使用同一入口。用法见[文档站](documentation.md)。
 
 ## 真实下载与 CI
 

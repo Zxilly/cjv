@@ -20,7 +20,9 @@
   function targetUrl(code, current) {
     var loc = window.location;
     if (loc.pathname.indexOf("/" + current + "/") === -1) return null;
-    return loc.pathname.replace("/" + current + "/", "/" + code + "/") + loc.search + loc.hash;
+    // Translated headings have different IDs. Open the matching chapter rather
+    // than carrying an anchor that is absent from the destination language.
+    return loc.pathname.replace("/" + current + "/", "/" + code + "/") + loc.search;
   }
 
   function build() {
@@ -57,9 +59,6 @@
       } else {
         a.setAttribute("aria-disabled", "true");
       }
-      a.addEventListener("click", function () {
-        try { localStorage.setItem("cjv-doc-lang", l.code); } catch (e) { /* ignore */ }
-      });
       li.appendChild(a);
       menu.appendChild(li);
     });
