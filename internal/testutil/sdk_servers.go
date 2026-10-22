@@ -9,6 +9,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io/fs"
 	"net/http"
 	"net/http/httptest"
 	"runtime"
@@ -26,8 +27,10 @@ func MockSDKZip() ([]byte, string) {
 	var buf bytes.Buffer
 	w := zip.NewWriter(&buf)
 
-	writeEntry := func(name, content string) {
-		f, err := w.Create(name)
+	writeEntry := func(name, content string, mode fs.FileMode) {
+		header := &zip.FileHeader{Name: name, Method: zip.Deflate}
+		header.SetMode(mode)
+		f, err := w.CreateHeader(header)
 		if err != nil {
 			panic(fmt.Sprintf("zip create %s: %v", name, err))
 		}
@@ -42,10 +45,10 @@ func MockSDKZip() ([]byte, string) {
 		if runtime.GOOS == "windows" {
 			name += ".exe"
 		}
-		writeEntry(name, "stub-"+tool)
+		writeEntry(name, "stub-"+tool, 0o755)
 	}
-	writeEntry("cangjie/envsetup.sh", "export CANGJIE_HOME=\"$PWD\"")
-	writeEntry("cangjie/envsetup.ps1", "$env:CANGJIE_HOME = $PWD.Path")
+	writeEntry("cangjie/envsetup.sh", "export CANGJIE_HOME=\"$PWD\"", 0o666)
+	writeEntry("cangjie/envsetup.ps1", "$env:CANGJIE_HOME = $PWD.Path", 0o666)
 
 	if err := w.Close(); err != nil {
 		panic(fmt.Sprintf("zip close: %v", err))

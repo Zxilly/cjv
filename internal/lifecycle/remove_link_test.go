@@ -159,6 +159,38 @@ func TestLinkedToolchainUnlinkFailureRestoresSettings(t *testing.T) {
 	f.assertNoJournal(t)
 }
 
+func TestLinkedToolchainUnlinkFailurePreservesConcurrentSettings(t *testing.T) {
+	f := newLinkedRemovalFixture(t, "absolute")
+	failure := errors.New("unlink denied")
+	other := config.NewSettingsFile(f.sf.Path())
+	next := "next-sdk"
+	err := unlinkToolchainLocked(f.roots, f.sf, f.before, f.update, func(*os.Root, string) error {
+		f.assertReferencesCleared(t)
+		_, err := other.Update(config.SettingsUpdate{
+			DefaultToolchain: &next,
+			OverrideChanges: map[string]*string{
+				filepath.Join(f.home, "unrelated"): &next,
+				filepath.Join(f.home, "new"):       &next,
+			},
+		})
+		require.NoError(t, err)
+		return failure
+	})
+	require.ErrorIs(t, err, failure)
+	settings, err := config.LoadSettings(f.sf.Path())
+	require.NoError(t, err)
+	assert.Equal(t, next, settings.DefaultToolchain)
+	assert.Equal(t, map[string]string{
+		filepath.Join(f.home, "project"):   linkedRemovalName,
+		filepath.Join(f.home, "unrelated"): next,
+		filepath.Join(f.home, "new"):       next,
+	}, settings.Overrides)
+	_, err = os.Readlink(f.roots.TcDir)
+	require.NoError(t, err)
+	f.assertSourcePreserved(t)
+	f.assertNoJournal(t)
+}
+
 func TestLinkedToolchainUnlinkErrorAfterRemovalKeepsReferencesCleared(t *testing.T) {
 	f := newLinkedRemovalFixture(t, "absolute")
 	failure := errors.New("error after unlink")
@@ -176,42 +208,25 @@ func TestLinkedToolchainUnlinkErrorAfterRemovalKeepsReferencesCleared(t *testing
 
 type linkedRemovalSettingsFault struct {
 	*config.SettingsFile
-	update func(config.SettingsUpdate) (bool, error)
-	save   func(*config.Settings) error
-}
-
-func (sf linkedRemovalSettingsFault) Update(update config.SettingsUpdate) (bool, error) {
-	if sf.update != nil {
-		return sf.update(update)
-	}
-	return sf.SettingsFile.Update(update)
-}
-
-func (sf linkedRemovalSettingsFault) Save(settings *config.Settings) error {
-	if sf.save != nil {
-		return sf.save(settings)
-	}
-	return sf.SettingsFile.Save(settings)
+	beforeUpdate func() error
+	afterUpdate  func() error
+	undo         func() error
 }
 
 func (sf linkedRemovalSettingsFault) MutateWithUndo(fn func(*config.Settings) (config.SettingsUpdate, error)) (bool, func() error, error) {
-	before, err := sf.SettingsFile.Load()
-	if err != nil {
-		return false, nil, err
-	}
-	if sf.update != nil {
-		update, err := fn(before)
-		if err != nil {
+	if sf.beforeUpdate != nil {
+		if err := sf.beforeUpdate(); err != nil {
 			return false, nil, err
 		}
-		changed, err := sf.update(update)
-		// This fault seam deliberately simulates an error after publication.
-		// Production settings writes either return an undo or fail before publish.
-		return changed, func() error { return sf.Save(before) }, err
 	}
+	// Keep the production update and undo together: saving an unchanged loaded
+	// snapshot does not reverse an update, because Save only merges its changes.
 	changed, undo, err := sf.SettingsFile.MutateWithUndo(fn)
-	if sf.save != nil && undo != nil {
-		undo = func() error { return sf.save(before) }
+	if sf.undo != nil && undo != nil {
+		undo = sf.undo
+	}
+	if err == nil && sf.afterUpdate != nil {
+		err = sf.afterUpdate()
 	}
 	return changed, undo, err
 }
@@ -221,13 +236,15 @@ func TestLinkedToolchainSettingsFailureKeepsLink(t *testing.T) {
 		t.Run(map[bool]string{false: "before-publication", true: "after-publication"}[published], func(t *testing.T) {
 			f := newLinkedRemovalFixture(t, "absolute")
 			failure := errors.New("settings update failed")
-			sf := linkedRemovalSettingsFault{SettingsFile: f.sf, update: func(update config.SettingsUpdate) (bool, error) {
-				if published {
-					_, err := f.sf.Update(update)
-					require.NoError(t, err)
+			sf := linkedRemovalSettingsFault{SettingsFile: f.sf}
+			if published {
+				sf.afterUpdate = func() error {
+					f.assertReferencesCleared(t)
+					return failure
 				}
-				return published, failure
-			}}
+			} else {
+				sf.beforeUpdate = func() error { return failure }
+			}
 			err := unlinkToolchainLocked(f.roots, sf, f.before, f.update, func(*os.Root, string) error {
 				t.Fatal("must not unlink after a settings error")
 				return nil
@@ -244,7 +261,7 @@ func TestLinkedToolchainSettingsFailureKeepsLink(t *testing.T) {
 func TestLinkedToolchainSettingsRestoreFailureIsReported(t *testing.T) {
 	f := newLinkedRemovalFixture(t, "absolute")
 	restoreFailure, unlinkFailure := errors.New("settings restore failed"), errors.New("unlink denied")
-	sf := linkedRemovalSettingsFault{SettingsFile: f.sf, save: func(*config.Settings) error { return restoreFailure }}
+	sf := linkedRemovalSettingsFault{SettingsFile: f.sf, undo: func() error { return restoreFailure }}
 	err := unlinkToolchainLocked(f.roots, sf, f.before, f.update, func(*os.Root, string) error { return unlinkFailure })
 	require.ErrorIs(t, err, unlinkFailure)
 	require.ErrorIs(t, err, restoreFailure)
@@ -258,9 +275,7 @@ func TestLinkedToolchainChangedEntryIsNotUnlinked(t *testing.T) {
 	for _, kind := range []string{"directory", "file", "symlink", "missing"} {
 		t.Run(kind, func(t *testing.T) {
 			f := newLinkedRemovalFixture(t, "absolute")
-			sf := linkedRemovalSettingsFault{SettingsFile: f.sf, update: func(update config.SettingsUpdate) (bool, error) {
-				changed, err := f.sf.Update(update)
-				require.NoError(t, err)
+			sf := linkedRemovalSettingsFault{SettingsFile: f.sf, afterUpdate: func() error {
 				require.NoError(t, os.Remove(f.roots.TcDir))
 				switch kind {
 				case "directory":
@@ -270,7 +285,7 @@ func TestLinkedToolchainChangedEntryIsNotUnlinked(t *testing.T) {
 				case "symlink":
 					require.NoError(t, os.Symlink("different-target", f.roots.TcDir))
 				}
-				return changed, nil
+				return nil
 			}}
 			err := unlinkToolchainLocked(f.roots, sf, f.before, f.update, func(*os.Root, string) error {
 				t.Fatal("changed entry must not be removed")
@@ -309,13 +324,11 @@ func TestLinkedToolchainMovedParentKeepsReferencesCleared(t *testing.T) {
 						require.NoError(t, os.Symlink("other-source", f.roots.TcDir))
 					}
 				}
-				sf := linkedRemovalSettingsFault{SettingsFile: f.sf, update: func(update config.SettingsUpdate) (bool, error) {
-					changed, err := f.sf.Update(update)
-					require.NoError(t, err)
+				sf := linkedRemovalSettingsFault{SettingsFile: f.sf, afterUpdate: func() error {
 					if timing == "after-settings" {
 						moveParent()
 					}
-					return changed, nil
+					return nil
 				}}
 				failure := errors.New("unlink failed after parent moved")
 				err := unlinkToolchainLocked(f.roots, sf, f.before, f.update, func(*os.Root, string) error {
