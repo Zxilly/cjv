@@ -24,7 +24,11 @@ func TestRemoveOwnedTreePreservesLinksAndExternalModes(t *testing.T) {
 			_ = os.Chmod(dir, 0o700)
 		}
 	})
-	require.NoError(t, os.Link(filepath.Join(outside, "data"), filepath.Join(owned, "hardlink")))
+	if hardlinksAvailable(t, base) {
+		require.NoError(t, os.Link(filepath.Join(outside, "data"), filepath.Join(owned, "hardlink")))
+	} else {
+		t.Log("filesystem policy denies hard links; still checking symlinks and external modes")
+	}
 	require.NoError(t, os.Symlink(outside, filepath.Join(owned, "external")))
 	require.NoError(t, os.Symlink("../keep", filepath.Join(owned, "internal")))
 	for _, dir := range []string{outside, sibling, owned} {
