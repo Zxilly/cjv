@@ -147,6 +147,20 @@ func (s *Settings) ResolveDistServer() string {
 	return strings.TrimSpace(s.DistServer)
 }
 
+// ResolveAutoInstall applies the per-invocation environment policy without
+// changing a settings snapshot or persisting the override on a later save.
+func ResolveAutoInstall(fallback bool) (bool, error) {
+	value := strings.TrimSpace(os.Getenv(EnvAutoInstall))
+	if value == "" {
+		return fallback, nil
+	}
+	enabled, err := strconv.ParseBool(value)
+	if err != nil {
+		return false, fmt.Errorf("invalid %s value %q: expected 0, 1, false, or true", EnvAutoInstall, value)
+	}
+	return enabled, nil
+}
+
 // migrateSettings applies in-memory migrations from older settings versions
 // to the current version. Add new cases as currentSettingsVersion is bumped.
 func migrateSettings(s *Settings) {
@@ -160,11 +174,7 @@ func migrateSettings(s *Settings) {
 
 // Prefer SettingsFile.Save when a cached SettingsFile is available.
 func SaveSettings(s *Settings, path string) error {
-	data, _, err := prepareSettingsValues(settingsToSave(s))
-	if err != nil {
-		return err
-	}
-	return writeSettingsData(data, path)
+	return NewSettingsFile(path).Save(s)
 }
 
 // prepareSettingsValues validates the exact encoded document and prepares the

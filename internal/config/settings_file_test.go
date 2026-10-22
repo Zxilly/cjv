@@ -89,18 +89,15 @@ func TestSettingsFile_ConcurrentAccess(t *testing.T) {
 	wg.Wait()
 }
 
-func TestSettingsFileSavePreservesAndRestoresProvenance(t *testing.T) {
+func TestSettingsFileUndoPreservesAndRestoresProvenance(t *testing.T) {
 	dir := t.TempDir()
 	fallback := filepath.Join(dir, "fallback.toml")
 	t.Setenv(EnvFallbackSettings, fallback)
 	require.NoError(t, os.WriteFile(fallback, []byte("default_toolchain = 'lts-1.0.5'\nauto_install = false\n"), 0o600))
 	sf := NewSettingsFile(filepath.Join(dir, "settings.toml"))
-	before, err := sf.Load()
+	value := "sts"
+	_, undo, err := sf.UpdateWithUndo(SettingsUpdate{OverrideChanges: map[string]*string{"project": &value}})
 	require.NoError(t, err)
-
-	changed := copySettings(before)
-	changed.Overrides["project"] = "sts"
-	require.NoError(t, sf.Save(changed))
 	var stored map[string]any
 	_, err = toml.DecodeFile(sf.Path(), &stored)
 	require.NoError(t, err)
@@ -110,7 +107,7 @@ func TestSettingsFileSavePreservesAndRestoresProvenance(t *testing.T) {
 
 	// Rollback restores field presence as well as the values seen before the
 	// operation, so a later administrator change is still inherited.
-	require.NoError(t, sf.Save(before))
+	require.NoError(t, undo())
 	require.NoError(t, os.WriteFile(fallback, []byte("default_toolchain = 'lts-1.0.6'\nauto_install = true\n"), 0o600))
 	sf.Invalidate()
 	restored, err := sf.Load()

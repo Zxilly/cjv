@@ -79,11 +79,13 @@ func TestUnsetNonexistentOverrides_RemovesStale(t *testing.T) {
 	require.NoError(t, config.SaveSettings(&stg, settingsPath))
 
 	sf := config.NewSettingsFile(settingsPath)
-	require.NoError(t, unsetNonexistentOverrides(io.Discard, &stg, sf))
+	require.NoError(t, unsetNonexistentOverrides(io.Discard, sf))
+	loaded, err := sf.Load()
+	require.NoError(t, err)
 
-	assert.Contains(t, stg.Overrides, existingDir,
+	assert.Contains(t, loaded.Overrides, existingDir,
 		"override for existing dir should be preserved")
-	assert.NotContains(t, stg.Overrides, goneDir,
+	assert.NotContains(t, loaded.Overrides, goneDir,
 		"override for gone dir should be removed")
 }
 
@@ -102,9 +104,11 @@ func TestUnsetNonexistentOverrides_NoOpWhenAllExist(t *testing.T) {
 	require.NoError(t, config.SaveSettings(&stg, settingsPath))
 
 	sf := config.NewSettingsFile(settingsPath)
-	require.NoError(t, unsetNonexistentOverrides(io.Discard, &stg, sf))
+	require.NoError(t, unsetNonexistentOverrides(io.Discard, sf))
+	loaded, err := sf.Load()
+	require.NoError(t, err)
 
-	assert.Len(t, stg.Overrides, 2, "all overrides should be preserved")
+	assert.Len(t, loaded.Overrides, 2, "all overrides should be preserved")
 }
 
 func TestOverrideUnsetCommandRemovesMatchingNormalizedPath(t *testing.T) {

@@ -20,6 +20,9 @@ type SettingsUpdate struct {
 	LinkMode         *string
 	DefaultHost      *string
 	Overrides        map[string]string
+	// OverrideChanges changes individual stored paths. A nil value removes
+	// the path; unrelated overrides are preserved. Applied after Overrides.
+	OverrideChanges map[string]*string
 }
 
 type settingsSnapshot struct {
@@ -42,6 +45,100 @@ func (u SettingsUpdate) apply(values map[string]any) {
 		} else {
 			values["overrides"] = maps.Clone(u.Overrides)
 		}
+	}
+	if len(u.OverrideChanges) > 0 {
+		overrides, _ := values["overrides"].(map[string]string)
+		overrides = maps.Clone(overrides)
+		if overrides == nil {
+			overrides = make(map[string]string)
+		}
+		for path, value := range u.OverrideChanges {
+			if value == nil {
+				delete(overrides, path)
+			} else {
+				overrides[path] = *value
+			}
+		}
+		if len(overrides) == 0 {
+			delete(values, "overrides")
+		} else {
+			values["overrides"] = overrides
+		}
+	}
+}
+
+// mergeSettingsChanges applies only the difference from before to after.
+// Conditional changes are used by undo: a later writer's value wins over
+// restoring a stale snapshot. Overrides are compared per path, not as a table.
+func mergeSettingsChanges(current, before, after map[string]any, conditional bool) {
+	keys := make(map[string]struct{}, len(before)+len(after))
+	for key := range before {
+		keys[key] = struct{}{}
+	}
+	for key := range after {
+		keys[key] = struct{}{}
+	}
+	for key := range keys {
+		if key == "overrides" {
+			mergeOverrideChanges(current, before, after, conditional)
+			continue
+		}
+		oldValue, oldPresent := before[key]
+		newValue, newPresent := after[key]
+		if oldPresent == newPresent && settingsValueEqual(oldValue, newValue) {
+			continue
+		}
+		if conditional {
+			value, present := current[key]
+			if present != oldPresent || !settingsValueEqual(value, oldValue) {
+				continue
+			}
+		}
+		if newPresent {
+			current[key] = newValue
+		} else {
+			delete(current, key)
+		}
+	}
+}
+
+func mergeOverrideChanges(current, before, after map[string]any, conditional bool) {
+	oldValues, _ := before["overrides"].(map[string]string)
+	newValues, _ := after["overrides"].(map[string]string)
+	values, _ := current["overrides"].(map[string]string)
+	values = maps.Clone(values)
+	if values == nil {
+		values = make(map[string]string)
+	}
+	keys := make(map[string]struct{}, len(oldValues)+len(newValues))
+	for key := range oldValues {
+		keys[key] = struct{}{}
+	}
+	for key := range newValues {
+		keys[key] = struct{}{}
+	}
+	for key := range keys {
+		oldValue, oldPresent := oldValues[key]
+		newValue, newPresent := newValues[key]
+		if oldPresent == newPresent && oldValue == newValue {
+			continue
+		}
+		if conditional {
+			value, present := values[key]
+			if present != oldPresent || value != oldValue {
+				continue
+			}
+		}
+		if newPresent {
+			values[key] = newValue
+		} else {
+			delete(values, key)
+		}
+	}
+	if len(values) == 0 {
+		delete(current, "overrides")
+	} else {
+		current["overrides"] = values
 	}
 }
 

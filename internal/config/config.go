@@ -63,6 +63,8 @@ const (
 	EnvNoPathSetup      = "CJV_NO_PATH_SETUP"
 	EnvDistServer       = "CJV_DIST_SERVER"
 	EnvFallbackSettings = "CJV_FALLBACK_SETTINGS"
+	EnvConfigFile       = "CJV_CONFIG_FILE"
+	EnvAutoInstall      = "CJV_AUTO_INSTALL"
 	// EnvAllowInsecureManifest, when set to "1", permits fetching the toolchain
 	// manifest over plain HTTP from a non-loopback host (trusted internal
 	// mirrors). HTTPS is required by default because the manifest carries both
@@ -174,11 +176,14 @@ func loadHomeFromSettings() string {
 	return s.Home
 }
 
-// SettingsPath returns the location of the persisted settings file. It is
-// intentionally decoupled from Home(): settings.toml always lives at
-// <user-home>/.cjv/settings.toml so that the home path itself can be
-// persisted as a setting without creating a chicken-and-egg dependency.
+// SettingsPath returns the explicitly selected settings file, or the default
+// <user-home>/.cjv/settings.toml. It is independent of CJV_HOME so the data
+// directory can itself be configured in this file. Explicit paths may name
+// a file that does not exist yet and are resolved against the current directory.
 func SettingsPath() (string, error) {
+	if path := strings.TrimSpace(os.Getenv(EnvConfigFile)); path != "" {
+		return filepath.Abs(path)
+	}
 	h, err := cachedUserHomeDir()
 	if err != nil {
 		return "", err
@@ -191,8 +196,8 @@ var (
 	defaultSettingsFiles  = make(map[string]*SettingsFile)
 )
 
-// DefaultSettingsFile returns a SettingsFile backed by the user's
-// settings.toml inside CJV_HOME. Instances are cached per resolved path,
+// DefaultSettingsFile returns a SettingsFile backed by SettingsPath(),
+// independently of CJV_HOME. Instances are cached per resolved path,
 // and their internal caches avoid redundant disk reads.
 func DefaultSettingsFile() (*SettingsFile, error) {
 	path, err := SettingsPath()

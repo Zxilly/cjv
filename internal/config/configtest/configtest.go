@@ -29,6 +29,8 @@ import (
 func Isolate(t *testing.T, tmpDir string) {
 	t.Helper()
 	t.Setenv(config.EnvHome, tmpDir)
+	t.Setenv(config.EnvConfigFile, "")
+	t.Setenv(config.EnvAutoInstall, "")
 	config.SetUserHomeDirOverrideForTest(tmpDir)
 	config.ResetDefaultSettingsFileCache()
 	t.Cleanup(func() {

@@ -47,20 +47,21 @@ func newOverrideSetCommand() *cobra.Command {
 				return err
 			}
 
-			sf, settings, err := config.LoadDefaultSettings()
+			sf, err := config.DefaultSettingsFile()
 			if err != nil {
 				return err
 			}
 
-			// Remove any existing entry whose normalized path matches dir
-			// to prevent duplicate entries from different string representations.
-			for key := range settings.Overrides {
-				if config.NormalizePath(key) == dir && key != dir {
-					delete(settings.Overrides, key)
+			if _, err := sf.Mutate(func(settings *config.Settings) (config.SettingsUpdate, error) {
+				changes := map[string]*string{dir: &tc}
+				// Normalize aliases while holding the settings file lock.
+				for key := range settings.Overrides {
+					if config.NormalizePath(key) == dir && key != dir {
+						changes[key] = nil
+					}
 				}
-			}
-			settings.Overrides[dir] = tc
-			if _, err := sf.Update(config.SettingsUpdate{Overrides: settings.Overrides}); err != nil {
+				return config.SettingsUpdate{OverrideChanges: changes}, nil
+			}); err != nil {
 				return err
 			}
 
@@ -82,13 +83,13 @@ func newOverrideUnsetCommand() *cobra.Command {
 		Use:   "unset",
 		Short: i18n.T("OverrideUnsetShort", nil),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			sf, settings, err := config.LoadDefaultSettings()
+			sf, err := config.DefaultSettingsFile()
 			if err != nil {
 				return err
 			}
 
 			if nonexistent {
-				return unsetNonexistentOverrides(cmd.OutOrStdout(), settings, sf)
+				return unsetNonexistentOverrides(cmd.OutOrStdout(), sf)
 			}
 
 			dir, err := resolveOverrideDir(path)
@@ -96,19 +97,18 @@ func newOverrideUnsetCommand() *cobra.Command {
 				return err
 			}
 
-			found := false
-			for key := range settings.Overrides {
-				if config.NormalizePath(key) == dir {
-					delete(settings.Overrides, key)
-					found = true
-					break
+			if _, err := sf.Mutate(func(settings *config.Settings) (config.SettingsUpdate, error) {
+				changes := make(map[string]*string)
+				for key := range settings.Overrides {
+					if config.NormalizePath(key) == dir {
+						changes[key] = nil
+					}
 				}
-			}
-			if !found {
-				return errors.New(i18n.T("NoOverrideSet", i18n.MsgData{"Dir": dir}))
-			}
-
-			if _, err := sf.Update(config.SettingsUpdate{Overrides: settings.Overrides}); err != nil {
+				if len(changes) == 0 {
+					return config.SettingsUpdate{}, errors.New(i18n.T("NoOverrideSet", i18n.MsgData{"Dir": dir}))
+				}
+				return config.SettingsUpdate{OverrideChanges: changes}, nil
+			}); err != nil {
 				return err
 			}
 
@@ -135,22 +135,26 @@ func resolveOverrideDir(flagPath string) (string, error) {
 	return config.NormalizePath(dir), nil
 }
 
-func unsetNonexistentOverrides(w io.Writer, settings *config.Settings, sf *config.SettingsFile) error {
+func unsetNonexistentOverrides(w io.Writer, sf *config.SettingsFile) error {
 	removed := 0
-	for dir := range settings.Overrides {
-		if _, err := os.Stat(dir); errors.Is(err, os.ErrNotExist) {
-			delete(settings.Overrides, dir)
-			removed++
+	_, err := sf.Mutate(func(settings *config.Settings) (config.SettingsUpdate, error) {
+		changes := make(map[string]*string)
+		for dir := range settings.Overrides {
+			if _, err := os.Stat(dir); errors.Is(err, os.ErrNotExist) {
+				changes[dir] = nil
+				removed++
+			}
 		}
+		return config.SettingsUpdate{OverrideChanges: changes}, nil
+	})
+	if err != nil {
+		return err
 	}
 	if removed == 0 {
 		_, err := fmt.Fprintln(w, i18n.T("NoNonexistentOverrides", nil))
 		return err
 	}
-	if _, err := sf.Update(config.SettingsUpdate{Overrides: settings.Overrides}); err != nil {
-		return err
-	}
-	_, err := fmt.Fprintln(w, i18n.TP("RemovedNonexistentOverrides", i18n.MsgData{"Count": strconv.Itoa(removed)}, removed))
+	_, err = fmt.Fprintln(w, i18n.TP("RemovedNonexistentOverrides", i18n.MsgData{"Count": strconv.Itoa(removed)}, removed))
 	return err
 }
 
