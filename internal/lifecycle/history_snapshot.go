@@ -309,7 +309,12 @@ func safeHistoryLink(root, path string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	rel, err := filepath.Rel(root, resolved)
+	// Compare both paths after resolving ancestor links, such as /var on macOS.
+	resolvedRoot, err := filepath.EvalSymlinks(root)
+	if err != nil {
+		return "", err
+	}
+	rel, err := filepath.Rel(resolvedRoot, resolved)
 	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) || filepath.IsAbs(rel) {
 		return "", fmt.Errorf("history link leaves its content root: %s", path)
 	}
