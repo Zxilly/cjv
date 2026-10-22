@@ -8,6 +8,9 @@
     reliable GitHub access).
 .PARAMETER Yes
     Skip confirmation prompt
+.PARAMETER Version
+    Exact cjv release tag, including prereleases. Defaults to CJV_VERSION or
+    the latest stable release. Explicit download roots take precedence.
 .PARAMETER DefaultToolchain
     Toolchain to install (default: auto, use 'none' to skip)
 .PARAMETER NoModifyPath
@@ -20,6 +23,7 @@
 param(
     [switch]$Mirror,
     [switch]$Yes,
+    [string]$Version,
     [string]$DefaultToolchain = "auto",
     [switch]$NoModifyPath
 )
@@ -31,16 +35,21 @@ if ($env:CJV_MIRROR -eq "1") {
     $Mirror = $true
 }
 
+if (-not $PSBoundParameters.ContainsKey("Version")) {
+    $Version = $env:CJV_VERSION
+}
+$ReleasePath = if ($Version) { "download/$Version" } else { "latest/download" }
+
 if ($env:CJV_GITHUB_ROOT) {
     $CjvGithubRoot = $env:CJV_GITHUB_ROOT
 } else {
-    $CjvGithubRoot = "https://github.com/Zxilly/cjv/releases/latest/download"
+    $CjvGithubRoot = "https://github.com/Zxilly/cjv/releases/$ReleasePath"
 }
 
 if ($env:CJV_GITCODE_ROOT) {
     $CjvGitcodeRoot = $env:CJV_GITCODE_ROOT
 } else {
-    $CjvGitcodeRoot = "https://gitcode.com/Zxilly/cjv/releases/latest/download"
+    $CjvGitcodeRoot = "https://gitcode.com/Zxilly/cjv/releases/$ReleasePath"
 }
 
 if ($env:CJV_UPDATE_ROOT) {
@@ -133,8 +142,11 @@ function Download-File {
     if (Has-Command "Invoke-WebRequest") {
         $savedProgress = $global:ProgressPreference
         $global:ProgressPreference = "SilentlyContinue"
-        Invoke-WebRequest -Uri $Uri -OutFile $OutFile -UseBasicParsing
-        $global:ProgressPreference = $savedProgress
+        try {
+            Invoke-WebRequest -Uri $Uri -OutFile $OutFile -UseBasicParsing
+        } finally {
+            $global:ProgressPreference = $savedProgress
+        }
         return
     }
 
@@ -262,4 +274,11 @@ function Install-Cjv {
     }
 }
 
+# Validate after defining the trap's cleanup helper, before any download. Tags
+# are one URL-safe segment, matching install.sh's version selector.
+if ($PSBoundParameters.ContainsKey("Version") -or $Version) {
+    if ($Version -notmatch '^[a-zA-Z0-9][a-zA-Z0-9._+-]*$') {
+        Fail "invalid release tag: $Version"
+    }
+}
 Install-Cjv

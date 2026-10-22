@@ -92,6 +92,11 @@ function Invoke-WithInstallerEnvironment {
         "CJV_GITHUB_ROOT",
         "CJV_GITCODE_ROOT",
         "CJV_MIRROR",
+        "CJV_VERSION",
+        "CJV_CONFIG_FILE",
+        "CJV_AUTO_INSTALL",
+        "CJV_OFFLINE",
+        "CJV_DIST_SERVER",
         "CJV_FALLBACK_SETTINGS",
         "CJV_NO_PATH_SETUP",
         "CJV_HOME",
@@ -105,9 +110,10 @@ function Invoke-WithInstallerEnvironment {
     $snapshot = Get-EnvironmentSnapshot -Names $names
 
     try {
-        foreach ($name in @("CJV_UPDATE_ROOT", "CJV_GITHUB_ROOT", "CJV_GITCODE_ROOT", "CJV_MIRROR", "CJV_FALLBACK_SETTINGS", "CJV_NO_PATH_SETUP")) {
+        foreach ($name in @("CJV_UPDATE_ROOT", "CJV_GITHUB_ROOT", "CJV_GITCODE_ROOT", "CJV_MIRROR", "CJV_VERSION", "CJV_CONFIG_FILE", "CJV_AUTO_INSTALL", "CJV_OFFLINE", "CJV_DIST_SERVER", "CJV_NO_PATH_SETUP")) {
             [Environment]::SetEnvironmentVariable($name, $null, "Process")
         }
+        [Environment]::SetEnvironmentVariable("CJV_FALLBACK_SETTINGS", (Join-Path $CjvHome "missing-fallback.toml"), "Process")
         [Environment]::SetEnvironmentVariable("CJV_HOME", $CjvHome, "Process")
         [Environment]::SetEnvironmentVariable("HOME", $CjvHome, "Process")
         [Environment]::SetEnvironmentVariable("USERPROFILE", $CjvHome, "Process")
@@ -176,6 +182,10 @@ function Run-Case {
 }
 
 try {
+    & $TargetPowerShell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $ScriptDir "parameters-ps1.ps1")
+    if ($LASTEXITCODE -ne 0) {
+        Fail "installer parameter checks failed"
+    }
     if ($DefaultToolchain -eq "all") {
         $modes = @("none", "lts")
     } else {
