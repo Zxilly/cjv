@@ -121,6 +121,9 @@ func validateJournal(state journal) error {
 	if state.Scope != "" && state.Scope != "toolchain" {
 		return errors.New("fstx: invalid transaction scope")
 	}
+	if state.History != "" && (state.Scope != "toolchain" || !config.IsHistoryID(state.History)) {
+		return errors.New("fstx: invalid history snapshot scope or identifier")
+	}
 	if len(state.Targets) > 0 {
 		if state.Scope != "toolchain" || state.Targets[0] != state.Target {
 			return errors.New("fstx: invalid toolchain group")
@@ -170,6 +173,12 @@ func scopedPath(state journal, path string) bool {
 		return false
 	}
 	if state.Scope == "toolchain" {
+		if state.History != "" {
+			history := filepath.Join(config.HistorySubdir, state.Target, state.History)
+			if path == history || path == config.StagingDir(history) {
+				return true
+			}
+		}
 		names := state.Targets
 		if len(names) == 0 {
 			names = []string{state.Target}

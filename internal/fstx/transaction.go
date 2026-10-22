@@ -33,6 +33,7 @@ type journal struct {
 	Target  string   `json:"target"`
 	Scope   string   `json:"scope,omitempty"`
 	Targets []string `json:"targets,omitempty"`
+	History string   `json:"history,omitempty"`
 	State   string   `json:"state"`
 	Changes []change `json:"changes"`
 }
@@ -110,6 +111,18 @@ func NewToolchainGroupTransaction(home string, names []string) (*Transaction, er
 		return nil, errors.Join(err, tx.Rollback())
 	}
 	return tx, nil
+}
+
+// IncludeHistory adds one history snapshot owned by the first toolchain in a
+// group. The snapshot and SDK roots then share the same durable commit decision.
+// It must be declared before the first mutation is recorded.
+func (tx *Transaction) IncludeHistory(id string) error {
+	if tx.closed || tx.journal.Scope != "toolchain" || tx.journal.State != stateActive || len(tx.journal.Changes) != 0 || !config.IsHistoryID(id) {
+		return errors.New("fstx: invalid history snapshot or transaction state")
+	}
+	next := tx.journal
+	next.History = id
+	return tx.save(next)
 }
 
 func newTransaction(rootDir, target, scope string) (*Transaction, error) {
@@ -404,7 +417,7 @@ func (tx *Transaction) cleanup() error {
 			continue
 		}
 		path := filepath.Join(dir, entry.Name())
-		if err := fsops.Retry(func() error { return root.RemoveAll(path) }); err != nil {
+		if err := fsops.RemoveOwnedTree(root, path); err != nil {
 			return err
 		}
 	}

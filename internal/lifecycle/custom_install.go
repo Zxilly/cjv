@@ -73,7 +73,10 @@ func InstallToolchainFromZip(ctx context.Context, name, archivePath, sha256 stri
 // binary and proxy links are in place when it returns. A link whose
 // finalization fails is removed again, leaving nothing half-configured. An
 // existing toolchain of that name is never replaced.
-func LinkToolchainDir(name, dir string) error {
+func LinkToolchainDir(ctx context.Context, name, dir string) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	parsed, err := toolchain.ParseToolchainName(name)
 	if err != nil {
 		return err
@@ -86,7 +89,7 @@ func LinkToolchainDir(name, dir string) error {
 	if err != nil {
 		return err
 	}
-	lock, err := toolchain.LockHome(context.Background())
+	lock, err := toolchain.LockHome(ctx)
 	if err != nil {
 		return err
 	}
@@ -104,7 +107,7 @@ func LinkToolchainDir(name, dir string) error {
 	if err := fsops.SymlinkOrJunction(dir, linkPath); err != nil {
 		return fmt.Errorf("%s: %w", i18n.T("LinkCreateFailed", nil), err)
 	}
-	if err := finalizeInstalledToolchain(); err != nil {
+	if err := finalizeInstalledToolchain(ctx); err != nil {
 		_ = os.Remove(linkPath) //nolint:errcheck // best-effort rollback
 		return fmt.Errorf("failed to finalize installation: %w", err)
 	}

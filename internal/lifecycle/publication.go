@@ -1,10 +1,12 @@
 package lifecycle
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/BurntSushi/toml"
 	"github.com/Zxilly/cjv/internal/config"
@@ -16,18 +18,33 @@ import (
 
 // publishPrepared runs with the home lock, after all members have been staged
 // and revalidated. Every root shares the same commit and recovery decision.
-func publishPrepared(home string, identities []string, pairs [][2]string, publish func() error, opts Options) (retErr error) {
+func publishPrepared(ctx context.Context, home string, identities []string, pairs [][2]string, publish func() error, opts Options) (retErr error) {
+	root, err := os.OpenRoot(home)
+	if err != nil {
+		return err
+	}
+	defer root.Close() //nolint:errcheck
+	removeStaging := func(destination string) error {
+		rel, err := filepath.Rel(home, config.StagingDir(destination))
+		if err != nil {
+			return err
+		}
+		return fsops.RemoveOwnedTree(root, rel)
+	}
 	defer func() {
 		var recovery *fstx.RecoveryError
 		if !errors.As(retErr, &recovery) {
 			for _, pair := range pairs {
-				_ = fsops.RemoveAllRetry(config.StagingDir(pair[1]))
+				_ = removeStaging(pair[1])
 			}
 		}
 	}()
 	for _, pair := range pairs {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		stage := config.StagingDir(pair[1])
-		if err := fsops.RemoveAllRetry(stage); err != nil {
+		if err := removeStaging(pair[1]); err != nil {
 			return err
 		}
 		if _, err := os.Lstat(pair[0]); err == nil {
@@ -45,7 +62,32 @@ func publishPrepared(home string, identities []string, pairs [][2]string, publis
 			return err
 		}
 	}
-	tx, err := fstx.NewToolchainGroupTransaction(home, identities)
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	transactionNames := identities
+	if opts.history != nil && len(identities) > 0 {
+		owner := opts.history.entry.Toolchain
+		parsedOwner, err := toolchain.ParseToolchainName(owner)
+		if err != nil || parsedOwner.IsCustom() || parsedOwner.Channel == toolchain.UnknownChannel || parsedOwner.Version != "" || parsedOwner.Target != "" {
+			return fmt.Errorf("history snapshot owner must be a tracking host")
+		}
+		// A target-only replacement still publishes history owned by its
+		// unchanged host. Include that owner in the journal's allowed scope,
+		// without moving its SDK or emitting an installation event for it.
+		transactionNames = []string{owner}
+		for _, identity := range identities {
+			if identity == owner {
+				continue
+			}
+			name, err := toolchain.ParseToolchainName(identity)
+			if err != nil || name.IsCustom() || name.Channel != parsedOwner.Channel || name.Version != "" || name.Host != "" || !strings.HasPrefix(name.Target, opts.history.entry.HostTuple+"-") {
+				return fmt.Errorf("history snapshot owner does not match the published group")
+			}
+			transactionNames = append(transactionNames, identity)
+		}
+	}
+	tx, err := fstx.NewToolchainGroupTransaction(home, transactionNames)
 	if err != nil {
 		return err
 	}
@@ -55,7 +97,18 @@ func publishPrepared(home string, identities []string, pairs [][2]string, publis
 			retErr = errors.Join(retErr, tx.Rollback())
 		}
 	}()
+	if opts.history != nil {
+		if err := tx.IncludeHistory(opts.history.entry.ID); err != nil {
+			return err
+		}
+		if err := tx.RenameFile(opts.history.staging, opts.history.path); err != nil {
+			return err
+		}
+	}
 	for _, pair := range pairs {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		if _, err := os.Lstat(pair[1]); err == nil {
 			if err := tx.RemoveDir(pair[1]); err != nil {
 				return err
@@ -72,7 +125,10 @@ func publishPrepared(home string, identities []string, pairs [][2]string, publis
 			return err
 		}
 	}
-	if err := finalizeInstalledToolchain(); err != nil {
+	if err := finalizeInstalledToolchain(ctx); err != nil {
+		return err
+	}
+	if err := ctx.Err(); err != nil {
 		return err
 	}
 	publicationErr, err := commitInstallation(tx, publish)

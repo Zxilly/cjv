@@ -8,6 +8,7 @@
 package reachable
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"os"
@@ -22,6 +23,8 @@ import (
 // Policy selects how far Ensure goes. The zero value establishes a missing
 // managed binary and the proxy links, which every install needs.
 type Policy struct {
+	// ManagedLockHeld is used by self-update, which owns the lock through the swap.
+	ManagedLockHeld bool
 	// ForceManagedBinary replaces the managed binary with the running
 	// executable even when one exists, so a (re)installation always leaves
 	// the current cjv behind. Unset, an existing managed binary is kept.
@@ -37,7 +40,24 @@ type Policy struct {
 
 // Ensure establishes the managed binary and the proxy links, then the env
 // scripts and the PATH entry when policy asks for them. It is idempotent.
-func Ensure(policy Policy) error {
+func Ensure(ctx context.Context, policy Policy) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if !policy.ManagedLockHeld {
+		lock, err := selfupdate.LockManaged(ctx)
+		if err != nil {
+			return err
+		}
+		defer lock.Close() //nolint:errcheck
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	selfupdate.CleanupOldBinaries()
 	if policy.ForceManagedBinary {
 		if _, err := selfupdate.ForceUpdateManagedExecutable(); err != nil {
 			return err

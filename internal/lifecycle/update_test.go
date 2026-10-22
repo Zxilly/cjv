@@ -403,3 +403,44 @@ func TestNoUpdateKeepsInstalledSDKWithoutManifest(t *testing.T) {
 	require.NoError(t, err, "existing SDK with no requested changes should not require a manifest")
 	require.Equal(t, "sts-1.0.0", readRelease(t, home, "sts").Release)
 }
+
+func TestReinstallNightlyRetainsRecordedRelease(t *testing.T) {
+	home := updateHome(t)
+	sdk, checksum := testutil.CreateMockSDKZip("1.0.5")
+	tuple, err := sdktarget.CurrentHostTuple("")
+	require.NoError(t, err)
+	old, newer := "1.0.0-alpha.20260101", "1.0.0-alpha.20260102"
+	var latest atomic.Value
+	latest.Store(old)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/sdk.zip" {
+			_, _ = w.Write(sdk)
+			return
+		}
+		if r.URL.Path != "/nightly.json" {
+			http.NotFound(w, r)
+			return
+		}
+		artifact := dist.DownloadInfo{Name: "sdk.zip", URL: "http://" + r.Host + "/sdk.zip", SHA256: checksum}
+		current := latest.Load().(string)
+		channel := dist.ChannelInfo{Latest: current, Versions: map[string]map[string]dist.DownloadInfo{old: {tuple: artifact}}}
+		if current == newer {
+			channel.Versions[newer] = map[string]dist.DownloadInfo{tuple: artifact}
+		}
+		_ = json.NewEncoder(w).Encode(channel)
+	}))
+	t.Cleanup(server.Close)
+	sf, err := config.DefaultSettingsFile()
+	require.NoError(t, err)
+	manifestURL := server.URL + "/versions.json"
+	_, err = sf.Update(config.SettingsUpdate{ManifestURL: &manifestURL})
+	require.NoError(t, err)
+	require.NoError(t, Install(t.Context(), InstallRequest{Toolchain: "nightly"}, Options{}))
+	require.Equal(t, "nightly-"+old, readRelease(t, home, "nightly").Release)
+	latest.Store(newer)
+	require.NoError(t, Install(t.Context(), InstallRequest{Toolchain: "nightly", Reinstall: true}, Options{}))
+	require.Equal(t, "nightly-"+old, readRelease(t, home, "nightly").Release)
+	history, err := ListHistory(t.Context(), "nightly")
+	require.NoError(t, err)
+	require.Empty(t, history)
+}

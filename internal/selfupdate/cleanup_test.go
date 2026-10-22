@@ -3,7 +3,6 @@ package selfupdate
 import (
 	"os"
 	"path/filepath"
-	"runtime"
 	"testing"
 
 	"github.com/Zxilly/cjv/internal/config"
@@ -13,9 +12,6 @@ import (
 )
 
 func TestCleanupOldBinariesRemovesDotOldAndGcFiles(t *testing.T) {
-	if runtime.GOOS != "windows" {
-		t.Skip("cleanup is Windows-only")
-	}
 	home := t.TempDir()
 	t.Setenv(config.EnvHome, home)
 
@@ -34,6 +30,24 @@ func TestCleanupOldBinariesRemovesDotOldAndGcFiles(t *testing.T) {
 	assert.FileExists(t, managed)
 	assert.NoFileExists(t, dotOld)
 	assert.NoFileExists(t, gcFile)
+}
+
+func TestCleanupOldBinariesRecoversInterruptedSwap(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv(config.EnvHome, home)
+	bin := filepath.Join(home, "bin")
+	require.NoError(t, os.MkdirAll(bin, 0o755))
+	managed := filepath.Join(bin, sdktools.CjvBinaryName())
+	old := filepath.Join(bin, "."+sdktools.CjvBinaryName()+".old")
+	staged := filepath.Join(bin, "."+sdktools.CjvBinaryName()+".new")
+	require.NoError(t, os.WriteFile(old, []byte("previous executable"), 0o755))
+	require.NoError(t, os.WriteFile(staged, []byte("unfinished replacement"), 0o755))
+	CleanupOldBinaries()
+	data, err := os.ReadFile(managed)
+	require.NoError(t, err)
+	assert.Equal(t, "previous executable", string(data))
+	assert.NoFileExists(t, old)
+	assert.NoFileExists(t, staged)
 }
 
 func gcTestName(base string) string {

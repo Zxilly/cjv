@@ -2,6 +2,7 @@ package config
 
 import (
 	"path/filepath"
+	"regexp"
 	"strings"
 )
 
@@ -14,10 +15,17 @@ const (
 	// DocsSubdir holds one documentation tree per toolchain.
 	DocsSubdir = "docs"
 	// StdxSubdir holds one stdx tree per toolchain.
-	StdxSubdir      = "stdx"
+	StdxSubdir = "stdx"
+	// HistorySubdir holds independent snapshots of tracking toolchain groups.
+	HistorySubdir   = "history"
 	binSubdir       = "bin"
 	downloadsSubdir = "downloads"
 )
+
+var historyIDPattern = regexp.MustCompile(`^[0-9]{8}T[0-9]{6}\.[0-9]{9}Z-[0-9a-f]{12}$`)
+
+// IsHistoryID permits generated snapshot identifiers, never paths or aliases.
+func IsHistoryID(id string) bool { return historyIDPattern.MatchString(id) }
 
 const (
 	// StagingSuffix marks a toolchain tree that is still being materialized

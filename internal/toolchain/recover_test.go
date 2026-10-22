@@ -98,6 +98,8 @@ func TestRecoverHome_PreservesAmbiguousTransactionsAndStaging(t *testing.T) {
 			require.NoError(t, os.WriteFile(filepath.Join(backup, "old-sdk"), []byte("previous SDK"), 0o644))
 			staging := filepath.Join(root, "lts-1.0.5.staging")
 			require.NoError(t, os.MkdirAll(staging, 0o755))
+			historyStage := filepath.Join(home, config.HistorySubdir, "lts", "20261022T010203.123456789Z-abcdef123456.staging")
+			require.NoError(t, os.MkdirAll(historyStage, 0o755))
 			switch artifact {
 			case "legacy-conflict":
 				require.NoError(t, os.MkdirAll(filepath.Join(root, "lts-1.0.5"), 0o755))
@@ -113,6 +115,7 @@ func TestRecoverHome_PreservesAmbiguousTransactionsAndStaging(t *testing.T) {
 
 			assert.DirExists(t, txDir)
 			assert.DirExists(t, staging)
+			assert.DirExists(t, historyStage, "ambiguous recovery must retain history staging too")
 			// Legacy recovery may restore an unambiguous backup before finding
 			// an unknown entry, but must keep the old SDK in either location.
 			_, backupErr := os.Stat(filepath.Join(backup, "old-sdk"))

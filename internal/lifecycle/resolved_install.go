@@ -119,7 +119,9 @@ func placeToolchain(ctx context.Context, name string, force bool, tuple string, 
 			return err
 		}
 	}
-	if err := swapInstalledToolchain(stagingDir, destDir, isReinstall, finalizeInstalledToolchain, publish); err != nil {
+	if err := swapInstalledToolchain(stagingDir, destDir, isReinstall, func() error {
+		return finalizeInstalledToolchain(ctx)
+	}, publish); err != nil {
 		return err
 	}
 	opts.emit(progress.Event{Kind: progress.ToolchainInstalled, Toolchain: name})
@@ -153,13 +155,50 @@ func lockPlacement(ctx context.Context, destDir string, force bool) (*toolchain.
 	return lock, false, nil
 }
 
-func defaultToolchainExists(name string) bool {
+func defaultToolchainExistsAt(root, name, host string) bool {
 	parsed, err := toolchain.ParseToolchainName(name)
 	if err != nil {
 		return false
 	}
-	_, err = toolchain.FindInstalled(parsed)
-	return err == nil
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		return false
+	}
+	for _, entry := range entries {
+		candidate, err := toolchain.ParseToolchainName(entry.Name())
+		if err != nil || config.IsScratchName(entry.Name()) {
+			continue
+		}
+		if candidate.String() == parsed.String() {
+			info, err := os.Stat(filepath.Join(root, entry.Name()))
+			return err == nil && info.IsDir()
+		}
+		if candidate.IsCustom() || parsed.IsCustom() || candidate.Target != parsed.Target || parsed.Channel != toolchain.UnknownChannel && parsed.Channel != candidate.Channel {
+			continue
+		}
+		if !toolchain.MatchesVersionSelector(parsed.Version, candidate.Version) {
+			continue
+		}
+		record, err := toolchain.ReadInstallation(filepath.Join(root, entry.Name()))
+		if err != nil {
+			continue
+		}
+		wanted := parsed.Host
+		if wanted == "" {
+			wanted = host
+		}
+		actual := record.Tuple
+		if actual == "" {
+			actual = candidate.Host
+		}
+		if actual == "" {
+			actual = host
+		}
+		if actual == wanted {
+			return true
+		}
+	}
+	return false
 }
 
 // validateInstallation checks that the extracted SDK carries the compiler at
@@ -184,8 +223,8 @@ func validateInstallation(dir, tuple string) error {
 // CJV_HOME/bin and every SDK tool gets its proxy link, so the toolchain is
 // reachable through the proxies whether it was installed by `cjv install` or
 // by proxy auto-install.
-func finalizeInstalledToolchain() error {
-	if err := reachable.Ensure(reachable.Policy{}); err != nil {
+func finalizeInstalledToolchain(ctx context.Context) error {
+	if err := reachable.Ensure(ctx, reachable.Policy{}); err != nil {
 		return err
 	}
 	if afterFinalizeHook != nil {
@@ -249,22 +288,25 @@ func swapInstalledToolchain(stagingDir, destDir string, isReinstall bool, afterS
 // publishFirstDefault runs under the home lock and restores its settings if
 // publication fails. It also serves already-installed SDKs without downloads.
 func publishFirstDefault(d *Distribution, identity string, opts Options) error {
-	d.File.Invalidate()
-	before, err := d.File.Load()
+	root, err := config.ToolchainsDir()
 	if err != nil {
 		return err
 	}
-	if before.DefaultToolchain == "" || !defaultToolchainExists(before.DefaultToolchain) {
-		if _, err := d.File.Update(config.SettingsUpdate{DefaultToolchain: &identity}); err != nil {
-			return err
+	changed, undo, err := d.File.MutateWithUndo(func(settings *config.Settings) (config.SettingsUpdate, error) {
+		if settings.DefaultToolchain == "" || !defaultToolchainExistsAt(root, settings.DefaultToolchain, d.HostTuple) {
+			return config.SettingsUpdate{DefaultToolchain: &identity}, nil
 		}
-		if opts.ConfigurePath {
-			reachable.ConfigurePath()
-		}
+		return config.SettingsUpdate{}, nil
+	})
+	if err != nil {
+		return err
+	}
+	if changed && opts.ConfigurePath {
+		reachable.ConfigurePath()
 	}
 	if afterPublishHook != nil {
 		if err := afterPublishHook(); err != nil {
-			if restoreErr := d.File.Save(before); restoreErr != nil {
+			if restoreErr := undo(); restoreErr != nil {
 				return &publishedSettingsError{errors.Join(err, fmt.Errorf("restore toolchain settings: %w", restoreErr))}
 			}
 			return err

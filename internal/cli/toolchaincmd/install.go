@@ -25,10 +25,11 @@ func Register(root *cobra.Command, ctx *clictx.Context) {
 
 type installResult struct {
 	output.ProgressDriven
-	Toolchain  string   `json:"toolchain"`
-	Targets    []string `json:"targets"`
-	Components []string `json:"components"`
-	Forced     bool     `json:"forced"`
+	Toolchain   string   `json:"toolchain"`
+	Targets     []string `json:"targets"`
+	Components  []string `json:"components"`
+	Forced      bool     `json:"forced"`
+	Reinstalled bool     `json:"reinstalled,omitempty"`
 }
 
 type installBatchResult struct {
@@ -44,6 +45,7 @@ type install struct {
 	components     []string
 	noUpdate       bool
 	allowDowngrade bool
+	reinstall      bool
 }
 
 func newInstall(ctx *clictx.Context) *install {
@@ -75,11 +77,12 @@ func (c *install) run(cmd *cobra.Command, args []string) error {
 			Components: c.components,
 			Force:      c.force,
 			NoUpdate:   c.noUpdate,
+			Reinstall:  c.reinstall,
 		}, c.lifecycleOptions())
 		if err != nil {
 			errs = append(errs, err)
 		} else {
-			results = append(results, installResult{Toolchain: input, Targets: c.targets, Components: c.components, Forced: c.force})
+			results = append(results, installResult{Toolchain: input, Targets: c.targets, Components: c.components, Forced: c.force, Reinstalled: c.reinstall})
 		}
 	}
 	if err := errors.Join(errs...); err != nil {
@@ -89,10 +92,11 @@ func (c *install) run(cmd *cobra.Command, args []string) error {
 		return c.ctx.Output.RenderTo(clictx.Out(cmd), installBatchResult{Installations: results})
 	}
 	return c.ctx.Output.RenderTo(clictx.Out(cmd), installResult{
-		Toolchain:  args[0],
-		Targets:    c.targets,
-		Components: c.components,
-		Forced:     c.force,
+		Toolchain:   args[0],
+		Targets:     c.targets,
+		Components:  c.components,
+		Forced:      c.force,
+		Reinstalled: c.reinstall,
 	})
 }
 
@@ -107,7 +111,9 @@ func (c *install) command() *cobra.Command {
 	cmd.Flags().StringSliceVarP(&c.targets, "target", "t", nil, i18n.T("InstallFlagTarget", nil))
 	cmd.Flags().StringSliceVarP(&c.components, "component", "c", nil, i18n.T("InstallFlagComponent", nil))
 	cmd.Flags().BoolVar(&c.noUpdate, "no-update", false, "Keep an existing SDK release while adding targets or components")
+	cmd.Flags().BoolVar(&c.reinstall, "reinstall", false, "Replace the selected SDK release and restore its components")
 	cmd.Flags().BoolVar(&c.allowDowngrade, "allow-downgrade", false, "Allow an older nightly that supplies the requested components")
 	cmd.MarkFlagsMutuallyExclusive("force", "no-update")
+	cmd.MarkFlagsMutuallyExclusive("reinstall", "no-update")
 	return cmd
 }

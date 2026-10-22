@@ -91,16 +91,29 @@ func captureDependency(ctx context.Context, identity string, opts Options) (tool
 }
 
 func selectTargetHost(ctx context.Context, selector toolchain.ToolchainName, opts Options) (toolchain.ToolchainName, Options, error) {
+	hostIdentity, err := targetHostIdentity(selector)
+	if err != nil {
+		return selector, opts, err
+	}
+	record, opts, err := captureDependency(ctx, hostIdentity.String(), opts)
+	if err != nil {
+		return selector, opts, err
+	}
+	selector, err = selectTargetRelease(selector, hostIdentity, record)
+	return selector, opts, err
+}
+
+func targetHostIdentity(selector toolchain.ToolchainName) (toolchain.ToolchainName, error) {
 	hostIdentity := toolchain.ToolchainName{Channel: selector.Channel, Host: selector.Host}
 	if selector.Target != "" {
 		parts, err := sdktarget.ParseTuple(selector.Target)
 		if err != nil {
-			return selector, opts, err
+			return hostIdentity, err
 		}
 		// Explicit host installations coexist with the legacy unsuffixed host.
 		roots, rootErr := component.RootsFor(selector.Channel.String())
 		if rootErr != nil {
-			return selector, opts, rootErr
+			return hostIdentity, rootErr
 		}
 		current, readErr := toolchain.ReadInstallation(roots.TcDir)
 		if readErr == nil && current.Tuple != "" && current.Tuple != parts.Host {
@@ -112,25 +125,25 @@ func selectTargetHost(ctx context.Context, selector toolchain.ToolchainName, opt
 			}
 		}
 	}
-	record, opts, err := captureDependency(ctx, hostIdentity.String(), opts)
-	if err != nil {
-		return selector, opts, err
-	}
+	return hostIdentity, nil
+}
+
+func selectTargetRelease(selector, hostIdentity toolchain.ToolchainName, record toolchain.Installation) (toolchain.ToolchainName, error) {
 	if record.Release != "" {
 		parts, err := sdktarget.ParseTuple(selector.Target)
 		if err != nil {
-			return selector, opts, err
+			return selector, err
 		}
 		if record.Tuple != "" && record.Tuple != parts.Host {
-			return selector, opts, fmt.Errorf("toolchain %s host changed during target resolution; retry", hostIdentity.String())
+			return selector, fmt.Errorf("toolchain %s host changed during target resolution; retry", hostIdentity.String())
 		}
 		host, err := toolchain.ParseToolchainName(record.Release)
 		if err != nil {
-			return selector, opts, err
+			return selector, err
 		}
 		selector.Version = host.Version
 	}
-	return selector, opts, nil
+	return selector, nil
 }
 
 // validateDependencies requires the home lock.

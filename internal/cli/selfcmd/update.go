@@ -64,6 +64,14 @@ func (r UpdateResult) Text() string {
 // callers decide how to render its result and whether failures are fatal.
 // The release download reports its progress to sink; nil reports nothing.
 func UpdateManaged(ctx context.Context, updateURL, currentVersion string, sink progress.Sink) (UpdateResult, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	lock, err := selfupdate.LockManaged(ctx)
+	if err != nil {
+		return UpdateResult{}, err
+	}
+	defer lock.Close() //nolint:errcheck
 	// Recover an interrupted update before bootstrapping a missing binary.
 	selfupdate.CleanupOldBinaries()
 	if _, err := selfupdate.EnsureManagedExecutable(); err != nil {
@@ -83,7 +91,9 @@ func UpdateManaged(ctx context.Context, updateURL, currentVersion string, sink p
 	// the env scripts are refreshed. Refreshing never edits shell profiles or
 	// registry PATH entries, and a script failure only logs, so a successfully
 	// replaced binary is never reported as a failed update.
-	if err := reachable.Ensure(reachable.Policy{EnvScripts: true}); err != nil {
+	// Binary publication has already completed and we still own the lock.
+	// Complete its local proxy refresh even if cancellation arrived meanwhile.
+	if err := reachable.Ensure(context.WithoutCancel(ctx), reachable.Policy{EnvScripts: true, ManagedLockHeld: true}); err != nil {
 		return outcome, &UpdateFinalizationError{Result: outcome, Err: err}
 	}
 	return outcome, nil

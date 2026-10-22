@@ -76,9 +76,9 @@ func TestRemovePathUndoesConfigurePath(t *testing.T) {
 func TestEnsureConfiguresPathOnlyWhenPolicyAsks(t *testing.T) {
 	binDir := guardedRegistry(t)
 
-	require.NoError(t, Ensure(Policy{}))
+	require.NoError(t, Ensure(t.Context(), Policy{}))
 	assert.Equal(t, 0, registryPathCount(t, binDir))
 
-	require.NoError(t, Ensure(Policy{ConfigurePath: true}))
+	require.NoError(t, Ensure(t.Context(), Policy{ConfigurePath: true}))
 	assert.Equal(t, 1, registryPathCount(t, binDir))
 }

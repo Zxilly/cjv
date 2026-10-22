@@ -86,12 +86,12 @@ func TestRemovePathUndoesConfigurePath(t *testing.T) {
 func TestEnsureConfiguresPathOnlyWhenPolicyAsks(t *testing.T) {
 	userHome, binDir := fakeUserHome(t)
 
-	require.NoError(t, Ensure(Policy{}))
+	require.NoError(t, Ensure(t.Context(), Policy{}))
 	for _, rc := range shellRCFiles {
 		assert.NotContains(t, readRC(t, userHome, rc), markerStart, rc)
 	}
 
-	require.NoError(t, Ensure(Policy{ConfigurePath: true}))
+	require.NoError(t, Ensure(t.Context(), Policy{ConfigurePath: true}))
 	for _, rc := range shellRCFiles {
 		assert.Contains(t, readRC(t, userHome, rc), binDir, rc)
 	}

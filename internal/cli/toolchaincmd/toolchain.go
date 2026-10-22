@@ -115,7 +115,7 @@ func (c *link) run(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	if err := lifecycle.LinkToolchainDir(name, absPath); err != nil {
+	if err := lifecycle.LinkToolchainDir(cmd.Context(), name, absPath); err != nil {
 		return err
 	}
 	return c.ctx.Output.RenderTo(clictx.Out(cmd), toolchainLinkResult{Name: name, Path: absPath})
@@ -151,6 +151,8 @@ func toolchainCommand(ctx *clictx.Context) *cobra.Command {
 		(&link{ctx: ctx}).command(),
 		newUninstall(ctx).command("uninstall <name>...", i18n.T("ToolchainUninstallShort", nil)),
 		(&listRemote{ctx: ctx}).command(),
+		historyCommand(ctx),
+		rollbackCommand(ctx),
 	)
 	return cmd
 }

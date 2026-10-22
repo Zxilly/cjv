@@ -115,7 +115,7 @@ func TestPlacementRechecksDestinationAfterPreparation(t *testing.T) {
 			sourceCompiler := filepath.Join(source, "bin", sdktools.PlatformBinaryName("cjc"))
 			require.NoError(t, os.MkdirAll(filepath.Dir(sourceCompiler), 0o755))
 			require.NoError(t, os.WriteFile(sourceCompiler, []byte("linked compiler"), 0o755))
-			require.NoError(t, LinkToolchainDir(name, source))
+			require.NoError(t, LinkToolchainDir(t.Context(), name, source))
 			return nil
 		},
 	}

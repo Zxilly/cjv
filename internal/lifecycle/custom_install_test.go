@@ -394,7 +394,7 @@ func sdkDir(t *testing.T) string {
 func TestLinkToolchainDir_ReferencesInPlaceAndFinalizes(t *testing.T) {
 	home := linkHome(t)
 	target := sdkDir(t)
-	require.NoError(t, lifecycle.LinkToolchainDir("local-sdk", target))
+	require.NoError(t, lifecycle.LinkToolchainDir(t.Context(), "local-sdk", target))
 
 	// Finalized like an installed toolchain.
 	assert.FileExists(t, filepath.Join(home, "bin", sdktools.CjvBinaryName()))
@@ -406,14 +406,14 @@ func TestLinkToolchainDir_ReferencesInPlaceAndFinalizes(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(target, "marker.txt"), []byte("x"), 0o644))
 	assert.FileExists(t, filepath.Join(home, "toolchains", "local-sdk", "marker.txt"))
 
-	err := lifecycle.LinkToolchainDir("local-sdk", target)
+	err := lifecycle.LinkToolchainDir(t.Context(), "local-sdk", target)
 	var already *cjverr.ToolchainAlreadyInstalledError
 	require.ErrorAs(t, err, &already, "an existing toolchain is never replaced by a link")
 }
 
 func TestLinkToolchainDir_RejectsDirectoryWithoutCompiler(t *testing.T) {
 	home := linkHome(t)
-	err := lifecycle.LinkToolchainDir("not-sdk", t.TempDir())
+	err := lifecycle.LinkToolchainDir(t.Context(), "not-sdk", t.TempDir())
 	require.Error(t, err)
 	assert.NoFileExists(t, filepath.Join(home, "toolchains", "not-sdk"))
 }
@@ -422,7 +422,7 @@ func TestLinkToolchainDir_RemovesLinkWhenFinalizeFails(t *testing.T) {
 	home := linkHome(t)
 	finalizeErr := errors.New("proxy refresh failed")
 	lifecycle.SetAfterFinalizeHook(t, func() error { return finalizeErr })
-	err := lifecycle.LinkToolchainDir("local-sdk", sdkDir(t))
+	err := lifecycle.LinkToolchainDir(t.Context(), "local-sdk", sdkDir(t))
 	require.ErrorIs(t, err, finalizeErr)
 	_, statErr := os.Lstat(filepath.Join(home, "toolchains", "local-sdk"))
 	assert.True(t, errors.Is(statErr, os.ErrNotExist), "a link whose finalization failed must not remain")
@@ -436,7 +436,7 @@ func TestLinkRejectsScratchNamesBeforeAccessingSource(t *testing.T) {
 				var err error
 				switch source {
 				case "directory":
-					err = lifecycle.LinkToolchainDir(name, filepath.Join(home, "missing"))
+					err = lifecycle.LinkToolchainDir(t.Context(), name, filepath.Join(home, "missing"))
 				case "archive":
 					err = lifecycle.InstallToolchainFromZip(t.Context(), name, filepath.Join(home, "missing.zip"), "", false, true, lifecycle.Options{})
 				case "url":
@@ -457,7 +457,7 @@ func TestLinkNormalizesNamesForEverySource(t *testing.T) {
 			var err error
 			switch source {
 			case "directory":
-				err = lifecycle.LinkToolchainDir(name, sdkDir(t))
+				err = lifecycle.LinkToolchainDir(t.Context(), name, sdkDir(t))
 			case "archive":
 				err = lifecycle.InstallToolchainFromZip(t.Context(), name, writeArchive(t, sdkInnerArchive(t)), "", false, true, lifecycle.Options{})
 			case "url":

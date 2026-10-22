@@ -4,11 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"maps"
 	"os"
 	"path/filepath"
 	"slices"
-	"strings"
 
 	"github.com/Zxilly/cjv/internal/cjverr"
 	"github.com/Zxilly/cjv/internal/component"
@@ -48,11 +46,20 @@ func RemoveToolchain(name string) error {
 	if err != nil {
 		return err
 	}
+	lock, err := toolchain.LockHome(context.Background())
+	if err != nil {
+		return err
+	}
+	defer lock.Close() //nolint:errcheck
+	if err := lock.Recover(); err != nil {
+		return err
+	}
 	dir, err := removalDir(parsed)
 	if err != nil {
 		return err
 	}
 	name = filepath.Base(dir)
+	names := []string{name}
 	if parsed.IsChannelOnly() {
 		record, err := toolchain.ReadInstallation(dir)
 		if err != nil {
@@ -66,56 +73,41 @@ func RemoveToolchain(name string) error {
 			}
 			hostTuple = d.HostTuple
 		}
-		installed, err := toolchain.ListInstalled()
+		variants, err := trackedGroupTargets(parsed.Channel, hostTuple, true)
 		if err != nil {
 			return err
 		}
-		for _, variant := range installed {
-			p, err := toolchain.ParseToolchainName(variant)
-			if err == nil && !p.IsCustom() && p.Channel == parsed.Channel && p.Version == "" && p.Target != "" && strings.HasPrefix(p.Target, hostTuple+"-") {
-				if err := removeInstallation(variant); err != nil {
-					return err
-				}
-			}
-		}
+		names = append(names, variants...)
 	}
-	return removeInstallation(name)
+	return removeInstallationsLocked(names)
 }
 
-func removeInstallation(name string) error {
-	lock, err := toolchain.LockHome(context.Background())
-	if err != nil {
-		return err
-	}
-	defer lock.Close() //nolint:errcheck
-	if err := lock.Recover(); err != nil {
-		return err
-	}
-	roots, err := component.RootsFor(name)
-	if err != nil {
-		return err
-	}
-	info, err := os.Lstat(roots.TcDir)
-	if err != nil {
-		return err
+func removeInstallationsLocked(names []string) error {
+	roots := make([]component.Roots, 0, len(names))
+	for _, name := range names {
+		member, err := component.RootsFor(name)
+		if err != nil {
+			return err
+		}
+		if _, err := os.Lstat(member.TcDir); err != nil {
+			return err
+		}
+		roots = append(roots, member)
 	}
 	sf, _, err := config.LoadDefaultSettings()
 	if err != nil {
 		return err
 	}
-	sf.Invalidate()
-	settings, err := sf.Load()
-	if err != nil {
-		return err
+	if len(roots) == 1 {
+		info, err := os.Lstat(roots[0].TcDir)
+		if err != nil {
+			return err
+		}
+		if unlink := linkedToolchainRemover(info); unlink != nil {
+			return unlinkToolchainLocked(roots[0], sf, nil, config.SettingsUpdate{}, unlink)
+		}
 	}
-	update, err := referencesAfterRemoval(settings, name)
-	if err != nil {
-		return err
-	}
-	if unlink := linkedToolchainRemover(info); unlink != nil {
-		return unlinkToolchainLocked(roots, sf, settings, update, unlink)
-	}
-	return retireLocked(roots, sf, settings, update)
+	return retireGroupLocked(names, roots, sf)
 }
 
 // PrepareToolchainRemoval recovers interrupted changes before checking whether
@@ -158,18 +150,19 @@ func removalDir(name toolchain.ToolchainName) (string, error) {
 	return toolchain.FindInstalled(name)
 }
 
-// retireLocked requires the home lock to stay held through settings publication
+// retireGroupLocked requires the home lock to stay held through settings publication
 // and transaction cleanup.
-func retireLocked(roots component.Roots, sf *config.SettingsFile, before *config.Settings, update config.SettingsUpdate) (retErr error) {
+func retireGroupLocked(names []string, roots []component.Roots, sf *config.SettingsFile) (retErr error) {
 	home, err := config.Home()
 	if err != nil {
 		return err
 	}
-	tx, err := fstx.NewToolchainTransaction(home, filepath.Base(roots.TcDir))
+	tx, err := fstx.NewToolchainGroupTransaction(home, names)
 	if err != nil {
 		return err
 	}
-	committed, settingsAttempted := false, false
+	committed := false
+	var undo func() error
 	defer func() {
 		if committed {
 			return
@@ -180,26 +173,34 @@ func retireLocked(roots component.Roots, sf *config.SettingsFile, before *config
 			retErr = errors.Join(retErr, err)
 			return
 		}
-		if settingsAttempted {
-			if err := sf.Save(before); err != nil {
+		if undo != nil {
+			if err := undo(); err != nil {
 				retErr = errors.Join(retErr, fmt.Errorf("restore toolchain settings: %w", err))
 			}
 		}
 	}()
 	// Clear or repoint references before moving content into the journal. An
 	// interrupted removal can then restore content without dangling references.
-	settingsAttempted = true
-	if _, err := sf.Update(update); err != nil {
+	installed, err := toolchain.ListInstalled()
+	if err != nil {
 		return err
 	}
-	for _, path := range []string{roots.DocsDir, roots.StdxDir, roots.TcDir} {
-		if _, err := os.Lstat(path); errors.Is(err, os.ErrNotExist) {
-			continue
-		} else if err != nil {
-			return err
-		}
-		if err := tx.RemoveDir(path); err != nil {
-			return err
+	_, undo, err = sf.MutateWithUndo(func(settings *config.Settings) (config.SettingsUpdate, error) {
+		return referencesAfterRemovalsFromInstalled(settings, names, installed), nil
+	})
+	if err != nil {
+		return err
+	}
+	for _, member := range roots {
+		for _, path := range []string{member.DocsDir, member.StdxDir, member.TcDir} {
+			if _, err := os.Lstat(path); errors.Is(err, os.ErrNotExist) {
+				continue
+			} else if err != nil {
+				return err
+			}
+			if err := tx.RemoveDir(path); err != nil {
+				return err
+			}
 		}
 	}
 	if err := tx.Commit(); err != nil {
@@ -209,37 +210,30 @@ func retireLocked(roots component.Roots, sf *config.SettingsFile, before *config
 	return nil
 }
 
-func referencesAfterRemoval(settings *config.Settings, name string) (config.SettingsUpdate, error) {
+func referencesAfterRemovalsFromInstalled(settings *config.Settings, names, installed []string) config.SettingsUpdate {
 	update := config.SettingsUpdate{}
-	if settings.DefaultToolchain == name {
-		next, err := nextDefaultAfterRemoval(name)
-		if err != nil {
-			return update, err
-		}
+	if slices.Contains(names, settings.DefaultToolchain) {
+		next := nextDefaultAfterRemovals(names, installed)
 		update.DefaultToolchain = &next
 	}
 	for dir, tc := range settings.Overrides {
-		if tc == name {
-			if update.Overrides == nil {
-				update.Overrides = maps.Clone(settings.Overrides)
+		if slices.Contains(names, tc) {
+			if update.OverrideChanges == nil {
+				update.OverrideChanges = make(map[string]*string)
 			}
-			delete(update.Overrides, dir)
+			update.OverrideChanges[dir] = nil
 		}
 	}
-	return update, nil
+	return update
 }
 
-func nextDefaultAfterRemoval(name string) (string, error) {
-	installed, err := toolchain.ListInstalled()
-	if err != nil {
-		return "", err
-	}
+func nextDefaultAfterRemovals(names, installed []string) string {
 	idx := slices.IndexFunc(installed, func(candidate string) bool {
 		parsed, err := toolchain.ParseToolchainName(candidate)
-		return candidate != name && err == nil && parsed.Target == ""
+		return !slices.Contains(names, candidate) && err == nil && parsed.Target == ""
 	})
 	if idx < 0 {
-		return "", nil
+		return ""
 	}
-	return installed[idx], nil
+	return installed[idx]
 }

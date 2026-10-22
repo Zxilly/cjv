@@ -20,6 +20,14 @@ import (
 
 const linkedRemovalName = "user-sdk"
 
+func referencesAfterRemoval(settings *config.Settings, name string) (config.SettingsUpdate, error) {
+	installed, err := toolchain.ListInstalled()
+	if err != nil {
+		return config.SettingsUpdate{}, err
+	}
+	return referencesAfterRemovalsFromInstalled(settings, []string{name}, installed), nil
+}
+
 type linkedRemovalFixture struct {
 	home, source string
 	sourceInfo   os.FileInfo
@@ -184,6 +192,28 @@ func (sf linkedRemovalSettingsFault) Save(settings *config.Settings) error {
 		return sf.save(settings)
 	}
 	return sf.SettingsFile.Save(settings)
+}
+
+func (sf linkedRemovalSettingsFault) MutateWithUndo(fn func(*config.Settings) (config.SettingsUpdate, error)) (bool, func() error, error) {
+	before, err := sf.SettingsFile.Load()
+	if err != nil {
+		return false, nil, err
+	}
+	if sf.update != nil {
+		update, err := fn(before)
+		if err != nil {
+			return false, nil, err
+		}
+		changed, err := sf.update(update)
+		// This fault seam deliberately simulates an error after publication.
+		// Production settings writes either return an undo or fail before publish.
+		return changed, func() error { return sf.Save(before) }, err
+	}
+	changed, undo, err := sf.SettingsFile.MutateWithUndo(fn)
+	if sf.save != nil && undo != nil {
+		undo = func() error { return sf.save(before) }
+	}
+	return changed, undo, err
 }
 
 func TestLinkedToolchainSettingsFailureKeepsLink(t *testing.T) {

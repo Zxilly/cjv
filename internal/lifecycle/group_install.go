@@ -18,7 +18,6 @@ import (
 	"github.com/Zxilly/cjv/internal/progress"
 	sdktarget "github.com/Zxilly/cjv/internal/target"
 	"github.com/Zxilly/cjv/internal/toolchain"
-	goversion "github.com/hashicorp/go-version"
 )
 
 type groupMember struct {
@@ -31,6 +30,15 @@ type groupMember struct {
 	prepared        component.Roots
 	addedComponents bool
 	drop            bool
+	reinstall       bool
+}
+
+// canReuseSDK must agree during component selection and preparation: a fresh
+// SDK also needs fresh copies of its published components.
+func (m *groupMember) canReuseSDK() bool {
+	return !m.reinstall && m.before != nil && m.before.Release == m.release.Name &&
+		(m.before.Tuple == "" || m.before.Tuple == m.release.Tuple) &&
+		(m.release.URL == "" || strings.EqualFold(m.before.SHA256, m.release.SHA256))
 }
 
 // installGroup prepares a host and all its tracking targets before changing any
@@ -76,7 +84,7 @@ func installGroup(ctx context.Context, d *installationDistribution, name toolcha
 		if err != nil {
 			return nil, err
 		}
-		m := &groupMember{identity: memberIdentity}
+		m := &groupMember{identity: memberIdentity, reinstall: req.Reinstall}
 		record, err := toolchain.ReadInstallation(roots.TcDir)
 		if errors.Is(err, os.ErrNotExist) {
 			if _, existed := d.installed[memberIdentity]; existed {
@@ -104,7 +112,7 @@ func installGroup(ctx context.Context, d *installationDistribution, name toolcha
 		_ = lock.Close()
 		return false, err
 	}
-	if (req.NoUpdate || !tracking) && host.before != nil {
+	if !req.Reinstall && (req.NoUpdate || !tracking) && host.before != nil {
 		release, err := toolchain.ParseToolchainName(host.before.Release)
 		if err != nil {
 			_ = lock.Close()
@@ -171,7 +179,17 @@ func installGroup(ctx context.Context, d *installationDistribution, name toolcha
 			}
 		}
 	}
-	if err := resolveGroup(ctx, d.Distribution, name, members, opts); err != nil {
+	selection := name
+	if req.Reinstall && host.before != nil {
+		// Repair selects the recorded artifact even when a newer compatible
+		// nightly exists. Keep tracking identities while pinning this solve.
+		concrete, err := toolchain.ParseToolchainName(host.release.Name)
+		if err != nil {
+			return false, err
+		}
+		selection.Version = concrete.Version
+	}
+	if err := resolveGroup(ctx, d.Distribution, selection, members, opts); err != nil {
 		return false, err
 	}
 	stage, err := preparation.TempDir(".cjv-group-*")
@@ -186,7 +204,7 @@ func installGroup(ctx context.Context, d *installationDistribution, name toolcha
 			}
 			continue
 		}
-		reuse := m.before != nil && m.before.Release == m.release.Name && (m.before.Tuple == "" || m.before.Tuple == m.release.Tuple) && (m.release.URL == "" || m.before.SHA256 == m.release.SHA256)
+		reuse := m.canReuseSDK()
 		if reuse {
 			if !m.addedComponents {
 				continue
@@ -317,8 +335,21 @@ func installGroup(ctx context.Context, d *installationDistribution, name toolcha
 		identities = append(identities, m.identity)
 		pairs = append(pairs, [2]string{m.prepared.TcDir, roots.TcDir}, [2]string{m.prepared.DocsDir, roots.DocsDir}, [2]string{m.prepared.StdxDir, roots.StdxDir})
 	}
-	if err := publishPrepared(home, identities, pairs, publishDefault, opts); err != nil {
-		return false, err
+	if trackingHost && !req.Reinstall && host.before != nil && slices.ContainsFunc(changed, func(m *groupMember) bool {
+		return m.before != nil && (m.drop || !m.canReuseSDK())
+	}) {
+		snapshot, err := prepareHistorySnapshot(ctx, home, identity, rt.Tuple, members)
+		if err != nil {
+			return false, err
+		}
+		opts.history = snapshot
+	}
+	publishErr := publishPrepared(ctx, home, identities, pairs, publishDefault, opts)
+	if opts.history != nil {
+		opts.history.cleanup(publishErr)
+	}
+	if publishErr != nil {
+		return false, publishErr
 	}
 	// Advance only the records this operation published. Other snapshots must
 	// continue detecting changes made by concurrent commands.
@@ -330,6 +361,11 @@ func installGroup(ctx context.Context, d *installationDistribution, name toolcha
 		}
 	}
 	preparation.Complete()
+	if opts.history != nil {
+		if _, err := pruneHistoryLocked(ctx, home, identity, DefaultHistoryRetention); err != nil {
+			slog.Warn("could not prune toolchain history", "toolchain", identity, "error", err)
+		}
+	}
 	return true, nil
 }
 
@@ -361,6 +397,12 @@ func sdktargetTuple(host, suffix string) (string, error) {
 }
 
 func resolveGroup(ctx context.Context, d *Distribution, name toolchain.ToolchainName, members []*groupMember, opts Options) error {
+	return resolveGroupPlan(ctx, d, name, members, opts, nil)
+}
+
+// resolveGroupPlan is the metadata-only solver shared by installation and
+// inspection. notes explains why a newer candidate cannot be selected.
+func resolveGroupPlan(ctx context.Context, d *Distribution, name toolchain.ToolchainName, members []*groupMember, opts Options, notes *[]string) error {
 	host := members[0].release
 	concrete, err := toolchain.ParseToolchainName(host.Name)
 	if err != nil {
@@ -419,7 +461,7 @@ func resolveGroup(ctx context.Context, d *Distribution, name toolchain.Toolchain
 			}
 			var selected []component.Intent
 			for _, intent := range m.intents {
-				preserved := m.before != nil && m.before.Release == m.release.Name && (m.before.Tuple == "" || m.before.Tuple == m.release.Tuple) && slices.ContainsFunc(m.original, func(old component.Intent) bool { return old == intent })
+				preserved := m.canReuseSDK() && slices.ContainsFunc(m.original, func(old component.Intent) bool { return old == intent })
 				if intent.Source == "" && !preserved {
 					platform := ""
 					if intent.Name == component.Stdx {
@@ -455,6 +497,9 @@ func resolveGroup(ctx context.Context, d *Distribution, name toolchain.Toolchain
 		if unavailable == nil {
 			return nil
 		}
+		if notes != nil && !slices.Contains(*notes, unavailable.Error()) {
+			*notes = append(*notes, unavailable.Error())
+		}
 		if !isUnavailable(unavailable) {
 			return unavailable
 		}
@@ -470,12 +515,7 @@ func isUnavailable(err error) bool {
 }
 
 func versionLess(a, b string) bool {
-	av, aerr := goversion.NewVersion(a)
-	bv, berr := goversion.NewVersion(b)
-	if aerr == nil && berr == nil {
-		return av.LessThan(bv)
-	}
-	return a < b
+	return toolchain.CompareVersions(a, b) < 0
 }
 
 func selectedIdentity(rt ResolvedToolchain, tracking bool) string {

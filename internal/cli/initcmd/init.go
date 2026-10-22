@@ -470,7 +470,7 @@ func (c *commands) install(ctx context.Context, con initConsole, initialHome str
 	}
 	// A (re)installation always leaves the running cjv behind as the managed
 	// binary and refreshes the env scripts; PATH follows the user's choice.
-	if err := reachable.Ensure(reachable.Policy{
+	if err := reachable.Ensure(ctx, reachable.Policy{
 		ForceManagedBinary: true,
 		EnvScripts:         true,
 		ConfigurePath:      opts.modifyPath,

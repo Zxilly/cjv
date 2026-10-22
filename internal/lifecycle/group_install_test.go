@@ -94,6 +94,12 @@ func TestChannelGroupRecoversRealProcessInterruption(t *testing.T) {
 	require.NoError(t, toolchain.RecoverHome())
 	require.Equal(t, "sts-1.0.0", readRelease(t, home, "sts").Release)
 	require.Equal(t, "sts-1.0.0-"+tuple, readRelease(t, home, "sts-"+tuple).Release)
+	history, err := ListHistory(t.Context(), "sts")
+	require.NoError(t, err)
+	require.Empty(t, history, "an interrupted uncommitted update must not retain a snapshot")
+	staging, err := filepath.Glob(filepath.Join(home, config.HistorySubdir, "sts", "*.staging"))
+	require.NoError(t, err)
+	require.Empty(t, staging)
 }
 
 func TestDifferentHostsOwnIndependentTargetGroups(t *testing.T) {

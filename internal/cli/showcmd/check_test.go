@@ -90,23 +90,24 @@ func TestRunCheckTrackedChannelsUpToDate(t *testing.T) {
 	assert.Contains(t, out, "sts ✓")
 }
 
-// Legacy version directories migrate into tracked channels that follow
-// them, so check reports the channel update. The fixed-version entries pin
-// a release and are listed without comparison; custom toolchains are skipped.
-func TestRunCheckReportsUpdatesForMigratedChannels(t *testing.T) {
-	checkHome(t, manifestSettings(testutil.ValidMockServer(t).URL), "lts-1.0.0", "sts-1.0.0", "my-custom-sdk")
+// Inspection keeps legacy fixed directories pinned and does not create
+// tracking installations as a side effect.
+func TestRunCheckDoesNotMigrateLegacyChannels(t *testing.T) {
+	home := checkHome(t, manifestSettings(testutil.ValidMockServer(t).URL), "lts-1.0.0", "sts-1.0.0", "my-custom-sdk")
 
 	got := runCheckJSON(t, newTestCommands())
-	assert.True(t, got.HasUpdates)
+	assert.False(t, got.HasUpdates)
 	byName := map[string]checkEntry{}
 	for _, e := range got.Toolchains {
 		byName[e.Name] = e
 	}
-	require.ElementsMatch(t, []string{"lts", "lts-1.0.0", "sts", "sts-1.0.0"}, entryNames(got.Toolchains))
-	assert.Equal(t, checkEntry{Name: "lts", Latest: "lts-1.0.5", UpdateAvailable: true}, byName["lts"])
-	assert.Equal(t, checkEntry{Name: "sts", Latest: "sts-2.0.0", UpdateAvailable: true}, byName["sts"])
-	assert.Equal(t, checkEntry{Name: "lts-1.0.0"}, byName["lts-1.0.0"])
-	assert.Equal(t, checkEntry{Name: "sts-1.0.0"}, byName["sts-1.0.0"])
+	require.ElementsMatch(t, []string{"lts-1.0.0", "sts-1.0.0"}, entryNames(got.Toolchains))
+	for _, name := range []string{"lts-1.0.0", "sts-1.0.0"} {
+		assert.Equal(t, "pinned", byName[name].Status)
+		assert.Equal(t, name, byName[name].Selected)
+	}
+	assert.NoDirExists(t, filepath.Join(home, "toolchains", "lts"))
+	assert.NoDirExists(t, filepath.Join(home, "toolchains", "sts"))
 }
 
 func TestRunCheckNightlyUsesUnifiedDistServer(t *testing.T) {
@@ -122,16 +123,14 @@ func TestRunCheckNightlyUsesUnifiedDistServer(t *testing.T) {
 	assert.Equal(t, "nightly-1.2.0-alpha.20260822010101", got.Toolchains[0].Latest)
 }
 
-func TestRunCheckUsesLatestVersionAvailableForInstalledTarget(t *testing.T) {
+func TestRunCheckLeavesFixedTargetsPinned(t *testing.T) {
 	server := testutil.ManifestOnlyServer(t, testutil.ManifestWithPlatformGap())
 	checkHome(t, manifestSettings(server.URL), "lts-1.0.0-linux-x64-ohos")
 
 	got := runCheckJSON(t, newTestCommands())
-	require.Len(t, got.Toolchains, 2)
-	if got.Toolchains[0].Name != "lts-linux-x64-ohos" {
-		got.Toolchains[0], got.Toolchains[1] = got.Toolchains[1], got.Toolchains[0]
-	}
-	assert.Equal(t, "lts-1.5.0-linux-x64-ohos", got.Toolchains[0].Latest)
-	assert.True(t, got.Toolchains[0].UpdateAvailable)
+	require.Len(t, got.Toolchains, 1)
+	assert.Equal(t, "lts-1.0.0-linux-x64-ohos", got.Toolchains[0].Selected)
+	assert.Equal(t, "pinned", got.Toolchains[0].Status)
+	assert.False(t, got.Toolchains[0].UpdateAvailable)
 	assert.False(t, got.Toolchains[0].NotForTarget)
 }

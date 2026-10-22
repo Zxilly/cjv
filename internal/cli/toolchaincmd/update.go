@@ -67,6 +67,7 @@ type update struct {
 	force          bool
 	allowDowngrade bool
 	noSelfUpdate   bool
+	dryRun         bool
 }
 
 func newUpdate(ctx *clictx.Context) *update {
@@ -87,6 +88,10 @@ func (c *update) run(cmd *cobra.Command, args []string) error {
 	}
 	if len(args) == 0 && c.ctx.Selector != "" {
 		args = []string{c.ctx.Selector}
+	}
+	if c.dryRun {
+		plan, err := lifecycle.PlanUpdates(ctx, args, c.lifecycleOptions())
+		return c.ctx.Output.RenderOutcome(clictx.Out(cmd), updatePlanResult{UpdatePlanReport: plan, DryRun: true}, err)
 	}
 	if len(args) > 0 {
 		var outcomes []lifecycle.UpdateOutcome
@@ -167,7 +172,38 @@ func (c *update) command() *cobra.Command {
 		RunE:  c.run,
 	}
 	cmd.Flags().BoolVar(&c.noSelfUpdate, "no-self-update", false, i18n.T("UpdateFlagNoSelfUpdate", nil))
+	cmd.Flags().BoolVar(&c.dryRun, "dry-run", false, "Show the compatible update plan without changing installed files")
 	cmd.Flags().BoolVar(&c.force, "force", false, "Update even when optional components or targets are unavailable")
 	cmd.Flags().BoolVar(&c.allowDowngrade, "allow-downgrade", false, "Allow an older compatible nightly")
 	return cmd
+}
+
+type updatePlanResult struct {
+	lifecycle.UpdatePlanReport
+	DryRun bool `json:"dry_run"`
+}
+
+func (r updatePlanResult) Text() string {
+	if r.NoneInstalled {
+		return i18n.T("NoToolchainsInstalled", nil)
+	}
+	var b strings.Builder
+	for _, plan := range r.Toolchains {
+		fmt.Fprintf(&b, "%s: %s", plan.Name, plan.Status)
+		if plan.Selected != "" {
+			fmt.Fprintf(&b, " (%s", plan.Selected)
+			if plan.Latest != "" && plan.Latest != plan.Selected {
+				fmt.Fprintf(&b, "; latest %s", plan.Latest)
+			}
+			b.WriteString(")")
+		}
+		b.WriteByte('\n')
+		for _, blocker := range plan.Blockers {
+			fmt.Fprintf(&b, "  %s\n", blocker)
+		}
+		if plan.Error != "" {
+			fmt.Fprintf(&b, "  %s\n", plan.Error)
+		}
+	}
+	return b.String()
 }

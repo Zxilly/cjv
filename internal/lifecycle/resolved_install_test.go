@@ -217,7 +217,10 @@ func TestSDKReplacementRetainsOldSDKUntilBlockedRecoveryCanFinish(t *testing.T) 
 			var recoveryErr *fstx.RecoveryError
 			require.ErrorAs(t, err, &recoveryErr)
 			assert.ErrorContains(t, err, recoveryErr.Directory)
-			backup := filepath.Join(recoveryErr.Directory, "0-"+name, "old-sdk-only")
+			backups, err := filepath.Glob(filepath.Join(recoveryErr.Directory, "*-"+name, "old-sdk-only"))
+			require.NoError(t, err)
+			require.Len(t, backups, 1)
+			backup := backups[0]
 			assert.FileExists(t, backup)
 
 			// Startup and another attempted replacement must keep the old

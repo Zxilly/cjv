@@ -43,6 +43,14 @@ func (lock *HomeLock) Recover() error {
 	if err := fstx.Recover(tcDir); err != nil {
 		return err
 	}
+	if err := recoverHistoryStaging(filepath.Dir(tcDir)); err != nil {
+		return err
+	}
+	homeRoot, err := os.OpenRoot(filepath.Dir(tcDir))
+	if err != nil {
+		return err
+	}
+	defer homeRoot.Close() //nolint:errcheck
 	entries, err := os.ReadDir(tcDir)
 	if err != nil {
 		return nil
@@ -51,7 +59,7 @@ func (lock *HomeLock) Recover() error {
 		name := e.Name()
 		fullPath := filepath.Join(tcDir, name)
 		if strings.HasSuffix(name, config.StagingSuffix) {
-			if err := fsops.RemoveAllRetry(fullPath); err != nil {
+			if err := fsops.RemoveOwnedTree(homeRoot, filepath.Join(config.ToolchainsSubdir, name)); err != nil {
 				slog.Warn("failed to clean up staging directory", "name", name, "error", err)
 			}
 		} else if originalName, ok := strings.CutSuffix(name, config.BackupSuffix); ok {
@@ -81,10 +89,78 @@ func (lock *HomeLock) Recover() error {
 		}
 		for _, entry := range entries {
 			if strings.HasSuffix(entry.Name(), config.StagingSuffix) {
-				if err := fsops.RemoveAllRetry(filepath.Join(root, entry.Name())); err != nil {
+				if err := fsops.RemoveOwnedTree(homeRoot, filepath.Join(subdir, entry.Name())); err != nil {
 					return err
 				}
 			}
+		}
+	}
+	return nil
+}
+
+// History snapshots are prepared under the same home lock as publication.
+// After journal recovery succeeds, legal staging names cannot belong to a
+// running writer. Never follow links in history's directory hierarchy.
+func recoverHistoryStaging(home string) error {
+	homeRoot, err := os.OpenRoot(home)
+	if err != nil {
+		return err
+	}
+	defer homeRoot.Close() //nolint:errcheck
+	info, err := homeRoot.Lstat(config.HistorySubdir)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
+		return nil
+	}
+	root, err := homeRoot.OpenRoot(config.HistorySubdir)
+	if err != nil {
+		return err
+	}
+	defer root.Close() //nolint:errcheck
+	file, err := root.Open(".")
+	if err != nil {
+		return err
+	}
+	owners, readErr := file.ReadDir(-1)
+	if err := errors.Join(readErr, file.Close()); err != nil {
+		return err
+	}
+	for _, owner := range owners {
+		name, err := ParseToolchainName(owner.Name())
+		if err != nil || name.IsCustom() || name.Channel == UnknownChannel || name.Version != "" || name.Target != "" || name.String() != owner.Name() || !owner.IsDir() || owner.Type()&os.ModeSymlink != 0 {
+			continue
+		}
+		dir, err := root.OpenRoot(owner.Name())
+		if err != nil {
+			return err
+		}
+		file, err := dir.Open(".")
+		if err != nil {
+			_ = dir.Close()
+			return err
+		}
+		entries, readErr := file.ReadDir(-1)
+		if err := errors.Join(readErr, file.Close()); err != nil {
+			_ = dir.Close()
+			return err
+		}
+		for _, entry := range entries {
+			id, ok := strings.CutSuffix(entry.Name(), config.StagingSuffix)
+			if !ok || !config.IsHistoryID(id) {
+				continue
+			}
+			if err := fsops.RemoveOwnedTree(dir, entry.Name()); err != nil {
+				_ = dir.Close()
+				return err
+			}
+		}
+		if err := dir.Close(); err != nil {
+			return err
 		}
 	}
 	return nil

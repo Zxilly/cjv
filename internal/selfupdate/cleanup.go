@@ -5,7 +5,6 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 
 	"github.com/Zxilly/cjv/internal/config"
@@ -16,10 +15,6 @@ import (
 // CleanupOldBinaries removes stale updater/uninstall leftovers from the managed
 // cjv bin directory.
 func CleanupOldBinaries() {
-	if runtime.GOOS != "windows" {
-		return
-	}
-
 	dir, err := config.BinDir()
 	if err != nil {
 		return

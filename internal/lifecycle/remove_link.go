@@ -8,18 +8,18 @@ import (
 
 	"github.com/Zxilly/cjv/internal/component"
 	"github.com/Zxilly/cjv/internal/config"
+	"github.com/Zxilly/cjv/internal/toolchain"
 )
 
 type linkRemovalSettings interface {
-	Update(config.SettingsUpdate) (bool, error)
-	Save(*config.Settings) error
+	MutateWithUndo(func(*config.Settings) (config.SettingsUpdate, error)) (bool, func() error, error)
 }
 
 // unlinkToolchainLocked requires the home lock. Only an SDK link with no
 // same-name component roots can use this irreversible removal path. Component
 // editing rejects linked SDKs, so existing side roots are ambiguous leftovers,
 // not permission to perform a partial, mixed transactional removal.
-func unlinkToolchainLocked(roots component.Roots, sf linkRemovalSettings, before *config.Settings, update config.SettingsUpdate, unlink func(*os.Root, string) error) (retErr error) {
+func unlinkToolchainLocked(roots component.Roots, sf linkRemovalSettings, _ *config.Settings, _ config.SettingsUpdate, unlink func(*os.Root, string) error) (retErr error) {
 	home, err := config.Home()
 	if err != nil {
 		return err
@@ -86,9 +86,10 @@ func unlinkToolchainLocked(roots component.Roots, sf linkRemovalSettings, before
 		}
 		return sameToolchainLink(root, filepath.Join(config.ToolchainsSubdir, name), info, target)
 	}
-	settingsAttempted, removed := false, false
+	removed := false
+	var undo func() error
 	defer func() {
-		if !settingsAttempted || removed {
+		if undo == nil || removed {
 			return
 		}
 		// A failed or interrupted unlink must never restore references to an
@@ -97,12 +98,18 @@ func unlinkToolchainLocked(roots component.Roots, sf linkRemovalSettings, before
 			retErr = errors.Join(retErr, fmt.Errorf("toolchain settings left cleared: %w", err))
 			return
 		}
-		if err := sf.Save(before); err != nil {
+		if err := undo(); err != nil {
 			retErr = errors.Join(retErr, fmt.Errorf("restore toolchain settings: %w", err))
 		}
 	}()
-	settingsAttempted = true
-	if _, err := sf.Update(update); err != nil {
+	installed, err := toolchain.ListInstalled()
+	if err != nil {
+		return err
+	}
+	_, undo, err = sf.MutateWithUndo(func(settings *config.Settings) (config.SettingsUpdate, error) {
+		return referencesAfterRemovalsFromInstalled(settings, []string{name}, installed), nil
+	})
+	if err != nil {
 		return err
 	}
 	if err := stillLinked(); err != nil {

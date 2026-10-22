@@ -38,6 +38,7 @@ type Options struct {
 	// Internal dependencies are revalidated before publishing target SDKs.
 	dependencies    map[string]toolchain.Installation
 	preserveDefault bool
+	history         *preparedHistory
 }
 
 // sink returns the progress adapter to emit to, never nil.
@@ -65,6 +66,9 @@ type InstallRequest struct {
 	// not reinstall an unchanged SDK; updates use Options.AllowMissing too.
 	Force    bool
 	NoUpdate bool
+	// Reinstall replaces the selected release even when its installation record
+	// already matches. Components, targets and settings references are retained.
+	Reinstall bool
 }
 
 // Install resolves the request against the configured distribution source
@@ -72,8 +76,8 @@ type InstallRequest struct {
 // The first host toolchain installed becomes the default; target variants
 // never do. An unchanged installed toolchain is reported and kept.
 func Install(ctx context.Context, req InstallRequest, opts Options) error {
-	if req.NoUpdate && req.Force {
-		return fmt.Errorf("cannot combine force with no-update")
+	if req.NoUpdate && (req.Force || req.Reinstall) {
+		return fmt.Errorf("cannot combine no-update with force or reinstall")
 	}
 	opts.AllowMissing = opts.AllowMissing || req.Force
 	if ctx == nil {
@@ -99,6 +103,26 @@ func Install(ctx context.Context, req InstallRequest, opts Options) error {
 		return err
 	}
 	req.Targets = targets
+	if req.Reinstall {
+		if dir, err := toolchain.FindInstalled(name); err == nil {
+			record, err := toolchain.ReadInstallation(dir)
+			if err != nil {
+				return err
+			}
+			release, err := toolchain.ParseToolchainName(record.Release)
+			if err != nil {
+				return err
+			}
+			resolved, err := d.Resolve(ctx, release, record.Tuple)
+			if err != nil {
+				return err
+			}
+			_, err = installGroup(ctx, d, name, resolved, req, opts)
+			return err
+		} else if !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
+	}
 	if req.NoUpdate {
 		if dir, err := toolchain.FindInstalled(name); err == nil {
 			record, err := toolchain.ReadInstallation(dir)
@@ -123,7 +147,7 @@ func Install(ctx context.Context, req InstallRequest, opts Options) error {
 	}
 	// A fixed version already on disk needs no remote manifest to remain
 	// installed. The directory itself is its installation identity.
-	if name.Version != "" && !toolchain.IsVersionSelector(name.Version) && len(targets) == 0 && len(req.Components) == 0 {
+	if !req.Reinstall && name.Version != "" && !toolchain.IsVersionSelector(name.Version) && len(targets) == 0 && len(req.Components) == 0 {
 		if dir, err := toolchain.FindInstalled(name); err == nil {
 			identity, err := toolchain.ParseToolchainName(filepath.Base(dir))
 			if err != nil {
