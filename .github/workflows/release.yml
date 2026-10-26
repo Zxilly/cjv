@@ -66,5 +66,7 @@ jobs:
       pages: write
       id-token: write
     uses: ./.github/workflows/pages.yml
+    with:
+      release_tag: ${{ github.ref_name }}
     secrets:
       EDGEONE_API_TOKEN: ${{ secrets.EDGEONE_API_TOKEN }}

@@ -3,7 +3,7 @@
 # Used by the Pages workflow and as a local-test helper.
 #
 # Inputs:
-#   ARCHIVES_DIR  Directory containing the downloaded archives (default: ./archives)
+#   ARCHIVES_DIR  Directory containing archives and checksums.txt (default: ./archives)
 #   OUT_DIR       Output base directory (default: web/dist/dl)
 #
 # Archive naming follows goreleaser:
@@ -25,7 +25,18 @@ PLATFORMS=(
   "openharmony_arm64 tar.gz"
 )
 
-extract_one() {
+verify_archive() {
+  local archive="$1" expected
+  expected=$(awk -v name="$archive" '$2 == name { if (NF != 2) exit 1; print $1 }' "${ARCHIVES_DIR}/checksums.txt")
+  # An absent, malformed, or duplicate entry must fail before any extraction.
+  if [[ ! "$expected" =~ ^[a-fA-F0-9]{64}$ ]]; then
+    echo "missing or invalid checksum for $archive" >&2
+    return 1
+  fi
+  (cd "$ARCHIVES_DIR" && printf '%s  %s\n' "$expected" "$archive" | sha256sum --check --strict)
+}
+
+extract_one() (
   local variant="$1" platform="$2" ext="$3"
   local archive_prefix init_basename src
   if [[ "$variant" == "official" ]]; then
@@ -45,7 +56,7 @@ extract_one() {
   mkdir -p "${out_dir}"
   local tmp
   tmp=$(mktemp -d)
-
+  trap 'rm -rf -- "$tmp"' EXIT
   if [[ "$ext" == "zip" ]]; then
     unzip -q -o "${archive}" -d "${tmp}"
   else
@@ -53,17 +64,21 @@ extract_one() {
   fi
 
   if [[ ! -f "${tmp}/${src}" ]]; then
-    rm -rf "${tmp}"
     echo "missing ${src} inside ${archive}" >&2
     return 1
   fi
 
   install -m 0755 "${tmp}/${src}" "${out_dir}/${init_basename}"
-  rm -rf "${tmp}"
   echo "extracted ${variant}/${platform}/${init_basename}"
-}
+)
 
 main() {
+  # Verify the entire set before publishing even the first installer.
+  for entry in "${PLATFORMS[@]}"; do
+    read -r platform ext <<<"${entry}"
+    verify_archive "cjv_${platform}.${ext}"
+    verify_archive "cjv-mirror_${platform}.${ext}"
+  done
   for entry in "${PLATFORMS[@]}"; do
     read -r platform ext <<<"${entry}"
     extract_one official "${platform}" "${ext}"

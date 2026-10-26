@@ -34,13 +34,13 @@ Before a local snapshot, set `HMOS_GO` and `HMOS_SIGN` and build the host signer
 
 ## Website installers
 
-Pages downloads the latest release archives and runs:
+The release workflow passes its current tag to Pages. Ordinary website deployments resolve the latest stable tag once before downloading; manual Pages runs may provide `release_tag`. `scripts/download-release-archives.sh` downloads all archives and `checksums.txt` from that single tag, then runs:
 
 ```bash
 ARCHIVES_DIR=archives OUT_DIR=web/dist/dl bash scripts/extract-init-binaries.sh
 ```
 
-The script extracts and renames executables to `cjv-init[.exe]` under `dl/{official,mirror}/{os}_{arch}/`. The program recognizes that name and enters `init`. Prefix matching also accepts suffixes added by browsers to duplicate downloads.
+The script verifies SHA-256 for all 14 archives first. Missing, duplicate, malformed, or mismatched checksums fail before extraction. This checks download integrity; deployment triggers remain based on changed paths. It then extracts and renames executables to `cjv-init[.exe]` under `dl/{official,mirror}/{os}_{arch}/`. The program recognizes that name and enters `init`. Prefix matching also accepts suffixes added by browsers to duplicate downloads.
 
 `install.sh` and `install.ps1` download release archives directly and read `checksums.txt`. Website executables and script installers therefore depend on the same release but download different files.
 

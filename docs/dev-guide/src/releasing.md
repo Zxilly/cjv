@@ -34,13 +34,13 @@ GoReleaser 使用 `HMOS_GO` 构建 `openharmony_arm64` 和 `openharmony_amd64`�
 
 ## 网页安装器
 
-Pages 从最新 Release 下载归档，运行：
+发布工作流向 Pages 传入当前 tag；普通网站部署在下载前只解析一次最新稳定 tag。手动运行 Pages 可指定 `release_tag`。`scripts/download-release-archives.sh` 从同一标签下载全部归档和 `checksums.txt`，然后运行：
 
 ```bash
 ARCHIVES_DIR=archives OUT_DIR=web/dist/dl bash scripts/extract-init-binaries.sh
 ```
 
-脚本提取二进制并重命名为 `cjv-init[.exe]`，放到 `dl/{official,mirror}/{os}_{arch}/`。程序识别这个名称后进入 `init`；名称前缀匹配也兼容浏览器添加的下载副本后缀。
+脚本先校验全部 14 个归档的 SHA-256；缺失、重复、无效的校验项或内容不匹配都会在提取前失败。该校验用于下载完整性，不影响按变更路径触发部署的规则。随后提取二进制并重命名为 `cjv-init[.exe]`，放到 `dl/{official,mirror}/{os}_{arch}/`。程序识别这个名称后进入 `init`；名称前缀匹配也兼容浏览器添加的下载副本后缀。
 
 `install.sh` 和 `install.ps1` 直接下载发布归档并读取 `checksums.txt`。因此网页单文件安装器与脚本安装都依赖同一发布，但使用不同的下载文件。
 

@@ -11,15 +11,26 @@ on:
       - docs/theme/**
       - scripts/build-docs.py
       - scripts/extract-init-binaries.sh
+      - scripts/download-release-archives.sh
       - deployment/build-edge.mjs
       - deployment/home-response.mjs
       - deployment/edgeone/**
       - deployment/verify-site.mjs
   workflow_call:
+    inputs:
+      release_tag:
+        description: Stable release tag for website installers; empty resolves latest once
+        type: string
+        default: ''
     secrets:
       EDGEONE_API_TOKEN:
         required: true
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Stable release tag for website installers; empty resolves latest once
+        type: string
+        default: ''
 
 permissions:
   contents: read
@@ -48,7 +59,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: lts/*
+          node-version: 22
           cache: pnpm
           cache-dependency-path: web/pnpm-lock.yaml
       - name: Install dependencies
@@ -57,14 +68,12 @@ jobs:
       - name: Build
         working-directory: web
         run: pnpm build
-      - name: Download latest release archives
+      - name: Download release archives and checksums from one tag
+        id: release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          mkdir -p archives
-          gh release download --repo "${GITHUB_REPOSITORY}" --dir archives \
-            --pattern 'cjv_*' --pattern 'cjv-mirror_*'
-          ls -lh archives
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: bash scripts/download-release-archives.sh
       - name: Extract cjv-init binaries by platform and variant
         run: |
           ARCHIVES_DIR=archives OUT_DIR=web/dist/dl bash scripts/extract-init-binaries.sh
@@ -127,7 +136,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: lts/*
+          node-version: 22
       - name: Login to Tencent Cloud China
         run: npx --yes edgeone@1.6.44 login --site china --token "$EDGEONE_API_TOKEN"
       - name: Build regional homepage edge function
