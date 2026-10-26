@@ -1,12 +1,12 @@
 # Network proxies
 
-cjv obeys standard proxy environment variables for all network requests, including version manifests, SDK archives, components, and self-updates. This chapter shows how to configure HTTP, HTTPS, and SOCKS5 proxies and how to handle corporate TLS certificates.
+Corporate and institutional networks often restrict direct outbound internet access and require traffic to pass through a proxy server. If you are on such a network, `cjv` honors the standard proxy environment variables for all of its network requests—including version manifests, SDK archives, components, and self-updates.
 
-## Set proxy variables
+## Configuring a proxy in your shell
 
-Set the proxy variables in your shell before you start cjv.
+Set the proxy environment variables in your shell before running `cjv`:
 
-In Bash or Zsh:
+- On Linux, macOS, or HarmonyOS HiShell (**Bash** or **Zsh**):
 
 ```bash
 export HTTPS_PROXY=http://proxy.example.com:8080
@@ -14,7 +14,7 @@ export NO_PROXY=localhost,127.0.0.1,artifacts.corp.example
 cjv install lts
 ```
 
-In Windows PowerShell:
+- On Windows **PowerShell**:
 
 ```powershell
 $env:HTTPS_PROXY = "http://proxy.example.com:8080"
@@ -22,7 +22,7 @@ $env:NO_PROXY = "localhost,127.0.0.1,artifacts.corp.example"
 cjv install lts
 ```
 
-In Windows Command Prompt (`cmd.exe`):
+- On Windows **Command Prompt (`cmd.exe`)**:
 
 ```cmd
 set HTTPS_PROXY=http://proxy.example.com:8080
@@ -32,18 +32,18 @@ cjv install lts
 
 ## Supported variables and URL schemes
 
-| Variable | Effect |
+| Variable | Purpose |
 | --- | --- |
-| `HTTPS_PROXY` or `https_proxy` | Proxy server for `https://` requests |
-| `HTTP_PROXY` or `http_proxy` | Proxy server for `http://` requests |
-| `NO_PROXY` or `no_proxy` | Comma-separated hostnames, domains, or IPs that bypass the proxy |
+| `HTTPS_PROXY` / `https_proxy` | Proxy server for `https://` requests |
+| `HTTP_PROXY` / `http_proxy` | Proxy server for `http://` requests |
+| `NO_PROXY` / `no_proxy` | Comma-separated list of hostnames, domains, or IP addresses to contact directly |
 
 Proxy URLs support the `http://`, `https://`, and `socks5://` schemes.
 
-> **CAUTION:** cjv does not read `ALL_PROXY` or `all_proxy`. If your environment sets `ALL_PROXY` only, set `HTTPS_PROXY` and `HTTP_PROXY` explicitly before you run cjv.
+> **Note:** `cjv` uses Go's standard HTTP proxy resolution and does **not** read `ALL_PROXY` or `all_proxy`. If your shell environment only defines `ALL_PROXY`, set `HTTPS_PROXY` (and `HTTP_PROXY` if needed) explicitly before running `cjv`.
 
-## Corporate TLS inspection and slow links
+## Corporate TLS inspection and slow connections
 
-- **Private CA certificates**: If your corporate proxy intercepts TLS traffic with a private certificate authority (CA), add that CA certificate to your operating system's trust store.
-- **Internal mirrors**: If you use an [internal distribution server](enterprise/distribution-server.md), add its hostname to `NO_PROXY` so clients connect to the internal server directly.
-- **Timeouts and retries**: On slow or unstable network links, increase `CJV_MAX_RETRIES` and `CJV_DOWNLOAD_TIMEOUT`. Read [Environment variables](environment-variables.md) for their default values and syntax.
+- **Private CA certificates** — If your organization uses a TLS-inspecting proxy with a private Certificate Authority (CA), add the organization's root CA certificate to your operating system's trust store so `cjv` can verify HTTPS connections.
+- **Bypassing the proxy for internal mirrors** — If you use an [internal distribution server](enterprise/distribution-server.md) alongside an outbound internet proxy, add your internal mirror's hostname or domain to `NO_PROXY` so `cjv` connects to it directly.
+- **Tuning retries and timeouts** — On slow or high-latency connections, you can increase `CJV_MAX_RETRIES` (default `3`) and `CJV_DOWNLOAD_TIMEOUT` (default `180` seconds); see [Environment variables](environment-variables.md) for details.

@@ -1,50 +1,46 @@
 # Internal distribution source
 
-The `dist_server` setting in [settings.toml](../configuration.md) (or the `CJV_DIST_SERVER` [environment variable](../environment-variables.md)) sets the root URL for toolchain manifests and archives. This chapter defines the directory layout, the JSON schemas for `versions.json` and `nightly.json`, and the safe publication sequence for an internal mirror.
-
-## How cjv resolves manifests and URLs
-
-Suppose you configure this `dist_server` URL:
+The `dist_server` setting in [`settings.toml`](../configuration.md) (or the `CJV_DIST_SERVER` [environment variable](../environment-variables.md)) configures the root URL from which `cjv` fetches version manifests and toolchain archives. For example:
 
 ```toml
 dist_server = "https://artifacts.corp.example/cjv/dist"
 ```
 
-cjv fetches two manifest files under that root URL:
+Under that root URL, `cjv` reads two channel-specific manifest files:
 
 ```text
 https://artifacts.corp.example/cjv/dist/versions.json  # LTS and STS channels
 https://artifacts.corp.example/cjv/dist/nightly.json   # nightly channel
 ```
 
-- LTS and STS commands read `versions.json` only.
-- Nightly commands read `nightly.json` only.
-- `cjv check` and `cjv update` load only the manifest files for your installed channels.
-- If an archive `url` inside a manifest is a relative path, cjv resolves it relative to `dist_server`. If `url` is an absolute `https://` URL, cjv uses that exact URL.
+- LTS and STS operations read `versions.json` only.
+- Nightly operations read `nightly.json` only.
+- `cjv check` and `cjv update` load only the manifest files required by your locally installed channels.
+- Relative SDK and component `url` fields inside a manifest are resolved against `dist_server`, whereas absolute `https://` URLs are used exactly as written.
 
-Precedence for the distribution source is `CJV_DIST_SERVER`, then `dist_server` in merged settings, then `manifest_url`. CI pipelines can set `CJV_DIST_SERVER` to test a staging mirror before production rollout.
+Distribution source precedence is `CJV_DIST_SERVER`, then `dist_server` from merged settings, and finally `manifest_url`. In CI pipelines, you can set `CJV_DIST_SERVER` to test a staging mirror before promoting manifests to production.
 
-## Recommended repository layout
+## Recommended layout
 
-Organize your internal artifact repository so `dist/` serves SDKs and manifests while `releases/` serves the `cjv` binary itself:
+We recommend organizing your internal artifact repository so `dist/` serves toolchains and manifests while `releases/` serves `cjv` binary releases:
 
 ```text
 Enterprise artifact repository
 └── cjv/
-    ├── dist/                         # Point dist_server here
-    │   ├── versions.json             # LTS and STS channels and components
-    │   ├── nightly.json              # nightly channel and components
-    │   ├── sdk/                      # Stable SDK archives
-    │   ├── components/               # Component archives (stdx, docs, stdx-docs)
-    │   └── nightly/                  # Nightly SDK and component archives
-    └── releases/                     # cjv binary archives and checksums.txt
+    ├── dist/                         # dist_server points here
+    │   ├── versions.json             # LTS / STS and their components
+    │   ├── nightly.json              # nightly and its components
+    │   ├── sdk/
+    │   ├── components/
+    │   └── nightly/
+    └── releases/                     # cjv archives and checksums.txt
 ```
 
-Configure the HTTPS server to give client machines read-only `GET` access. You can control access with network allowlists, device certificates, or an enterprise reverse proxy.
+The distribution endpoint simply needs to serve machine-readable, read-only files over `HTTPS GET`. You can enforce access control using network allowlists, device certificates, or an enterprise reverse proxy.
 
-## `versions.json` schema
+## `versions.json` contract
 
-The `versions.json` file wraps the `lts` and `sts` channel objects inside a top-level `channels` object:
+In `versions.json`, the top-level `channels` object contains the `lts` and `sts` channel objects:
 
 ```jsonc
 {
@@ -77,9 +73,9 @@ The `versions.json` file wraps the `lts` and `sts` channel objects inside a top-
 }
 ```
 
-## `nightly.json` schema
+## `nightly.json` contract
 
-Unlike `versions.json`, `nightly.json` represents the `nightly` channel at the top level with `latest`, `versions`, and optional `components`. Do not wrap `nightly.json` inside `channels.nightly`:
+Unlike `versions.json`, `nightly.json` directly represents a single channel at the top level with `latest`, `versions`, and optional `components` (do **not** wrap `nightly.json` inside `channels.nightly`):
 
 ```jsonc
 {
@@ -105,13 +101,13 @@ Unlike `versions.json`, `nightly.json` represents the `nightly` channel at the t
 }
 ```
 
-Every SDK entry contains `name`, `url`, and `sha256`. On upstream nightly builds, `sha256` may be empty briefly while the build finishes, in which case cjv fetches `<url>.sha256`. On an internal enterprise server, always populate the 64-character `sha256` field directly in the JSON.
+Every SDK entry contains `name`, `url`, and `sha256`. On upstream nightly builds, `sha256` may temporarily be empty while artifacts finish publishing, in which case `cjv` fetches `<url>.sha256`; on an internal enterprise mirror, you should populate `sha256` directly in the manifest. Component entries also accept an optional `sha256` field—populating it ensures clients verify component archives and retain them in the reusable offline cache.
 
-The version key in `versions` defines the toolchain version string, while `url` gives the archive path. When a client installs `nightly`, cjv starts at `latest` and searches earlier versions in `nightly.json` if the client needs specific components or cross targets. By default, cjv does not downgrade an installed nightly toolchain.
+The version key under `versions` determines the toolchain version name, while `url` identifies the archive file to download. When installing or updating the tracked `nightly` channel, `cjv` starts from `latest` and searches published history in `nightly.json` if required components or cross targets are missing from the newest build (without downgrading an existing installation unless `--allow-downgrade` is passed). A full pinned nightly name selects that exact release directly.
 
-## Component and cross-target entries
+## Component format
 
-Inside each channel object (`channels.lts`, `channels.sts`, or the root of `nightly.json`), the `components` object indexes component archives by version:
+Within each channel object (`channels.lts`, `channels.sts`, or the top level of `nightly.json`), `components` is indexed by version. `docs` and `stdx-docs` each point to a single archive per version, whereas `stdx` is further indexed by component platform:
 
 ```jsonc
 {
@@ -121,7 +117,7 @@ Inside each channel object (`channels.lts`, `channels.sts`, or the root of `nigh
         "linux-x64": {
           "name": "stdx-linux-x64.tar.gz",
           "url": "components/stdx-linux-x64.tar.gz",
-          "sha256": "<64-character hexadecimal SHA-256>"
+          "sha256": "<64-digit hexadecimal SHA-256>"
         }
       },
       "docs": { "name": "docs.tar.gz", "url": "components/docs.tar.gz" },
@@ -131,19 +127,16 @@ Inside each channel object (`channels.lts`, `channels.sts`, or the root of `nigh
 }
 ```
 
-- `docs` and `stdx-docs` are platform-independent and map directly to one archive object per version.
-- `stdx` groups its archive objects by component platform name (such as `linux-x64` for a host or `ohos-aarch64` for a cross target).
-- [Cross-compilation](../cross-compilation.md) SDK archives live under `versions[version][platform]` using host-target keys such as `linux-x64-ohos`.
-- Component entries accept an optional `sha256` field. Populate `sha256` for all component archives on internal mirrors so clients check integrity and cache the archives for `--offline` use.
+Combine this `components` fragment with `latest` and `versions` inside the channel object. [Cross-compilation](../cross-compilation.md) target SDKs are stored under `versions[version][platform]` using host-target keys such as `linux-x64-ohos`, while their corresponding `stdx` archives use component platform names such as `ohos-aarch64`.
 
-## Safe publication procedure
+## Publishing order
 
-Obey this sequence whenever you publish new releases to your internal distribution server:
+When updating your internal mirror, follow this sequence so clients never see a manifest pointing to missing files:
 
-1. Download and check all approved SDK, cross-target, and component archives.
-2. Compute the 64-character SHA-256 hash for every SDK and component archive.
-3. Upload all archive files to their target paths first, and test `HTTPS GET` access from a standard client account.
-4. Generate the updated `versions.json` and `nightly.json` files with all existing pinned versions kept in place.
-5. Atomically replace `versions.json` and `nightly.json` on the server, advancing `latest` only after every archive for that release is reachable.
+1. Mirror and verify all approved SDK, cross-target, and component archives.
+2. Compute the 64-character SHA-256 digest for each SDK archive and component archive.
+3. Upload all archives to their target paths first and verify `HTTPS GET` access from a standard client account.
+4. Generate `versions.json` and `nightly.json` independently, retaining every exact version still referenced by project `cangjie-sdk.toml` files.
+5. Atomically replace the manifest files on the server, advancing `latest` only after all artifacts for that release are in place.
 
-Read [Enterprise and offline deployment](index.md#publication-and-validation-checklist) for the client validation checklist.
+See [Publication and validation](index.md#publication-and-validation) for the end-to-end client verification checklist.

@@ -1,27 +1,25 @@
 # Automation and JSON interfaces
 
-This chapter explains how to use cjv in CI pipelines, automated scripts, and offline build environments. It covers project version pinning, isolated CI directories, offline caches, diagnostics, update rollback, and the JSON output contract.
+`cjv` is designed to work reliably in CI pipelines, build scripts, and editor integrations. This chapter covers pinning project versions, isolating CI configuration and offline caches, running non-destructive diagnostics and update dry runs, rolling back channel updates, and consuming `cjv`'s `--json` output.
 
 ## Pin a project version
 
-In a team or CI repository, run `cjv pin` to write a concrete SDK release name into [cangjie-sdk.toml](toolchain-file.md) in the current directory:
+In a project repository, running `cjv pin lts` writes the resolved concrete release name (such as `lts-1.0.5`) to [`cangjie-sdk.toml`](toolchain-file.md) in the current directory while preserving any existing `components`, `targets`, and custom keys (comments and formatting are rewritten). If you omit the toolchain name (`cjv pin`), `cjv` pins whichever toolchain is currently active. When pinning a tracked channel that is already installed on your machine, `cjv pin` prefers your locally installed release first and never downloads an SDK.
+
+Commit `cangjie-sdk.toml` to version control so every contributor and CI job selects the exact same SDK version:
 
 ```bash
 cjv pin lts
 cjv pin --check
 ```
 
-- `cjv pin lts` writes the resolved release name for `lts` and keeps existing `components`, `targets`, and custom keys. It reformats the file and removes TOML comments.
-- If you omit the toolchain name, `cjv pin` pins the active selection. If a tracked channel is already installed locally, `cjv pin` uses that local release first without downloading an SDK.
-- `cjv pin --check` checks that `cangjie-sdk.toml` pins a concrete version without writing to disk or using the network.
+In CI pipelines, `cjv pin --check` verifies that the current directory's `cangjie-sdk.toml` pins a concrete release without modifying the file or making network requests. Because `cangjie-sdk.toml` fixes the exact version and the distribution manifest supplies SHA-256 checksums for every artifact, no separate lockfile is needed.
 
-Commit `cangjie-sdk.toml` to version control. Because `cangjie-sdk.toml` fixes the exact version and the distribution manifest supplies SHA-256 checksums, you do not need a separate lockfile.
+## Configuration and network access
 
-## CI isolation and offline caches
+### Isolating CI directories and settings
 
-### Isolate CI settings and data
-
-In CI jobs, set an dedicated data directory and user settings file so builds do not read or change the runner's home directory:
+In CI jobs, you often want to isolate both the data directory and the user settings file inside the workspace so builds do not read or mutate the runner's home directory:
 
 ```bash
 export CJV_HOME="$PWD/.cjv-data"
@@ -30,24 +28,20 @@ cjv install lts
 cjv --offline --no-auto-install exec cjc --version
 ```
 
-The `CJV_HOME` path must be an absolute path. The `--config` flag and `CJV_CONFIG_FILE` replace the user settings file only; system fallback settings, `cangjie-sdk.toml`, and other [environment variables](environment-variables.md) still apply. Set `CJV_FALLBACK_SETTINGS` if you also need to isolate the system fallback file.
+`CJV_HOME` must be an absolute path. Note that `--config` and `CJV_CONFIG_FILE` replace only the user settings file; system fallback settings, `cangjie-sdk.toml` project selection, and other [environment variables](environment-variables.md) still apply. If your runner also needs to isolate or override the system fallback file, set `CJV_FALLBACK_SETTINGS` separately.
 
-### Prepare and inspect an offline cache
+### Offline caches and network flags
 
-To run `cjv install` with `--offline`, you must populate `<CJV_HOME>/cache/` ahead of time from the same distribution source. When you install a toolchain online, cjv saves the manifest and all SDK and component archives with valid SHA-256 hashes in `cache/`. Archives without a SHA-256 checksum are not saved in `cache/`.
+To run `cjv` with `--offline` (or `CJV_OFFLINE=1`), the required manifests, SDK archives, and component archives from the configured distribution source must be present in `<CJV_HOME>/cache/` beforehand. Whenever an online installation succeeds, `cjv` retains the manifest and all SHA-256-verified archives in `cache/` (archives without checksums are not retained in the reusable cache). You can inspect the cached items with `cjv cache list --json`, and supply the populated `cache/` directory alongside `cangjie-sdk.toml` to your offline build environment under the same distribution source configuration.
 
-Copy the populated `cache/` directory and `cangjie-sdk.toml` into the offline runner, and keep the same distribution source configuration. Run `cjv cache list --json` to inspect the cached items.
+If `cache/` contains damaged metadata records, orphaned archive files, or incomplete temporary files, `cjv cache list --json` reports them via the optional `problem` field while still listing healthy entries. Running `cjv cache clean` removes all `cjv`-owned cache files (including damaged ones), whereas `cjv cache prune --max-age <duration>` filters entries by age. Note that if an online query succeeds but saving its optional cache entry fails, `cjv` prints a warning to `stderr` and still returns the successful query result.
 
-If `cache/` contains damaged metadata, orphaned archive files, or incomplete temporary files, `cjv cache list --json` reports them in the optional `problem` field while still listing valid entries. Run `cjv cache clean` to delete these cjv-managed cache files, or run `cjv cache prune --max-age <duration>` to delete entries by age. If an online command succeeds but cannot write to the optional cache, cjv prints a warning and completes the command.
+- **`--no-auto-install`** prevents proxy commands and `cjv exec` from implicitly installing missing SDKs or components; explicit `cjv install` commands remain available.
+- **`--offline`** prevents `cjv` itself from making network requests, but does not restrict network access by child programs spawned via `run`, `exec`, or proxy binaries.
 
-### Control network and installation behavior
+## Inspect and repair
 
-- `--no-auto-install` stops proxy commands and `cjv exec` from installing missing items implicitly. Explicit `cjv install` commands still work.
-- `--offline` stops cjv itself from making network requests. It does not block network access for child programs started by `run`, `exec`, or proxy binaries.
-
-## Diagnostics, dry runs, and repair
-
-Use these commands in scripts to check installation health, preview updates, or repair an SDK:
+You can use these commands in automation or troubleshooting scripts to inspect environment health, preview updates, or repair an installation:
 
 ```bash
 cjv doctor --json
@@ -55,23 +49,15 @@ cjv update --dry-run --json
 cjv install lts --reinstall
 ```
 
-- `cjv doctor` checks your settings, active selection, proxy binaries, installation metadata, and key SDK files without changing disk state. It does not compute SHA-256 hashes for every file in an installed SDK. If it finds an issue, it suggests a repair command and exits with a nonzero code.
-- `cjv update --dry-run` calculates compatible target versions and update blockers without downloading archives, changing installations, or updating `cache/`.
-- `cjv install <name> --reinstall` reinstalls the same SDK release and keeps your installed components and cross targets. By contrast, `--force` lets an install or update skip and remove unavailable optional components or targets, and does not reinstall an unchanged SDK.
+- **`cjv doctor`** performs a read-only check of your settings, active toolchain selection, proxy entry points in `<CJV_HOME>/bin`, installation records, and the presence of key SDK files, suggesting concrete repair commands when it detects an issue. It does not compute SHA-256 digests for every individual file inside an installed SDK, and it exits with a nonzero code (`1`) whenever a check fails.
+- **`cjv update --dry-run`** resolves compatible target releases and any update blockers without downloading archives, modifying installations, or refreshing `cache/`.
+- **`cjv install <name> --reinstall`** prepares and installs the named SDK release again while preserving your selected components and cross targets. By contrast, `--force` continues to mean skipping and removing unavailable optional components or targets—it does not reinstall an unchanged SDK.
 
 ## Update history and rollback
 
-### How update snapshots work
+Whenever updating a tracked channel (`lts`, `sts`, `nightly`) changes the release or SHA-256 digest of its host SDK or an installed cross target, `cjv` retains a complete snapshot of the previous toolchain group—including the host SDK, tracked cross targets, offline documentation, and `stdx`—under `<CJV_HOME>/history/`.
 
-When `cjv update` changes the release or digest of a tracked channel's host SDK or cross targets, cjv saves a snapshot of the previous toolchain group under `<CJV_HOME>/history/`. A toolchain group snapshot includes the host SDK, tracked cross targets, offline documentation, and `stdx`.
-
-By default, cjv keeps the 2 most recent snapshots for each tracked channel. First-time installations, `--reinstall` repairs of the same release, and standalone `target add` or `component add` commands do not create snapshots. Pinned versions such as `lts-1.0.5` do not use channel history.
-
-> **CAUTION:** Each snapshot stores an independent copy of the files, including the target contents of linked components, which uses additional disk space. Do not edit files inside `<CJV_HOME>/history/` directly.
-
-### Roll back or prune history
-
-Use these commands to view snapshots, roll back an update, or free disk space:
+By default, each tracked channel retains its **2** most recent snapshots. Initial installations, `--reinstall` repairs of the same release, and standalone `target add` or `component add` operations do not create update snapshots. Fixed-version installations (such as `lts-1.0.5`) remain independent of tracking-channel history.
 
 ```bash
 cjv toolchain history lts
@@ -79,38 +65,34 @@ cjv toolchain rollback lts
 cjv toolchain history prune lts --keep 1
 ```
 
-- `cjv toolchain rollback lts` restores the newest snapshot for `lts`. Pass an explicit `<snapshot>` ID to select an older snapshot. Before restoring, cjv checks the integrity of the snapshot on disk and saves the current installation as a snapshot so you can undo the rollback.
-- `cjv toolchain history prune lts --keep 1` keeps the 1 newest valid snapshot for `lts` and deletes older ones. Pass `--keep 0` to delete all snapshots while keeping your active installation. The `--keep` flag applies to that `prune` run only; future updates still keep 2 snapshots automatically. Note that `cjv cache clean` does not delete update history.
+- **`cjv toolchain rollback <channel> [snapshot]`** restores the newest snapshot when `[snapshot]` is omitted, or restores a specific snapshot ID when given. Before replacing the installation, `rollback` verifies the local snapshot's contents and saves the current toolchain group as a snapshot so that the rollback itself can be undone.
+- **`cjv toolchain history prune [channel] [--keep N]`** removes older snapshots. Because each snapshot stores independent file copies (including the target contents of linked components), snapshots consume additional disk space and are not removed by `cjv cache clean`. Passing `--keep 0` clears all snapshots while preserving your active installations. Note that `--keep` applies only to that `prune` invocation; future updates still retain 2 snapshots automatically. Never edit files inside `<CJV_HOME>/history/` by hand.
 
-### Damaged snapshot handling
+### Handling damaged snapshots
 
-`cjv toolchain history` lists valid snapshots in `snapshots` and lists damaged records with their failure reasons in the optional `invalid_snapshots` array.
+`cjv toolchain history` lists valid, readable snapshots in `snapshots` and reports any damaged records—along with their failure causes—in the optional `invalid_snapshots` array.
 
-When you run `history prune` with a nonzero `--keep`, cjv keeps that many valid snapshots and leaves damaged snapshots in place so you can check them. Running `history prune --keep 0` deletes both valid and damaged snapshots. If the newest snapshot has damage, `cjv toolchain rollback <channel>` without a snapshot ID refuses to guess an older version and asks you to pass a valid `<snapshot>` ID explicitly.
+When you run `history prune` with a nonzero `--keep` value, `cjv` retains that many readable snapshots and leaves damaged entries in place so you can inspect them; running `history prune --keep 0` removes both readable and damaged entries. If the newest snapshot is damaged, running `cjv toolchain rollback <channel>` without an explicit snapshot ID refuses to silently guess an older release and requires you to specify a valid `<snapshot>` ID explicitly. Every selected snapshot must pass full content verification before restoration.
 
-## JSON output contract
+## JSON compatibility
 
-### Output streams and schema stability
+Commands that support `--json` write a single structured JSON document to `stdout` and send all logs or warnings to `stderr`. The `run`, `exec`, and `init` commands do not support `--json` because their `stdout` and exit codes belong directly to the child process or interactive wizard.
 
-Commands that support `--json` write a single JSON document to `stdout` and write logs or warnings to `stderr`. The `run`, `exec`, and `init` commands do not support `--json` because they pass child process streams through directly.
+When building automation around `--json`, follow these compatibility rules:
 
-Obey these rules when you parse `--json` output in scripts:
+- **Per-command success payloads**: Success fields are specific to each command. Clients should ignore unrecognized object keys and enum values they do not use.
+- **Versioned schemas (`schema_version`)**: Payloads that include a `schema_version` field preserve existing field meanings and types within that version. Adding new optional fields does not increment `schema_version`; incompatible changes increment it.
+- **Unversioned payloads**: Existing commands without a `schema_version` field keep their current output structure; do not assume they share fields with other commands.
+- **Collections and optional fields**: Required collections are always JSON arrays (`[]` when empty), while optional fields may be omitted or `null` according to each command's existing behavior.
+- **Machine-readable error handling**: Always branch on the process exit code and `error.code`, never on the localized human-readable `error.message`.
 
-- **Per-command fields**: Each command defines its own success payload. Your parser must ignore unknown object keys and unknown enum strings.
-- **Versioned schemas**: Payloads that include `schema_version` keep existing field names, types, and meanings within that version number. cjv may add optional fields without changing `schema_version`, and increments `schema_version` only for incompatible changes.
-- **Unversioned payloads**: Older commands without `schema_version` keep their existing JSON structure. Do not assume that different commands share the same top-level fields.
-- **Collections and optional fields**: Mandatory lists are always JSON arrays (`[]` when empty). Commands may omit optional fields or set them to `null` according to each command's existing behavior.
-- **Error matching**: Always branch on the process exit code and the machine-readable `error.code` string, never on the localized `error.message` text.
-
-### Example: `cache list --json` schema
-
-An empty cache returns this JSON document:
+For example, an empty cache returns:
 
 ```json
 {"schema_version":1,"path":"/home/user/.cjv/cache","entries":[]}
 ```
 
-The JSON Schema below defines the stable fields of `cjv cache list --json`:
+The following JSON Schema describes the stable fields of `cjv cache list --json` while allowing future optional fields:
 
 ```json
 {
@@ -139,21 +121,17 @@ The JSON Schema below defines the stable fields of `cjv cache list --json`:
 }
 ```
 
-### Error payloads and diagnostic exit codes
+### Error objects and automatic installation causes
 
-When a command fails, cjv writes `{"error":{"code":"...","message":"...","details":{}}}` to `stdout` and exits with a nonzero status code. Future releases may add new error codes, and the keys inside `details` depend on `error.code`.
+When a command fails, `cjv` writes `{"error":{"code":"...","message":"...","details":{}}}` to `stdout` and exits with a nonzero status code. New error codes may be added over time, so clients should handle unknown `code` values gracefully; the fields inside `details` depend on the specific `code`.
 
-The `cjv doctor --json` command is an exception: when it finds environment problems, it returns its normal report object with `checks` and `"ok": false`, and exits with status code `1` instead of wrapping the output in an `error` object.
+`cjv doctor --json` is an intentional exception: when it detects diagnostic problems, it still outputs its normal report object containing `checks` with `"ok": false` and exits with code `1`, rather than wrapping the response in an `error` object.
 
-When automatic installation fails during a command, the top-level `error.code` is `TOOLCHAIN_NOT_INSTALLED` or `COMPONENT_NOT_INSTALLED`, and `details.cause` contains the underlying `code`, `message`, and `details`:
+When automatic installation fails while resolving a toolchain or component, the top-level error code remains `TOOLCHAIN_NOT_INSTALLED` or `COMPONENT_NOT_INSTALLED`, and `details.cause` preserves the underlying failure's `code`, `message`, and `details`:
 
-| `details.cause.code` | Meaning |
-| --- | --- |
-| `OFFLINE_CACHE_MISS` | Target manifest or archive is not in `<CJV_HOME>/cache/` during `--offline` mode |
-| `CHECKSUM_MISMATCH` | Downloaded or cached archive failed SHA-256 verification |
-| `HTTP_ERROR` | Server returned an unsuccessful HTTP status code |
-| `NETWORK_ERROR` | Connection or transport failure occurred before a complete HTTP response |
-| `CANCELED` | A signal or caller context canceled the operation |
-| `DEADLINE_EXCEEDED` | Download or request exceeded the configured timeout |
+- **`OFFLINE_CACHE_MISS`** — A required manifest or archive was not found in `<CJV_HOME>/cache/` while running with `--offline`.
+- **`CHECKSUM_MISMATCH`** — A downloaded or cached archive failed SHA-256 verification.
+- **`HTTP_ERROR`** and **`NETWORK_ERROR`** — Distinguish unsuccessful HTTP status responses from lower-level connection or transport failures.
+- **`CANCELED`** and **`DEADLINE_EXCEEDED`** — Indicate that the operation was canceled by a signal or exceeded the download timeout.
 
-If you disable automatic installation, cjv omits `details.cause` because it did not try to install the missing item. Read [Command reference](command-reference.md) for all CLI commands and flags.
+When automatic installation is disabled (`--no-auto-install`, `CJV_AUTO_INSTALL=0`, or `auto_install = false`), a missing installation has no `details.cause` because no installation was attempted.
