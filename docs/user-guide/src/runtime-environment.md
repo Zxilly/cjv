@@ -1,51 +1,34 @@
 # 运行命令与配置环境
 
-完成[安装 cjv](installation/index.md) 后，`<CJV_HOME>/bin` 中的 `cjc`、`cjpm` 等命令入口会通过 cjv 调用当前选中的 SDK。cjv 会按[项目工具链](toolchain-file.md)规则解析版本，配置运行环境，并转发参数和退出码。本章介绍如何调用 SDK 工具、运行仓颉编译产物，以及在当前终端会话中加载 SDK 环境。
+安装 `cjv` 后，`<CJV_HOME>/bin` 目录中的 `cjc`、`cjpm` 等可执行文件作为**代理入口（proxies）**工作。每次调用这些命令时，`cjv` 都会按照[项目工具链](toolchain-file.md)的选择规则确定当前目录应当使用的 SDK 版本，准备好对应的环境变量与动态库路径，并将命令行参数和子进程退出码原样透传。
 
-## 执行方式对比
+## 运行 SDK 工具与自己的程序
 
-请根据使用场景选择合适的命令入口：
-
-| 执行方式 | 命令示例 | 作用范围 | 适用场景 |
-| --- | --- | --- | --- |
-| 代理命令入口 | `cjc --version` | 单个子进程 | 日常编译、构建与包管理 |
-| `cjv run` | `cjv run --install sts cjc --version` | 单个子进程 | 临时指定某个工具链版本运行一次命令 |
-| `cjv exec` | `cjv exec ./my_binary arg1` | 单个子进程 | 运行依赖仓颉 SDK 或 `stdx` 动态库的编译产物 |
-| `cjv envsetup` | `eval "$(cjv envsetup)"` | 当前终端会话 | 将 SDK 路径与环境变量导入当前交互式终端 |
-
-## 运行 SDK 工具与编译产物
-
-### 使用代理命令与 `cjv run`
-
-直接运行 `cjc` 或 `cjpm` 时，cjv 按[项目工具链](toolchain-file.md)的选择顺序决定版本。如果需要显式指定工具链运行单条命令，请使用 `cjv run`：
+除了直接运行 `cjc`、`cjpm` 等代理命令外，`cjv` 还提供了 `cjv run` 和 `cjv exec` 两个子命令，用于在独立的子进程环境中执行命令：
 
 ```bash
 cjc --version
 cjv run --install sts cjc --version
-```
-
-`run` 会先在指定工具链的 SDK 工具目录中查找命令，再查找该环境的 `PATH`；只有传入 `--install` 时，才会在工具链缺失时自动下载安装。
-
-### 使用 `cjv exec` 运行编译产物
-
-编译生成的仓颉程序通常需要加载 SDK 或 `stdx` 中的动态链接库。使用 `cjv exec` 可以在当前激活工具链（或 `+name` 指定工具链）的运行环境下启动程序：
-
-```bash
 cjv exec ./my_binary arg1 arg2
 cjv exec +nightly ./my_binary
 ```
 
-`run` 和 `exec` 都只修改子进程的环境，并原样透传标准输入、标准输出、标准错误和退出码。如果被调用的命令名本身以 `+` 开头，请在命令名前加上 `--`，防止它被解析为工具链选择器：
+理解两者的定位可以帮助你快速选择合适的命令：
+
+- **`cjv run [--install] <toolchain> <command> [args...]`** — 显式指定要使用的 `<toolchain>`。它会先查找该 SDK 的工具目录，再查找该环境的 `PATH`；只有传入 `--install` 时，才会在指定的工具链缺失时自动下载安装。
+- **`cjv exec [+toolchain] <command> [args...]`** — 按照当前激活的工具链选择（或 `+name` 指定的工具链）准备完整的 SDK 运行环境，包括仓颉运行时库和 `stdx` 动态库搜索路径。因此，`cjv exec` 非常适合用来运行你自己编译出的、依赖仓颉动态库的二进制程序。
+
+`run` 和 `exec` 都只改变子进程的运行环境，不会污染当前终端会话，并且会原样转发标准输入、标准输出、标准错误和退出码。
+
+如果待运行的命令名称本身以 `+` 开头，请在命令名前加上 `--`，避免它被当作 `+toolchain` 选择器解析：
 
 ```bash
 cjv exec -- +command
 ```
 
-## 配置当前终端会话（`envsetup`）
+## 使用 `envsetup` 配置当前 shell
 
-### 执行 `cjv envsetup` 脚本
-
-`cjv envsetup` 会向标准输出打印一段环境配置脚本。在当前终端中求值执行该输出，即可把 SDK 环境导入当前 shell 会话：
+在与外部构建系统（如 Makefile、CMake 或自定义脚本）配合时，有时需要将 SDK 的工具路径和环境变量直接导入当前交互式终端会话。`cjv envsetup` 会向标准输出打印一段环境配置脚本，在当前 shell 中求值执行即可生效：
 
 ```bash
 # Bash 或 Zsh
@@ -58,36 +41,36 @@ cjv envsetup | source
 ```
 
 ```powershell
-# PowerShell
+# Windows PowerShell
 cjv envsetup | Invoke-Expression
 ```
 
-你可以传入 `+nightly` 选择特定工具链，或传入 `--shell=bash|fish|powershell|cmd` 指定脚本格式。省略 `--shell` 时，cjv 会自动检测当前 shell；如果检测失败，会打印提示并回退到 POSIX 格式。运行 `cjv --json envsetup` 可以获取供自动化脚本使用的结构化环境数据，详见[自动化与 JSON 接口](automation.md)。
+你可以运行 `cjv envsetup +nightly` 显式指定工具链版本，或者传入 `--shell=bash|fish|powershell|cmd` 指定输出脚本的语法格式。省略 `--shell` 时，`cjv` 会自动检测当前 shell；如果检测失败，会在 `stderr` 打印提示并回退到 POSIX shell 格式。此外，运行 `cjv --json envsetup` 可以输出结构化的环境变量 JSON 数据，供编辑器插件或自动化脚本读取（详见[自动化与 JSON 接口](automation.md)）。
 
-### 注入的环境变量
+### 设置的环境变量
 
-SDK 运行环境会设置 `CANGJIE_HOME`，将 SDK 工具目录加入 `PATH`，并按操作系统配置动态库搜索路径：
+无论是通过代理命令、`cjv run`、`cjv exec` 还是 `cjv envsetup`，`cjv` 都会为所选 SDK 配置以下环境信息：
 
-- **Linux**：设置 `LD_LIBRARY_PATH`。
-- **macOS**：设置 `DYLD_LIBRARY_PATH`。
-- **Windows**：将运行时动态库目录加入 `PATH`。
-- **已安装 `stdx`**：自动注入 `CANGJIE_STDX_PATH_DYNAMIC` 和 `CANGJIE_STDX_PATH_STATIC`。`stdx` 的安装与链接方式见[组件与离线文档](concepts/components.md)。
+- **`CANGJIE_HOME`** — 指向所选 SDK 安装的根目录。
+- **`PATH`** — 将 SDK 的编译器与工具目录前置加入 `PATH`。
+- **运行时动态库路径** — 按宿主操作系统设置动态库搜索路径：Linux 与鸿蒙使用 `LD_LIBRARY_PATH`，macOS 使用 `DYLD_LIBRARY_PATH`，Windows 使用 `PATH`。
+- **`stdx` 扩展库路径** — 如果该工具链已安装 [`stdx` 组件](concepts/components.md)，`cjv` 会自动注入 `CANGJIE_STDX_PATH_DYNAMIC` 和 `CANGJIE_STDX_PATH_STATIC`，分别指向组件的 `dynamic/` 与 `static/` 目录。
 
-### 恢复按项目自动切换
+### 切换项目与恢复代理选择
 
-在终端中求值执行 `envsetup` 后，当前会话的 `PATH` 会直接指向某个具体 SDK 目录。只要该目录排在 `<CJV_HOME>/bin` 之前，切换工作目录时 `cangjie-sdk.toml` 的代理选择就不会在该终端生效。
+请注意，在当前终端中求值执行 `envsetup` 的输出后，当前会话的 `PATH` 会直接指向某个具体 SDK 的工具目录（排在 `<CJV_HOME>/bin` 之前）。此时在该终端中切换到其他项目目录，将不再按 `cangjie-sdk.toml` 自动切换编译器。
 
-如果需要恢复按项目目录自动切换工具链，请打开一个新终端；或者在当前终端再次执行 `envsetup` 切换到其他 SDK。
+如果需要恢复按项目自动选择工具链，只需打开一个新终端；或者在当前终端再次执行 `envsetup` 切换到目标工具链。
 
-## 加载交叉编译 SDK 环境
+## 交叉 SDK 环境
 
-进行跨平台编译时，可以为已安装的交叉编译目标加载对应的工具与库环境：
+进行跨平台交叉编译时，可以通过 `cjv envsetup --target` 加载已安装交叉编译 SDK 的工具路径与库环境：
 
 ```bash
 cjv install sts --target ohos
 eval "$(cjv envsetup +sts --target=ohos)"
 ```
 
-`--target` 会使用所选宿主工具链同发行版下已安装的交叉 SDK 路径和库环境。它不会自动安装缺失的目标 SDK，也不提供跨平台模拟器来直接运行目标平台的程序。
+`--target` 会使用所选宿主工具链同一发行版下已安装的交叉 SDK 路径和库环境。它不会自动安装缺失的目标 SDK，也不提供模拟器或跨平台程序直接运行能力。
 
-目标平台所需的编译器参数、系统库和运行条件请查阅对应仓颉 SDK 文档；在 cjv 中管理交叉编译目标的方法见[交叉编译](cross-compilation.md)。
+目标平台所需的编译器参数、系统库与运行条件请参阅对应仓颉 SDK 文档；使用 `cjv` 安装和管理交叉编译目标的方法见[交叉编译](cross-compilation.md)。

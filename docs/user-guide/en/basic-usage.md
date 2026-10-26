@@ -1,21 +1,21 @@
 # Quick start
 
-This chapter shows how to check your setup, select a default SDK, pin a project version, and update toolchains. If you have not installed cjv yet, start with [Install cjv](installation/index.md).
+Once you have [installed `cjv`](installation/index.md), you can use it to inspect your active SDK, switch between release channels, pin a specific compiler version for a project, and keep your toolchains up to date.
 
-## Do a check of your installation
+## Checking your installation
 
-After you complete the setup wizard, open a new terminal and check the active toolchain:
+After completing the setup wizard, open a new terminal so your updated `PATH` is loaded, and check the active toolchain:
 
 ```bash
 cjv show
 cjc --version
 ```
 
-If your shell cannot find `cjc`, make sure that `<CJV_HOME>/bin` is on your `PATH`. The default path is `~/.cjv/bin`. Read [Install cjv](installation/index.md#configure-path-and-check-the-setup) for `PATH` configuration details.
+`cjv show` displays your default host platform, all installed toolchains, and which toolchain is currently active. If your shell reports that `cjc` cannot be found, double-check that `<CJV_HOME>/bin` (by default `~/.cjv/bin`) is on your `PATH`—see [PATH configuration and verification](installation/index.md#path-configuration-and-verification) for details.
 
-## Set a default toolchain
+## Choosing a default toolchain
 
-If you installed cjv without an SDK, find an available channel and set it as the default. Run these commands to use the LTS channel:
+If you installed `cjv` with `--default-toolchain none` (or skipped SDK installation during setup), you can query the releases available on a channel and set a global default toolchain. Let's take the `lts` channel as an example:
 
 ```bash
 cjv toolchain list-remote --channel lts
@@ -23,15 +23,21 @@ cjv default lts
 cjc --version
 ```
 
-The `default` command installs the toolchain if it is not on your machine. If LTS has no release for your platform, check `sts` or `nightly` and select that channel instead. You can also run `cjv init` again to select an available channel through the wizard.
+If the toolchain you pass to `cjv default` is not installed yet, `cjv` downloads and installs it automatically before saving it as the default. If `lts` does not publish an SDK for your platform yet, run `cjv toolchain list-remote` for `sts` or `nightly` and select that channel instead—or run `cjv init` again to let the interactive wizard pick an available channel for you.
 
-cjv uses the default toolchain in directories that have no project file or directory override. Run `cjv show active` to see the active toolchain and its selection source. Read [Toolchains and versions](concepts/toolchains.md) for channel and version syntax.
+The global default toolchain is used whenever you are in a directory that does not have a project toolchain file or a local directory override. To see which toolchain is active in your current directory and why it was chosen, run:
 
-## Configure a version for a project
+```bash
+cjv show active
+```
 
-### Create a project toolchain file
+See [Toolchains and versions](concepts/toolchains.md) for a full explanation of channels and version naming.
 
-To share the same SDK requirement across a team, create `cangjie-sdk.toml` in the project root directory:
+## Choosing a version for a project
+
+### Using `cangjie-sdk.toml`
+
+In a team repository, you usually want every contributor and CI runner to build with the exact same Cangjie release and extension libraries. You can declare these requirements in a `cangjie-sdk.toml` file at the root of your project:
 
 ```toml
 [toolchain]
@@ -39,13 +45,13 @@ channel = "lts-1.0.5"
 components = ["stdx"]
 ```
 
-Replace `lts-1.0.5` with a version that your distribution source provides. You can also run `cjv pin lts` to write the full release name automatically.
+Replace `lts-1.0.5` with a version that your project needs and your distribution source provides (or run `cjv pin lts` to generate the file with the resolved version automatically).
 
-When you run `cjpm build` in this directory, cjv uses the toolchain from `cangjie-sdk.toml`. By default, cjv installs missing SDKs and components automatically. Running a proxy command does not upgrade an SDK that is already installed.
+Whenever you run `cjpm build` or `cjc` inside that project directory, `cjv` automatically selects the toolchain declared in `cangjie-sdk.toml`. By default, `auto_install` is enabled, so `cjv` will download and install any missing SDK, component, or cross-compilation target on the fly. Running a proxy command will never unexpectedly upgrade an SDK that is already installed.
 
-### Set a local directory override
+### Setting a local directory override
 
-If you want to change the toolchain for a directory on your machine only, set a directory override:
+If you want to test a project with a different toolchain on your own machine without modifying `cangjie-sdk.toml`, you can set a directory override:
 
 ```bash
 cjv override set sts
@@ -53,21 +59,29 @@ cjv show active
 cjv override unset
 ```
 
-cjv saves directory overrides in your user settings file instead of the project repository. Read [Project toolchains](toolchain-file.md) for the full selection order between flags, environment variables, overrides, and project files.
+Directory overrides are stored in your personal `~/.cjv/settings.toml` file rather than inside the project directory, while `cangjie-sdk.toml` is meant to be committed to version control. See [Project toolchains](toolchain-file.md) for how overrides and project files interact.
 
-## Run a command with another version
+## Running a command with another version
 
-To run one command with an explicit toolchain without changing your default or project settings, use `cjv run`:
+Sometimes you just want to run a single command with a specific toolchain without changing your default or directory settings. Use `cjv run`:
 
 ```bash
 cjv run --install sts cjc --version
 ```
 
-The `run` command selects the named toolchain for that child process only. The `--install` flag installs the version if it is missing. To run your own compiled Cangjie binary with the SDK runtime library paths, use `cjv exec ./my_binary`. Read [Run commands and set the environment](runtime-environment.md) for details on `run`, `exec`, and `envsetup`.
+`cjv run` invokes the command using the specified toolchain (`sts` here), and `--install` tells `cjv` to install that toolchain first if it is missing.
 
-## Check installed toolchains
+If you have compiled your own Cangjie binary and need to run it with the dynamic libraries from the SDK or `stdx`, use `cjv exec`:
 
-Use these commands to check the active SDK, the tool paths, and all local installations:
+```bash
+cjv exec ./my_binary
+```
+
+See [Running commands and setting the environment](runtime-environment.md) for more on `run`, `exec`, and `envsetup`.
+
+## Inspecting installed toolchains
+
+Here are the most common commands for inspecting your local setup:
 
 ```bash
 cjv show active
@@ -75,35 +89,35 @@ cjv which cjc
 cjv toolchain list
 ```
 
-- `cjv show active` prints the selected toolchain and the rule that selected it.
-- `cjv which cjc` prints the resolved file path of the compiler binary inside the active SDK.
-- `cjv toolchain list` lists all installed host SDKs and their attached cross targets.
+- `cjv show active` prints the currently selected toolchain and the rule that selected it (such as a `cangjie-sdk.toml` file, a directory override, or the global default).
+- `cjv which cjc` prints the full filesystem path to the `cjc` executable inside the active SDK.
+- `cjv toolchain list` (or `cjv show installed`) lists all installed host toolchains and any cross-compilation targets attached to them.
 
-## Update and uninstall toolchains
+## Keeping toolchains and `cjv` up to date
 
-### Update SDKs and cjv
+### Updating tracked channels
 
-Run these commands to check for updates and install them:
+When new versions of the Cangjie SDK are released, you can check for available updates or install them across all of your tracked channels (`lts`, `sts`, `nightly`):
 
 ```bash
 cjv check
 cjv update
 ```
 
-The `check` command lists available updates for installed SDKs and for cjv without installing them. The `update` command upgrades tracked channels such as `lts`, `sts`, and `nightly`. It keeps pinned versions and custom toolchains unchanged.
+`cjv check` queries the remote manifest and reports available updates for your installed SDKs and for `cjv` itself without installing anything. `cjv update` downloads and installs updates for all tracked channels, while leaving pinned versions (like `lts-1.0.5`) and custom toolchains untouched.
 
-The `auto_self_update` setting controls whether a full `cjv update` also checks or updates cjv itself. Read [Configuration](configuration.md) to change this behavior, or update cjv manually at any time:
+Whether a full `cjv update` also checks for or installs updates to `cjv` itself is controlled by the [`auto_self_update`](configuration.md#automatic-updates) setting (`check` by default). You can also update `cjv` manually at any time by running:
 
 ```bash
 cjv self update
 ```
 
-### Remove a toolchain
+### Uninstalling a toolchain
 
-To delete an installed toolchain that you no longer need, run `cjv uninstall`:
+To remove an installed toolchain that you no longer need and reclaim disk space:
 
 ```bash
 cjv uninstall sts
 ```
 
-Uninstalling a toolchain also removes its attached components, cross targets, and offline documentation. Read [Command reference](command-reference.md) for all command options, or continue to [Run commands and set the environment](runtime-environment.md).
+Uninstalling a host toolchain also removes its attached components, cross-compilation targets, and offline documentation. For a complete list of commands and flags, see the [Command reference](command-reference.md).

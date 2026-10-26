@@ -1,10 +1,12 @@
 # Cross-compilation
 
-A cross SDK provides compilers, libraries, and tools on your current host machine so you can build programs for another target platform. cjv manages each cross SDK as an attachment to an installed host [toolchain](concepts/toolchains.md). The cross SDK release must match the host release, and available targets depend on your distribution manifest.
+Before going further, it is important to understand the distinction between a toolchain's _host platform_ and the _compilation targets_ it supports. A host toolchain runs on your current machine (for example, `linux-x64`) and compiles programs for that same platform out of the box. A _cross SDK_ (or target SDK) provides additional compilers, tools, and target libraries that run on your current host machine but produce code for another platform (such as `ohos` or `android`).
 
-## Install and list target SDKs
+`cjv` manages cross SDKs as attachments to an installed host [toolchain](concepts/toolchains.md). A target SDK's release version always matches its host toolchain's release, and the set of available targets depends on what the upstream distribution manifest publishes for that release and host.
 
-You can install a cross target when you install a host toolchain, or add it later with `cjv target add`:
+## Installing and inspecting targets
+
+You can install a cross-compilation target when installing a host toolchain with `--target` (`-t`), or add it to an already-installed host toolchain with `cjv target add`:
 
 ```bash
 cjv install sts --target ohos
@@ -13,56 +15,39 @@ cjv target add android --toolchain sts
 cjv target list --toolchain sts --installed
 ```
 
-- `cjv target add` installs the target SDK for the existing host release without upgrading the host SDK.
-- `cjv target list` queries the distribution manifest for all targets published for that host release.
-- `cjv target list --installed` reads local metadata only and works offline.
+- **`cjv target add`** installs the requested target SDKs for the host toolchain's currently installed release without upgrading the host SDK itself.
+- **`cjv target list`** queries the distribution manifest to show all targets published for that host release, marking which ones are already installed.
+- **`cjv target list --installed`** reads local installation state only and works completely offline.
 
-Always write target suffixes such as `ohos`, `android`, or `ohos-arm32`. Do not write a full platform tuple such as `linux-x64-ohos`. You can pass `--target` more than once or use a comma-separated list such as `--target ohos,android`.
+When naming a target on the command line or in [`cangjie-sdk.toml`](toolchain-file.md#components-and-targets), always write the target suffix—such as `ohos`, `android`, or `ohos-arm32`—rather than a full host-target platform key like `linux-x64-ohos`. Both `cjv install` and `cjv target add` accept repeated `--target` flags or comma-separated values (such as `--target ohos,android`).
 
-You can also declare needed targets in [cangjie-sdk.toml](toolchain-file.md#components-and-target-sdks) so cjv installs them automatically when a project command runs.
+## Using a target SDK
 
-## Load the target build environment
-
-By default, proxy commands such as `cjc` and `cjpm` select the host SDK environment. When you want to call tools or link against libraries from an installed cross SDK, load its environment into your current shell with `cjv envsetup`:
+By default, the `cjc` and `cjpm` proxy binaries in `<CJV_HOME>/bin` select your host SDK environment. When you want to invoke tools or link against libraries from an installed cross SDK, load its environment into your current shell with `cjv envsetup`:
 
 ```bash
 eval "$(cjv envsetup +sts --target=ohos)"
 cjc --version
 ```
 
-In Windows PowerShell, run:
+In Windows PowerShell:
 
 ```powershell
 cjv envsetup +sts --target=ohos | Invoke-Expression
 ```
 
-Installing a target SDK or listing `targets` in `cangjie-sdk.toml` prepares the files on disk. It does not turn a regular `cjpm build` into a cross-platform build on its own. Your build scripts and project configuration must still pass the target compiler flags, system sysroot, and linker options for the target platform. Read [Run commands and set the environment](runtime-environment.md#load-a-cross-compilation-environment) for details on shell sessions.
+Keep in mind that installing a target SDK with `cjv` (or listing `targets` in `cangjie-sdk.toml`) prepares the cross SDK files on disk, but does not automatically turn an ordinary `cjpm build` into a cross-compiled build. Compiler flags, target sysroots, system libraries, and linker settings depend on your target platform and project build scripts; see the official Cangjie SDK documentation for target-specific compiler options, and see [Running commands and setting the environment](runtime-environment.md#loading-a-cross-compilation-sdk-environment) for how `envsetup` manages your shell session.
 
-## Manage target components, updates, and removal
+## Target components, updates, and removal
 
-### Target components
-
-Each cross SDK manages its own `stdx` component separately from the host SDK. Pass `--target <suffix>` to `cjv component` commands after you install the target SDK:
+Each installed cross SDK has its own independent component set—host `stdx` libraries do not substitute for target `stdx` libraries. Once a target SDK is installed, pass `--target <suffix>` to `cjv component` commands to manage components for that target:
 
 ```bash
 cjv component add stdx --toolchain sts --target ohos
 cjv component list --toolchain sts --target ohos
-```
-
-Host `stdx` libraries do not substitute for target `stdx` libraries. Read [Components and offline documentation](concepts/components.md) for component storage and options.
-
-### Channel updates with targets
-
-When you run `cjv update` on a tracked channel, cjv prepares the updated host SDK, all installed cross targets, and all selected components before it replaces the active installation.
-
-By default, if a needed target or component is missing from the new release, cjv blocks the update and keeps your working setup. On the `nightly` channel, cjv searches the published history for a release that provides all needed targets and components. Pass `--force` if you want cjv to skip and remove unavailable optional targets or components during the update; read [Command reference](command-reference.md#installation-and-update-policies).
-
-### Remove a target SDK
-
-To delete a cross SDK and its target components while keeping the host toolchain, run `cjv target remove`:
-
-```bash
 cjv target remove ohos --toolchain sts
 ```
 
-A cross SDK always belongs to a host toolchain and cannot be set as the global default or active toolchain directly.
+When you run `cjv update` on a tracked channel (`lts`, `sts`, `nightly`), `cjv` stages the updated host SDK, all of its installed cross targets, and all selected components before publishing them together in one atomic step. By default, if a required target or component is missing from the new release, `cjv` blocks the update and preserves your working installation (on `nightly`, it searches published history for a release that includes all required targets and components). If you want `cjv` to skip and remove unavailable optional targets or components during an update, pass `--force`; see the [Command reference](command-reference.md#installation-and-update-policies).
+
+To remove a cross SDK and its target components while keeping the host toolchain intact, run `cjv target remove`. Because a cross SDK is always attached to a host toolchain, it cannot be set as the global default or active toolchain on its own.

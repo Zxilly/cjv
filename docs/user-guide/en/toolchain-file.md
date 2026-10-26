@@ -1,10 +1,6 @@
 # Project toolchains
 
-You can commit a `cangjie-sdk.toml` file in the root directory of a project to share its SDK, component, and target settings with your team. This chapter explains how to create and pin project files, how cjv selects the active toolchain, and how to use local directory overrides.
-
-## Declare a project toolchain
-
-Create `cangjie-sdk.toml` in the project root directory:
+`cjv` automatically determines which [toolchain](concepts/toolchains.md) to use whenever you run an installed proxy command like `cjc` or `cjpm`. In a team project, you can check a `cangjie-sdk.toml` file into the root of your repository so that every developer and CI runner automatically selects the right SDK version, components, and cross-compilation targets:
 
 ```toml
 [toolchain]
@@ -12,57 +8,59 @@ channel = "lts-1.0.5"
 components = ["stdx"]
 ```
 
-The version `lts-1.0.5` is an example. Read [Toolchains and versions](concepts/toolchains.md) for all supported version and channel formats.
+The version `lts-1.0.5` above is an example; see [Toolchains and versions](concepts/toolchains.md) for all supported channel and version formats.
 
-To write a concrete release name automatically, run `cjv pin`:
+Instead of writing the version string by hand, you can run `cjv pin lts` in your project root to write the resolved concrete release name to `cangjie-sdk.toml` (or `cjv pin` with no arguments to pin whichever toolchain is currently active). Existing `components` and `targets` entries in the file are preserved. In CI pipelines, you can run `cjv pin --check` to verify that the project file pins a concrete release without modifying it; see [Automation and JSON interfaces](automation.md#pin-a-project-version).
+
+## Selection order
+
+There are several ways to control and override which toolchain is active. `cjv` chooses the toolchain in the following order, using the first one that is specified:
+
+1. An explicit command-line selection, such as a global `+name` shorthand (`cjv +nightly show`) or a command's `--toolchain` option.
+2. The `CJV_TOOLCHAIN` [environment variable](environment-variables.md).
+3. A directory walk from the current working directory up toward the filesystem root. At each directory level, `cjv` checks for a [local directory override](#local-directory-overrides) before checking for `cangjie-sdk.toml`, stopping at the first match it finds.
+4. The global default toolchain set with `cjv default`.
+
+Notice how step 3 works when walking up the directory tree: both directory overrides and `cangjie-sdk.toml` files are preferred by their proximity to your current directory. Within the _same_ directory, a local directory override takes precedence over `cangjie-sdk.toml`; however, a `cangjie-sdk.toml` file in a child directory takes precedence over a directory override set on a parent directory. `cangjie-sdk.toml` files at different directory levels are never merged.
+
+To verify which toolchain is active in your current directory and see which rule selected it, run:
 
 ```bash
-cjv pin lts
-cjv pin --check
+cjv show active
 ```
 
-- `cjv pin lts` writes the resolved release name for `lts` into `cangjie-sdk.toml` and keeps existing component and target lists.
-- `cjv pin` without a name pins the currently active toolchain.
-- `cjv pin --check` checks that `cangjie-sdk.toml` pins a concrete release without changing the file. Use this flag in CI; read [Automation and JSON interfaces](automation.md#pin-a-project-version) for pipeline examples.
+Note that `cjv run <toolchain> <command>` always uses its explicit `<toolchain>` argument. Whenever an explicit command-line selection or `CJV_TOOLCHAIN` overrides `cangjie-sdk.toml`, the `components` and `targets` listed in `cangjie-sdk.toml` are not attached to that override.
 
-## Toolchain selection order
+## The `cangjie-sdk.toml` file
 
-When you run a proxy command or a cjv subcommand, cjv selects the active toolchain in this sequence:
+The `cangjie-sdk.toml` file uses the [TOML](https://toml.io/) format. All settings live under the `[toolchain]` table:
 
-1. An explicit command-line selection, such as a global `+name` selector or a `--toolchain` flag.
-2. The `CJV_TOOLCHAIN` environment variable; read [Environment variables](environment-variables.md).
-3. A directory walk from the current working directory up to the filesystem root. At each directory level, cjv checks for a local directory override before `cangjie-sdk.toml`, and stops at the first match.
-4. The global default toolchain set by `cjv default`.
-
-Because cjv stops at the first directory level that has a match, a directory override takes precedence over `cangjie-sdk.toml` in the same directory. However, a `cangjie-sdk.toml` file in a child directory takes precedence over a directory override in a parent directory. cjv never merges `cangjie-sdk.toml` files from different directories. Run `cjv show active` at any time to see the selected toolchain and its source.
-
-The `cjv run <toolchain> <command>` command always uses its `<toolchain>` argument. When an explicit CLI selector or `CJV_TOOLCHAIN` takes precedence over `cangjie-sdk.toml`, cjv does not attach the `components` or `targets` from the project file to that selection.
-
-## Configuration fields
-
-Place all fields under the `[toolchain]` table in `cangjie-sdk.toml`:
-
-| Field | Type | Description |
+| Field | Type | Meaning |
 | --- | --- | --- |
-| `channel` | `string` | A channel name, version selector, or registered custom toolchain name |
+| `channel` | `string` | A release channel, version selector, or registered custom toolchain name |
 | `path` | `string` | An absolute path to a local SDK directory; mutually exclusive with `channel` |
-| `components` | `string[]` | Optional components to install: `stdx`, `docs`, or `stdx-docs` |
-| `targets` | `string[]` | Optional cross SDK suffixes to install, such as `ohos` or `android` |
+| `components` | `string[]` | Additional components to install (`stdx`, `docs`, `stdx-docs`); empty by default |
+| `targets` | `string[]` | Cross-compilation target suffixes to install (such as `ohos`); empty by default |
 
-### Channel vs. direct SDK path
+### Toolchain file settings
 
-You must set either `channel` or `path`, but never both. When you set `path`, cjv uses that external SDK directory directly:
+#### `channel` and `path`
+
+Every `cangjie-sdk.toml` file must specify either `channel` or `path`, but never both:
+
+- **`channel`** names an official release channel (`lts`, `sts`, `nightly`), a pinned version selector (`lts-1.0.5`, `1.2`, `nightly-2026-10-04`), or a custom toolchain name registered via `cjv toolchain link`.
+- **`path`** points directly to an unpacked SDK directory on the local filesystem using an absolute path:
 
 ```toml
 [toolchain]
 path = 'C:\SDKs\cangjie'
 ```
 
-The owner of an external SDK directory manages its components. When `path` is set, cjv ignores `components` and `targets` during automatic installation.
+Because a `path` directive points directly to an external SDK directory whose contents are managed by its owner, `components` and `targets` do not trigger automatic installation when `path` is used.
 
-### Components and target SDKs
+#### `components` and `targets`
 
-In the `targets` list, write target suffixes such as `ohos` or `android` rather than full platform names such as `linux-x64-ohos`. cjv normalizes letter case and underscores, expands comma-separated items, and removes duplicates. An empty target string causes an error.
+When `channel` selects a managed toolchain, you can list additional [components](concepts/components.md) and [cross-compilation target SDKs](cross-compilation.md) that your project requires:
 
 ```toml
 [toolchain]
@@ -71,33 +69,29 @@ components = ["stdx", "docs"]
 targets = ["ohos", "android"]
 ```
 
-When `cangjie-sdk.toml` selects the active toolchain, this declaration prepares the host SDK, the host [components](concepts/components.md), and the [cross-compilation](cross-compilation.md) target SDKs. To compile code with a target SDK environment, read [Run commands and set the environment](runtime-environment.md#load-a-cross-compilation-environment).
+In `targets`, always write target suffixes such as `ohos` or `android` rather than full host-target platform names like `linux-x64-ohos`. `cjv` normalizes letter case and underscores, expands comma-separated items, and removes duplicates automatically; empty target strings are rejected with an error.
 
-### Validation and errors
-
-If `cangjie-sdk.toml` contains unknown keys, cjv prints a warning and parses the known fields. If the file has invalid TOML syntax, an unknown component name, an empty body, or no valid `channel` or `path`, cjv stops with an error instead of falling back to the default toolchain. Delete the file if you want to restore selection from a parent directory or the global default.
+When `cangjie-sdk.toml` selects the active toolchain, this declaration ensures the host SDK, the listed host components, and the listed target SDKs are prepared. See [Cross-compilation](cross-compilation.md) for how to load a target SDK's build environment when compiling.
 
 ## Automatic installation
 
-The `auto_install` setting is `true` by default. When you run a proxy command such as `cjc` or `cjpm`, cjv automatically installs any missing SDK, component, or target listed in the active `cangjie-sdk.toml`.
+By default, the `auto_install` setting is `true`. Whenever you run a proxy command such as `cjc` or `cjpm` inside a project, `cjv` automatically downloads and installs any missing SDK, component, or target declared in the active `cangjie-sdk.toml`.
 
-If you disable `auto_install`, missing items cause an immediate error instead of a download:
+If you prefer missing requirements to fail immediately instead of downloading automatically, you can disable `auto_install` in your user settings:
 
 ```bash
 cjv set auto-install false
 ```
 
-To disable automatic installation for a single command without changing your saved [configuration](configuration.md), pass `--no-auto-install` or set `CJV_AUTO_INSTALL=0`:
+You can also disable automatic installation for a single command invocation without changing your saved configuration by passing `--no-auto-install` (`cjv --no-auto-install exec cjc --version`) or by setting `CJV_AUTO_INSTALL=0` in the environment for proxy commands. Explicit `cjv install` commands always run regardless of this setting.
 
-```bash
-cjv --no-auto-install exec cjc --version
-```
+## Invalid project files
 
-Explicit `cjv install` commands always run regardless of `auto_install`.
+If `cangjie-sdk.toml` contains unrecognized keys under `[toolchain]`, `cjv` prints a warning to `stderr` while still honoring all recognized fields. However, invalid TOML syntax, unknown component names, an empty file, or a missing/invalid `channel` or `path` will cause the command to fail with an error rather than silently falling back to another toolchain. If you want a directory to fall back to a parent directory's configuration or the global default, delete the `cangjie-sdk.toml` file.
 
 ## Local directory overrides
 
-Use `cjv override` when you want to test a directory with another toolchain on your machine without editing `cangjie-sdk.toml`:
+Directories can be assigned their own local toolchain override with `cjv override`. When a directory has an override, running `cjc` or `cjpm` inside that directory—or any of its subdirectories—uses the override toolchain without touching the project's repository files:
 
 ```bash
 cjv override set nightly
@@ -107,4 +101,4 @@ cjv override unset
 cjv override unset --nonexistent
 ```
 
-cjv stores directory overrides in your user `settings.toml` file, and each override applies to that directory and its subdirectories. Pass `--nonexistent` to clean up overrides for directories that you deleted from disk. Read [Command reference](command-reference.md#override) for all flags.
+Per-directory overrides are saved in your user [`settings.toml`](configuration.md) file. Passing `--nonexistent` to `cjv override unset` cleans up stale overrides for directories that have been deleted from disk.

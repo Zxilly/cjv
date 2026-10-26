@@ -1,38 +1,36 @@
-# cjv user guide
+# Introduction
 
-cjv is a version manager for the [Cangjie](https://cangjie-lang.cn/) SDK. It installs toolchains on your machine and selects an SDK version for each project. When the command path is set, proxy commands such as `cjc` and `cjpm` call the active SDK through cjv.
+_cjv_ installs the [Cangjie Programming Language](https://cangjie-lang.cn/) SDK from the official release channels, enabling you to easily switch between LTS, STS, and nightly toolchains and keep them updated. Once `cjv` is installed and its proxy directory is on your `PATH`, everyday commands like `cjc` and `cjpm` automatically route to the toolchain selected for your current project.
 
-## Get started
+Check out the [Install cjv](installation/index.md) chapter for instructions on installing `cjv` across Linux, macOS, Windows, and HarmonyOS, and then follow the [Quick start](basic-usage.md) to inspect your active toolchain, pin a project version, and keep your SDKs up to date.
 
-Start with these chapters to install cjv and run your first Cangjie commands:
+Note that `cjv` itself runs on platforms where a Cangjie SDK channel might not yet publish prebuilt archives. During setup, the installation wizard queries the upstream manifest for channels available on your host platform, and you can run `cjv toolchain list-remote` at any time to see which releases are published for your machine.
 
-1. Read [Install cjv](installation/index.md) to run the installer script, download an archive, or build from source.
-2. Read [Quick start](basic-usage.md) to select a default toolchain, configure a project, and update SDKs.
-3. Read [Run commands and set the environment](runtime-environment.md) to run SDK tools, start compiled programs, or load SDK variables into your shell.
+## How this book is organized
 
-The setup wizard queries the channels that are available for your platform. Platform support in cjv can differ from the release coverage of the Cangjie SDK. Run `cjv toolchain list-remote` to check the available versions for your host.
+### Getting started and running tools
 
-## Manage SDKs and project toolchains
+- **[Install cjv](installation/index.md)** covers the one-line shell and PowerShell installers, version pinning for `cjv` itself, the GitCode mirror, manual archive downloads, and `PATH` configuration.
+- **[Quick start](basic-usage.md)** walks through everyday operations: checking your installation, choosing a default toolchain, pinning a project version, and updating or removing toolchains.
+- **[Running commands and setting the environment](runtime-environment.md)** explains how proxy binaries work, how to run a single command with `cjv run` or `cjv exec` (including runtime library paths for compiled Cangjie binaries), and how to load an SDK into your interactive shell with `cjv envsetup`.
 
-Use these chapters to control SDK versions, extensions, and target platforms across your projects:
+### Managing toolchains, components, and targets
 
-- [Toolchains and versions](concepts/toolchains.md) explains release channels, pinned versions, host platforms, and version names.
-- [Project toolchains](toolchain-file.md) shows how to commit `cangjie-sdk.toml` so your team shares the same SDK, components, and targets.
-- [Components and offline documentation](concepts/components.md) covers the `stdx` extension library and local HTML documentation.
-- [Custom SDKs](install-from-url.md) explains how to link a local SDK directory or install from a `.zip`, `.tar.gz`, or URL.
-- [Cross-compilation](cross-compilation.md) shows how to add target SDKs such as `ohos` and `android` to a host toolchain.
+- **[Toolchains and versions](concepts/toolchains.md)** introduces the core concepts behind release channels (`lts`, `sts`, `nightly`), pinned releases, minor-version and date selectors, host platforms, and custom toolchains.
+- **[Project toolchains](toolchain-file.md)** explains how `cjv` chooses the active toolchain for a directory, how to check a `cangjie-sdk.toml` file into version control so your whole team shares the same setup, and how to use local directory overrides.
+- **[Components and offline documentation](concepts/components.md)** covers optional packages attached to a toolchain—such as the `stdx` extension library and offline HTML documentation (`cjv doc`)—as well as linking local `stdx` builds.
+- **[Custom SDKs](install-from-url.md)** shows how to register unpacked local SDK directories or install custom SDKs from `.zip` / `.tar.gz` archives and HTTP(S) URLs.
+- **[Cross-compilation](cross-compilation.md)** explains the distinction between host platforms and compilation targets, and shows how to attach target SDKs such as `ohos` and `android` to your host toolchain.
 
-## Configure and deploy
+### Configuration, automation, and enterprise deployment
 
-Use these chapters to customize cjv for local workstations, CI pipelines, and enterprise networks:
+- **[Configuration](configuration.md)** and **[Environment variables](environment-variables.md)** document `~/.cjv/settings.toml`, inheritance from system fallback settings, the `<CJV_HOME>` directory layout, reusable download caches, and hard-link deduplication.
+- **[Automation and JSON interfaces](automation.md)** is designed for CI pipelines and tooling authors, covering `cjv pin --check`, isolated CI directories, `--offline` builds, `cjv doctor`, update history and rollback, and the `--json` output contract.
+- **[Network proxies](network-proxies.md)** explains how to use HTTP, HTTPS, and SOCKS5 proxies and custom TLS certificates.
+- **[Enterprise and offline deployment](enterprise/index.md)** and **[Internal distribution](enterprise/distribution-server.md)** describe how organizations can host private SDK mirrors, distribute system fallback settings, and support air-gapped developer workstations.
 
-- [Configuration](configuration.md) and [Environment variables](environment-variables.md) describe user settings, data directories, caches, and process overrides.
-- [Automation and JSON interfaces](automation.md) covers CI isolation, offline caches, update history, rollback, and JSON output schemas.
-- [Network proxies](network-proxies.md) explains HTTP, HTTPS, and SOCKS5 proxy settings and private TLS certificates.
-- [Enterprise and offline deployment](enterprise/index.md) and [Internal distribution](enterprise/distribution-server.md) describe fallback settings, air-gapped hosts, and private mirrors.
+### Reference and contributing
 
-## Reference and support
+For a complete overview of every subcommand and flag, see the **[Command reference](command-reference.md)**, or check **[Common questions](faq.md)** for troubleshooting tips.
 
-- [Command reference](command-reference.md) lists all CLI commands, flags, and installation policies.
-- [Common questions](faq.md) gives solutions for version selection, runtime library errors, and offline setups.
-- If you want to build or change cjv itself, read the [cjv developer guide](https://cjv.zxilly.com/book/dev-guide/en/).
+The source code for `cjv` and this manual is hosted on GitHub at <https://github.com/Zxilly/cjv>. If you run into a bug or want to contribute, check out the [issue tracker](https://github.com/Zxilly/cjv/issues) and the [**cjv Developer Guide**](https://cjv.zxilly.com/book/dev-guide/en/).

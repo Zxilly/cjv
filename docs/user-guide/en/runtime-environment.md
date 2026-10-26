@@ -1,53 +1,34 @@
-# Run commands and set the environment
+# Running commands and setting the environment
 
-After you [install cjv](installation/index.md), proxy commands such as `cjc` and `cjpm` live in `<CJV_HOME>/bin`. When you run a proxy command, cjv selects an SDK, sets the runtime environment, and runs the tool. This chapter explains how to run SDK tools, start compiled programs, and configure your current shell session.
+When `cjv` is installed, it places wrapper executables—called _proxies_—for standard Cangjie SDK tools such as `cjc` and `cjpm` into `<CJV_HOME>/bin`. Whenever you invoke one of these proxies, `cjv` determines which [project toolchain](toolchain-file.md) is active for your current directory, prepares the SDK's environment variables and library paths, and forwards your command-line arguments and exit code transparently.
 
-## Compare execution methods
+## Running SDK tools and compiled programs
 
-Choose the command that matches your task:
-
-| Method | Example | Scope | Typical use |
-| --- | --- | --- | --- |
-| Proxy binary | `cjc --version` | Child process | Daily compilation and package management |
-| `cjv run` | `cjv run --install sts cjc --version` | Child process | Run a tool once with a specific toolchain |
-| `cjv exec` | `cjv exec ./my_binary arg1` | Child process | Run a compiled Cangjie program that needs runtime libraries |
-| `cjv envsetup` | `eval "$(cjv envsetup)"` | Current shell session | Load SDK paths and variables into your active terminal |
-
-## Run SDK tools and compiled programs
-
-### Use proxy commands and `cjv run`
-
-Proxy commands in `<CJV_HOME>/bin` obey the [Project toolchains](toolchain-file.md) selection order. To run a command with an explicit toolchain instead, use `cjv run`:
+In addition to calling proxy binaries like `cjc` directly, `cjv` provides two subcommands—`cjv run` and `cjv exec`—for running commands in an isolated child process environment:
 
 ```bash
 cjc --version
 cjv run --install sts cjc --version
-```
-
-The `run` command searches the tools of the selected SDK first, and then searches the `PATH` of that environment. It installs a missing toolchain only when you pass `--install`.
-
-### Run compiled programs with `cjv exec`
-
-Compiled Cangjie binaries often need dynamic libraries from the SDK or from `stdx`. Use `cjv exec` to run a program with the runtime environment of the active SDK or of a `+name` toolchain:
-
-```bash
 cjv exec ./my_binary arg1 arg2
 cjv exec +nightly ./my_binary
 ```
 
-Both `run` and `exec` change the environment for the child process only. They forward standard input, output, error streams, and exit codes directly. If the command name starts with `+`, pass `--` before the command name:
+Understanding the difference between `run` and `exec` makes it easy to pick the right tool:
+
+- **`cjv run [--install] <toolchain> <command> [args...]`** explicitly selects the `<toolchain>` you name on the command line. It searches that SDK's `bin` and tool directories first, and then searches the `PATH` of that environment. It only installs a missing toolchain when you pass `--install` before the toolchain name.
+- **`cjv exec [+toolchain] <command> [args...]`** prepares the runtime environment for the currently active toolchain (or for `+toolchain` if specified), including the dynamic library paths required by compiled Cangjie programs and `stdx`. This makes `cjv exec` the ideal way to run your own compiled binaries without polluting your interactive shell environment.
+
+Both `run` and `exec` modify the environment for the spawned child process only, and both forward `stdin`, `stdout`, `stderr`, and the child's exit code directly.
+
+If you need to run a command whose executable name literally begins with a `+` character, pass `--` before the command name so `cjv exec` does not interpret it as a `+toolchain` selector:
 
 ```bash
 cjv exec -- +command
 ```
 
-This separator stops cjv from reading `+command` as a toolchain selector.
+## Configuring the current shell with `envsetup`
 
-## Configure the current shell session
-
-### Evaluate `cjv envsetup`
-
-The `cjv envsetup` command prints a shell script that exports SDK variables into your current terminal. Evaluate its output in your shell:
+Sometimes—for example, when working with external build systems, custom Makefiles, or CMake scripts—you want the SDK's tool paths and environment variables loaded directly into your current shell session. The `cjv envsetup` command prints a shell script that you can evaluate in your terminal:
 
 ```bash
 # Bash or Zsh
@@ -60,36 +41,38 @@ cjv envsetup | source
 ```
 
 ```powershell
-# PowerShell
+# Windows PowerShell
 cjv envsetup | Invoke-Expression
 ```
 
-Pass `+nightly` to select a specific toolchain, or pass `--shell=bash|fish|powershell|cmd` to select the script syntax. If you omit `--shell`, cjv detects your shell automatically. If shell detection fails, cjv prints a warning and uses POSIX syntax. Run `cjv --json envsetup` to get structured environment data for scripts; read [Automation and JSON interfaces](automation.md) for details.
+You can pass `+nightly` (or any installed toolchain name) to `cjv envsetup +nightly` to load a specific toolchain rather than the active selection, or pass `--shell=bash|fish|powershell|cmd` to choose the output syntax explicitly. When `--shell` is omitted, `cjv` detects your current shell automatically; if detection fails, it prints a notice to `stderr` and falls back to POSIX shell syntax.
 
-### Variables set in the environment
+For automation tools and IDE integrations, you can also run `cjv --json envsetup` to get the resolved environment variables as structured JSON; see [Automation and JSON interfaces](automation.md) for details.
 
-The SDK environment sets `CANGJIE_HOME`, adds SDK tool directories to `PATH`, and configures dynamic library paths:
+### Environment variables configured by `cjv`
 
-- **Linux**: sets `LD_LIBRARY_PATH`.
-- **macOS**: sets `DYLD_LIBRARY_PATH`.
-- **Windows**: adds runtime library directories to `PATH`.
-- **Installed `stdx`**: sets `CANGJIE_STDX_PATH_DYNAMIC` and `CANGJIE_STDX_PATH_STATIC`. Read [Components and offline documentation](concepts/components.md) for `stdx` management.
+Whether you run a command via a proxy, `cjv run`, `cjv exec`, or `cjv envsetup`, `cjv` configures the following variables for the selected SDK:
 
-### Restore project-based selection
+- **`CANGJIE_HOME`** — Points to the root directory of the selected SDK installation.
+- **`PATH`** — Prepends the SDK's compiler and tool directories so that internal tools resolve directly to that SDK.
+- **Dynamic library search paths** — Configures runtime library paths according to the host operating system: `LD_LIBRARY_PATH` on Linux and HarmonyOS, `DYLD_LIBRARY_PATH` on macOS, and `PATH` on Windows.
+- **`stdx` library paths** — When the [`stdx` component](concepts/components.md) is installed for the selected toolchain, `cjv` automatically sets `CANGJIE_STDX_PATH_DYNAMIC` and `CANGJIE_STDX_PATH_STATIC` to point to the component's `dynamic/` and `static/` directories.
 
-After you evaluate `cjv envsetup`, the `PATH` in your current shell points directly to one SDK directory. Proxy selection from `cangjie-sdk.toml` will not take effect in that terminal while the SDK directory precedes `<CJV_HOME>/bin`.
+### Switching projects after `envsetup`
 
-Open a new terminal to return to automatic proxy selection, or evaluate `cjv envsetup` again to switch the active session to another SDK.
+Keep in mind that once you evaluate `cjv envsetup` in a terminal, your current shell session's `PATH` points directly to that specific SDK's `bin` directory ahead of `<CJV_HOME>/bin`. As a result, `cd`-ing into another project with a different `cangjie-sdk.toml` will not switch compilers in that terminal session.
 
-## Load a cross-compilation environment
+To return to automatic per-project proxy selection, simply open a new terminal window—or evaluate `cjv envsetup` again in the new directory to switch the active session.
 
-When you compile for another target platform, you can load the environment of an installed cross SDK:
+## Loading a cross-compilation SDK environment
+
+When cross-compiling for another platform, you can use `cjv envsetup` with the `--target` flag to load the paths and libraries of an installed cross SDK:
 
 ```bash
 cjv install sts --target ohos
 eval "$(cjv envsetup +sts --target=ohos)"
 ```
 
-The `--target` flag uses the tool paths and runtime libraries of the cross SDK that matches the release of the selected host. It does not install a missing target automatically, and it does not emulate another platform to run target binaries.
+`--target` selects the installed cross SDK whose release matches the selected host toolchain. Note that `envsetup --target` does not install a missing target automatically, nor does it provide an emulator to execute binaries built for another operating system or CPU architecture.
 
-Consult the Cangjie SDK documentation for target compiler flags and device runtime setup. Read [Cross-compilation](cross-compilation.md) for instructions on how to install and manage target SDKs in cjv.
+Consult the official Cangjie SDK documentation for the compiler flags and target linker requirements of your target platform, and see the [Cross-compilation](cross-compilation.md) chapter for how to install and manage target SDKs with `cjv`.
