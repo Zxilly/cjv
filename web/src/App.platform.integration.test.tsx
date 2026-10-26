@@ -1,11 +1,9 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { server } from 'vitest/browser'
 import App from './App'
 import { HARMONY_SAMPLES } from './test-fixtures/harmony'
 import { activateLang, type Lang } from './lib/i18n'
-import { computePlatformResult, type PlatformResult, type PlatformState } from './hooks/use-platform'
 
 const MAC_DESKTOP_UA =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Safari/605.1.15'
@@ -36,19 +34,6 @@ interface NavigatorPatch {
   } | null
 }
 
-interface ExpectedPlatformEnv {
-  VITE_EXPECTED_BINARY_GOARCH?: string
-  VITE_EXPECTED_BINARY_GOOS?: string
-  VITE_EXPECTED_BROWSER?: string
-  VITE_EXPECTED_LABEL?: string
-  VITE_EXPECTED_PLATFORM_ARCH?: string
-  VITE_EXPECTED_PLATFORM_OS?: string
-  VITE_EXPECTED_PLAYWRIGHT_BROWSER?: string
-  VITE_EXPECTED_RUNNER?: string
-  VITE_EXPECTED_RUNNER_ARCH?: string
-  VITE_EXPECTED_STATE?: PlatformState
-}
-
 const restoreNavigatorFns: Array<() => void> = []
 
 function restoreNavigator() {
@@ -74,55 +59,6 @@ function stubNavigator(patch: NavigatorPatch) {
 }
 
 afterEach(restoreNavigator)
-
-function expectedEnv(): ExpectedPlatformEnv {
-  return import.meta.env
-}
-
-function assertPlatformResult(result: PlatformResult, env: ExpectedPlatformEnv) {
-  expect(result.state).toBe(env.VITE_EXPECTED_STATE)
-  expect(result.info.label).toBe(env.VITE_EXPECTED_LABEL)
-
-  if (result.state === 'ready') {
-    if (env.VITE_EXPECTED_BINARY_GOOS) {
-      expect(result.binary?.goos).toBe(env.VITE_EXPECTED_BINARY_GOOS)
-      expect(result.binary?.goarch).toBe(env.VITE_EXPECTED_BINARY_GOARCH)
-    } else {
-      expect(result.binary).toBeNull()
-    }
-  } else {
-    expect(result.binary).toBeNull()
-  }
-}
-
-function navigatorPatchForExpectedPlatform(env: ExpectedPlatformEnv): NavigatorPatch {
-  const os = env.VITE_EXPECTED_PLATFORM_OS
-  const arch = env.VITE_EXPECTED_PLATFORM_ARCH
-
-  if (os === 'Linux' && arch === 'amd64') {
-    return { maxTouchPoints: 0, platform: 'Linux x86_64', userAgent: LINUX_AMD64_UA, userAgentData: null }
-  }
-  if (os === 'Linux' && arch === 'arm64') {
-    return { maxTouchPoints: 0, platform: 'Linux aarch64', userAgent: LINUX_ARM64_UA, userAgentData: null }
-  }
-  if (os === 'Windows' && arch === 'amd64') {
-    return { maxTouchPoints: 0, platform: 'Win32', userAgent: WINDOWS_AMD64_UA, userAgentData: null }
-  }
-  if (os === 'Windows' && arch === 'arm64') {
-    return { maxTouchPoints: 0, platform: 'Win32', userAgent: WINDOWS_ARM64_UA, userAgentData: null }
-  }
-  if (os === 'Mac OS' && arch === '') {
-    return { maxTouchPoints: 0, platform: 'MacIntel', userAgent: MAC_DESKTOP_UA, userAgentData: null }
-  }
-  if (os === 'iOS') {
-    return { maxTouchPoints: 5, platform: 'iPhone', userAgent: IPHONE_UA, userAgentData: null }
-  }
-  if (os === 'Android') {
-    return { maxTouchPoints: 5, platform: 'Linux armv8l', userAgent: ANDROID_UA, userAgentData: null }
-  }
-
-  throw new Error(`unsupported expected CI platform: ${os}/${arch}`)
-}
 
 describe('App platform detection integration', () => {
   it('keeps macOS command install ready without guessing x86_64 when browsers hide the CPU architecture', () => {
@@ -235,30 +171,19 @@ describe('App platform detection integration', () => {
     expect(screen.queryByText(/macOS x86_64/)).not.toBeInTheDocument()
   })
 
-  it('asserts the configured CI runner browser and platform behavior', () => {
-    const env = expectedEnv()
-    if (!env.VITE_EXPECTED_RUNNER) return
-
-    expect(env.VITE_EXPECTED_BROWSER).toMatch(/^(chromium|firefox|webkit)$/)
-    expect(server.browser).toBe(env.VITE_EXPECTED_PLAYWRIGHT_BROWSER)
-    expect(env.VITE_EXPECTED_RUNNER_ARCH).toMatch(/^(amd64|arm64)$/)
-
-    const platformResult = computePlatformResult(
-      env.VITE_EXPECTED_PLATFORM_OS || '',
-      env.VITE_EXPECTED_PLATFORM_ARCH || '',
-    )
-    assertPlatformResult(platformResult, env)
-
-    stubNavigator(navigatorPatchForExpectedPlatform(env))
+  it.each([
+    { label: 'Linux x86_64', ua: LINUX_AMD64_UA, platform: 'Linux x86_64', supported: true },
+    { label: 'Linux ARM64', ua: LINUX_ARM64_UA, platform: 'Linux aarch64', supported: true },
+    { label: 'Windows x86_64', ua: WINDOWS_AMD64_UA, platform: 'Win32', supported: true },
+    { label: 'Windows arm64', ua: WINDOWS_ARM64_UA, platform: 'Win32', supported: false },
+  ])('renders $label from the browser platform', ({ label, ua, platform, supported }) => {
+    stubNavigator({ maxTouchPoints: 0, platform, userAgent: ua, userAgentData: null })
     render(<App />)
-
-    if (env.VITE_EXPECTED_STATE === 'ready') {
-      expect(screen.getByText(`检测到你的平台：${env.VITE_EXPECTED_LABEL}`)).toBeInTheDocument()
-    } else if (env.VITE_EXPECTED_STATE === 'unsupported') {
-      expect(screen.getByText(/cjv 暂不支持/)).toBeInTheDocument()
-      expect(screen.getByText(env.VITE_EXPECTED_LABEL || '')).toBeInTheDocument()
+    if (supported) {
+      expect(screen.getByText(`检测到你的平台：${label}`)).toBeInTheDocument()
     } else {
-      expect(screen.getByText(/无法识别你的平台/)).toBeInTheDocument()
+      expect(screen.getByText(/cjv 暂不支持/)).toBeInTheDocument()
+      expect(screen.getByText(label)).toBeInTheDocument()
     }
   })
 })

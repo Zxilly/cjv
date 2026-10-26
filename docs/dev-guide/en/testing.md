@@ -66,11 +66,11 @@ CI also covers sh, zsh, fish, and Windows PowerShell 5.1. For the frontend, run 
 pnpm install --frozen-lockfile
 pnpm exec playwright install chromium
 pnpm build
-pnpm test
 pnpm coverage
+pnpm test:built
 ```
 
-Vitest uses real browsers. `VITEST_BROWSER` selects chromium, firefox, or webkit. Platform integration tests run through `pnpm test:integration`, with CI supplying runner-specific `VITE_EXPECTED_*` values. Coverage thresholds live in `web/vitest.config.ts`.
+Vitest uses real browsers. `VITEST_BROWSER` selects chromium, firefox, or webkit; `pnpm test:integration` runs every simulated platform in each browser. `pnpm coverage` combines unit tests and coverage checks. After building, `pnpm test:built` checks installation paths using the actual browser platform, content visibility with pending font downloads, and desktop/narrow-screen overflow. `PLAYWRIGHT_BROWSER` selects its browser. Coverage thresholds live in `web/vitest.config.ts`.
 
 ## Documentation, workflows, and dependencies
 
@@ -114,3 +114,12 @@ go test -v -tags smoke -run TestSmokeRealComponentDownloads_LTSSTS -count=1 -tim
 ```
 
 `.github/workflows/smoke.yml` schedules this test. The main `ci.yml` runs on PRs and master pushes, checking Go, mirror, builds and tests across five platforms, frontend browser matrices, installers, lint, and dependencies. Workflow files define current platforms and tool versions. See [documentation](documentation.md) and [releases](releasing.md) for site and release automation.
+
+Main CI always responds to PRs and master pushes, then selects expensive jobs by changed paths using `scripts/ci-scope.py`. Workflow or scope-rule changes run all checks. New PR updates cancel old runs; master pushes do not. Normal frontend checks run simulated platforms in all three browsers and built-page smoke tests on Linux/Windows Chromium and macOS WebKit. Manual and weekly runs select all jobs and add native Linux ARM64, Windows ARM64, and macOS Intel checks. HarmonyOS uses the same path classification and PR cancellation policy in its separate workflow.
+
+Run isolated release-script fixtures with Bash, zip, unzip, tar, and sha256sum installed:
+
+```bash
+python3 scripts/test_ci_scope.py
+bash tests/release-scripts/release-scripts.sh
+```

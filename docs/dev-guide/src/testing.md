@@ -66,11 +66,11 @@ CI 还覆盖 sh、zsh、fish 和 Windows PowerShell 5.1。前端在 `web/` 运�
 pnpm install --frozen-lockfile
 pnpm exec playwright install chromium
 pnpm build
-pnpm test
 pnpm coverage
+pnpm test:built
 ```
 
-Vitest 使用真实浏览器，`VITEST_BROWSER` 可选择 chromium、firefox 或 webkit。平台集成测试用 `pnpm test:integration`，CI 提供各 runner 的 `VITE_EXPECTED_*` 值。覆盖率阈值由 `web/vitest.config.ts` 定义。
+Vitest 使用真实浏览器。`VITEST_BROWSER` 可选择 chromium、firefox 或 webkit；`pnpm test:integration` 在每种浏览器中运行全部模拟平台用例。`pnpm coverage` 合并单元测试和覆盖率检查。构建后运行 `pnpm test:built`，使用实际浏览器的平台信息验证安装入口、字体下载挂起时的内容可见性，以及桌面和窄屏溢出；`PLAYWRIGHT_BROWSER` 可选择浏览器。覆盖率阈值见 `web/vitest.config.ts`。
 
 ## 文档、工作流和依赖
 
@@ -114,3 +114,12 @@ go test -v -tags smoke -run TestSmokeRealComponentDownloads_LTSSTS -count=1 -tim
 ```
 
 `.github/workflows/smoke.yml` 定时执行该测试。主 `ci.yml` 在 PR 和 master 推送时检查 Go、mirror、五个平台的测试与构建、前端浏览器矩阵、安装脚本、lint 和依赖。平台和工具版本以工作流文件为准；站点与发布流程分别见[文档站](documentation.md)和[发布](releasing.md)。
+
+主 CI 始终响应 PR 和 master 推送，通过 `scripts/ci-scope.py` 按变更路径选择较重的任务；工作流或范围规则变更会运行全部检查。连续 PR 更新取消旧运行，master 推送不取消。前端常规执行三个浏览器的模拟平台用例，以及 Linux/Windows Chromium 和 macOS WebKit 的真实页面检查。手动或每周 CI 运行全部任务，并补充 Linux ARM64、Windows ARM64 和 macOS Intel 的真实页面检查。HarmonyOS 使用独立的相同路径规则和 PR 取消策略。
+
+发布辅助脚本的隔离夹具验证可在有 Bash、zip、unzip、tar 和 sha256sum 的环境中运行：
+
+```bash
+python3 scripts/test_ci_scope.py
+bash tests/release-scripts/release-scripts.sh
+```

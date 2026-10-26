@@ -8,8 +8,24 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: harmonyos-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
+  changes:
+    runs-on: ubuntu-24.04
+    outputs:
+      hmos: ${{ steps.scope.outputs.hmos }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - id: scope
+        run: python3 scripts/ci-scope.py
   emulator-test:
+    needs: changes
+    if: needs.changes.outputs.hmos == 'true'
     name: HarmonyOS unit tests (x86_64 emulator)
     runs-on: ubuntu-24.04
     timeout-minutes: 45
