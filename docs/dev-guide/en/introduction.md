@@ -1,23 +1,23 @@
 # cjv developer guide
 
-This guide explains how to build cjv from source, how its internal packages work together, and how to test and release changes. If you want to install Cangjie SDKs and use cjv in your projects, read the [cjv user guide](https://cjv.zxilly.com/book/user-guide/en/).
+Welcome to the _cjv_ Developer Guide! This book covers how to build `cjv` from source, how its internal Go packages are structured, how to run the test and lint suites, and how website deployments and releases work. If you are looking for documentation on installing Cangjie SDKs and using `cjv` in your own projects, see [**The cjv User Guide**](https://cjv.zxilly.com/book/user-guide/en/).
 
 ## Repository layout
 
 | Directory | Contents |
 | --- | --- |
-| `cmd/cjv/` | Main entry point for `cjv`, `cjv-init`, and SDK proxy binaries |
-| `internal/` | CLI command groups, installation lifecycle, distribution, transactions, and runtime setup |
-| `tests/` | End-to-end CLI integration tests, installer script tests, and live download smoke tests |
-| `web/` | React landing page, platform detector, and public installer scripts (`install.sh`, `install.ps1`) |
-| `docs/` | Bilingual mdBook sources for the user guide and developer guide, plus the shared theme |
-| `deployment/` | Edge functions and site verification tools for Cloudflare and EdgeOne |
-| `scripts/` | Platform catalog generators, CI scope filter, documentation builder, and HarmonyOS test runners |
+| `cmd/cjv/` | Go entry point for `cjv`, `cjv-init`, and SDK proxy binaries |
+| `internal/` | CLI command groups, installation lifecycle, distribution, transactions, and runtime environment |
+| `tests/` | End-to-end CLI integration, installer script, and live-download smoke tests |
+| `web/` | React landing page, browser platform detection, and public installer scripts (`install.sh`, `install.ps1`) |
+| `docs/` | User and developer guides (with Chinese in `src/` and English in `en/`) plus the shared theme |
+| `deployment/` | Edge functions and site verification tools for Cloudflare Worker and Tencent Cloud EdgeOne |
+| `scripts/` | Platform catalog generators, CI scope filter, documentation builder, and HarmonyOS test helpers |
 
-## How to use this guide
+## Quick workflow for contributors
 
-1. Start with [Build from source](building.md) to compile the `cjv` binary, build the `mirror` variant, or cross-compile for OpenHarmony.
-2. Read [Architecture](architecture.md) to find the package that owns the behavior you want to change and understand its locking and transaction guarantees.
-3. Run the relevant commands in [Tests and checks](testing.md) to check your change across Go packages, installer scripts, the frontend, and documentation.
-4. Follow [Contribute to cjv](contributing.md) to format commits and open a pull request.
-5. For website and release maintenance, read [Landing page](web.md), [Documentation site](documentation.md), and [Releases](releasing.md).
+1. Start by [building `cjv` from source](building.md) and trying out your local build in an isolated `CJV_HOME` directory.
+2. Read the [Architecture guide](architecture.md) to find the package that owns the behavior you want to change and understand its locking, transaction, and state-isolation invariants.
+3. Run the relevant commands in [Testing and checks](testing.md) to verify your changes across Go packages, installer scripts, the frontend, and the bilingual mdBook manuals.
+4. Follow the [Contributing guide](contributing.md) for atomic commits, commit message conventions, and pull request expectations.
+5. For maintaining the public website, documentation build, or release pipelines, see [Landing page](web.md), [Documentation site](documentation.md), and [Releases](releasing.md).

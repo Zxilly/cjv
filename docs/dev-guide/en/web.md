@@ -1,10 +1,10 @@
 # Landing page
 
-The `web/` directory contains the static landing page deployed at [cjv.zxilly.com](https://cjv.zxilly.com) and [cjv.zxilly.dev](https://cjv.zxilly.dev). It displays platform-specific installer commands and direct binary downloads. The project uses React, Vite, TypeScript, Tailwind CSS, and Lingui, with exact dependency and `pnpm` versions pinned in `web/package.json`.
+`web/` contains the static landing page deployed at [cjv.zxilly.com](https://cjv.zxilly.com) and [cjv.zxilly.dev](https://cjv.zxilly.dev), providing one-line installer commands and platform-specific binary downloads. It is built with React, Vite, TypeScript, Tailwind CSS, and Lingui; exact dependency and `pnpm` versions are pinned in `web/package.json`.
 
-## Local development and file layout
+## Development and files
 
-Run these commands inside `web/` to start the local development server:
+To start the local development server, run inside `web/`:
 
 ```bash
 cd web
@@ -12,67 +12,49 @@ pnpm install --frozen-lockfile
 pnpm dev
 ```
 
-- `pnpm build` runs the TypeScript compiler check and builds the static bundle into `web/dist/`.
-- `pnpm preview` serves the built `web/dist/` directory locally.
+`pnpm build` runs TypeScript type-checking before generating the production bundle in `web/dist/`, and `pnpm preview` serves the built output locally.
 
-| File or directory | Purpose |
+| File or directory | Contents |
 | --- | --- |
-| `src/App.tsx` | Main landing page layout, mirror toggle, and download interactions |
-| `src/hooks/use-platform.ts` | Browser platform and CPU architecture detection logic |
-| `src/generated/platforms.ts` | Platform catalog generated from Go (`internal/target/catalog.go`) |
-| `src/lib/i18n.ts`, `src/locales/` | Language detection, switcher state, and Lingui `.po` catalogs |
-| `src/style.css`, `src/components/` | Tailwind CSS theme tokens and UI components |
+| `src/App.tsx` | Installation landing page layout, mirror toggle, and download interactions |
+| `src/hooks/use-platform.ts` | Browser platform detection and download recommendations |
+| `src/generated/platforms.ts` | Frontend platform catalog generated from Go (`internal/target/catalog.go`) |
+| `src/lib/i18n.ts`, `src/locales/` | Language selection and Lingui message catalogs |
+| `src/style.css`, `src/components/` | Theme tokens and UI components |
 | `public/install.sh`, `public/install.ps1` | Public Unix and PowerShell installer scripts |
 
-> **CAUTION:** Never edit `web/src/generated/platforms.ts` by hand. To add or change a supported platform, update `internal/target/catalog.go` and run `go generate ./...` from the repository root; read [Build from source](building.md#cross-compilation-and-generated-platform-catalogs).
+To change the set of supported release platforms, update `internal/target/catalog.go` in Go and run `go generate ./...` from the repository root—never edit `src/generated/platforms.ts` by hand.
 
-## Browser platform detection
+## Platform detection
 
-### Detection states and macOS architecture handling
+`use-platform.ts` computes an initial platform match synchronously from standard browser properties (`navigator.userAgent` and `navigator.platform`), and then queries User-Agent Client Hints (`navigator.userAgentData`) for additional CPU architecture metadata. Detection resolves to one of three states: `ready`, `unknown`, or `unsupported`.
 
-`use-platform.ts` computes an initial platform match synchronously from `navigator.userAgent` and `navigator.platform`, and then queries User-Agent Client Hints (`navigator.userAgentData`) for high-entropy CPU architecture data. It classifies the visitor's environment into one of three states:
+- **macOS architecture ambiguity** — Many macOS browsers report an Intel (`x86_64`) User-Agent even on Apple Silicon (`arm64`) Macs. When a browser cannot reliably confirm the Mac's CPU architecture, the `install.sh` script command remains available (since the shell script detects the native architecture locally), while manual downloads present both Apple Silicon and Intel options side by side.
+- **Mobile and tablet browsers** — Mobile operating systems and architectures without prebuilt binaries are marked `unsupported`, including iPadOS browsers running in desktop User-Agent mode.
+- **HarmonyOS and OpenHarmony** — HarmonyOS detection prioritizes the version in the `OpenHarmony` / `HarmonyOS` token and preserves its version namespace (`ArkWeb`, `HuaweiBrowser`, and `Chrome` versions are never treated as OS versions). `Phone` / `Mobile` tokens identify phones, and `Tablet` alone identifies ordinary tablets (`unsupported`). `Tablet` combined with `Windows NT` identifies a 2-in-1 device in tablet mode, while `PC` or desktop `Windows NT` tokens identify PCs. HarmonyOS PCs and 2-in-1 devices receive the shell installer command and native `ARM64` / `x86_64` download choices, whereas phones, ordinary tablets, and unclassified devices show device-specific guidance.
 
-- `ready`: cjv supports both the operating system and the CPU architecture.
-- `unknown`: cjv supports the operating system, but the browser cannot confirm the CPU architecture.
-- `unsupported`: mobile operating systems or CPU architectures without prebuilt `cjv` binaries.
+Compatibility tokens (`Windows NT`, `Linux`, `Android`) and UA Client Hints are never allowed to override HarmonyOS with Windows or Android, nor are they trusted to guess a HarmonyOS device's native CPU architecture. Instead, the download panel explains how to run `uname -m` in the terminal to choose the right architecture and launch `cjv-init`.
 
-On macOS, many browsers report an Intel (`x86_64`) user agent even on Apple Silicon (`arm64`) hardware. When browser hints do not confirm the exact Mac architecture, the page still shows the `install.sh` one-liner (which detects the architecture locally in the shell) and presents both Apple Silicon and Intel buttons for manual archive downloads. Detection also handles iPadOS desktop-class user agents.
-
-### HarmonyOS and OpenHarmony detection rules
-
-For HarmonyOS and OpenHarmony visitors, the detector applies strict token rules:
-
-1. **OS version priority**: reads the version number from the `OpenHarmony` or `HarmonyOS` token and keeps its version namespace intact. It never mistakes `ArkWeb`, `HuaweiBrowser`, or `Chrome` version numbers for the OS version.
-2. **Form-factor classification**:
-   - `Phone` or `Mobile` identifies a phone (`unsupported`).
-   - `Tablet` together with `Windows NT` identifies a 2-in-1 device in tablet mode (`ready` or `unknown`).
-   - `PC` or a desktop `Windows NT` token identifies a HarmonyOS PC (`ready` or `unknown`).
-   - `Tablet` alone identifies an ordinary tablet (`unsupported`).
-3. **Architecture safety**: compatibility tokens (`Windows NT`, `Linux`, `Android`) and UA Client Hints do not override HarmonyOS with Windows or Android, and do not establish the native CPU architecture of a HarmonyOS PC. Instead, the download panel instructs the user to run `uname -m` in HiShell to choose `ARM64` or `x86_64` and run `cjv-init`.
-
-Whenever you change `use-platform.ts`, run the browser integration and built-page test suites (`pnpm test:integration` and `pnpm test:built`) to make sure that an unknown architecture never recommends a single wrong binary. Read [Tests and checks](testing.md#installer-scripts-and-web-frontend).
+Whenever you modify platform detection, run the real-browser platform tests (`pnpm test:integration` and `pnpm test:built`) and verify that an unknown architecture never produces a single wrong binary recommendation. See [Testing and checks](testing.md#installers-and-frontend).
 
 ## Translation and styling
 
 Chinese (`zh`) is the Lingui source language:
 
-- Use `<Trans>` from `@lingui/react/macro` for JSX elements.
+- Use `<Trans>` from `@lingui/react/macro` inside JSX.
 - Use `useLingui().t` for string expressions inside React components.
 - Use `msg` from `@lingui/core/macro` for message descriptors outside components.
 
-After adding or changing any UI text in `web/src/`, extract the message catalog:
+After adding or updating UI copy in `web/src/`, extract the message catalogs:
 
 ```bash
 pnpm i18n:extract
 ```
 
-Then fill in the English translations in `web/src/locales/en/messages.po`. At runtime, the page checks the saved `cjv-lang` preference first and falls back to the browser's preferred language (`zh` or `en`). During `pnpm build`, the Lingui Vite plugin compiles the catalogs automatically.
+Then fill in the new English translations in `src/locales/en/messages.po`. At runtime, language selection checks the saved `cjv-lang` preference first, and otherwise picks Chinese or English from the browser's preferred language. During production builds, the Lingui Vite plugin compiles the catalogs automatically.
 
-Theme colors and typography live in `src/style.css`, dark mode follows the OS color scheme, and the build bundles web fonts from local `node_modules` packages. All animations must respect `useReducedMotion`.
+The visual theme is defined in `src/style.css`, dark mode follows the operating system preference, and web fonts are bundled from local dependencies. Animations should continue to respect `useReducedMotion`.
 
-## Production bundle and Pages deployment
+## Deployment contents
 
-Running `pnpm build` in `web/` produces the landing page and `install.sh` / `install.ps1` only. During CI deployment, `.github/workflows/pages.yml` adds two more sets of files into `web/dist/`:
-
-- `/dl/{official,mirror}/{os}_{arch}/cjv-init[.exe]` standalone installer binaries extracted from the latest release; read [Releases](releasing.md#website-installers).
-- `/book/user-guide/{zh-CN,en}/` and `/book/dev-guide/{zh-CN,en}/` built by `scripts/build-docs.py`; read [Documentation site](documentation.md).
+During CI deployment, `.github/workflows/pages.yml` builds `web/` first, and then adds platform-specific `cjv-init` binaries under `web/dist/dl/` and both bilingual mdBook manuals under `web/dist/book/`. A local `pnpm build` in `web/` does not generate those extra directories on its own. See [Releases](releasing.md#website-installers) for `/dl/` installer artifacts and [Documentation site](documentation.md) for the mdBook build.

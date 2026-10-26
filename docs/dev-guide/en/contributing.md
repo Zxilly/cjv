@@ -1,42 +1,30 @@
-# Contribute to cjv
+# Contributing
 
-We welcome bug reports, feature requests, and pull requests. Before you start working on a change, read [Build from source](building.md) and [Architecture](architecture.md) to find the package that owns the behavior.
-
-## Create a working branch
-
-Create a focused branch from the latest `master` branch. If you are an external contributor, fork [Zxilly/cjv](https://github.com/Zxilly/cjv) on GitHub and branch from `upstream/master`:
+Contributions to `cjv`—whether bug reports, documentation improvements, or code changes—are very welcome! To get started, create a focused branch from the latest `master`. External contributors can fork [Zxilly/cjv](https://github.com/Zxilly/cjv) on GitHub and open a pull request against the upstream `master` branch:
 
 ```bash
 git fetch upstream
 git switch -c fix-windows-path upstream/master
 ```
 
-Keep each branch focused on a single bug fix or feature. Do not mix unrelated formatting changes or dependency upgrades into a functional fix.
+## Making changes and validating locally
 
-## Implement and validate changes
+1. **Reproduce first** — Before fixing a bug, reproduce the failure and locate the package that owns the behavior in the [Architecture guide](architecture.md).
+2. **Test through production entry points** — Add or update regression tests in the owning package rather than testing private helpers in isolation. See [Testing and checks](testing.md#where-regression-tests-belong) for test locations and commands.
+3. **Note platform coverage** — When changing platform-specific behavior (such as Windows file locking, Unix shell profile edits, or OpenHarmony self-signing), mention which platforms you tested locally in your PR description and let CI verify the rest of the matrix.
+4. **Keep translations and docs in sync** — Keep Chinese (`src/`) and English (`en/`) documentation changes in the same commit. When adding, moving, or removing a chapter, update both `SUMMARY.md` files and add a redirect entry in `book.toml` (see [Documentation site](documentation.md)). Frontend copy in `web/` uses Lingui (`pnpm i18n:extract`) and requires English translations in `web/src/locales/en/messages.po` (see [Landing page](web.md#translation-and-styling)).
 
-### Code and test requirements
+## Atomic commits and commit messages
 
-1. Reproduce the bug or define the target behavior before editing production code.
-2. Implement the change in the package that owns that responsibility; read [Architecture](architecture.md).
-3. Add or update unit and integration tests through the production entry points; read [Tests and checks](testing.md#where-to-place-regression-tests).
-4. If your change affects platform-specific behavior (such as Windows file locks, Unix shell profiles, or OpenHarmony signing), note which platforms you tested locally and let CI check the full platform matrix.
+We prefer atomic commits where each commit represents a single, self-contained logical change. Keep unrelated formatting cleanups, refactoring, and dependency upgrades in separate commits from behavioral fixes.
 
-### Documentation and localization synchronization
-
-- **Bilingual manuals**: Whenever you change CLI flags, configuration fields, or user-visible behavior, update both the Chinese (`src/`) and English (`en/`) mdBook files in the same commit.
-- **Chapter changes**: If you add, move, or remove a documentation page, update both `SUMMARY.md` files and add a redirect rule under `[output.html.redirect]` in `book.toml`. Read [Documentation site](documentation.md).
-- **Frontend copy**: If you add or edit text in `web/`, extract the Lingui catalog (`pnpm i18n:extract`) and translate the new strings in `web/src/locales/en/messages.po`. Read [Landing page](web.md#translation-and-styling).
-
-## Write commit messages
-
-Check the recent commit log to match the repository's convention:
+Before committing, inspect the recent git history and follow the repository's convention:
 
 ```bash
 git log --oneline -20
 ```
 
-Write commit titles in the format `type(scope): description`, where `(scope)` is optional and `description` is a short imperative phrase in English:
+Commit titles use the Conventional Commits form `type(scope): description`, where `(scope)` is optional and `description` is a concise imperative phrase in English:
 
 ```text
 fix(component): enforce ownership across file edits
@@ -44,15 +32,15 @@ refactor(toolchain): centralize host target associations
 docs: simplify project toolchain setup
 ```
 
-Split independent logical changes into separate commits.
+## Pull requests
 
-## Open a pull request
+When opening a pull request, describe:
 
-In your pull request description, include:
+- **The trigger or motivation** — What user command, configuration, or edge case triggered the problem.
+- **The resulting behavior** — How `cjv` behaves after your change.
+- **Validation** — Which test suites and platforms you ran locally.
+- **Related issues** — Links or `#issue` references to any related GitHub issues.
 
-- **Problem or trigger**: what user command or condition triggered the issue.
-- **Solution and behavior**: what changed and how `cjv` behaves now.
-- **Validation**: which test suites and platforms you ran locally (run `npx markdownlint-cli2` and `python3 scripts/build-docs.py` for documentation changes).
-- **Related issues**: links to any GitHub issues that the PR addresses.
+After pushing your branch, check the GitHub Actions results, inspect any failures, and push follow-up fixes to the same branch as code review continues.
 
-After pushing your branch, check the GitHub Actions results. If a CI job fails, inspect the log and push follow-up commits to the same branch. Keep architecture docs focused on stable package contracts and invariants; put low-level implementation details in code comments and tests.
+Remember to update the [User Guide](https://cjv.zxilly.com/book/user-guide/en/) whenever a change alters CLI flags, configuration fields, or user-visible behavior. In the Developer Guide, keep [Architecture](architecture.md) focused on stable module responsibilities and invariants—low-level implementation details belong in code comments and tests.
