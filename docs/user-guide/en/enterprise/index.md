@@ -1,12 +1,22 @@
 # Enterprise and offline deployment
 
-When clients can reach upstream servers, configure a [network proxy](../network-proxies.md). For internal-only clients, publish SDKs, components, and manifests to an [internal distribution](distribution-server.md). Fully offline clients can use local archives or directories.
+Organizations can deploy cjv across developer workstations and CI runners under varying network policies. This chapter explains how to choose a deployment mode, roll out managed clients, configure system fallback settings, install approved SDKs, and check air-gapped environments.
 
-`dist_server` controls SDK and component distribution. cjv binary upgrades and `cjpm` project dependency repositories require separate configuration.
+## Choose a deployment mode
+
+Match your setup to the network access available on your client machines:
+
+| Network environment | Recommended setup | Related guide |
+| --- | --- | --- |
+| Clients can reach upstream servers through a proxy | Configure `HTTPS_PROXY`, `NO_PROXY`, and corporate CA trust | [Network proxies](../network-proxies.md) |
+| Clients can reach internal servers only | Host manifests and archives on an internal HTTPS server and set `dist_server` | [Internal distribution](distribution-server.md) |
+| Clients have no network access (air-gapped) | Distribute SDK archives and `stdx` directories locally and register them with `link` | [Custom SDKs](../install-from-url.md) |
+
+Note that `dist_server` controls Cangjie SDK and component downloads only. You must manage cjv binary upgrades and `cjpm` package dependency repositories separately.
 
 ## Deploy clients
 
-Install cjv through enterprise software distribution, or host the installer scripts and release archives internally:
+You can push the `cjv` binary through your enterprise software management tool, or host the installer scripts and release archives on an internal server:
 
 ```powershell
 $env:CJV_UPDATE_ROOT = "https://artifacts.corp.example/cjv/releases/latest/download"
@@ -14,18 +24,25 @@ $env:CJV_UPDATE_ROOT = "https://artifacts.corp.example/cjv/releases/latest/downl
   -Yes -DefaultToolchain none -NoModifyPath
 ```
 
-`CJV_UPDATE_ROOT` selects the installer download location only. The directory must provide platform archives and `checksums.txt`. Use `-NoModifyPath` when endpoint management sets PATH.
+- `CJV_UPDATE_ROOT` sets the download URL for the installer script. That directory must serve the platform archives and `checksums.txt`.
+- `-NoModifyPath` (or `--no-modify-path` on Unix) leaves `PATH` unchanged when your endpoint management system configures `PATH` centrally.
 
-Install cjv, distribute settings, then install SDKs so each step has a separate exit status.
+In automated rollouts, run these three steps as separate commands so you can check the exit code of each step:
+
+1. Install the `cjv` executable.
+2. Deploy the system fallback `settings.toml` file.
+3. Install the approved SDKs and components.
 
 ## System fallback settings
 
-| System | Default file |
+cjv reads a system-wide fallback settings file before it reads the user's `~/.cjv/settings.toml` file:
+
+| Operating system | Default system fallback path |
 | --- | --- |
 | Windows | `C:\ProgramData\cjv\settings.toml` |
-| Linux / macOS | `/etc/cjv/settings.toml` |
+| Linux and macOS | `/etc/cjv/settings.toml` |
 
-`CJV_FALLBACK_SETTINGS` selects another file. Example:
+You can override this path with the `CJV_FALLBACK_SETTINGS` [environment variable](../environment-variables.md). An enterprise fallback `settings.toml` typically looks like this:
 
 ```toml
 version = 1
@@ -35,11 +52,13 @@ auto_self_update = "disable"
 auto_install = false
 ```
 
-Replace the example version with an approved release. With automatic installation disabled, missing SDKs or components cause errors and must be supplied by deployment. Give each user a separate `CJV_HOME`.
+Replace `lts-1.0.5` with your organization's approved release. When `auto_install` is `false`, missing SDKs or components cause an immediate error instead of an unapproved download. Give each OS user account its own `CJV_HOME` directory.
 
-Fallback settings provide defaults. User settings can override individual fields, and environment variables can change the distribution source. Enforce source and version policies through network ACLs, endpoint permissions, and software distribution.
+System fallback settings supply default values only. A user can still override individual fields in `~/.cjv/settings.toml` or set `CJV_DIST_SERVER` in the environment. Enforce strict source and version policies through firewall rules, filesystem permissions, and managed software deployment. Read [Configuration](../configuration.md#inheritance-and-precedence) for field inheritance rules.
 
 ## Install approved versions
+
+On connected internal clients, install and check the approved release from your [internal distribution](distribution-server.md):
 
 ```bash
 cjv install lts-1.0.5 -c stdx
@@ -48,29 +67,33 @@ cjv which cjc
 cjc --version
 ```
 
-Use the same full version name in the project's `cangjie-sdk.toml`. Pin full nightly versions as well, and retain their SDKs and components in the distribution.
+Write the exact same full version string (`lts-1.0.5`) in each project's [cangjie-sdk.toml](../toolchain-file.md). If your teams use `nightly`, pin the full nightly version string as well and keep that version's SDK and component archives on your internal server.
 
 ## Fully offline clients
 
+On air-gapped machines without an internal HTTP server, install from local archives or pre-staged directories:
+
 ```bash
-cjv toolchain link corp-sdk ./cangjie-sdk.zip
+cjv toolchain link corp-sdk ./cangjie-sdk.zip --sha256 <approved-sha256>
 cjv component link stdx /opt/corp/cangjie-stdx --toolchain corp-sdk
 cjv default corp-sdk
 ```
 
-Pass `--sha256 <approved-sha256>` when an approved hash is available. You can also link an existing SDK directory, whose owner then maintains its components. Project files use the custom name, such as `corp-sdk`; build dependencies must also be prepared in advance.
+1. Pass `--sha256 <approved-sha256>` when you link the archive so cjv checks the file hash before extraction.
+2. Alternatively, link an unpacked read-only SDK directory (`cjv toolchain link corp-sdk /opt/corp/sdk`). In that mode, the directory administrator maintains its components directly.
+3. Set `channel = "corp-sdk"` in the project's `cangjie-sdk.toml` and pre-stage any `cjpm` project dependencies needed for offline builds.
 
-See [custom SDKs](../install-from-url.md) for archive formats. `docs` and `stdx-docs` cannot be linked locally; install them through a distribution before disconnecting.
+Read [Custom SDKs](../install-from-url.md) for supported archive layouts. Note that `cjv component link` does not support `docs` or `stdx-docs` directories; install them from a distribution server before disconnecting the machine, or bundle them into your pre-staged `CJV_HOME`.
 
-## Publication and validation
+## Publication and validation checklist
 
-Upload and verify artifacts before atomically replacing manifests and advancing `latest`. Nightly's `latest` is a top-level field in `nightly.json`; clients may choose a compatible historical release for their component and target requirements. Retain all versions pinned by projects.
+When you update your [internal distribution](distribution-server.md), upload and check all archive files before you atomically replace `versions.json` or `nightly.json` and advance `latest`. Keep all historical versions that active projects pin in `cangjie-sdk.toml`.
 
-Validate with ordinary user accounts and the actual CI service account:
+Before you roll out a change to developers, do a check with both a standard user account and your CI service account:
 
-- LTS/STS and nightly read `versions.json` and `nightly.json` respectively, and all artifact URLs stay within approved locations.
-- Approved releases and components install, and `cjv which cjc` and `cjc --version` identify the intended SDK.
-- Projects with prepared toolchains and dependencies still build offline.
-- Corporate CAs, proxies, and `NO_PROXY` work, and missing requirements produce the expected errors.
+- [ ] LTS/STS commands read `versions.json`, nightly commands read `nightly.json`, and every artifact URL points to an approved internal host.
+- [ ] Approved SDKs and components install cleanly, and `cjv which cjc` and `cjc --version` report the expected SDK.
+- [ ] Projects with pre-installed toolchains and dependencies build with `--offline --no-auto-install`.
+- [ ] Corporate CA certificates, proxy variables, and `NO_PROXY` rules work, and missing unapproved toolchains fail with clear errors.
 
-With automatic self-updates disabled, distribute cjv upgrades through enterprise software management. An explicit `cjv self update` still uses the build's upstream update source; network restrictions should match deployment policy.
+When `auto_self_update` is `disable`, distribute new cjv binaries through your enterprise software management tool. Because an explicit `cjv self update` command still queries the upstream release URL compiled into the binary, block external update hosts at the network boundary when your security policy demands it.

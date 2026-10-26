@@ -1,41 +1,62 @@
 # Common questions
 
-## Why is the wrong version selected?
+This chapter answers frequent questions about toolchain selection, project files, runtime libraries, offline setups, and platform downloads.
 
-Run `cjv show active` to see the selection and its source. Check `CJV_TOOLCHAIN`, directory overrides, and `cangjie-sdk.toml` in the current directory and its parents. cjv searches one level at a time, with an override taking precedence at the same level. See [project toolchains](toolchain-file.md).
+## Toolchain selection and project files
 
-If you evaluated `envsetup`, the shell may be calling a specific SDK directly. Open a new terminal to return to proxy selection, or load the environment for the required toolchain again.
+### Why did cjv select the wrong SDK version?
 
-## What happens when a project field is misspelled?
+Run `cjv show active` to see the selected toolchain and the rule that chose it. Next, check these sources in order:
 
-Unknown fields produce warnings. If the remaining fields do not provide a valid `channel` or `path`, the command fails instead of falling back to the default. Empty files also fail. Delete the file to restore parent-directory selection.
+1. Command-line selectors (`+name` or `--toolchain`).
+2. The `CJV_TOOLCHAIN` [environment variable](environment-variables.md).
+3. Local directory overrides (`cjv override list`) and `cangjie-sdk.toml` files in the current directory and parent directories. At the same directory level, an override takes precedence over `cangjie-sdk.toml`. Read [Project toolchains](toolchain-file.md#toolchain-selection-order).
+4. If you evaluated `cjv envsetup` earlier in the current terminal, your shell `PATH` points directly to that SDK. Open a new terminal to return to automatic proxy selection, or evaluate `cjv envsetup` again for the toolchain you want.
 
-## My compiled program cannot find runtime libraries
+### What happens if `cangjie-sdk.toml` has a misspelled field?
+
+cjv prints a warning for unknown keys and continues to parse known keys. However, if the file has invalid TOML syntax, an empty body, or no valid `channel` or `path`, cjv fails with an error instead of falling back to the global default. Delete the broken `cangjie-sdk.toml` file if you want to restore parent-directory or default selection.
+
+## Runtime environment and components
+
+### Why does my compiled program fail to find runtime libraries?
+
+Compiled Cangjie binaries often link against dynamic libraries in the SDK or in `stdx`. Run your binary through `cjv exec` so cjv sets the platform library path (`LD_LIBRARY_PATH`, `DYLD_LIBRARY_PATH`, or `PATH`) and `stdx` variables for the child process:
 
 ```bash
 cjv exec ./my_binary
 ```
 
-You can also evaluate `cjv envsetup` for the current shell. See [runtime environments](runtime-environment.md) for shell-specific syntax.
+You can also evaluate `cjv envsetup` to load those variables into your current shell session. Read [Run commands and set the environment](runtime-environment.md) for shell-specific commands.
 
-## How do I install offline?
+### Why can't a custom toolchain download components with `component add`?
 
-Use a [local SDK archive or directory](install-from-url.md). Installed toolchains run locally, but project dependencies must also be available. Managed clients can use an [internal distribution](enterprise/distribution-server.md) and disable automatic installation and update checks. See [enterprise deployment](enterprise/index.md).
+A custom toolchain registered with `cjv toolchain link` has no official release entry in the upstream manifest, so `cjv component add` cannot look up component archives for it:
 
-## Why can't a custom toolchain download components?
+- If you installed the custom SDK from a [local archive or URL](install-from-url.md), it can install bundled `stdx` automatically or accept a local `stdx` directory via `cjv component link stdx`.
+- If you linked an unpacked external SDK directory, the owner of that directory maintains its contents and `cjv component` commands cannot edit it. Read [Components and offline documentation](concepts/components.md#manage-components-on-custom-sdks).
 
-A custom SDK has no official release record, so `component add` cannot identify its artifacts. Archive installations can include stdx or link local stdx. External directory links are maintained by the source SDK owner and cannot be edited with cjv component commands. See [components](concepts/components.md).
+## Installation, offline use, and removal
 
-## What does uninstall remove?
+### How do I install and use cjv on an offline machine?
 
-`cjv uninstall <name>` removes the selected SDK, attached stdx and documentation, and directory overrides referring to it. If it is the default, cjv tries to select another installed host or clears the default. Link sources are preserved.
+Choose the method that matches your environment:
 
-`cjv self uninstall` removes the cjv data directory and all installations, and cleans up PATH. See the [command reference](command-reference.md) for options.
+- **Pre-populated cache**: Populate `<CJV_HOME>/cache/` on a connected machine with `cjv install`, copy `cache/` and `cangjie-sdk.toml` to the offline machine, and run with `--offline`. Read [Automation and JSON interfaces](automation.md#ci-isolation-and-offline-caches).
+- **Local archive or directory**: Register a local SDK `.zip`, `.tar.gz`, or unpacked directory with `cjv toolchain link`. Read [Custom SDKs](install-from-url.md).
+- **Enterprise internal network**: Host manifests and archives on an [internal distribution server](enterprise/distribution-server.md) and disable automatic installation and self-updates in system fallback settings. Read [Enterprise and offline deployment](enterprise/index.md).
 
-## Why does the macOS download page ask for an architecture?
+Note that installed SDKs run locally, but you must also cache or vendor your `cjpm` project dependencies for offline builds.
 
-Some browsers cannot reliably report a Mac's CPU architecture. The installer script detects it locally. For manual downloads, run `uname -m`: `arm64` means Apple Silicon and `x86_64` means Intel.
+### What files do `cjv uninstall` and `cjv self uninstall` delete?
 
-## What happens when nightly has no checksum?
+- `cjv uninstall <name>` deletes the named SDK, its attached cross targets, its `stdx` and documentation components, and any directory overrides that reference `<name>`. If `<name>` was your default toolchain, cjv selects another installed host SDK or clears the default. External directories linked with `toolchain link` or `component link` are never deleted.
+- `cjv self uninstall` deletes the entire `<CJV_HOME>` data directory, including all installed toolchains, components, caches, and snapshots, and cleans up `PATH`. Read [Command reference](command-reference.md#self-update-and-self-uninstall).
 
-cjv reads versions and download URLs from `nightly.json`. If an SDK entry has no SHA-256, it tries `<url>.sha256`. If the sidecar is not published, cjv reports the integrity limitation. Internal mirrors can put checksums directly in the manifest; see the [distribution format](enterprise/distribution-server.md).
+### Why does the macOS download page ask me to choose an architecture?
+
+Many macOS browsers report an Intel user agent even on Apple Silicon Macs, so a web page cannot always detect the CPU architecture reliably. If you run the `install.sh` script in your terminal, it detects your native CPU architecture automatically. For a manual archive download, run `uname -m` in your terminal: `arm64` means Apple Silicon and `x86_64` means Intel.
+
+### What happens when a nightly release has no SHA-256 in `nightly.json`?
+
+cjv reads nightly versions and URLs from `nightly.json`. If an upstream nightly entry has an empty `sha256` field, cjv fetches `<url>.sha256` automatically. If that sidecar file is not published yet, cjv reports the integrity limitation. On an internal enterprise mirror, always write the 64-character SHA-256 directly into `nightly.json`; read [Internal distribution](enterprise/distribution-server.md#nightlyjson-schema).
