@@ -1,86 +1,126 @@
 # Architecture
 
-The CLI parses commands, `lifecycle` coordinates installation and updates, and lower-level modules own distribution, file ownership, and transactions. Proxy execution resolves SDKs from the same installation state without using the CLI command tree.
+`cjv` separates command parsing, installation orchestration, and low-level filesystem or network operations into distinct packages under `internal/`. Proxy execution (`cjc`, `cjpm`) resolves the active SDK from the same local state without constructing the Cobra CLI command tree. This chapter explains the package boundaries, command state isolation, transactional installation flow, locking model, and runtime resolution.
 
-## Entry point and modules
+## Entry point and package responsibilities
 
-`cmd/cjv/main.go` dispatches by executable name. SDK tool names enter `proxy.Run`; `cjv-init` / `cjv-setup` prefixes enter the installer; other invocations enter `cli.Execute`.
+`cmd/cjv/main.go` routes execution according to `os.Args[0]`:
 
-| Module | Responsibility |
+- **SDK tool name** (`cjc`, `cjpm`, and others): calls `proxy.Run` directly.
+- **`cjv-init` or `cjv-setup` prefix**: starts the interactive installation wizard.
+- **`cjv` (or any other name)**: calls `cli.Execute`.
+
+| Package | Responsibility |
 | --- | --- |
-| `cli` | Cobra command tree, argument validation, results, and errors |
-| `lifecycle` | SDK, target, component, custom installation, and removal orchestration |
-| `toolchain` | Installation identities, versions, host-target associations, and local recovery |
-| `resolve` | Active toolchain preparation and automatic installation of missing requirements |
-| `component` | Component roots, file manifests, links, and batch edits |
-| `dist` | Lazy manifest loading, downloads, verification, extraction, and preparation lifetime |
-| `target` | Platform tuples, SDK/component mappings, and release platform catalog |
-| `env`, `sdktools` | Environment merging, shell output, and SDK tool layout |
-| `proxy`, `process` | Tool forwarding, child processes, exit codes, and signals |
-| `config` | Setting origins, project selection, and data layout |
-| `reachable`, `selfupdate` | Managed binary, proxies, PATH, and cjv updates |
-| `fstx`, `fsops` | Durable transactions, atomic file operations, and platform retries |
-| `ohos` | Preparing and self-signing native payloads for OpenHarmony hosts |
+| `cli` | Cobra command tree, flag parsing, text and JSON rendering, and error formatting |
+| `lifecycle` | High-level orchestration for installing, updating, linking, rolling back, and removing SDKs, targets, and components |
+| `toolchain` | Installation identities, version selectors, host-target associations, and local state recovery |
+| `resolve` | Active toolchain preparation and automatic installation of missing project requirements |
+| `component` | Component directory roots, file manifests, local `stdx` links, and batch updates |
+| `dist` | Lazy manifest loading, resumable downloads, SHA-256 verification, archive extraction, and staging lifetimes |
+| `target` | Platform tuple conversions, SDK and component platform mappings, and the release platform catalog |
+| `env`, `sdktools` | Environment variable merging, shell script generation (`envsetup`), and SDK tool binary lookup |
+| `proxy`, `process` | Proxy command forwarding, child process execution, exit code propagation, and signal handling |
+| `config` | Settings file inheritance, `cangjie-sdk.toml` lookup, and `<CJV_HOME>` directory layout |
+| `reachable`, `selfupdate` | Managed `cjv` binary placement, proxy links in `<CJV_HOME>/bin`, `PATH` setup, and self-updates |
+| `fstx`, `fsops` | Durable filesystem transactions, atomic renames, directory tree merges, and Windows retry loops |
+| `ohos` | Preparing and self-signing native ELF binaries for OpenHarmony hosts |
 
-`progress` defines events and output adapters. `i18n`, `cjverr`, and `logging` provide messages, structured errors, and logs. `retry` is the backoff loop behind the filesystem and download retry policies. `testutil` supplies distribution fixtures, progress recording, and platform test helpers; `config/configtest` isolates settings and `cli/clitest` runs command groups in tests.
+Supporting packages provide cross-cutting utilities:
 
-## Command state and output
+- `progress` defines progress events and terminal/JSON sinks.
+- `i18n`, `cjverr`, and `logging` provide localized text, typed error codes, and structured logs.
+- `retry` implements the backoff loop shared by filesystem and HTTP retry policies.
+- `testutil`, `config/configtest`, and `cli/clitest` provide mock distribution servers, progress recorders, isolated settings, and CLI test harnesses; read [Tests and checks](testing.md).
 
-Each `cli.Execute` creates a separate `clictx.Context` (renderer, `+toolchain` selector, root command) and command tree. Command groups live in their own packages (`showcmd`, `componentcmd`, `runcmd`, `initcmd`, `toolchaincmd`, `settingscmd`, `selfcmd`); each keeps its flags in its own struct and registers itself on the root. Commands pass requests to business modules, which report events through `progress.Sink` instead of printing final results.
+## Command state and output rendering
 
-Text mode uses `progress.Text` and result `Text()` methods. JSON mode discards progress and emits structured results or errors. The CLI renders each error once; `main` sets the exit code. Proxy stdout belongs to the SDK tool, so automatic installation reports progress on stderr.
+Each call to `cli.Execute` constructs a fresh `clictx.Context` (output renderer, global `+toolchain` selector, and root command) and a fresh command tree. Subcommand groups live in dedicated subpackages (`showcmd`, `componentcmd`, `runcmd`, `initcmd`, `toolchaincmd`, `settingscmd`, `selfcmd`). Each subpackage stores its flags in a local struct and registers its subcommands on the root command.
 
-Keep invocation state isolated when changing the CLI. Do not move flags, writers, or JSON mode into global variables.
+Subcommands pass request structs to business packages (`lifecycle`, `resolve`, `toolchain`, `config`). Business packages emit progress events through `progress.Sink` and return structured result values instead of writing directly to `stdout`:
 
-## Installation and publication
+- **Text mode**: renders live progress through `progress.Text` and prints the result's `Text()` output.
+- **JSON mode**: discards progress events and writes a single JSON document or error object to `stdout`.
+- **Proxy mode**: reserves `stdout` for the child SDK tool and writes automatic installation progress to `stderr`.
 
-`lifecycle.OpenDistribution` reads settings, platforms, and manifests without recovering or scanning local installations. Remote queries therefore do not require successful local recovery. Mutations use an installation distribution session, recovering interrupted transactions and migrating legacy layouts before taking snapshots.
+The CLI layer renders each returned error once, and `main` translates the error into a process exit code. When you add or change CLI commands, keep all state inside `clictx.Context` or command structs; never store flags, writers, or JSON mode in package-level global variables.
 
-A managed SDK installation proceeds as follows:
+## Transactional installation and publication
 
-1. `dist.Preparation` takes the installation lock and creates private staging space.
-2. Under the home lock, read installation identity, component selection, and host dependency snapshots.
-3. Release the home lock while resolving releases, downloading, and preparing the host, tracked targets, and components. Keep the installation lock.
-4. Reacquire the home lock and check snapshots and dependencies for changes.
-5. `publication.go` publishes SDK, stdx, and documentation roots together through `fstx.NewToolchainGroupTransaction`.
-6. Finish command entry point setup, mark preparation complete, and clean owned downloads and staging files.
+### Read-only vs. mutating distribution sessions
 
-`--force` allows missing optional entries; it does not reinstall unchanged SDKs. `--no-update` preserves the installed release. Nightly resolution considers the required component and target set, with downgrades requiring explicit permission.
+`lifecycle.OpenDistribution` loads merged settings, platform definitions, and remote manifests without scanning or recovering local installations. Remote queries such as `list-remote` and `check` therefore succeed even if local state needs recovery.
 
-Managed component batches also prepare and revalidate before publishing contents and manifests in one transaction. The SDK remains in place. Pinned versions and tracked channels are independent. Hard-link deduplication applies only to regular SDK files with matching provenance and content; metadata and components are separate.
+Mutating commands open an installation distribution session that recovers any interrupted transactions and migrates legacy directory layouts before reading local installation snapshots.
 
-URL and local archive installations use `resolved_install.go`. Bundled stdx is processed after the SDK commits. A stdx failure preserves that SDK and reports partial success, unlike the all-member publication used for managed channels.
+### Six-step managed SDK installation
 
-## Recovery and file ownership
+A managed channel or version installation executes in six steps:
 
-`fstx` journals commit state, owned paths, and backups. Recovery after interruption uses the same commit or rollback decision. Blocked recovery retains journals and backups and returns `RecoveryError`. Installation, removal, and active toolchain preparation require recovery to succeed. Backups needed for recovery must not be treated as disposable leftovers.
+1. `dist.Preparation` takes the installation lock (`downloads/.lock`) and creates a private staging directory.
+2. Under `HomeLock`, cjv reads the target installation identity, existing component selections, and host-target dependency snapshots.
+3. cjv releases `HomeLock` while it resolves manifest versions, downloads archives, and extracts the host SDK, tracked cross targets, and components into staging. It keeps the installation lock throughout this phase.
+4. cjv takes `HomeLock` again and checks that local snapshots and dependencies did not change while `HomeLock` was free.
+5. `publication.go` commits the SDK, `stdx`, and documentation roots together in a single durable transaction (`fstx.NewToolchainGroupTransaction`).
+6. cjv updates the proxy entry points in `<CJV_HOME>/bin`, marks the preparation complete, and deletes owned staging files and temporary downloads.
 
-`HomeLock` takes the global writer lock before the active-lookup gate. History copying, verification, and pruning use `WithStableReads` to release that gate while retaining the writer lock. These phases leave installed roots unchanged, so other commands can resolve an existing SDK. A reader holds the gate through directory lookup and checks the writer lock without waiting; if no live writer owns it, ordinary recovery runs instead. Before publication, the writer reacquires the gate and atomically clears the read-phase marker. Readers must never wait for the writer lock while holding the gate. A stale marker after a crash cannot bypass recovery, and this path is disabled until the first legacy-layout migration completes.
+Policy flags adjust the resolution step without weakening transaction safety:
 
-Before snapshots or mutations, `component` checks owned roots, the complete file manifest, and parent directory links. Shared files are retained. Tracked leaf links may be removed without deleting their sources, and archive merges cannot traverse untracked links. External SDK directory links cannot be component edit roots; rollback also validates destination roots.
+- `--force` lets the operation skip and remove missing optional components or targets, and does not reinstall an unchanged SDK.
+- `--no-update` keeps the installed host release and adds requested targets or components only.
+- `nightly` resolution checks the needed component and target set against published history, and needs `--allow-downgrade` before selecting an older release.
 
-Managed component batches have durable publication journals. Direct component linking and archive edits use backups and rollback for ordinary errors, retaining backups if restoration fails. These operations do not all have the same cross-process recovery guarantees.
+### Component batches, deduplication, and archive links
 
-Derive data paths from `config/layout.go`. Use `fsops` for tree copies, merges, and platform retries. Archive and tree operations reject paths or links that escape owned directories.
+Managed component commands (`component add` and `component remove`) also stage files outside `HomeLock`, revalidate under `HomeLock`, and publish the component contents and file manifest in one `fstx` transaction while leaving the SDK root untouched.
 
-## Active toolchains and cross targets
+Hard-link deduplication (`link_mode = "hardlink"`) shares regular SDK files only when two installations have the same release, platform, and SHA-256 digest. Installation metadata and components are never shared across toolchains.
 
-`toolchain.SelectActive` handles explicit selection, environment variables, per-directory overrides and project files, and defaults. `PrepareActive` recovers and locates an installation. It calls an installation callback only for a missing official SDK; invalid selections, corrupt records, and filesystem errors are returned directly.
+Custom archive and URL installations (`resolved_install.go`) commit the SDK first and then process any bundled `stdx` archive. If the bundled `stdx` step fails, cjv keeps the committed SDK and reports partial success, unlike managed channel updates which publish or roll back the entire group together.
 
-`resolve.Active` supplies project requirements according to `auto_install`. `run --install` enables installation explicitly; status queries do not install. `toolchain.ReadHostTargets` combines host identity, actual release, and platform. Target commands, `component --target`, `resolve.ActiveTarget`, and proxy target preparation all use it to avoid selecting another host's or release's cross SDK.
+## Crash recovery, locking, and file ownership
 
-`env.Runtime` merges SDK paths and component variables into an explicitly supplied base environment, then creates a child environment or shell script. `env` does not select toolchains; `resolve.ActiveRuntime` pairs the active selection with its `env.Runtime`. `sdktools` owns tool paths. Unix proxies replace the current process; Windows proxies, `run`, and `exec` use `process.Run` for child execution.
+### Journaled transactions (`fstx`)
 
-## Distribution and downloads
+`fstx` writes the transaction state, owned target paths, and backup paths to a journal file on disk before moving files into place. If a process crashes or stops unexpectedly, the next mutating or active-toolchain command replays the journal and applies the same commit or rollback decision.
 
-`dist.Source` lazily reads and caches `versions.json` for LTS/STS and a separate `nightly.json`. Components are resolved from the same channel data. cjv consumes static manifests; upstream discovery and generation belong to the separate `cangjie-version-manifest` repository.
+If a filesystem error blocks recovery, `fstx` keeps the journal and backup directories intact and returns `RecoveryError`. Never delete recovery backup directories as ordinary temporary files.
 
-`Preparation` owns the installation lock, staging space, and downloaded archives through publication and cleanup. Failure retains reusable downloads. Success cleans only owned files, excluding user-provided archives and recovery journals.
+### Concurrent read/write locking (`HomeLock` and `WithStableReads`)
 
-Archives and nightly SHA-256 sidecars share cancellable retries. HTTP 408, 429, and server errors may retry; permanent HTTP errors and malformed content do not. Sidecar 404 means unpublished. Downloads with SHA-256 can resume across commands and verify the complete file. Downloads without a hash resume only within one operation.
+`HomeLock` takes the global writer lock first, and then takes the active-lookup gate. During long operations that do not mutate installed SDK directories (such as copying, checking, or pruning update history snapshots), the writer calls `WithStableReads` to release the active-lookup gate while holding the global writer lock.
 
-## Settings and self-management
+This design lets concurrent reader processes (`cjc`, `cjv show active`, `cjv which`) resolve and run an installed SDK without waiting for history snapshot operations:
 
-`config.SettingsFile` retains field presence. `Update` saves explicitly selected fields; `Save` can restore both values and presence from a snapshot. Environment overrides remain temporary. Validation precedes publication, and the cache is updated after a successful write.
+- A reader holds the active-lookup gate during directory resolution and checks the writer lock without blocking.
+- If a live writer holds the writer lock during a stable-read phase, the reader uses the existing installed roots directly.
+- If no live writer holds the writer lock (for example, after a writer crash), the reader runs normal transaction recovery before resolving the SDK.
+- Before publishing changes to installed roots, the writer takes the active-lookup gate again and atomically clears the stable-read marker.
+- Readers must never wait for the writer lock while holding the active-lookup gate, preventing lock-order deadlocks. Stale markers left by a crashed process never bypass recovery, and `WithStableReads` stays disabled until the initial legacy-layout migration finishes.
 
-`reachable.Ensure` manages the cjv binary, proxy entry points, and environment scripts, configuring PATH according to caller policy. `selfupdate.Check` queries metadata only; `Update` verifies and replaces the binary, then returns a status for the CLI to render. Default and mirror builds implement GitHub and GitCode discovery respectively.
+### Component ownership and path safety
+
+Before taking a snapshot or changing files, `component` checks owned directory roots, the complete file manifest, and parent directory symlinks:
+
+- Component removal keeps files that belong to the base SDK.
+- Component removal can delete tracked leaf symlinks without deleting their target directories, and archive extraction refuses to traverse untracked symlinks.
+- Component commands cannot edit external SDK directories linked with `cjv toolchain link`.
+- Managed component batches use durable `fstx` journals across processes, whereas direct `component link` and custom archive edits use in-process backups and rollback (keeping backups on disk if restoration fails).
+
+Always derive `<CJV_HOME>` subdirectories through `config/layout.go`, and use `fsops` for directory copies, merges, and Windows file-lock retries. All archive and tree operations reject paths or links that escape their owned root directory.
+
+## Active toolchain resolution and runtime execution
+
+1. `toolchain.SelectActive` evaluates explicit CLI selectors (`+name`, `--toolchain`), `CJV_TOOLCHAIN`, per-directory overrides and `cangjie-sdk.toml` files, and `default_toolchain`.
+2. `toolchain.PrepareActive` runs pending recovery and finds the installation on disk. It calls the auto-install callback only when a valid official toolchain is missing; invalid names, corrupt metadata, and I/O errors return immediately.
+3. `resolve.Active` checks and installs missing project components and cross targets when `auto_install` is `true` (or when you pass `run --install`). Read-only status commands (`show`, `which`) never trigger installation.
+4. `toolchain.ReadHostTargets` binds each cross target to its host toolchain identity, exact release, and host platform. `target` commands, `component --target`, `resolve.ActiveTarget`, and proxy target preparation all call `ReadHostTargets` so they never mix cross SDKs from another host or release.
+5. `env.Runtime` merges SDK binary paths, library paths, and `stdx` variables into an explicit base environment to produce a child process environment or an `envsetup` shell script. `resolve.ActiveRuntime` pairs active toolchain resolution with `env.Runtime`, and `sdktools` resolves tool binary paths. On Unix, proxy commands replace the current process via `execve`; on Windows (and for `cjv run` and `cjv exec`), `process.Run` spawns the child process and forwards signals and exit codes.
+
+## Distribution manifests, downloads, and settings
+
+- **Manifests (`dist.Source`)**: lazily loads and caches `versions.json` (for `lts` and `sts`) and `nightly.json` (for `nightly`). `cjv` consumes static manifests; upstream scraping and manifest generation live in the separate `cangjie-version-manifest` repository.
+- **Downloads (`dist.Preparation`)**: manages the installation lock, staging directory, and archive downloads until publication and cleanup finish. Failed downloads keep partial files for resumption; successful operations delete only their own staging files and keep user-supplied local archives and recovery journals.
+- **Retry rules**: archive downloads and nightly `.sha256` sidecar requests share a cancellable backoff loop. The client retries HTTP `408`, `429`, and `5xx` responses, whereas permanent `4xx` errors and invalid content fail immediately (a `404` on a nightly `.sha256` sidecar means the checksum is not published yet). Downloads with a known SHA-256 resume across separate CLI invocations; downloads without a hash resume only within a single command run.
+- **Settings (`config.SettingsFile`)**: tracks which keys were explicitly set in each file so `Update` writes only the changed key and keeps inheritance for unset keys. `Save` can restore a complete snapshot of values and key presence.
+- **Self-management (`reachable`, `selfupdate`)**: `reachable.Ensure` installs the managed `cjv` binary, proxy links, and shell environment scripts, and updates `PATH` when allowed. `selfupdate.Check` queries release metadata only, while `selfupdate.Update` checks and replaces the executable and returns a status struct for the CLI to display.

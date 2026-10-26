@@ -6,8 +6,8 @@
 
 - [Build from source](building.md)
 - [Architecture](architecture.md)
-- [Testing and checks](testing.md)
-- [Contributing](contributing.md)
+- [Tests and checks](testing.md)
+- [Contribute to cjv](contributing.md)
 
 # Site and releases
 

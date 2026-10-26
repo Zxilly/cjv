@@ -1,86 +1,125 @@
 # 代码架构
 
-CLI 解析命令，`lifecycle` 编排安装与更新，底层模块负责分发、文件所有权和事务。代理执行从同一套安装状态解析 SDK，绕过 CLI 命令树。
+`cjv` 将命令行解析、安装生命周期编排以及底层文件系统和网络操作拆分为 `internal/` 下的独立模块。代理执行（如调用 `cjc`、`cjpm`）直接基于同一套本地安装状态解析 SDK，不经过 Cobra CLI 命令树。本章说明模块职责划分、命令状态隔离、事务性安装与发布、并发锁机制以及运行时解析流程。
 
-## 入口与模块职责
+## 入口分流与模块职责
 
-`cmd/cjv/main.go` 按调用名称分流：SDK 工具名进入 `proxy.Run`；`cjv-init` / `cjv-setup` 前缀进入安装向导；其他调用进入 `cli.Execute`。
+`cmd/cjv/main.go` 根据进程调用名称（`os.Args[0]`）进行分流：
 
-| 模块 | 职责 |
+- **SDK 工具名**（`cjc`、`cjpm` 等）：直接进入 `proxy.Run`。
+- **`cjv-init` 或 `cjv-setup` 前缀**：进入交互式安装向导。
+- **`cjv` 或其他名称**：进入 `cli.Execute`。
+
+| 模块 | 核心职责 |
 | --- | --- |
-| `cli` | Cobra 命令树、参数校验、结果与错误输出 |
-| `lifecycle` | SDK、目标、组件、自定义安装和卸载的编排 |
-| `toolchain` | 安装身份、版本解析、宿主与目标关联、本地恢复 |
-| `resolve` | 活跃工具链准备与缺失项自动安装 |
-| `component` | 组件目录、文件清单、链接及批次编辑 |
-| `dist` | 按需加载 manifest、下载、校验、解包及准备生命周期 |
-| `target` | 平台 tuple、SDK/组件平台映射及发布平台清单 |
-| `env`、`sdktools` | 环境合并、shell 输出和 SDK 工具布局 |
-| `proxy`、`process` | 工具代理、子进程、退出码和信号处理 |
-| `config` | 设置来源、项目选择规则和数据目录布局 |
-| `reachable`、`selfupdate` | 受管二进制、代理入口、PATH 及 cjv 更新 |
-| `fstx`、`fsops` | 持久化事务、原子文件操作和平台重试 |
-| `ohos` | 为 OpenHarmony 宿主准备原生载荷并自签名 |
+| `cli` | Cobra 命令树组装、参数校验、文本与 JSON 输出渲染及错误展示 |
+| `lifecycle` | SDK、交叉目标、组件、自定义安装、历史回退和卸载的高层编排 |
+| `toolchain` | 安装身份标识、版本解析、宿主与目标关联关系及本地状态恢复 |
+| `resolve` | 活跃工具链准备与项目缺失依赖项的自动补装 |
+| `component` | 组件目录根、文件清单、本地 `stdx` 链接及批次编辑 |
+| `dist` | 按需加载版本清单、断点续传下载、SHA-256 校验、解包及暂存区生命周期 |
+| `target` | 平台四元组转换、SDK 与组件平台名称映射及发布平台清单 |
+| `env`、`sdktools` | 环境变量合并、shell 脚本生成（`envsetup`）与 SDK 工具路径查找 |
+| `proxy`、`process` | 工具代理转发、子进程启动、退出码传递与系统信号处理 |
+| `config` | 设置文件继承、项目工具链查找规则与 `<CJV_HOME>` 目录布局 |
+| `reachable`、`selfupdate` | 受管 `cjv` 二进制安装、`<CJV_HOME>/bin` 代理入口、`PATH` 配置与自更新 |
+| `fstx`、`fsops` | 持久化文件事务、原子重命名、目录树合并与平台文件重试 |
+| `ohos` | 为 OpenHarmony 宿主准备原生 ELF 载荷并执行自签名 |
 
-`progress` 定义事件和输出适配器；`i18n`、`cjverr`、`logging` 分别提供消息、结构化错误和日志。`retry` 是文件系统与下载重试策略共用的退避循环。`testutil` 提供测试分发源、进度记录器及平台测试辅助；`config/configtest` 隔离设置，`cli/clitest` 用于在测试中运行命令组。
+横切支撑包提供通用基础设施：
 
-## 命令状态与输出
+- `progress`：定义进度事件模型与终端/JSON 输出适配器。
+- `i18n`、`cjverr`、`logging`：分别提供多语言消息、带错误码的结构化错误和分级日志。
+- `retry`：文件系统重试与 HTTP 下载重试共用的退避循环。
+- `testutil`、`config/configtest`、`cli/clitest`：提供测试用本地分发源、进度记录器、隔离配置与命令组测试夹具（见[测试与检查](testing.md)）。
 
-每次 `cli.Execute` 创建独立的 `clictx.Context`（输出渲染器、`+toolchain` 选择、根命令）和命令树。命令组位于各自的包中（`showcmd`、`componentcmd`、`runcmd`、`initcmd`、`toolchaincmd`、`settingscmd`、`selfcmd`），各自在结构体中保存自己的标志，并注册到根命令。子命令把请求交给业务模块，业务模块通过 `progress.Sink` 报告事件，不直接打印最终结果。
+## 命令状态与输出渲染
 
-文本模式由 `progress.Text` 和结果的 `Text()` 方法渲染；JSON 模式丢弃进度，只输出结构化结果或错误。错误由 CLI 渲染一次，`main` 负责退出码。代理路径的 stdout 属于 SDK 工具，自动安装进度写入 stderr。
+每次调用 `cli.Execute` 都会创建独立的 `clictx.Context`（包含输出渲染器、全局 `+toolchain` 选择器和根命令）及全新命令树。各命令组分别位于独立的子包中（`showcmd`、`componentcmd`、`runcmd`、`initcmd`、`toolchaincmd`、`settingscmd`、`selfcmd`），各自在结构体中保存标志参数并注册到根命令。
 
-修改 CLI 时，保持每次调用的状态隔离，不把标志、writer 或 JSON 模式存回全局变量。
+子命令将请求参数组装后传给业务模块（`lifecycle`、`resolve`、`toolchain`、`config`），业务模块通过 `progress.Sink` 报告进度事件并返回结构化结果，不直接向标准输出打印最终文本：
 
-## 安装与发布
+- **文本模式**：由 `progress.Text` 渲染实时进度，并调用结果对象的 `Text()` 方法输出。
+- **JSON 模式**：丢弃进度事件，向 `stdout` 输出单个结构化 JSON 文档或错误对象。
+- **代理模式**：将 `stdout` 完全留给被调用的 SDK 工具，自动补装进度统一写入 `stderr`。
 
-`lifecycle.OpenDistribution` 读取设置、平台与清单，不恢复或扫描本地安装，远程查询因此不依赖本地恢复成功。写入操作使用安装分发会话，先恢复中断事务和迁移旧布局，再读取安装快照。
+每个错误由 CLI 层渲染一次，再由 `main` 转换为进程退出码。修改 CLI 时请保持每次调用的状态隔离，禁止将命令标志、`io.Writer` 或 JSON 模式存回包级全局变量。
 
-一次受管 SDK 安装遵循以下顺序：
+## 事务性安装与发布
 
-1. `dist.Preparation` 获取安装锁，创建本次操作的私有暂存区。
-2. 在 home 锁内读取安装身份、组件选择及宿主依赖快照。
-3. 释放 home 锁，解析版本、下载并准备宿主、跟踪目标和组件。安装锁继续持有。
-4. 重新获取 home 锁，检查快照和依赖是否变化。
-5. `publication.go` 通过 `fstx.NewToolchainGroupTransaction` 一起发布 SDK、stdx 和文档。
-6. 完成命令入口等收尾工作，标记准备成功并清理本次拥有的下载和暂存文件。
+### 只读查询会话与写入安装会话
 
-`--force` 对应允许缺失的可选项，不强制重装相同 SDK。`--no-update` 保留已安装发行版；nightly 根据组件和目标集合选择已发布的兼容版本，降级需显式允许。
+`lifecycle.OpenDistribution` 仅读取合并后的设置、平台定义与远程版本清单，不扫描也不恢复本地安装目录；因此即使本地状态存在待恢复事务，`list-remote` 和 `check` 等远程查询仍能正常执行。
 
-受管组件批次也先准备再复查，通过单个事务发布内容和清单。SDK 本体留在原处。固定版本与跟踪通道独立；硬链接去重只用于满足来源及内容条件的普通 SDK 文件，元数据和组件不共享。
+写入类操作则打开安装分发会话：在读取本地安装快照之前，先恢复上次中断的持久化事务并完成旧版目录布局迁移。
 
-URL 和本地归档安装走 `resolved_install.go`。随包 stdx 在 SDK 提交后处理，失败会保留已提交 SDK 并报告部分成功。这与受管通道的整组发布语义不同。
+### 受管 SDK 安装的六个阶段
 
-## 恢复与文件所有权
+一次受管通道或版本的 SDK 安装按以下六个步骤执行：
 
-`fstx` 将提交状态、受管路径和备份写入日志。进程中断后的恢复使用同一提交或回滚决策；恢复受阻时保留日志和备份，并返回 `RecoveryError`。安装、删除和活跃工具链准备要求先完成恢复，不能把需要恢复的备份当作普通残留清除。
+1. `dist.Preparation` 获取全局安装锁（`downloads/.lock`），并创建本次操作独享的私有暂存区。
+2. 在 `HomeLock` 锁内读取目标安装身份、已选组件集合及宿主与交叉目标的依赖快照。
+3. 释放 `HomeLock`（继续持有安装锁），解析清单版本、下载归档，并在暂存区解包准备宿主 SDK、已跟踪交叉目标和组件。
+4. 重新获取 `HomeLock`，校验本地安装快照和依赖关系在锁释放期间是否发生变化。
+5. `publication.go` 通过单个持久化事务（`fstx.NewToolchainGroupTransaction`）将 SDK、`stdx` 和离线文档根目录原子发布到位。
+6. 更新 `<CJV_HOME>/bin` 代理入口，标记准备阶段完成，并清理本次操作拥有的暂存文件和临时下载。
 
-`HomeLock` 先获取全局写锁，再获取活跃工具链查询锁。历史快照复制、校验及历史清理通过 `WithStableReads` 暂时释放查询锁，同时保留全局写锁；这些阶段不修改已安装目录，因此其他命令可以解析现有 SDK。查询持有查询锁直至目录定位完成，并以非阻塞方式确认仍有写进程持有全局锁；否则执行正常恢复。写进程在发布前重新获取查询锁，并原子清除只读阶段标记。查询不能持有查询锁等待全局锁，避免锁顺序反转。进程崩溃后遗留的阶段标记不能跳过恢复；首次旧布局迁移完成前也不启用此路径。
+安装策略标志仅调整版本与组件解析规则，不削弱事务完整性：
 
-`component` 在创建快照及修改文件前校验组件根、完整文件清单和父目录链接。共享文件保留，受管叶链接可以移除且不删除源目录，归档合并不能穿过未跟踪链接。外部 SDK 目录链接不能作为组件编辑根，回滚同样检查目标根。
+- `--force` 允许跳过并移除缺失的可选组件或目标，不会强制重装未变化的 SDK。
+- `--no-update` 保留已安装的宿主发行版，仅补齐新增的目标或组件。
+- `nightly` 解析会结合所需组件和交叉目标在已发布历史中选择兼容版本；除非显式传入 `--allow-downgrade`，否则不会降级。
 
-受管组件批次有持久化发布日志；直接组件链接和归档编辑使用备份及普通错误回滚，恢复失败时保留备份。不要把两类操作都描述为可跨进程恢复的事务。
+### 组件批次、文件复用与自定义归档
 
-数据路径从 `config/layout.go` 派生，树复制、合并和平台重试交给 `fsops`。归档与树操作拒绝逃出所拥有目录的路径或链接。
+受管组件批次操作（`component add`、`component remove`）同样先在锁外暂存准备，再在 `HomeLock` 下复查并通过单个 `fstx` 事务发布组件内容与文件清单，期间保持 SDK 本体目录不动。
 
-## 活跃工具链与交叉目标
+硬链接文件复用（`link_mode = "hardlink"`）仅对具有相同发行版、平台和 SHA-256 的普通 SDK 文件生效；安装元数据和组件目录始终保持独立。
 
-`toolchain.SelectActive` 处理显式选择、环境变量、逐层目录覆盖及项目文件、默认设置。`PrepareActive` 恢复并定位安装，只有确实缺少官方 SDK 时才调用安装回调；无效选择、损坏记录和文件系统错误直接返回。
+URL 和本地归档安装（`resolved_install.go`）先提交 SDK 本体，再处理随包附带的 `stdx`。如果随包 `stdx` 安装失败，cjv 会保留已提交的 SDK 并报告部分成功，这与受管通道整组原子发布的语义不同。
 
-`resolve.Active` 根据 `auto_install` 补齐项目要求。`run --install` 显式允许安装，状态查询不安装。`toolchain.ReadHostTargets` 统一读取宿主身份、实际发行版和平台；`target` 命令、`component --target`、`resolve.ActiveTarget` 及代理补齐都使用它，避免关联到其他宿主或版本的交叉 SDK。
+## 崩溃恢复、并发锁与文件所有权
 
-`env.Runtime` 从显式传入的基础环境合并 SDK 路径与组件变量，再生成子进程环境或 shell 脚本。`env` 不负责选择工具链；`resolve.ActiveRuntime` 将当前选择与对应的 `env.Runtime` 组合。`sdktools` 统一工具路径。Unix 代理替换当前进程，Windows 代理与 `run`、`exec` 共用 `process.Run` 处理子进程。
+### 持久化日志恢复（`fstx`）
 
-## 分发与下载
+`fstx` 在移动文件前先将事务状态、受管目标路径和备份路径写入磁盘日志。如果进程中途崩溃或被终止，下一次执行写入命令或准备活跃工具链时，会重放日志并按原提交或回滚决策完成恢复。
 
-`dist.Source` 按需读取并缓存 LTS/STS 的 `versions.json` 与独立 `nightly.json`，组件由同一通道数据解析。cjv 消费静态清单；上游发现和清单生成由独立的 `cangjie-version-manifest` 仓库负责。
+如果文件系统错误导致恢复受阻，`fstx` 会保留日志和备份目录并返回 `RecoveryError`。任何时候都不得将恢复所需的备份目录当作普通临时残留清除。
 
-`Preparation` 拥有安装锁、暂存目录和下载归档，持续到发布与清理结束。失败保留可复用下载，成功仅清理自己拥有的文件；用户提供的本地归档和恢复日志不归它清理。
+### 读写并发控制（`HomeLock` 与 `WithStableReads`）
 
-归档和 nightly SHA-256 sidecar 共用可取消重试。408、429 和服务器错误可重试，永久 HTTP 错误及格式错误不重试；sidecar 404 表示尚未发布。带 SHA-256 的下载可跨命令续传并校验完整文件，无哈希下载只在单次操作内续传。
+`HomeLock` 先获取全局写锁，再获取活跃工具链查询门禁锁（gate）。在执行复制历史快照、校验快照或清理历史记录等不修改已安装 SDK 目录的耗时阶段，写进程通过 `WithStableReads` 暂时释放查询门禁锁，同时继续持有全局写锁。
 
-## 设置与 cjv 自管理
+这一机制允许并发的读进程（如运行 `cjc`、`cjv show active`、`cjv which`）在不等待历史快照操作的情况下直接解析并使用现有 SDK：
 
-`config.SettingsFile` 保留字段是否由用户设置的信息，`Update` 只写明确选择的字段，`Save` 可恢复值及字段存在性。环境覆盖保持临时生效；写入前校验，发布成功后更新缓存。
+- 读进程在定位目录期间持有查询门禁锁，并以非阻塞方式探测全局写锁。
+- 如果探测到有存活的写进程持有全局写锁且处于稳定读阶段，读进程直接使用当前已安装的根目录。
+- 如果没有存活写进程持有全局写锁（例如写进程已崩溃退出），读进程会先执行正常的事务恢复，再解析 SDK。
+- 写进程在真正修改已安装目录前，必须重新获取查询门禁锁并原子清除只读阶段标记。
+- 读进程绝对不能在持有查询门禁锁的同时阻塞等待全局写锁，从而杜绝锁顺序反转死锁。进程崩溃遗留的阶段标记不会跳过恢复，且在首次旧布局迁移完成前不启用该快速路径。
 
-`reachable.Ensure` 统一安装受管二进制、代理入口和环境脚本，按调用方策略配置 PATH。`selfupdate.Check` 只查版本，`Update` 校验并替换二进制后返回状态，由 CLI 渲染。默认与 mirror 构建分别实现 GitHub 和 GitCode 版本发现。
+### 组件文件所有权与路径安全
+
+`component` 在创建快照或修改文件前，会校验受管组件根目录、完整文件清单和父目录符号链接：
+
+- 卸载组件时保留与基础 SDK 共享的文件。
+- 受管的叶节点符号链接可以直接移除而不删除其指向的源目录；归档合并拒绝穿过未跟踪的符号链接。
+- 通过 `cjv toolchain link` 创建的外部 SDK 目录链接不能作为组件编辑根目录；回退操作同样会校验目标根目录。
+- 受管组件批次拥有可跨进程恢复的持久化发布日志；而直接 `component link` 和自定义归档组件编辑使用进程内备份与普通错误回滚（若回滚失败则保留备份）。
+
+所有 `<CJV_HOME>` 子路径统一从 `config/layout.go` 派生；目录树复制、合并和平台重试统一调用 `fsops`。所有归档解包与目录树操作均拒绝任何逃出受管根目录的路径或链接。
+
+## 活跃工具链解析与运行环境执行
+
+1. `toolchain.SelectActive` 按顺序评估显式 CLI 选择器（`+name`、`--toolchain`）、`CJV_TOOLCHAIN` 环境变量、逐层目录覆盖与 `cangjie-sdk.toml` 以及全局 `default_toolchain`。
+2. `toolchain.PrepareActive` 执行待定事务恢复并定位本地安装；仅当确认缺少有效的官方 SDK 时才调用自动安装回调，无效名称、损坏记录和文件系统错误均直接返回。
+3. `resolve.Active` 根据 `auto_install` 设置（或 `run --install` 标志）自动补齐项目声明的组件与交叉编译目标；`show`、`which` 等只读状态查询绝不触发安装。
+4. `toolchain.ReadHostTargets` 统一绑定宿主安装身份、实际发行版和主机平台；`target` 子命令、`component --target`、`resolve.ActiveTarget` 以及代理目标补齐均调用该函数，防止错误关联到其他宿主或不同版本的交叉 SDK。
+5. `env.Runtime` 基于显式传入的基础环境变量合并 SDK 路径与组件变量，生成子进程环境或 `envsetup` 脚本。`resolve.ActiveRuntime` 将活跃工具链解析与 `env.Runtime` 组合，`sdktools` 统一解析工具路径。Unix 代理直接通过 `execve` 替换当前进程；Windows 代理以及 `cjv run`、`cjv exec` 则共用 `process.Run` 启动子进程并传递信号与退出码。
+
+## 分发清单、下载重试与自管理
+
+- **按需加载清单（`dist.Source`）**：按需读取并缓存 LTS/STS 的 `versions.json` 与独立的 `nightly.json`，组件数据从同一通道对象解析。cjv 只消费静态清单，上游发现与清单生成由独立的 `cangjie-version-manifest` 仓库负责。
+- **下载与暂存生命周期（`dist.Preparation`）**：统一持有安装锁、暂存目录和已下载归档直至发布与清理结束。失败时保留支持断点续传的下载文件；成功时仅清理本次操作拥有的文件，不触碰用户传入的本地归档和恢复日志。
+- **重试与续传策略**：归档下载和 nightly `.sha256` sidecar 请求共用可取消的退避重试。HTTP `408`、`429` 和 `5xx` 错误会自动重试，永久性 `4xx` 错误和格式损坏立即失败（sidecar 返回 `404` 表示校验和尚未发布）。带 SHA-256 的下载支持跨命令断点续传并校验完整文件；无哈希下载仅在单次操作内续传。
+- **设置与自更新（`config`、`reachable`、`selfupdate`）**：`config.SettingsFile` 记录每个字段是否由用户显式设置，`Update` 仅写入被修改的字段。`reachable.Ensure` 统一安装受管二进制、代理入口与环境脚本并按策略配置 `PATH`。`selfupdate.Check` 仅查询版本，`selfupdate.Update` 校验并替换二进制后返回状态供 CLI 渲染。

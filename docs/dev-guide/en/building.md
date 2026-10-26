@@ -1,46 +1,60 @@
 # Build from source
 
-Use the Go version required by `go.mod`. The CLI builds independently of the frontend. Generated platform files and embedded locale resources are committed and ready to compile.
+You can compile the `cjv` CLI with the Go version in `go.mod`. The Go CLI compiles without building the `web/` frontend first, because the repository already commits generated platform tables and locale files. This chapter covers standard builds, version injection, mirror builds, cross-compilation, and OpenHarmony signing.
+
+## Build the standard CLI
+
+Run these commands from the repository root directory:
 
 ```bash
 go build ./...
 go build -o cjv ./cmd/cjv
 ```
 
-On Windows, use `go build -o cjv.exe ./cmd/cjv`. The first command checks all packages; the second writes an executable. Run `go install ./cmd/cjv` to install the current checkout into `GOBIN`.
+- On Windows, use `go build -o cjv.exe ./cmd/cjv`.
+- `go build ./...` checks that every package in the workspace compiles.
+- `go build -o cjv ./cmd/cjv` produces the standalone executable.
+- Run `go install ./cmd/cjv` if you want to install the binary from your working tree into `GOBIN`.
 
-## Version information and mirror builds
+## Version strings and mirror builds
 
-Ordinary builds report `dev`. GoReleaser injects `main.version` and `main.updateURL` for releases. You can set a local version explicitly:
+By default, a local build reports `dev` as its version and skips self-update version comparisons. During official releases, GoReleaser injects `main.version` and `main.updateURL` with `-ldflags`. You can set a version string or build the GitCode mirror variant locally:
 
 ```bash
 go build -ldflags "-X main.version=0.0.0-local" -o cjv ./cmd/cjv
 go build -tags=mirror -o cjv-mirror ./cmd/cjv
 ```
 
-The `mirror` build tag selects the GitCode default manifest and self-update implementation in `internal/config/manifest_*.go` and `internal/selfupdate/update_*.go`. Validate both variants when changing shared interfaces.
+The `mirror` build tag selects the GitCode default manifest URL and self-update backend in `internal/config/manifest_*.go` and `internal/selfupdate/update_*.go`. Whenever you change shared interfaces in `config` or `selfupdate`, compile and test both the default build and the `-tags=mirror` build.
 
-## Cross builds and generated files
+## Cross-compilation and generated platform catalogs
 
-Use Go's platform variables to cross-compile. In Bash:
+Use standard Go environment variables (`GOOS` and `GOARCH`) to cross-compile `cjv`. For example, in Bash:
 
 ```bash
 GOOS=linux GOARCH=arm64 go build -o cjv ./cmd/cjv
 ```
 
-The release platform catalog is in `internal/target/catalog.go`: amd64/arm64 for Linux and macOS, amd64 for Windows, and amd64/arm64 for OpenHarmony. After changing the catalog, run:
+The supported release platforms live in `internal/target/catalog.go`:
+
+- **Linux**: `amd64` and `arm64`
+- **macOS (`darwin`)**: `amd64` and `arm64`
+- **Windows**: `amd64`
+- **OpenHarmony (`openharmony`)**: `amd64` and `arm64`
+
+If you change `internal/target/catalog.go`, regenerate the derived files:
 
 ```bash
 go generate ./...
 ```
 
-Review the generated frontend platforms, then check release configuration and the CI matrix for consistency. See [testing and checks](testing.md) to validate behavior after building.
+After running `go generate ./...`, check the updated frontend catalog in `web/src/generated/platforms.ts`, `.goreleaser.yml`, and the CI workflows to keep all platform lists synchronized. Read [Tests and checks](testing.md) for verification commands.
 
 ## OpenHarmony
 
-Use the Linux/amd64 toolchain from [Go-HMOS go1.27.2-hmos.5](https://github.com/ZxillyFork/go-hmos-build/releases/tag/go1.27.2-hmos.5) with `CGO_ENABLED=0`.
+To build `cjv` for OpenHarmony (`GOOS=openharmony`), use the Linux `amd64` toolchain from [Go-HMOS go1.27.2-hmos.5](https://github.com/ZxillyFork/go-hmos-build/releases/tag/go1.27.2-hmos.5) with `CGO_ENABLED=0`.
 
-From the repository root, set the tool paths and build the signer with host Go:
+From the repository root on a Linux x86_64 host, build the host code-signing tool and then compile and sign the OpenHarmony binary:
 
 ```bash
 export GOENV=off GOTOOLCHAIN=local
@@ -51,8 +65,6 @@ GOOS=openharmony GOARCH=arm64 CGO_ENABLED=0 "$HMOS_GO" build -o cjv ./cmd/cjv
 "$HMOS_SIGN" cjv cjv
 ```
 
-Use `GOARCH=amd64` for x64 and add `-tags=mirror` for the mirror variant.
-
-The host signer reuses `internal/ohos/selfsign`, checks the ELF and Go build information, then adds and verifies `.codesign`. Use `--verify FILE...` to check existing artifacts.
-
-Releases use `.goreleaser.yml` to build default and mirror variants. OpenHarmony binaries are signed before archiving and checksum generation. Downloaded SDK payloads are signed through the platform hook in `internal/dist`.
+- Set `GOARCH=amd64` to build the x86_64 OpenHarmony binary, and add `-tags=mirror` to build the mirror variant.
+- The host signer (`scripts/harmonyos`) reuses `internal/ohos/selfsign` to check the ELF layout and Go build metadata, embed the `.codesign` section, and check the signature. Pass `--verify FILE...` to check existing binaries.
+- During official [releases](releasing.md), `.goreleaser.yml` signs OpenHarmony binaries before creating archives and checksums. When `cjv` runs on an OpenHarmony host and installs a Cangjie SDK, the platform hook in `internal/dist` self-signs downloaded SDK executables automatically.
