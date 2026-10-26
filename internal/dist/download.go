@@ -96,7 +96,7 @@ func DownloadCachedWithName(ctx context.Context, url, sha256Hex, cacheDir, displ
 	if Offline(ctx) {
 		// An offline miss says nothing about an existing partial download's
 		// validity. Preserve it so the next online attempt can resume.
-		return "", fmt.Errorf("offline mode: no verified cached download for %s", url)
+		return "", &cjverr.OfflineCacheMissError{Kind: "artifact", URL: redactURL(url)}
 	}
 	if err := os.MkdirAll(cacheDir, 0o755); err != nil {
 		return "", err

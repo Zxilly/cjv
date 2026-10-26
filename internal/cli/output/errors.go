@@ -1,31 +1,11 @@
 package output
 
-import (
-	"errors"
+import "github.com/Zxilly/cjv/internal/cjverr"
 
-	"github.com/Zxilly/cjv/internal/cjverr"
-)
-
-type errorPayload struct {
-	Code    cjverr.ErrorCode `json:"code"`
-	Message string           `json:"message"`
-	Details map[string]any   `json:"details"`
-}
+type errorPayload = cjverr.ErrorInfo
 
 // buildErrorPayload maps a Go error into the JSON error envelope payload.
-// Errors that implement cjverr.Coded supply their own code and details;
-// everything else falls back to UNKNOWN with empty details.
+// The same mapping describes nested automatic-install causes.
 func buildErrorPayload(err error) errorPayload {
-	if coded, ok := errors.AsType[cjverr.Coded](err); ok {
-		return errorPayload{
-			Code:    coded.Code(),
-			Message: err.Error(),
-			Details: coded.Details(),
-		}
-	}
-	return errorPayload{
-		Code:    cjverr.ErrorCodeUnknown,
-		Message: err.Error(),
-		Details: map[string]any{},
-	}
+	return cjverr.Describe(err)
 }

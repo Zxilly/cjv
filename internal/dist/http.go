@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Zxilly/cjv/internal/cjverr"
 	"github.com/Zxilly/cjv/internal/config"
 )
 
@@ -57,7 +58,7 @@ type uaTransport struct {
 
 func (t *uaTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	if Offline(req.Context()) {
-		return nil, &nonRetriableError{err: fmt.Errorf("offline mode: network access to %s is disabled", req.URL.Redacted())}
+		return nil, &nonRetriableError{err: &cjverr.NetworkDisabledError{URL: req.URL.Redacted()}}
 	}
 	if req.Header.Get("User-Agent") == "" {
 		r2 := new(http.Request)
@@ -67,6 +68,14 @@ func (t *uaTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 		req = r2
 	}
 	return t.base.RoundTrip(req)
+}
+
+func redactURL(rawURL string) string {
+	parsed, err := url.Parse(rawURL)
+	if err != nil {
+		return "<invalid URL>"
+	}
+	return parsed.Redacted()
 }
 
 func validateHTTPURL(u *url.URL, label string) error {

@@ -53,6 +53,11 @@ func (e *ManifestFetchError) Error() string {
 	return fmt.Sprintf("failed to fetch manifest: HTTP %d", e.StatusCode)
 }
 
+func (e *ManifestFetchError) Code() cjverr.ErrorCode { return cjverr.ErrorCodeHTTP }
+func (e *ManifestFetchError) Details() map[string]any {
+	return map[string]any{"status_code": e.StatusCode, "url": redactURL(e.URL)}
+}
+
 // NewSource resolves the active distribution source from settings. A nightly
 // release whose manifest entry carries no checksum is completed from its
 // sha256 sidecar next to the asset.

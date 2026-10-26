@@ -15,6 +15,12 @@ type ErrorCode string
 
 const (
 	ErrorCodeUnknown                         ErrorCode = "UNKNOWN"
+	ErrorCodeCanceled                        ErrorCode = "CANCELED"
+	ErrorCodeDeadlineExceeded                ErrorCode = "DEADLINE_EXCEEDED"
+	ErrorCodeNetwork                         ErrorCode = "NETWORK_ERROR"
+	ErrorCodeHTTP                            ErrorCode = "HTTP_ERROR"
+	ErrorCodeOfflineCacheMiss                ErrorCode = "OFFLINE_CACHE_MISS"
+	ErrorCodeNetworkDisabled                 ErrorCode = "NETWORK_DISABLED"
 	ErrorCodeToolchainNotInstalled           ErrorCode = "TOOLCHAIN_NOT_INSTALLED"
 	ErrorCodeToolchainAlreadyInstalled       ErrorCode = "TOOLCHAIN_ALREADY_INSTALLED"
 	ErrorCodeVersionNotFound                 ErrorCode = "VERSION_NOT_FOUND"
@@ -52,13 +58,18 @@ type Coded interface {
 // ToolchainNotInstalledError indicates the requested toolchain is not installed.
 type ToolchainNotInstalledError struct {
 	Name string
+	// Cause records a failed automatic installation, when one was attempted.
+	Cause error
 }
 
 func (e *ToolchainNotInstalledError) Error() string {
-	return i18n.T("ToolchainNotInstalled", i18n.MsgData{"Name": e.Name})
+	return messageWithCause(i18n.T("ToolchainNotInstalled", i18n.MsgData{"Name": e.Name}), e.Cause)
 }
-func (e *ToolchainNotInstalledError) Code() ErrorCode         { return ErrorCodeToolchainNotInstalled }
-func (e *ToolchainNotInstalledError) Details() map[string]any { return map[string]any{"name": e.Name} }
+func (e *ToolchainNotInstalledError) Unwrap() error   { return e.Cause }
+func (e *ToolchainNotInstalledError) Code() ErrorCode { return ErrorCodeToolchainNotInstalled }
+func (e *ToolchainNotInstalledError) Details() map[string]any {
+	return detailsWithCause(map[string]any{"name": e.Name}, e.Cause)
+}
 
 // ToolchainAlreadyInstalledError indicates the toolchain is already present.
 type ToolchainAlreadyInstalledError struct {
@@ -237,17 +248,20 @@ func (e *UnknownComponentError) Details() map[string]any { return map[string]any
 type ComponentNotInstalledError struct {
 	Toolchain string
 	Component string
+	// Cause records a failed automatic installation, when one was attempted.
+	Cause error
 }
 
 func (e *ComponentNotInstalledError) Error() string {
-	return i18n.T("ComponentNotInstalled", i18n.MsgData{
+	return messageWithCause(i18n.T("ComponentNotInstalled", i18n.MsgData{
 		"Toolchain": e.Toolchain,
 		"Component": e.Component,
-	})
+	}), e.Cause)
 }
+func (e *ComponentNotInstalledError) Unwrap() error   { return e.Cause }
 func (e *ComponentNotInstalledError) Code() ErrorCode { return ErrorCodeComponentNotInstalled }
 func (e *ComponentNotInstalledError) Details() map[string]any {
-	return map[string]any{"toolchain": e.Toolchain, "component": e.Component}
+	return detailsWithCause(map[string]any{"toolchain": e.Toolchain, "component": e.Component}, e.Cause)
 }
 
 // ComponentAlreadyInstalledError indicates the component is already present

@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/Zxilly/cjv/internal/cjverr"
 	"github.com/Zxilly/cjv/internal/config"
 )
 
@@ -86,8 +87,22 @@ func retryAfter(value string) time.Duration {
 	return 0
 }
 
+type transferHTTPStatusError struct {
+	status int
+	url    string
+}
+
+func (e *transferHTTPStatusError) Error() string {
+	return fmt.Sprintf("HTTP %d for %s", e.status, redactURL(e.url))
+}
+
+func (e *transferHTTPStatusError) Code() cjverr.ErrorCode { return cjverr.ErrorCodeHTTP }
+func (e *transferHTTPStatusError) Details() map[string]any {
+	return map[string]any{"status_code": e.status, "url": redactURL(e.url)}
+}
+
 func transferHTTPError(status int, url string) error {
-	err := fmt.Errorf("HTTP %d for %s", status, url)
+	err := &transferHTTPStatusError{status: status, url: url}
 	if isNonRetriableHTTPStatus(status) {
 		return &nonRetriableError{err: err}
 	}

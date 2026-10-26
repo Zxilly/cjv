@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Zxilly/cjv/internal/cjverr"
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/fsops"
 	"github.com/Zxilly/cjv/internal/progress"
@@ -79,7 +80,7 @@ func cachedMetadata(ctx context.Context, rawURL string, fetch func() ([]byte, er
 	if Offline(ctx) {
 		file, err := os.Open(path)
 		if errors.Is(err, os.ErrNotExist) {
-			return nil, fmt.Errorf("offline mode: metadata for %s is not cached: %w", rawURL, os.ErrNotExist)
+			return nil, &cjverr.OfflineCacheMissError{Kind: "metadata", URL: redactURL(rawURL)}
 		}
 		if err != nil {
 			return nil, err

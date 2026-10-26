@@ -376,7 +376,7 @@ func TestActiveAutoInstallFailureReportsToolchainMissing(t *testing.T) {
 
 	_, err := Active(context.Background(), "")
 
-	require.Error(t, err)
+	require.ErrorIs(t, err, os.ErrPermission)
 	assert.Contains(t, err.Error(), "lts-1.0.5")
 }
 
@@ -415,7 +415,7 @@ func TestEnsureTargetsAutoInstallFailureAndMissingResult(t *testing.T) {
 	}
 
 	err := ensureTargets(context.Background(), tcName, tcDir, &settings, []string{"ohos"}, progress.Discard)
-	require.Error(t, err)
+	require.ErrorIs(t, err, os.ErrPermission)
 
 	AutoInstallFunc = func(ctx context.Context, input string, targets []string) error {
 		return nil
@@ -439,7 +439,7 @@ func TestEnsureComponentsInvalidAndAutoInstallFailures(t *testing.T) {
 	}
 
 	err := ensureComponents(context.Background(), "lts-1.0.5", tcDir, &settings, []string{"docs"}, progress.Discard)
-	require.Error(t, err)
+	require.ErrorIs(t, err, os.ErrPermission)
 	assert.Contains(t, err.Error(), "docs")
 
 	AutoInstallComponentsFunc = func(ctx context.Context, input string, components []string) error {

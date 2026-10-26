@@ -79,7 +79,7 @@ func Active(ctx context.Context, tcOverride string) (ActiveToolchain, error) {
 			sink.Report(progress.Event{Kind: progress.AutoInstalling, Subject: tcName})
 			if installErr := installFunc(ctx, tcName, targets); installErr != nil {
 				sink.Report(progress.Event{Kind: progress.AutoInstallFailed, Subject: tcName, Err: installErr})
-				return &cjverr.ToolchainNotInstalledError{Name: tcName}
+				return &cjverr.ToolchainNotInstalledError{Name: tcName, Cause: installErr}
 			}
 			return nil
 		}
@@ -192,7 +192,7 @@ func ensureTargets(ctx context.Context, tcInput, tcDir string, settings *config.
 	sink.Report(progress.Event{Kind: progress.AutoInstalling, Subject: subject})
 	if installErr := installFunc(ctx, tcInput, missingTargets); installErr != nil {
 		sink.Report(progress.Event{Kind: progress.AutoInstallFailed, Subject: subject, Err: installErr})
-		return &cjverr.ToolchainNotInstalledError{Name: missingNames[0]}
+		return &cjverr.ToolchainNotInstalledError{Name: missingNames[0], Cause: installErr}
 	}
 
 	for _, target := range missingTargets {
@@ -278,6 +278,7 @@ func ensureComponents(ctx context.Context, tcInput, tcDir string, settings *conf
 		return &cjverr.ComponentNotInstalledError{
 			Toolchain: filepath.Base(tcDir),
 			Component: asStrings[0],
+			Cause:     err,
 		}
 	}
 	for _, n := range missingNames {
