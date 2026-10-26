@@ -1,52 +1,52 @@
 # Website edge functions
 
-The `deployment/` directory contains the edge function builders, adapters, and verification scripts for the two public `cjv` website domains:
+The `deployment/` directory contains the edge function builders, provider adapters, and end-to-end verification scripts for the two public `cjv` website domains:
 
-- **`cjv.zxilly.dev`**: hosted on GitHub Pages and fronted by a Cloudflare Worker route.
-- **`cjv.zxilly.com`**: hosted on Tencent Cloud EdgeOne Makers.
+- **`cjv.zxilly.dev`** — Hosted on GitHub Pages with a Cloudflare Worker route in front of the homepage.
+- **`cjv.zxilly.com`** — Hosted on Tencent Cloud EdgeOne Makers for low-latency access across mainland China and global regions.
 
-## Homepage geo-personalization
+Both domains serve the same static site artifact produced by GitHub Actions, while adapting the initial mirror toggle on the homepage to the visitor's region.
 
-Both edge providers inspect the visitor's two-letter country code on requests to `/` and `/index.html`:
+## How homepage geo-personalization works
 
-- When the visitor's country code is `CN`, the edge function sets `data-default-mirror="true"` on the homepage HTML response.
-- For all other countries (or when geolocation metadata is absent), the edge function sets `data-default-mirror="false"`.
-- On initial render, the React app in `web/` reads `data-default-mirror` to set the default state of the GitCode mirror switch. The visitor can still toggle the switch manually at any time, and the browser never requests the HTML5 Geolocation API.
-- Personalized homepage responses set `Cache-Control: private, no-store`. All other routes (static assets, `/dl/` binaries, `/book/` documentation, `install.sh`, `install.ps1`, and `404.html`) use their normal static caching rules.
+When a visitor requests `/` or `/index.html`, both edge providers inspect the two-letter country code attached to the incoming request by the CDN:
+
+- If the visitor's country code is `CN`, the edge function rewrites the homepage HTML to set `data-default-mirror="true"`.
+- For all other countries—or when geolocation metadata is unavailable—the edge function sets `data-default-mirror="false"`.
+
+When the React application in `web/` mounts for the first time, it reads `data-default-mirror` from the document to initialize the GitCode mirror switch. The visitor can still toggle the switch manually at any time, and the browser never needs to prompt for the HTML5 Geolocation API.
+
+Because the homepage HTML varies by visitor location, personalized responses carry `Cache-Control: private, no-store`. All other routes—including hashed frontend assets, `/dl/` standalone installers, `/book/` documentation pages, `install.sh`, `install.ps1`, and `404.html`—continue to use their standard static routes and cache policies.
 
 ## Tencent Cloud EdgeOne (`cjv.zxilly.com`)
 
-During `.github/workflows/pages.yml`, the deployment job converts the shared `github-pages` artifact into a prebuilt EdgeOne directory that includes an edge function for `/` and `/index.html`. The homepage function route runs before static file lookup and reads `request.eo.geo.countryCodeAlpha2`.
+During the website deployment workflow (`.github/workflows/pages.yml`), `deployment/build-edge.mjs` transforms the shared `github-pages` artifact into a prebuilt EdgeOne output directory. This bundle includes an edge function bound to `/` and `/index.html` that reads `request.eo.geo.countryCodeAlpha2`. The homepage route is ordered ahead of static-file lookup so that the edge function executes even though a static `index.html` file is present in the bundle.
 
-To build and deploy the EdgeOne bundle manually from `web/dist/`:
+To build and deploy the EdgeOne bundle manually from a built `web/dist` directory:
 
 ```sh
 node deployment/build-edge.mjs edgeone web/dist /path/to/edgeone-output/.edgeone
 edgeone makers deploy /path/to/edgeone-output/.edgeone --name cjv-web-global --env production
 ```
 
-> **CAUTION:** You **must** name the output directory `.edgeone` when you run `edgeone makers deploy`. If you pass a directory with any other name, the EdgeOne CLI treats it as a plain static upload, skips the edge function, and serves assets under the wrong URL prefix.
+> **Important:** The output directory passed to `edgeone makers deploy` **must** be named `.edgeone`. If you pass a directory with any other name, the EdgeOne CLI treats it as a plain static directory upload, leaving the edge function inactive and placing static assets under the wrong URL prefix.
 
-After deployment, the workflow runs `deployment/verify-site.mjs` to check the live homepage, documentation, installer scripts, and download routes.
+After deploying, the CI workflow automatically runs `deployment/verify-site.mjs` against both public domains to confirm that the homepage, documentation books, installer scripts, and download routes respond as expected.
 
 ## Cloudflare Worker (`cjv.zxilly.dev`)
 
-### How the route Worker operates
+### Architecture and deployment triggers
 
-On `cjv.zxilly.dev`, a Cloudflare Worker wraps the GitHub Pages origin for the homepage routes defined in `deployment/cloudflare/worker.config.json`. It reads `request.cf.country` and fetches the current homepage HTML from the GitHub Pages origin on each request.
+On `cjv.zxilly.dev`, a Cloudflare Worker wraps the GitHub Pages origin for the homepage routes declared in `deployment/cloudflare/worker.config.json` and reads `request.cf.country`. Because the Worker fetches the current homepage HTML from the GitHub Pages origin on each request, ordinary website or documentation updates do not require redeploying the Worker. You only need to redeploy it when you modify the shared response logic, the Cloudflare adapter, the edge builder, or `worker.config.json`.
 
-Because the Worker fetches live HTML from GitHub Pages, ordinary website or documentation updates do not need a Worker redeployment. You only need to redeploy the Worker when you change the shared response handler, the Cloudflare adapter, the edge builder, or `worker.config.json`.
+The `.github/workflows/cloudflare.yml` (`Deploy Cloudflare Worker`) workflow watches `deployment/` and its own workflow file on `master` (and also supports manual `workflow_dispatch` runs). Unrelated Go or documentation changes do not trigger a Worker deployment; similarly, Go-only changes do not redeploy either website unless called by the release workflow to publish new `/dl/` binaries.
 
-### Automated and manual Cloudflare deployment
+### Credentials and manual deployment
 
-The `.github/workflows/cloudflare.yml` (`Deploy Cloudflare Worker`) workflow triggers automatically when files under `deployment/` or `.github/workflows/cloudflare.yml` change on `master`, or on manual `workflow_dispatch`.
+The Cloudflare workflow uses two GitHub repository settings:
 
-The workflow uses two GitHub repository settings:
-
-| Setting type | Name | Needed permissions |
-| --- | --- | --- |
-| Repository variable | `CLOUDFLARE_ACCOUNT_ID` | Target Cloudflare account ID |
-| Repository secret | `CLOUDFLARE_API_TOKEN` | Account `Workers Scripts:Write`, plus `zxilly.dev` zone `Workers Routes:Write` and `Zone:Read` (current token expires on October 21, 2027; rotate before expiry) |
+- **`CLOUDFLARE_ACCOUNT_ID`** (repository variable) — The target Cloudflare account ID.
+- **`CLOUDFLARE_API_TOKEN`** (repository secret) — An API token with account `Workers Scripts:Write` permission, plus `Workers Routes:Write` and `Zone:Read` for the `zxilly.dev` zone. The current CI token expires on **October 21, 2027** and should be rotated before that date.
 
 To build and deploy the Cloudflare Worker locally with the npm `cf` CLI (`1.0.0-beta.6`):
 
@@ -56,14 +56,14 @@ cf deploy --prebuilt --dry-run
 cf deploy --prebuilt
 ```
 
-Enable the Cloudflare proxy (orange cloud) on the `cjv.zxilly.dev` DNS record so the Worker route intercepts homepage requests.
+The CLI requires an authenticated Cloudflare profile with Worker script and route permissions, and the `cjv.zxilly.dev` DNS record must have Cloudflare proxying (orange cloud) enabled so that the Worker route intercepts homepage traffic.
 
-## Local validation
+## Validation
 
-Run the unit and integration test suite for both edge bundles with Node.js:
+You can run the automated test suite for both edge bundles locally with Node.js:
 
 ```sh
 node --test deployment/edge.test.mjs
 ```
 
-`deployment/edge.test.mjs` runs both the generated Cloudflare and EdgeOne bundles against simulated `CN`, non-`CN`, and missing-country requests. It checks `data-default-mirror`, `Cache-Control` headers, route boundaries, `HEAD` requests, origin error handling, and static asset pass-through.
+These tests execute both the generated Cloudflare and EdgeOne bundles against simulated `CN`, non-`CN`, and missing-country requests, verifying `data-default-mirror` injection, `Cache-Control` headers, manual-route boundaries, origin error handling, `HEAD` responses, and preservation of static assets.

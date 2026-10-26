@@ -1,4 +1,4 @@
-# cjv - Cangjie Version Manager
+# cjv: the Cangjie toolchain installer
 
 [![CI](https://img.shields.io/github/actions/workflow/status/Zxilly/cjv/ci.yml?branch=master&style=flat-square)](https://github.com/Zxilly/cjv/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/Zxilly/cjv?style=flat-square)](https://github.com/Zxilly/cjv/releases)
@@ -6,36 +6,38 @@
 
 English | [中文](README.md)
 
-cjv is a version manager for the [Cangjie](https://cangjie-lang.cn/) SDK. It installs toolchains on your machine and selects an SDK version for each project. It also routes commands such as `cjc` and `cjpm` to the tools of the active SDK.
+_cjv_ installs the [Cangjie Programming Language](https://cangjie-lang.cn/) SDK from the official release channels, enabling you to easily switch between LTS, STS, and nightly toolchains and keep them updated. It manages extension libraries (`stdx`), offline documentation, and cross-compilation target SDKs, and routes everyday commands such as `cjc` and `cjpm` to the right toolchain for each project.
 
-## Key functions
+`cjv` runs across Linux, macOS, Windows, and HarmonyOS (availability of specific SDK releases depends on the upstream distribution manifest for each platform).
 
-- Install and update LTS, STS, and nightly toolchains.
-- Declare the SDK version, components, and target SDKs for a project in `cangjie-sdk.toml`.
-- Manage `stdx` extension libraries, offline documentation, and local or custom SDKs.
-- Operate on Linux, macOS, Windows, and HarmonyOS. Available SDK releases depend on the distribution source and the host platform.
+## Highlights
+
+- **Multiple release channels and pinned versions**: Track `lts`, `sts`, and `nightly` channels side by side, or pin exact versions such as `lts-1.0.5` and `nightly-2026-10-04`.
+- **Per-project toolchain files**: Commit a `cangjie-sdk.toml` file to your repository so everyone on your team—and your CI pipeline—uses the exact same compiler, components, and cross-compilation targets.
+- **Components and custom SDKs**: Install official `stdx` and documentation packages with a single command, or link local SDK builds and custom `.zip` / `.tar.gz` archives.
+- **Built for CI and enterprise networks**: First-class support for `--json` output, `--offline` reusable caches, transactional updates with rollback history, and internal mirror servers.
 
 ## Installation
 
-### Run the installer script
+### Quick install via script
 
-On Linux, macOS, or HarmonyOS HiShell, run this command:
+On Linux, macOS, or HarmonyOS HiShell, run the shell installer:
 
 ```bash
 curl -sSf https://cjv.zxilly.com/install.sh | sh
 ```
 
-On Windows PowerShell, run this command:
+On Windows PowerShell, run the PowerShell installer:
 
 ```powershell
 irm https://cjv.zxilly.com/install.ps1 | iex
 ```
 
-The script downloads cjv, checks the file hash, starts the setup wizard, and sets the command path. The wizard selects a channel that is available for your platform. Open a new terminal after installation to load the updated `PATH`.
+The installer downloads and verifies `cjv` for your platform, launches the interactive setup wizard (`cjv init`), and adds `<CJV_HOME>/bin` (default `~/.cjv/bin`) to your `PATH`. The wizard automatically queries the distribution manifest and offers the release channels available for your host platform. Once installation finishes, open a _new_ terminal window so the updated `PATH` takes effect.
 
-### Use the GitCode mirror
+### Using the GitCode mirror
 
-If GitHub access is unstable, use the GitCode mirror:
+If your network connection to GitHub is slow or unreliable, pass `--mirror` (or `-Mirror` in PowerShell) to install the mirror variant backed by GitCode:
 
 ```bash
 curl -sSf https://cjv.zxilly.com/install.sh | sh -s -- --mirror
@@ -47,101 +49,99 @@ curl -sSf https://cjv.zxilly.com/install.sh | sh -s -- --mirror
 
 ### Other installation methods
 
-You can also download the archive for your platform from [GitHub Releases](https://github.com/Zxilly/cjv/releases). Extract the archive and run `cjv init`. Read [Install cjv](https://cjv.zxilly.com/book/user-guide/en/installation/) for manual setup, source builds, and CI scripts.
+You can also download a prebuilt archive or standalone `cjv-init` installer for your platform from [GitHub Releases](https://github.com/Zxilly/cjv/releases) or [cjv.zxilly.com](https://cjv.zxilly.com), extract it, and run `cjv init`. See the [Installation chapter](https://cjv.zxilly.com/book/user-guide/en/installation/) in the user guide for manual installation, building from source with Go, and non-interactive CI options.
 
-## Quick start
+## Getting started
 
-### Do a check of your toolchain
+### Inspecting and selecting a toolchain
 
-After you complete the setup wizard, check the active toolchain and run the compiler:
+After completing the setup wizard, open a new shell and verify that `cjv` and the Cangjie compiler are ready:
 
 ```bash
 cjv show
 cjc --version
 ```
 
-If you skipped SDK setup, find an available channel and set it as the default. For example, run these commands to use LTS:
+If you chose to skip SDK installation during setup, you can query the available releases for a channel and set a global default toolchain at any time. Taking the `lts` channel as an example:
 
 ```bash
 cjv toolchain list-remote --channel lts
 cjv default lts
 ```
 
-The `default` command installs a missing toolchain and then saves the selection. If LTS is not available for your platform, check STS or nightly. Read [Quick start](https://cjv.zxilly.com/book/user-guide/en/basic-usage.html) for daily operations.
+When you pass an uninstalled official toolchain to `cjv default`, `cjv` automatically downloads and installs it before saving the default selection. If `lts` does not publish builds for your platform yet, check `sts` or `nightly` instead. See [Basic usage](https://cjv.zxilly.com/book/user-guide/en/basic-usage.html) for an overview of everyday commands.
 
-### Pin a project version
+### Pinning a version for your project
 
-In the project root directory, resolve and pin the SDK version:
+When working on a team project, you usually want everyone to build with the same Cangjie release. From the root of your project, run `cjv pin`:
 
 ```bash
 cjv pin lts
 cjv pin --check
 ```
 
-The `pin` command writes the full release name to `cangjie-sdk.toml`. It uses an installed channel release first and does not install a new SDK. It also keeps existing component and target lists. Commit `cangjie-sdk.toml` to version control. If the project needs `stdx`, add `components = ["stdx"]` under `[toolchain]`.
+`cjv pin lts` resolves `lts` to a concrete release name (such as `lts-1.0.5`, preferring a release you already have installed locally) and writes it to `cangjie-sdk.toml` without downloading a new SDK. Any existing `components` and `targets` in the file are preserved. You can check `cangjie-sdk.toml` into version control—and if your project uses the `stdx` extension library, simply add `components = ["stdx"]` under `[toolchain]`.
 
-When you run `cjpm build` in that directory, cjv uses the declared toolchain. By default, cjv installs missing SDKs and components automatically. The `cjv update` command updates tracked channels and keeps pinned versions unchanged.
+Whenever you run `cjpm build` or `cjc` inside that project directory, `cjv` automatically selects the declared toolchain and installs any missing SDKs or components on demand. Meanwhile, running `cjv update` updates your tracked channels (`lts`, `sts`, `nightly`) while leaving pinned project versions untouched.
 
-### Run a command with another version
+### Running commands and checking environment health
 
-To run one command with a different toolchain, use `cjv run`:
+To test a command against a different toolchain without changing your default or project configuration, use `cjv run`:
 
 ```bash
 cjv run --install sts cjc --version
 ```
 
-The `--install` flag installs the toolchain if it is missing. Read [Project toolchains](https://cjv.zxilly.com/book/user-guide/en/toolchain-file.html) for the selection sequence and directory overrides. Read [Run commands and set the environment](https://cjv.zxilly.com/book/user-guide/en/runtime-environment.html) for `cjv exec` and `cjv envsetup`.
+Passing `--install` tells `cjv` to install `sts` on the fly if it isn't already present. For full details on how `cjv` chooses a toolchain and how to set local directory overrides, see [Project toolchains and overrides](https://cjv.zxilly.com/book/user-guide/en/toolchain-file.html); for running compiled Cangjie binaries with `cjv exec` or loading SDK variables into your current shell with `cjv envsetup`, see [Running commands and setting the environment](https://cjv.zxilly.com/book/user-guide/en/runtime-environment.html).
 
-### Check the environment and preview updates
-
-Run these read-only commands to check your setup or preview an update:
+You can also run read-only diagnostics on your setup or preview what an update would do before applying it:
 
 ```bash
 cjv doctor
 cjv update --dry-run
 ```
 
-Neither command changes your installed toolchains. Read [Automation and JSON interfaces](https://cjv.zxilly.com/book/user-guide/en/automation.html) for CI setup, offline caches, JSON output, and rollback.
+Neither command modifies your installed toolchains. For CI isolation, offline caches, JSON schemas, and rolling back channel updates, see [Automation and JSON interfaces](https://cjv.zxilly.com/book/user-guide/en/automation.html).
 
 ## Documentation
 
-| Guide | Topics |
-| --- | --- |
-| [User guide](https://cjv.zxilly.com/book/user-guide/en/) | Installation, project files, components, and cross-compilation |
-| [Command reference](https://cjv.zxilly.com/book/user-guide/en/command-reference.html) | CLI syntax, flags, and default behavior |
-| [Automation and JSON interfaces](https://cjv.zxilly.com/book/user-guide/en/automation.html) | Version pins, CI isolation, offline caches, and rollback |
-| [Enterprise and offline deployment](https://cjv.zxilly.com/book/user-guide/en/enterprise/) | Internal distribution servers and managed client settings |
-| [Developer guide](https://cjv.zxilly.com/book/dev-guide/en/) | Source builds, architecture, tests, and releases |
+See [**The cjv User Guide**](https://cjv.zxilly.com/book/user-guide/en/) for complete documentation on installing and using `cjv`:
 
-## Code agents
+- [**User Guide**](https://cjv.zxilly.com/book/user-guide/en/) — Installation, basic usage, project toolchain files, components, custom SDKs, and cross-compilation.
+- [**Command Reference**](https://cjv.zxilly.com/book/user-guide/en/command-reference.html) — Complete CLI syntax, flags, and installation/update policies.
+- [**Automation and JSON Interfaces**](https://cjv.zxilly.com/book/user-guide/en/automation.html) — Pinning workflows, CI environment isolation, offline caches, update history rollback, and JSON output contracts.
+- [**Enterprise and Offline Deployment**](https://cjv.zxilly.com/book/user-guide/en/enterprise/) — Hosting internal distribution mirrors, system fallback settings, and air-gapped client setups.
+- [**Developer Guide**](https://cjv.zxilly.com/book/dev-guide/en/) — Building `cjv` from source, internal architecture, test suites, website maintenance, and release workflows.
 
-The repository includes the [cjv skill](skills/cjv) for code agents. It gives agents the rules for commands and project toolchains.
+## Coding agents
 
-Install the skill globally for Codex with the [skills CLI](https://github.com/vercel-labs/skills):
+This repository ships with a dedicated [cjv skill](skills/cjv) that gives AI coding agents accurate context on `cjv` commands, `cangjie-sdk.toml` rules, and read-only diagnostics.
+
+You can install it globally for Codex using the [skills CLI](https://github.com/vercel-labs/skills):
 
 ```bash
 npx skills add Zxilly/cjv --skill cjv --agent codex --global --yes
 ```
 
-Then call the skill in your chat session:
+Once installed, invoke `$cjv` directly in your prompt:
 
 ```text
 Use $cjv to install an LTS toolchain for this project and create a commit-ready cangjie-sdk.toml.
 ```
 
-## Contribute to cjv
+## Contributing
 
-Report bugs and send feature requests in [GitHub Issues](https://github.com/Zxilly/cjv/issues). Send code and documentation changes through pull requests.
+Bug reports and feature suggestions are welcome on [GitHub Issues](https://github.com/Zxilly/cjv/issues), and code or documentation improvements can be submitted through pull requests.
 
-To build and test locally, install the Go version listed in [go.mod](go.mod) and run:
+To build and test `cjv` locally, make sure you have a Go toolchain that satisfies [go.mod](go.mod):
 
 ```bash
 go build ./cmd/cjv
 go test -race -count=1 ./...
 ```
 
-Read the [Developer guide](https://cjv.zxilly.com/book/dev-guide/en/) for the architecture and the full check suite.
+See [**The cjv Developer Guide**](https://cjv.zxilly.com/book/dev-guide/en/) for a tour of the codebase, testing conventions, and pre-submission checks.
 
 ## License
 
-cjv uses the Apache-2.0 License. Read [LICENSE](LICENSE) for the full text.
+`cjv` is distributed under the terms of the Apache License, Version 2.0. See [LICENSE](LICENSE) for details.
