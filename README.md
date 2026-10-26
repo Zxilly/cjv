@@ -61,15 +61,16 @@ cjv default lts
 
 ### 为项目固定版本
 
-在项目根目录创建 `cangjie-sdk.toml`，并提交到版本控制：
+在项目根目录解析并固定所需的 SDK 版本：
 
-```toml
-[toolchain]
-channel = "lts-1.0.5"
-components = ["stdx"]
+```bash
+cjv pin lts
+cjv pin --check
 ```
 
-将示例版本替换为项目需要且分发源提供的版本。在该目录运行 `cjpm build` 时，cjv 会使用项目声明的工具链，默认自动安装缺失的 SDK 和组件。跟踪通道可通过 `cjv update` 更新，固定版本保持不变。
+`pin` 将完整发行名写入 `cangjie-sdk.toml`，优先使用本机已安装的通道版本；它不安装 SDK，并保留已有组件和目标声明。将生成的文件提交到版本控制。需要 stdx 时，可在 `[toolchain]` 中增加 `components = ["stdx"]`。
+
+在该目录运行 `cjpm build` 时，cjv 会使用项目声明的工具链，默认自动安装缺失的 SDK 和组件。跟踪通道可通过 `cjv update` 更新，固定版本保持不变。
 
 临时使用其他版本运行命令：
 
@@ -79,10 +80,20 @@ cjv run --install sts cjc --version
 
 `--install` 允许安装缺失的工具链。版本选择顺序和目录覆盖见[项目工具链](https://cjv.zxilly.com/book/user-guide/zh-CN/toolchain-file.html)。
 
+检查当前环境或预览更新：
+
+```bash
+cjv doctor
+cjv update --dry-run
+```
+
+两条命令都不修改安装状态。CI 配置、离线运行、JSON 输出和回滚步骤见[自动化指南](https://cjv.zxilly.com/book/user-guide/zh-CN/automation.html)。
+
 ## 文档
 
 - [用户手册](https://cjv.zxilly.com/book/user-guide/zh-CN/)：安装、项目配置、组件和交叉编译。
 - [命令参考](https://cjv.zxilly.com/book/user-guide/zh-CN/command-reference.html)：命令参数与默认行为。
+- [自动化与 JSON 接口](https://cjv.zxilly.com/book/user-guide/zh-CN/automation.html)：版本固定、CI 隔离、离线缓存和更新回退。
 - [企业与离线部署](https://cjv.zxilly.com/book/user-guide/zh-CN/enterprise/)：内部分发源与受管终端配置。
 - [开发指南](https://cjv.zxilly.com/book/dev-guide/zh-CN/)：构建、测试、架构和发布。
 

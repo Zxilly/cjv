@@ -61,15 +61,16 @@ cjv default lts
 
 ### Pin a project version
 
-Create `cangjie-sdk.toml` in the project root and commit it to version control:
+Resolve and pin the SDK version from the project root:
 
-```toml
-[toolchain]
-channel = "lts-1.0.5"
-components = ["stdx"]
+```bash
+cjv pin lts
+cjv pin --check
 ```
 
-Replace the example version with one your project needs and your distribution provides. Running `cjpm build` in that directory uses the declared toolchain. By default, cjv installs missing SDKs and components automatically. `cjv update` updates tracked channels and leaves pinned versions unchanged.
+`pin` writes the complete release name to `cangjie-sdk.toml`, preferring the locally installed channel release. It does not install an SDK and preserves existing component and target declarations. Commit the generated file to version control. To require stdx, add `components = ["stdx"]` under `[toolchain]`.
+
+Running `cjpm build` in that directory uses the declared toolchain. By default, cjv installs missing SDKs and components automatically. `cjv update` updates tracked channels and leaves pinned versions unchanged.
 
 To run a command with another version temporarily:
 
@@ -79,10 +80,20 @@ cjv run --install sts cjc --version
 
 `--install` allows a missing toolchain to be installed. See [project toolchains](https://cjv.zxilly.com/book/user-guide/en/toolchain-file.html) for selection order and directory overrides.
 
+Inspect the current environment or preview an update:
+
+```bash
+cjv doctor
+cjv update --dry-run
+```
+
+Neither command changes installed toolchains. See the [automation guide](https://cjv.zxilly.com/book/user-guide/en/automation.html) for CI configuration, offline use, JSON output, and rollback.
+
 ## Documentation
 
 - [User guide](https://cjv.zxilly.com/book/user-guide/en/): installation, project configuration, components, and cross-compilation.
 - [Command reference](https://cjv.zxilly.com/book/user-guide/en/command-reference.html): command options and default behavior.
+- [Automation and JSON interfaces](https://cjv.zxilly.com/book/user-guide/en/automation.html): version pinning, CI isolation, offline caches, and rollback.
 - [Enterprise and offline deployment](https://cjv.zxilly.com/book/user-guide/en/enterprise/): internal distribution sources and managed client settings.
 - [Developer guide](https://cjv.zxilly.com/book/dev-guide/en/): builds, tests, architecture, and releases.
 

@@ -26,6 +26,8 @@ cjv --offline --no-auto-install exec cjc --version
 
 离线安装需要事先下载对应来源的清单、SDK 和组件。成功安装会保留已验证的归档；可通过 `cjv cache list --json` 检查缓存。将安装时使用的 `cache/` 与项目工具链文件一起提供给离线环境，并保持分发源配置一致。无校验和的归档不会被保留为可复用缓存。
 
+缓存列表会通过可选的 `problem` 字段标出损坏记录、孤立归档和未完成的临时文件，不影响其他条目的显示。`cjv cache clean` 可清理这些由 cjv 管理的文件；`cache prune` 仍按年龄筛选。在线查询成功但无法保存缓存时会发出警告，查询结果仍可使用。
+
 `--no-auto-install` 禁止隐式补装；显式 `install` 仍可执行。`--offline` 约束 cjv 自身的请求，不限制子进程的联网行为。
 
 ## 检查与修复
@@ -53,6 +55,8 @@ cjv toolchain history prune lts --keep 1
 `rollback` 省略快照 ID 时选择最新一份，也可用 `cjv toolchain rollback lts <snapshot>` 指定历史记录。回退在本地校验整组内容后一起恢复，并保存回退前的当前组，以便再次撤销。固定版本安装独立保留，不参与通道历史。
 
 快照是独立副本，已链接的组件内容也会复制，因此会占用额外磁盘空间。缓存清理不会删除快照；`history prune --keep 0` 可删除历史，保留当前安装。`--keep` 只控制本次清理，不改变更新时自动保留两份的规则。历史记录位于 `<CJV_HOME>/history/`，不要直接修改其中的文件。
+
+历史列表在 `snapshots` 中保留可读记录，通过可选的 `invalid_snapshots` 数组报告损坏记录及原因。非零 `--keep` 保留指定数量的可读记录，并留下损坏记录供检查；`--keep 0` 也清理损坏记录。最新记录损坏时，省略 ID 的回滚会要求显式选择有效快照，不会自动退到更早版本。任何被选中的快照仍须通过完整内容校验。
 
 ## JSON 兼容规则
 
@@ -100,3 +104,5 @@ cjv toolchain history prune lts --keep 1
 ```
 
 执行失败时 stdout 返回 `{"error":{"code":"…","message":"…","details":{}}}`，进程退出码非零。错误码可以新增，客户端应保留未知错误的处理分支；`details` 的字段取决于错误码。普通成功命令退出码为零。`doctor` 发现诊断问题时仍返回包含 `checks` 的诊断报告，设置 `ok: false` 并以退出码 1 结束，不另附错误对象。
+
+自动补装失败时，顶层仍使用 `TOOLCHAIN_NOT_INSTALLED` 或 `COMPONENT_NOT_INSTALLED`，`details.cause` 保留实际失败的 `code`、`message` 和 `details`。例如 `OFFLINE_CACHE_MISS` 表示所需缓存缺失，`CHECKSUM_MISMATCH` 表示校验失败，`HTTP_ERROR` 和 `NETWORK_ERROR` 分别表示 HTTP 响应和网络传输错误，`CANCELED` 或 `DEADLINE_EXCEEDED` 表示操作取消或超时。关闭自动补装时没有 `cause`，表示未尝试安装。

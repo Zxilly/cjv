@@ -26,6 +26,8 @@ cjv --offline --no-auto-install exec cjc --version
 
 Offline installation requires metadata, SDK archives, and component archives from the configured source to have been downloaded beforehand. Successful installation retains verified archives; inspect them with `cjv cache list --json`. Supply the populated `cache/` and project toolchain file to the offline environment and keep the same distribution source configuration. Archives without checksums are not retained in the reusable cache.
 
+Cache listings use the optional `problem` field to identify damaged records, orphaned archives, and incomplete temporary files while retaining other entries. `cjv cache clean` removes these cjv-owned files; `cache prune` still filters by age. A successful online query remains usable if saving its optional cache fails, with a warning explaining the failure.
+
 `--no-auto-install` prevents implicit installation; explicit `install` remains available. `--offline` controls cjv's requests and does not restrict networking by child processes.
 
 ## Inspect and repair
@@ -53,6 +55,8 @@ cjv toolchain history prune lts --keep 1
 `rollback` selects the newest snapshot when its ID is omitted. Use `cjv toolchain rollback lts <snapshot>` to select one explicitly. Rollback verifies local content before restoring the entire group and retains the current group so the rollback can itself be undone. Fixed-version installations remain independent of tracking-channel history.
 
 Snapshots contain independent copies, including the content of linked components, and require additional disk space. Cache cleanup does not remove snapshots. `history prune --keep 0` clears history while preserving current installations. `--keep` applies only to that cleanup; updates still retain two snapshots automatically. History lives under `<CJV_HOME>/history/`; do not edit its files directly.
+
+History listings retain readable entries in `snapshots` and report damaged entries and their causes in the optional `invalid_snapshots` array. A nonzero `--keep` retains that many readable entries and leaves damaged entries for inspection; `--keep 0` also clears damaged entries. When the newest entry is damaged, rollback without an ID requires an explicit valid snapshot instead of silently choosing an older release. Every selected snapshot must still pass full content verification.
 
 ## JSON compatibility
 
@@ -100,3 +104,5 @@ This JSON Schema describes the stable fields of `cache list --json` and permits 
 ```
 
 Execution failures return `{"error":{"code":"…","message":"…","details":{}}}` on stdout and a nonzero process exit code. New error codes may be added, so clients must handle unknown codes. The fields of `details` depend on the error code. Ordinary successful commands exit with zero. When `doctor` finds diagnostic issues, it still returns its report with `checks`, sets `ok: false`, and exits with code 1 without an additional error object.
+
+When automatic installation fails, the top-level code remains `TOOLCHAIN_NOT_INSTALLED` or `COMPONENT_NOT_INSTALLED`. Its `details.cause` preserves the underlying failure's `code`, `message`, and `details`. For example, `OFFLINE_CACHE_MISS` indicates missing cached data, `CHECKSUM_MISMATCH` indicates failed verification, `HTTP_ERROR` and `NETWORK_ERROR` distinguish HTTP responses from transport failures, and `CANCELED` or `DEADLINE_EXCEEDED` indicates cancellation or a timeout. A missing installation with automatic installation disabled has no `cause`, because no installation was attempted.

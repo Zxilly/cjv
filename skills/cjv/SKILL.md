@@ -12,6 +12,8 @@ requested outcome. Match the user's language.
 
 - For an existing setup, start with the relevant subset of `cjv --version`,
   `cjv show active`, `cjv show installed`, and `cjv show home`.
+- Use `cjv doctor --json` for read-only diagnostics and suggested repairs.
+  Preview an update with `cjv update --dry-run --json` before explaining its impact.
 - Treat the installed `cjv <command> --help` as authoritative. Use the
   [Chinese](https://cjv.zxilly.com/book/user-guide/zh-CN/) or
   [English](https://cjv.zxilly.com/book/user-guide/en/) manual for more detail.
@@ -30,8 +32,11 @@ requested outcome. Match the user's language.
 - A found `cangjie-sdk.toml` is not merged with parent files and must have a
   non-empty `[toolchain].channel` or an absolute `[toolchain].path`, never both.
   A path selects an external SDK and ignores component/target auto-install.
-  Prefer an exact version for reproducible
-  projects; use `lts`, `sts`, or `nightly` only when tracking a channel is wanted.
+  Use `cjv pin <channel>` to write a concrete release while retaining existing
+  component and target declarations; it prefers the installed channel release
+  and does not install an SDK. `cjv pin --check` validates the current project's
+  pin without writing or using the network. Use `lts`, `sts`, or `nightly` only
+  when tracking a channel is wanted.
 - `components` and `targets` in that file apply only when it selected the active
   toolchain. Targets extend the host SDK and use suffixes such as `ohos` or
   `android` rather than full platform tuples.
@@ -45,13 +50,23 @@ requested outcome. Match the user's language.
   `check` queries SDK and cjv releases without installing updates.
 - Install/update `--force` permits skipping and removing unavailable components
   or targets, without reinstalling unchanged SDKs. `install --no-update` keeps
-  the current release. Nightly searches published history without downgrading
+  the current release. Use `install --reinstall` to repair the same SDK while
+  retaining selected components and targets. Nightly searches published history without downgrading
   unless `--allow-downgrade` is set. Hosts and tracking targets update together.
   Component and custom `toolchain link` replacement flags retain their own semantics.
 - Use `component --target <suffix>` for an installed matching cross SDK.
   Global `--quiet/-q` hides progress and `--verbose` enables debug logging;
   honor an existing `CJV_LOG` value. Version selectors support minor patches,
   dated nightly, and host suffixes only when the manifest publishes them.
+- For CI isolation, use both an absolute `CJV_HOME` and `--config <file>` or
+  `CJV_CONFIG_FILE`; the data directory alone does not isolate user settings.
+  `CJV_FALLBACK_SETTINGS` independently selects administrator fallback settings.
+- `--offline` uses existing metadata and verified archives from the same source;
+  inspect availability with `cjv cache list --json`. `--no-auto-install` prevents
+  implicit installation. Neither flag restricts networking by child programs.
+- Inspect saved updates with `cjv toolchain history <channel>`. Rollback restores
+  a verified complete toolchain group; use `cjv toolchain rollback <channel> [snapshot]`
+  when requested. History cleanup is separate from cache cleanup.
 
 ## Protect and verify state
 
