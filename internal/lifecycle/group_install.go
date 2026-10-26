@@ -338,11 +338,16 @@ func installGroup(ctx context.Context, d *installationDistribution, name toolcha
 	if trackingHost && !req.Reinstall && host.before != nil && slices.ContainsFunc(changed, func(m *groupMember) bool {
 		return m.before != nil && (m.drop || !m.canReuseSDK())
 	}) {
-		snapshot, err := prepareHistorySnapshot(ctx, home, identity, rt.Tuple, members)
-		if err != nil {
+		if err := lock.WithStableReads(ctx, func() error {
+			var err error
+			opts.history, err = prepareHistorySnapshot(ctx, home, identity, rt.Tuple, members)
+			return err
+		}); err != nil {
+			if opts.history != nil {
+				opts.history.cleanup(err)
+			}
 			return false, err
 		}
-		opts.history = snapshot
 	}
 	publishErr := publishPrepared(ctx, home, identities, pairs, publishDefault, opts)
 	if opts.history != nil {
@@ -362,7 +367,10 @@ func installGroup(ctx context.Context, d *installationDistribution, name toolcha
 	}
 	preparation.Complete()
 	if opts.history != nil {
-		if _, err := pruneHistoryLocked(ctx, home, identity, DefaultHistoryRetention); err != nil {
+		if err := lock.WithStableReads(ctx, func() error {
+			_, err := pruneHistoryLocked(ctx, home, identity, DefaultHistoryRetention)
+			return err
+		}); err != nil {
 			slog.Warn("could not prune toolchain history", "toolchain", identity, "error", err)
 		}
 	}

@@ -2,12 +2,45 @@ package toolchaincmd
 
 import (
 	"encoding/json"
+	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/Zxilly/cjv/internal/config/configtest"
+	"github.com/Zxilly/cjv/internal/lifecycle"
 	"github.com/stretchr/testify/require"
 )
+
+func TestHistoryReportsDamagedSnapshotsInTextAndJSON(t *testing.T) {
+	home := t.TempDir()
+	configtest.Isolate(t, home)
+	const id = "20261026T000000.000000000Z-aabbccddeeff"
+	dir := filepath.Join(home, "history", "sts", id)
+	require.NoError(t, os.MkdirAll(dir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "snapshot.json"), []byte("{"), 0o644))
+	stdout, err := execute(t, "--json", "toolchain", "history", "sts")
+	require.NoError(t, err)
+	var result struct {
+		SchemaVersion int `json:"schema_version"`
+		lifecycle.HistoryReport
+	}
+	require.NoError(t, json.Unmarshal([]byte(stdout), &result))
+	require.Equal(t, 1, result.SchemaVersion)
+	require.Empty(t, result.Snapshots)
+	require.Len(t, result.Invalid, 1)
+	require.Equal(t, id, result.Invalid[0].ID)
+	require.Contains(t, result.Invalid[0].Error, "unexpected EOF")
+	stdout, err = execute(t, "toolchain", "history", "sts")
+	require.NoError(t, err)
+	require.Contains(t, stdout, id+"  [invalid]")
+	require.Contains(t, stdout, "history prune --keep 0")
+	stdout, err = execute(t, "--json", "toolchain", "history", "prune", "sts", "--keep", "0")
+	require.NoError(t, err)
+	var pruned historyPruneResult
+	require.NoError(t, json.Unmarshal([]byte(stdout), &pruned))
+	require.Equal(t, 1, pruned.Removed)
+	require.NoDirExists(t, dir)
+}
 
 func TestHistoryJSONEmptyAndValidation(t *testing.T) {
 	home := filepath.Join(t.TempDir(), "absent")

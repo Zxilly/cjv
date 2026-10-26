@@ -86,10 +86,7 @@ func PrepareActive(ctx context.Context, rawName string, install func(context.Con
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	if err := RecoverHomeContext(ctx); err != nil {
-		return "", rawName, err
-	}
-	dir, displayName, parsed, err := FindActiveDir(rawName)
+	dir, displayName, parsed, err := prepareActiveLookup(ctx, rawName)
 	var missing *cjverr.ToolchainNotInstalledError
 	if install == nil || !errors.As(err, &missing) || parsed.IsCustom() {
 		return dir, displayName, err
@@ -97,8 +94,30 @@ func PrepareActive(ctx context.Context, rawName string, install func(context.Con
 	if err := install(ctx); err != nil {
 		return "", rawName, err
 	}
-	dir, displayName, _, err = FindActiveDir(rawName)
+	dir, displayName, _, err = prepareActiveLookup(ctx, rawName)
 	return dir, displayName, err
+}
+
+func prepareActiveLookup(ctx context.Context, rawName string) (dir, displayName string, parsed ToolchainName, err error) {
+	lock, lookup, err := lockActiveLookup(ctx)
+	if err != nil {
+		return "", rawName, ToolchainName{}, err
+	}
+	if lock != nil {
+		defer lock.Close() //nolint:errcheck
+		if err := lock.Recover(); err != nil {
+			return "", rawName, ToolchainName{}, err
+		}
+		if err := lock.MigrateLegacy(); err != nil {
+			return "", rawName, ToolchainName{}, err
+		}
+	} else {
+		defer lookup.Close() //nolint:errcheck
+	}
+	if err := ctx.Err(); err != nil {
+		return "", rawName, ToolchainName{}, err
+	}
+	return FindActiveDir(rawName)
 }
 
 // SelectActive applies the common selector precedence while retaining project

@@ -56,40 +56,30 @@ func RollbackHistory(ctx context.Context, name, id string, opts Options) (Rollba
 		return result, err
 	}
 	if id == "" {
-		entries, err := listHistoryAt(ctx, home, owner)
+		report, err := inspectHistoryAt(ctx, home, owner)
 		if err != nil {
 			return result, err
 		}
-		if len(entries) == 0 {
+		if len(report.Invalid) > 0 && (len(report.Snapshots) == 0 || report.Invalid[0].ID > report.Snapshots[0].ID) {
+			invalid := report.Invalid[0]
+			return result, fmt.Errorf("latest history snapshot %s is invalid: %s; inspect history and select a valid snapshot ID explicitly", invalid.ID, invalid.Error)
+		}
+		if len(report.Snapshots) == 0 {
 			return result, fmt.Errorf("no history for toolchain %s", owner)
 		}
-		id = entries[0].ID
+		id = report.Snapshots[0].ID
 	}
 	entry, err := readHistoryEntry(home, owner, id)
 	if err != nil {
 		return result, err
 	}
 	base := filepath.Join(home, config.HistorySubdir, owner, id)
-	if err := verifyHistoryPayload(ctx, base, entry); err != nil {
-		return result, err
-	}
-	stage, err := preparation.TempDir(".cjv-rollback-*")
-	if err != nil {
-		return result, err
-	}
-	for _, member := range entry.Members {
-		from, to := historyRoots(base, member.Name), historyRoots(stage, member.Name)
-		for i, pair := range historyRootPaths(from) {
-			if !slices.ContainsFunc(member.Roots, func(root HistoryRoot) bool { return root.Kind == pair[0] }) {
-				continue
-			}
-			if err := copyHistoryTree(ctx, pair[1], historyRootPaths(to)[i][1], nil); err != nil {
-				return result, err
-			}
-		}
-	}
-	// Verify the independent copies as well, before touching installed roots.
-	if err := verifyHistoryPayload(ctx, stage, entry); err != nil {
+	var stage string
+	if err := lock.WithStableReads(ctx, func() error {
+		var err error
+		stage, err = prepareHistoryRollback(ctx, preparation, base, entry)
+		return err
+	}); err != nil {
 		return result, err
 	}
 	parsed, _ := toolchain.ParseToolchainName(owner)
@@ -117,12 +107,17 @@ func RollbackHistory(ctx context.Context, name, id string, opts Options) (Rollba
 		current = append(current, &groupMember{identity: currentName, before: &record, original: intents})
 	}
 	if len(current) > 0 && current[0].identity == owner {
-		snapshot, err := prepareHistorySnapshot(ctx, home, owner, entry.HostTuple, current)
-		if err != nil {
+		if err := lock.WithStableReads(ctx, func() error {
+			var err error
+			opts.history, err = prepareHistorySnapshot(ctx, home, owner, entry.HostTuple, current)
+			return err
+		}); err != nil {
+			if opts.history != nil {
+				opts.history.cleanup(err)
+			}
 			return result, err
 		}
-		opts.history = snapshot
-		result.PreviousSnapshot = snapshot.entry.ID
+		result.PreviousSnapshot = opts.history.entry.ID
 	}
 	identities := make([]string, 0, len(entry.Members)+len(tracked))
 	var pairs [][2]string
@@ -160,7 +155,10 @@ func RollbackHistory(ctx context.Context, name, id string, opts Options) (Rollba
 		return result, publishErr
 	}
 	preparation.Complete()
-	if _, err := pruneHistoryLocked(ctx, home, owner, DefaultHistoryRetention); err != nil {
+	if err := lock.WithStableReads(ctx, func() error {
+		_, err := pruneHistoryLocked(ctx, home, owner, DefaultHistoryRetention)
+		return err
+	}); err != nil {
 		slog.Warn("could not prune toolchain history", "toolchain", owner, "error", err)
 	}
 	result.Toolchain, result.Snapshot = owner, id
@@ -168,6 +166,32 @@ func RollbackHistory(ctx context.Context, name, id string, opts Options) (Rollba
 		result.Members = append(result.Members, member.Name)
 	}
 	return result, nil
+}
+
+func prepareHistoryRollback(ctx context.Context, preparation *dist.Preparation, base string, entry HistoryEntry) (string, error) {
+	if err := verifyHistoryPayload(ctx, base, entry); err != nil {
+		return "", err
+	}
+	stage, err := preparation.TempDir(".cjv-rollback-*")
+	if err != nil {
+		return "", err
+	}
+	for _, member := range entry.Members {
+		from, to := historyRoots(base, member.Name), historyRoots(stage, member.Name)
+		for i, pair := range historyRootPaths(from) {
+			if !slices.ContainsFunc(member.Roots, func(root HistoryRoot) bool { return root.Kind == pair[0] }) {
+				continue
+			}
+			if err := copyHistoryTree(ctx, pair[1], historyRootPaths(to)[i][1], nil); err != nil {
+				return "", err
+			}
+		}
+	}
+	// Verify the independent copies as well, before touching installed roots.
+	if err := verifyHistoryPayload(ctx, stage, entry); err != nil {
+		return "", err
+	}
+	return stage, nil
 }
 
 func verifyHistoryPayload(ctx context.Context, base string, entry HistoryEntry) error {

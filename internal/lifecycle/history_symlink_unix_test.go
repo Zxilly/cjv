@@ -6,11 +6,35 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/config/configtest"
 	"github.com/stretchr/testify/require"
 )
+
+func TestPruneDamagedHistoryLinkNeverTraversesItsTarget(t *testing.T) {
+	home := updateHome(t)
+	outside := t.TempDir()
+	sentinel := filepath.Join(outside, "user-data")
+	require.NoError(t, os.WriteFile(sentinel, []byte("preserve"), 0o644))
+	entry := historyMetadataAt(time.Date(2026, 10, 26, 0, 0, 0, 0, time.UTC))
+	owner := filepath.Join(home, config.HistorySubdir, "sts")
+	require.NoError(t, os.MkdirAll(owner, 0o755))
+	link := filepath.Join(owner, entry.ID)
+	require.NoError(t, os.Symlink(outside, link))
+	report, err := InspectHistory(t.Context(), "sts")
+	require.NoError(t, err)
+	require.Len(t, report.Invalid, 1)
+	removed, err := PruneHistory(t.Context(), "sts", 0)
+	require.NoError(t, err)
+	require.Equal(t, 1, removed)
+	_, err = os.Lstat(link)
+	require.ErrorIs(t, err, os.ErrNotExist)
+	data, err := os.ReadFile(sentinel)
+	require.NoError(t, err)
+	require.Equal(t, "preserve", string(data))
+}
 
 func historyAliasedParent(t *testing.T) string {
 	t.Helper()

@@ -39,6 +39,15 @@ func RecoverHomeContext(ctx context.Context) error {
 
 // Recover repairs interrupted changes while the caller holds the home lock.
 func (lock *HomeLock) Recover() error {
+	if err := lock.recover(); err != nil {
+		lock.recovered = false
+		return err
+	}
+	lock.recovered = true
+	return nil
+}
+
+func (lock *HomeLock) recover() error {
 	tcDir := lock.tcDir
 	if err := fstx.Recover(tcDir); err != nil {
 		return err

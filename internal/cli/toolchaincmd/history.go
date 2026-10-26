@@ -10,17 +10,23 @@ import (
 )
 
 type historyListResult struct {
-	SchemaVersion int                      `json:"schema_version"`
-	Snapshots     []lifecycle.HistoryEntry `json:"snapshots"`
+	SchemaVersion int `json:"schema_version"`
+	lifecycle.HistoryReport
 }
 
 func (r historyListResult) Text() string {
-	if len(r.Snapshots) == 0 {
+	if len(r.Snapshots) == 0 && len(r.Invalid) == 0 {
 		return "No retained toolchain history."
 	}
 	var lines []string
 	for _, snapshot := range r.Snapshots {
 		lines = append(lines, fmt.Sprintf("%s  %s  %s  (%d members)", snapshot.Toolchain, snapshot.ID, snapshot.Members[0].Release, len(snapshot.Members)))
+	}
+	for _, invalid := range r.Invalid {
+		lines = append(lines, fmt.Sprintf("%s  %s  [invalid] %s", invalid.Toolchain, invalid.ID, invalid.Error))
+	}
+	if len(r.Invalid) > 0 {
+		lines = append(lines, "Use history prune --keep 0 to remove all retained snapshots, including invalid entries.")
 	}
 	return strings.Join(lines, "\n")
 }
@@ -47,11 +53,11 @@ func historyCommand(ctx *clictx.Context) *cobra.Command {
 		if len(args) > 0 {
 			name = args[0]
 		}
-		entries, err := lifecycle.ListHistory(cmd.Context(), name)
+		report, err := lifecycle.InspectHistory(cmd.Context(), name)
 		if err != nil {
 			return err
 		}
-		return ctx.Output.RenderTo(clictx.Out(cmd), historyListResult{SchemaVersion: 1, Snapshots: entries})
+		return ctx.Output.RenderTo(clictx.Out(cmd), historyListResult{SchemaVersion: 1, HistoryReport: report})
 	}
 	cmd := &cobra.Command{Use: "history [toolchain]", Short: "List retained tracking toolchain snapshots", Args: cobra.MaximumNArgs(1), RunE: runList}
 	cmd.AddCommand(&cobra.Command{Use: "list [toolchain]", Short: "List retained tracking toolchain snapshots", Args: cobra.MaximumNArgs(1), RunE: runList})
@@ -67,7 +73,7 @@ func historyCommand(ctx *clictx.Context) *cobra.Command {
 		}
 		return ctx.Output.RenderTo(clictx.Out(cmd), historyPruneResult{SchemaVersion: 1, Removed: removed, Keep: keep})
 	}}
-	prune.Flags().IntVar(&keep, "keep", lifecycle.DefaultHistoryRetention, "Number of recent snapshots to retain per tracking toolchain")
+	prune.Flags().IntVar(&keep, "keep", lifecycle.DefaultHistoryRetention, "Number of readable snapshots to retain per tracking toolchain; 0 also removes invalid entries")
 	cmd.AddCommand(prune)
 	return cmd
 }

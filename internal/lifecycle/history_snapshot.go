@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -278,7 +277,7 @@ func copyHistoryTree(ctx context.Context, source, dest string, materialize map[s
 			_ = in.Close()
 			return err
 		}
-		_, copyErr := io.Copy(out, in)
+		_, copyErr := fsops.CopyContext(ctx, out, in)
 		if copyErr == nil {
 			copyErr = out.Chmod(info.Mode())
 		}
@@ -365,7 +364,7 @@ func historyTreeDigest(ctx context.Context, root string) (string, error) {
 		if err != nil {
 			return err
 		}
-		_, copyErr := io.Copy(hash, file)
+		_, copyErr := fsops.CopyContext(ctx, hash, file)
 		return errors.Join(copyErr, file.Close())
 	})
 	if err != nil {

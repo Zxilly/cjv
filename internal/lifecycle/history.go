@@ -52,27 +52,48 @@ type HistoryRoot struct {
 	SHA256 string `json:"sha256"`
 }
 
+// InvalidHistory identifies an owned snapshot whose metadata cannot be read.
+// Payload validation remains mandatory when a snapshot is selected for rollback.
+type InvalidHistory struct {
+	Toolchain string `json:"toolchain"`
+	ID        string `json:"id"`
+	Error     string `json:"error"`
+}
+
+type HistoryReport struct {
+	Snapshots []HistoryEntry   `json:"snapshots"`
+	Invalid   []InvalidHistory `json:"invalid_snapshots,omitempty"`
+}
+
 func (m HistoryMember) installation() toolchain.Installation {
 	return toolchain.Installation{Release: m.Release, Tuple: m.Tuple, SHA256: m.SHA256}
 }
 
-// ListHistory is read-only, including for an absent home and legacy layouts.
-// An empty name lists all tracking groups, ordered newest first within each.
+// ListHistory returns readable snapshot metadata, newest first within each
+// tracking group. InspectHistory also reports damaged metadata. Both are
+// read-only, including for an absent home and legacy layouts.
 func ListHistory(ctx context.Context, name string) ([]HistoryEntry, error) {
+	report, err := InspectHistory(ctx, name)
+	return report.Snapshots, err
+}
+
+// InspectHistory keeps one damaged snapshot from hiding other usable entries.
+// Errors accessing the history directory itself still fail the inspection.
+func InspectHistory(ctx context.Context, name string) (HistoryReport, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
 	home, err := config.Home()
 	if err != nil {
-		return nil, err
+		return HistoryReport{}, err
 	}
 	if name != "" {
 		name, err = historyIdentity(name)
 		if err != nil {
-			return nil, err
+			return HistoryReport{}, err
 		}
 	}
-	return listHistoryAt(ctx, home, name)
+	return inspectHistoryAt(ctx, home, name)
 }
 
 func historyIdentity(input string) (string, error) {
@@ -88,14 +109,14 @@ func historyIdentity(input string) (string, error) {
 	return name.String(), nil
 }
 
-func listHistoryAt(ctx context.Context, home, name string) ([]HistoryEntry, error) {
-	result := []HistoryEntry{}
+func inspectHistoryAt(ctx context.Context, home, name string) (HistoryReport, error) {
+	result := HistoryReport{Snapshots: []HistoryEntry{}}
 	root, err := openHistoryDirectory(home, "", false)
 	if errors.Is(err, os.ErrNotExist) {
 		return result, nil
 	}
 	if err != nil {
-		return nil, err
+		return result, err
 	}
 	defer root.Close() //nolint:errcheck
 	owners := []string{name}
@@ -103,7 +124,7 @@ func listHistoryAt(ctx context.Context, home, name string) ([]HistoryEntry, erro
 		owners = nil
 		entries, err := readRootDirectory(root)
 		if err != nil {
-			return nil, err
+			return result, err
 		}
 		for _, entry := range entries {
 			parsed, parseErr := toolchain.ParseToolchainName(entry.Name())
@@ -115,39 +136,51 @@ func listHistoryAt(ctx context.Context, home, name string) ([]HistoryEntry, erro
 	}
 	for _, owner := range owners {
 		if err := ctx.Err(); err != nil {
-			return nil, err
+			return result, err
 		}
 		dir, err := openHistoryDirectory(home, owner, false)
 		if errors.Is(err, os.ErrNotExist) {
 			continue
 		}
 		if err != nil {
-			return nil, err
+			return result, err
 		}
 		entries, readErr := readRootDirectory(dir)
 		closeErr := dir.Close()
 		if err := errors.Join(readErr, closeErr); err != nil {
-			return nil, err
+			return result, err
 		}
 		var group []HistoryEntry
 		for _, entry := range entries {
+			if err := ctx.Err(); err != nil {
+				return result, err
+			}
 			if !config.IsHistoryID(entry.Name()) {
 				continue
 			}
 			snapshot, err := readHistoryEntry(home, owner, entry.Name())
 			if err != nil {
-				return nil, fmt.Errorf("history %s/%s: %w", owner, entry.Name(), err)
+				result.Invalid = append(result.Invalid, InvalidHistory{Toolchain: owner, ID: entry.Name(), Error: err.Error()})
+				continue
 			}
 			group = append(group, snapshot)
 		}
 		slices.SortFunc(group, func(a, b HistoryEntry) int { return strings.Compare(b.ID, a.ID) })
-		result = append(result, group...)
+		result.Snapshots = append(result.Snapshots, group...)
 	}
+	slices.SortFunc(result.Invalid, func(a, b InvalidHistory) int {
+		if a.Toolchain != b.Toolchain {
+			return strings.Compare(a.Toolchain, b.Toolchain)
+		}
+		return strings.Compare(b.ID, a.ID)
+	})
 	return result, nil
 }
 
 // PruneHistory keeps the newest keep entries per selected tracking host. A zero
-// retention removes its history only; installed SDKs and fixed versions stay put.
+// retention also removes damaged snapshot entries; installed SDKs and fixed
+// versions stay put. Nonzero retention preserves damaged entries for inspection
+// without letting them block pruning healthy snapshots.
 func PruneHistory(ctx context.Context, name string, keep int) (int, error) {
 	if ctx == nil {
 		ctx = context.Background()
@@ -179,13 +212,25 @@ func PruneHistory(ctx context.Context, name string, keep int) (int, error) {
 	if err := lock.Recover(); err != nil {
 		return 0, err
 	}
-	return pruneHistoryLocked(ctx, home, name, keep)
+	removed := 0
+	err = lock.WithStableReads(ctx, func() error {
+		var err error
+		removed, err = pruneHistoryLocked(ctx, home, name, keep)
+		return err
+	})
+	return removed, err
 }
 
 func pruneHistoryLocked(ctx context.Context, home, name string, keep int) (int, error) {
-	entries, err := listHistoryAt(ctx, home, name)
+	report, err := inspectHistoryAt(ctx, home, name)
 	if err != nil {
 		return 0, err
+	}
+	entries := report.Snapshots
+	if keep == 0 {
+		for _, invalid := range report.Invalid {
+			entries = append(entries, HistoryEntry{Toolchain: invalid.Toolchain, ID: invalid.ID})
+		}
 	}
 	seen := make(map[string]int)
 	removed := 0
