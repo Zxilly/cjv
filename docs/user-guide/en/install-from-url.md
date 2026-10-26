@@ -1,6 +1,10 @@
 # Custom SDKs: directories, archives, and URLs
 
-`cjv toolchain link` accepts an existing SDK directory, a local `.zip` / `.tar.gz` archive, or an HTTP(S) URL:
+Use `cjv toolchain link` when you need to register an unpacked SDK directory, install a local `.zip` or `.tar.gz` archive, or download a custom SDK archive from an HTTP or HTTPS URL. This chapter compares directory links with archive installations and describes the supported archive layouts.
+
+## Register a custom SDK
+
+Run `cjv toolchain link` with a custom name and a local path or URL:
 
 ```bash
 cjv toolchain link local-sdk /path/to/sdk
@@ -8,43 +12,61 @@ cjv toolchain link archive-sdk ./cangjie-sdk.zip
 cjv toolchain link remote-sdk https://example.com/cangjie-sdk.tar.gz
 ```
 
-These examples use separate names and can be run independently. They do not change the default toolchain; use `cjv default <name>` when needed.
+Each command registers an independent toolchain under the name that you give. The custom name must obey the naming rules in [Toolchains and versions](concepts/toolchains.md#channel-and-version-names) and cannot be an official name such as `lts`, `sts`, or `nightly`.
 
-## Directories and archives
+Linking a toolchain does not change your global default selection. Run `cjv default <name>` if you want to make the custom SDK your default, or reference `<name>` in [cangjie-sdk.toml](toolchain-file.md).
 
-| Source | Installation | Uninstallation |
-| --- | --- | --- |
-| Extracted directory | Create a reference; requires `bin/cjc` (`cjc.exe` on Windows) | Remove the link and preserve the source SDK |
-| Local archive or URL | Extract into a real directory managed by cjv | Delete the installed copy and components; preserve the local source archive |
+## Compare directory links and archive installs
 
-The source SDK owner maintains a linked directory; cjv component commands cannot edit it. Archive installations can use bundled stdx or attach local stdx through `component link`.
+Directory links and archive installations differ in file ownership, component support, and removal behavior:
 
-The name must be a [custom toolchain name](concepts/toolchains.md), not an official name such as `lts`, `sts`, or `nightly`.
+| Source type | How cjv installs it | Component support | What `cjv uninstall` removes |
+| --- | --- | --- | --- |
+| Unpacked directory | Creates a reference to your directory; checks for `bin/cjc` (`cjc.exe` on Windows) | Maintained by the directory owner; `cjv component` cannot edit it | Removes the cjv link and keeps your source directory |
+| Local archive or URL | Extracts files into a managed directory under `<CJV_HOME>/toolchains/` | Uses bundled `stdx` or accepts `cjv component link stdx` | Deletes the managed SDK copy and its components; keeps your local archive file |
 
-## Archive options
+Read [Components and offline documentation](concepts/components.md#manage-components-on-custom-sdks) for examples of linking `stdx` to an archive-installed custom SDK.
+
+## Archive installation options
+
+These flags apply only when the source is a local archive file or an HTTP/HTTPS URL:
 
 | Option | Effect |
 | --- | --- |
-| `--sha256 <hex>` | Verify content against the expected 64-digit hexadecimal SHA-256 |
-| `--force` | Replace an existing toolchain with the same name |
-| `--no-stdx` | Skip bundled stdx |
+| `--sha256 <hex>` | Check the archive against the expected 64-character hexadecimal SHA-256 hash |
+| `--force` | Replace an existing custom toolchain that has the same name |
+| `--no-stdx` | Skip installing a bundled `stdx` archive from an outer bundle |
 
-These options apply only to archives and URLs. Using them with a directory is an error. Without SHA-256, cjv does not check an expected content hash, but still validates the archive and SDK layout.
+Do not pass `--sha256`, `--force`, or `--no-stdx` when linking an unpacked directory; cjv returns an error. If you omit `--sha256` for an archive, cjv skips the expected hash check but still checks the archive structure and SDK layout.
 
-## Supported archives
+## Supported archive layouts
 
-A bare SDK archive contains one complete SDK directory. The outer ZIP produced by `cangjie-build` CI is also supported, with these inner archives:
+### Bare SDK archive
+
+A bare `.zip` or `.tar.gz` archive contains a single complete `cangjie/` SDK directory with `bin/`, `lib/`, `tools/`, and `runtime/`.
+
+### Outer CI bundle archive
+
+cjv also accepts the outer `.zip` bundle produced by `cangjie-build` CI jobs. That outer archive contains an inner SDK archive and an optional inner `stdx` archive:
 
 ```text
 cangjie-sdk-<sdk_name>-<version>.<tar.gz|zip>
 cangjie-stdx-<sdk_name>-<version>.<stdxver>.<tar.gz|zip>  # optional
 ```
 
-The SDK contains `cangjie/` with its `bin/`, `lib/`, `tools/`, `runtime/`, and other SDK contents. The stdx archive contains `dynamic/` and `static/` inside a platform directory. Bundled stdx is installed unless `--no-stdx` is set. If stdx installation fails, the successfully installed SDK remains.
+Inside the inner `stdx` archive, cjv expects `dynamic/` and `static/` under a platform directory. By default, cjv installs the bundled `stdx` automatically unless you pass `--no-stdx`. If the `stdx` extraction fails, cjv keeps the installed SDK and reports a warning.
 
-Archive installation requires an SDK for the current operating system. Cross-compilation uses a [target SDK](cross-compilation.md) that runs on the host; installing another operating system's regular SDK does not provide it.
+### Host platform requirement
+
+An archive installation must match your current host operating system. If you need to compile code for another target operating system, install a [cross-compilation](cross-compilation.md) target SDK that runs on your host instead of installing a regular SDK built for another host.
+
+## Inspect and remove an archive SDK
+
+Use the standard component and toolchain commands to inspect or remove a custom archive installation:
 
 ```bash
 cjv component list --toolchain archive-sdk
 cjv toolchain uninstall archive-sdk
 ```
+
+For air-gapped enterprise deployments that use custom archives, read [Enterprise and offline deployment](enterprise/index.md#fully-offline-clients).

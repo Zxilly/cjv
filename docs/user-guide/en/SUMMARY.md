@@ -6,7 +6,7 @@
 
 - [Install cjv](installation/index.md)
 - [Quick start](basic-usage.md)
-- [Running commands and setting the environment](runtime-environment.md)
+- [Run commands and set the environment](runtime-environment.md)
 
 # Manage SDKs
 

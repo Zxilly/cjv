@@ -1,14 +1,24 @@
 # Components and offline documentation
 
-Components belong to individual toolchains and are removed when their toolchain is uninstalled:
+Components are optional packages that belong to a specific [toolchain](toolchains.md), such as the `stdx` extension library and offline HTML documentation. When you uninstall a toolchain, cjv also removes its components. This chapter explains how to install components, link local `stdx` builds, and open offline documentation.
 
-| Component | Contents | Location relative to `CJV_HOME` |
+## Available components
+
+cjv stores components under `<CJV_HOME>` by toolchain name (`<tc>`):
+
+| Component | Contents | Path relative to `CJV_HOME` |
 | --- | --- | --- |
-| `stdx` | Extension libraries | `stdx/<tc>/{dynamic,static}` |
+| `stdx` | Dynamic and static extension libraries | `stdx/<tc>/{dynamic,static}` |
 | `docs` | Language, standard library, and tool documentation | `docs/<tc>/main/` |
 | `stdx-docs` | Extension library documentation | `docs/<tc>/stdx/` |
 
-## Install and remove
+When a toolchain has `stdx`, proxy commands, `cjv exec`, and `cjv envsetup` set `CANGJIE_STDX_PATH_DYNAMIC` and `CANGJIE_STDX_PATH_STATIC` automatically. Documentation components do not change the runtime environment; read [Run commands and set the environment](../runtime-environment.md) for environment details.
+
+## Install, list, and remove components
+
+### Manage components from the CLI
+
+You can install components during toolchain installation or add them later with `cjv component`:
 
 ```bash
 cjv install nightly -c stdx,docs
@@ -18,34 +28,47 @@ cjv component list --installed -q
 cjv component remove stdx-docs
 ```
 
-Without `--toolchain`, commands use the current selection. `--target <suffix>` selects an installed cross SDK belonging to that host. Component names may be repeated or comma-separated. `component add` skips installed entries; `--force` reinstalls them.
+- If you omit `--toolchain`, cjv uses the active toolchain.
+- Pass `--target <suffix>` to manage components for an installed [cross-compilation](../cross-compilation.md) target SDK on that host.
+- You can pass component names as separate arguments or as a comma-separated list.
+- `cjv component add` skips components that are already installed. Pass `--force` to reinstall them.
 
-Available artifacts depend on the channel, release, and platform. Custom toolchains have no official component download source. Projects can also declare components in [cangjie-sdk.toml](../toolchain-file.md) for automatic installation.
+Available component archives depend on the channel, version, and platform in your distribution manifest. You can also declare needed components in [cangjie-sdk.toml](../toolchain-file.md) so cjv installs them automatically when a project tool runs.
 
-### Updates
+### Component behavior during updates
 
-Tracked channel updates replace the SDK and selected components together. Components of pinned versions remain unchanged. Locally linked stdx keeps its source.
+When you run `cjv update` on a tracked channel, cjv updates the host SDK and its installed components together. Components that belong to a pinned version such as `lts-1.0.5` stay unchanged. If you linked a local `stdx` directory, the update keeps your local link.
 
-## Link local stdx
+## Link a local `stdx` directory
+
+### Link `stdx` to a managed toolchain
+
+If you build `stdx` locally or receive a prebuilt directory, link it to a toolchain with `cjv component link`:
 
 ```bash
 cjv component link stdx /path/to/local/stdx --toolchain lts --force
 ```
 
-The source must contain `dynamic/` and `static/`. `--force` replaces an existing component. Removing a link deletes cjv's entries and preserves the source directory. `docs` and `stdx-docs` do not support local links.
+The source directory must contain both `dynamic/` and `static/` subdirectories. Pass `--force` to replace an existing `stdx` installation on that toolchain.
 
-### Components for custom SDKs
+When you remove a linked component with `cjv component remove stdx`, cjv deletes its internal link and keeps your source directory intact. The `docs` and `stdx-docs` components do not support local directory links.
 
-Component edits require an SDK in a real directory managed by cjv. An external SDK directory referenced by `toolchain link` cannot be edited through component commands. To let cjv manage its components, install the SDK from a [local archive or URL](../install-from-url.md):
+### Manage components on custom SDKs
+
+Component commands can only edit an SDK that lives in a directory managed by cjv. If you registered an external SDK directory with `cjv toolchain link <name> /path/to/sdk`, the owner of that directory maintains its components and `cjv component` commands cannot change it.
+
+If you want cjv to manage components for a custom SDK, install the SDK from a local archive or URL first:
 
 ```bash
 cjv toolchain link my-sdk ./cangjie-sdk.zip
 cjv component link stdx /path/to/local/stdx --toolchain my-sdk
 ```
 
-Installed stdx supplies `CANGJIE_STDX_PATH_DYNAMIC` and `CANGJIE_STDX_PATH_STATIC` to proxies, `exec`, and `envsetup`. Documentation components do not change the runtime environment.
+Custom toolchains have no official download source for `cjv component add`, but archive installations can use bundled `stdx` or link a local `stdx` directory. Read [Custom SDKs](../install-from-url.md) for archive installation rules.
 
-## Open documentation
+## Open offline documentation
+
+After you install `docs` or `stdx-docs`, use `cjv doc` (or its alias `cjv docs`) to open the local HTML manual in your browser:
 
 ```bash
 cjv doc
@@ -56,4 +79,12 @@ cjv doc stdx --toolchain nightly
 cjv doc --path
 ```
 
-`doc` opens local HTML in a browser. `--path` and `--json` only return the path. `book` is an alias for `dev-guide`. Without a topic, cjv prefers the main documentation, then extension library documentation. If documentation is missing, it asks you to install the corresponding component.
+| Topic argument | Documentation opened | Needed component |
+| --- | --- | --- |
+| *(omitted)* | Main home page when `docs` is present; otherwise `stdx` home page | `docs` or `stdx-docs` |
+| `std` | Standard library reference | `docs` |
+| `dev-guide` or `book` | Cangjie developer guide | `docs` |
+| `tools` | SDK tools manual | `docs` |
+| `stdx` | Extension library reference | `stdx-docs` |
+
+Pass `--path` or `--json` to print the local file path without opening a browser. If the needed component is missing, cjv prints the command to install it. Read [Command reference](../command-reference.md#offline-documentation) for all options.

@@ -1,22 +1,28 @@
 # Install cjv
 
-cjv is a single executable and does not require an existing Cangjie SDK.
+cjv is a standalone executable. You do not need an existing Cangjie SDK before you install cjv. After you finish this chapter, continue to [Quick start](../basic-usage.md) to manage your toolchains.
 
-## Installer scripts
+## Run the installer script
 
-Linux / macOS / HarmonyOS HiShell:
+### Standard installation
+
+On Linux, macOS, or HarmonyOS HiShell, run this command:
 
 ```bash
 curl -sSf https://cjv.zxilly.com/install.sh | sh
 ```
 
-Windows PowerShell:
+On Windows PowerShell, run this command:
 
 ```powershell
 irm https://cjv.zxilly.com/install.ps1 | iex
 ```
 
-The script detects the platform, downloads and verifies cjv, then runs `cjv init`. Interactive terminals show a wizard; non-interactive input uses defaults. For automation, skip confirmation explicitly or install cjv without an SDK:
+The script detects your platform, downloads cjv, checks the checksum, and runs `cjv init`. Interactive terminals show the setup wizard, and non-interactive terminals use default settings.
+
+### Non-interactive installation
+
+In CI or automated scripts, skip confirmation prompts or install cjv without an SDK:
 
 ```bash
 curl -sSf https://cjv.zxilly.com/install.sh | sh -s -- -y --default-toolchain none
@@ -26,11 +32,11 @@ curl -sSf https://cjv.zxilly.com/install.sh | sh -s -- -y --default-toolchain no
 & ([scriptblock]::Create((irm https://cjv.zxilly.com/install.ps1))) -Yes -DefaultToolchain none
 ```
 
-The Unix script handles `--mirror` and `--version`, then forwards the remaining arguments to `cjv init`. The PowerShell script provides `-Mirror`, `-Version`, `-Yes`, `-DefaultToolchain`, and `-NoModifyPath`.
+The Unix script reads `--mirror` and `--version`, and passes all other flags to `cjv init`. The PowerShell script accepts `-Mirror`, `-Version`, `-Yes`, `-DefaultToolchain`, and `-NoModifyPath`. Read [Command reference](../command-reference.md#init) for all `cjv init` flags.
 
 ### Pin the cjv version
 
-Automated installations can select an exact cjv release tag, including prereleases:
+In automated setups, you can select an exact cjv release tag, including prereleases:
 
 ```bash
 curl -sSf https://cjv.zxilly.com/install.sh | sh -s -- --version v0.4.1 -y --default-toolchain none
@@ -40,15 +46,21 @@ curl -sSf https://cjv.zxilly.com/install.sh | sh -s -- --version v0.4.1 -y --def
 & ([scriptblock]::Create((irm https://cjv.zxilly.com/install.ps1))) -Version v0.4.1 -Yes -DefaultToolchain none
 ```
 
-Replace the example tag with the required version. Both scripts also read `CJV_VERSION`; the command-line version takes precedence. Without either, they download the latest stable release. This option selects cjv itself; `--default-toolchain` / `-DefaultToolchain` independently selects the Cangjie SDK. Explicit `CJV_UPDATE_ROOT`, `CJV_GITHUB_ROOT`, and `CJV_GITCODE_ROOT` download URLs take precedence over the version option. For an internal source, point the URL directly at the required version's artifact directory.
+Replace `v0.4.1` with the tag that you need. Both scripts also read the `CJV_VERSION` environment variable, but the command-line flag takes precedence. If you do not set a version, the script downloads the latest stable release.
 
-### SDK selection
+This version flag selects the cjv binary itself. The `--default-toolchain` or `-DefaultToolchain` flag selects the Cangjie SDK independently.
 
-By default, `cjv init` queries channels for the current platform and selects the first available channel in the order `lts`, `sts`, then `nightly`. Use `--default-toolchain <name>` to select a specific toolchain, or `--default-toolchain none` to install cjv alone.
+Explicit `CJV_UPDATE_ROOT`, `CJV_GITHUB_ROOT`, and `CJV_GITCODE_ROOT` download URLs take precedence over the version option. If you use an internal server, point the URL directly to the artifact directory of the target version. Read [Environment variables](../environment-variables.md) for details on these variables.
 
-If SDK installation fails, the command returns a nonzero exit code and keeps the installed cjv. Follow the retry command in the error message or check available versions with `cjv toolchain list-remote`.
+### SDK selection during initialization
 
-### GitCode mirror
+By default, `cjv init` queries the channels for your platform. It selects the first available channel in this sequence: `lts`, `sts`, and `nightly`. Pass `--default-toolchain <name>` to select a specific toolchain, or pass `--default-toolchain none` to install cjv alone.
+
+If the SDK download fails, `cjv init` returns a nonzero exit code and keeps the installed cjv binary. Run the retry command from the error message, or run `cjv toolchain list-remote` to see available releases.
+
+### Use the GitCode mirror
+
+If GitHub access is slow or blocked, install the mirror build from GitCode:
 
 ```bash
 curl -sSf https://cjv.zxilly.com/install.sh | sh -s -- --mirror
@@ -58,13 +70,17 @@ curl -sSf https://cjv.zxilly.com/install.sh | sh -s -- --mirror
 & ([scriptblock]::Create((irm https://cjv.zxilly.com/install.ps1))) -Mirror
 ```
 
-The mirror build uses GitCode for its default version manifest and cjv updates. See [enterprise deployment](../enterprise/index.md) for internal artifact servers.
+The mirror build uses GitCode for the default version manifest and for `cjv self update`. If your organization hosts its own mirror, read [Enterprise and offline deployment](../enterprise/index.md).
 
-## Manual download
+## Download an archive manually
 
-Download an archive from [GitHub Releases](https://github.com/Zxilly/cjv/releases), extract `cjv` or `cjv.exe` to a directory on `PATH`, and run `cjv init`.
+If you prefer not to run a script, install cjv from a release archive:
 
-| Platform | Archive |
+1. Download the archive for your platform from [GitHub Releases](https://github.com/Zxilly/cjv/releases).
+2. Extract `cjv` or `cjv.exe` into a directory on your `PATH`.
+3. Run `cjv init` to create the proxy binaries and configure your environment.
+
+| Platform | Archive name |
 | --- | --- |
 | Linux x86_64 | `cjv_linux_amd64.tar.gz` |
 | Linux ARM64 | `cjv_linux_arm64.tar.gz` |
@@ -74,25 +90,27 @@ Download an archive from [GitHub Releases](https://github.com/Zxilly/cjv/release
 | HarmonyOS x86_64 | `cjv_openharmony_amd64.tar.gz` |
 | HarmonyOS ARM64 | `cjv_openharmony_arm64.tar.gz` |
 
-[GitCode Releases](https://gitcode.com/Zxilly/cjv/releases) provides equivalent archives prefixed with `cjv-mirror_`. The download page also offers `cjv-init` executables that start the installation wizard directly.
+[GitCode Releases](https://gitcode.com/Zxilly/cjv/releases) publishes matching archives with the `cjv-mirror_` prefix. The [landing page](https://cjv.zxilly.com) also offers standalone `cjv-init` binaries that start the wizard directly.
 
-## Install from source
+## Build and install from source
 
-With a Go version satisfying the repository's `go.mod` requirement:
+If you have the Go version listed in `go.mod`, you can install cjv from source:
 
 ```bash
 go install github.com/Zxilly/cjv/cmd/cjv@latest
 cjv init
 ```
 
-Go installs the executable to `GOBIN`, or `$(go env GOPATH)/bin` when unset. Add that directory to `PATH`.
+Go writes the binary to `GOBIN`, or to `$(go env GOPATH)/bin` when `GOBIN` is not set. Add that directory to your `PATH`. Read [Build from source](https://cjv.zxilly.com/book/dev-guide/en/building.html) in the developer guide for custom and cross-platform builds.
 
-## PATH and verification
+## Configure PATH and check the setup
 
-SDK proxy commands live in `<CJV_HOME>/bin`, which defaults to `~/.cjv/bin`. `init` configures PATH. If you skip initialization and install an SDK directly, the first toolchain installation also attempts PATH setup. Windows updates the user PATH; Unix updates shell configuration. Open a new terminal and check:
+cjv puts SDK proxy binaries in `<CJV_HOME>/bin`, which defaults to `~/.cjv/bin`. The `cjv init` command adds this directory to your `PATH`. If you skip `cjv init` and install an SDK directly, the first toolchain installation also tries to configure `PATH`.
+
+On Windows, cjv updates the user `PATH` in the registry. On Unix systems, cjv updates your shell profile. Open a new terminal and check the installation:
 
 ```bash
 cjv --version
 ```
 
-To manage PATH yourself, pass `--no-modify-path` to `init` or `-NoModifyPath` to the PowerShell installer. `CJV_NO_PATH_SETUP=1` also skips automatic setup. Continue with the [quick start](../basic-usage.md) to install a toolchain.
+If you want to manage `PATH` yourself, pass `--no-modify-path` to `cjv init` or `-NoModifyPath` to `install.ps1`. You can also set `CJV_NO_PATH_SETUP=1` in your environment. Next, read [Quick start](../basic-usage.md) to install and select a Cangjie SDK.
