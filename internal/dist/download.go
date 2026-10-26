@@ -71,7 +71,7 @@ func DownloadCachedWithName(ctx context.Context, url, sha256Hex, cacheDir, displ
 	}
 	defer lock.Close() //nolint:errcheck
 
-	if reused, err := tryReuseStaged(stagedPath, sha256Hex); err != nil {
+	if reused, err := tryReuseStaged(ctx, stagedPath, sha256Hex); err != nil {
 		return "", err
 	} else if reused {
 		return stagedPath, nil
@@ -86,11 +86,13 @@ func DownloadCachedWithName(ctx context.Context, url, sha256Hex, cacheDir, displ
 		} else if !errors.Is(err, os.ErrNotExist) {
 			return "", err
 		}
-		if err := verifyStagedFile(partialPath, sha256Hex); err == nil {
+		if err := verifyStagedFileContext(ctx, partialPath, sha256Hex); err == nil {
 			if err := fsops.RenameRetry(partialPath, stagedPath); err != nil {
 				return "", err
 			}
 			return stagedPath, nil
+		} else if ctx.Err() != nil {
+			return "", ctx.Err()
 		}
 	}
 	if Offline(ctx) {
@@ -116,7 +118,7 @@ func DownloadCachedWithName(ctx context.Context, url, sha256Hex, cacheDir, displ
 	})
 	if err == nil {
 		if sha256Hex == "" {
-			if err := verifyStagedFile(partialPath, sha256Hex); err != nil {
+			if err := verifyStagedFileContext(ctx, partialPath, sha256Hex); err != nil {
 				cleanupDownloadTemp(partialPath)
 				return "", fmt.Errorf("downloaded file is not a valid archive: %w", err)
 			}
@@ -165,14 +167,17 @@ func fitProgressLabel(name string) string {
 // (true, nil) if the file passes verification and can be reused as-is,
 // (false, nil) if no usable file is present (callers should download fresh),
 // or (false, err) on a fatal verification problem the caller cannot recover.
-func tryReuseStaged(stagedPath, sha256Hex string) (bool, error) {
+func tryReuseStaged(ctx context.Context, stagedPath, sha256Hex string) (bool, error) {
 	if _, err := os.Stat(stagedPath); err != nil {
 		return false, nil
 	}
 	slog.Info("staged download already present", "path", stagedPath)
-	verifyErr := verifyStagedFile(stagedPath, sha256Hex)
+	verifyErr := verifyStagedFileContext(ctx, stagedPath, sha256Hex)
 	if verifyErr == nil {
 		return true, nil
+	}
+	if ctx.Err() != nil {
+		return false, ctx.Err()
 	}
 	var mismatchErr *cjverr.ChecksumMismatchError
 	if !errors.As(verifyErr, &mismatchErr) && sha256Hex != "" {
@@ -227,6 +232,19 @@ func VerifyArchive(path, sha256Hex string) error {
 }
 
 func verifyStagedFile(path, sha256Hex string) error {
+	return verifyStagedFileContext(context.Background(), path, sha256Hex)
+}
+
+// VerifyArchiveContext validates a local archive while honoring cancellation
+// during potentially long checksum reads.
+func VerifyArchiveContext(ctx context.Context, path, sha256Hex string) error {
+	return verifyStagedFileContext(ctx, path, strings.ToLower(sha256Hex))
+}
+
+func verifyStagedFileContext(ctx context.Context, path, sha256Hex string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if sha256Hex == "" {
 		// No checksum was published for this artifact. Verify the staged
 		// file is non-empty and has a valid archive magic header to catch
@@ -250,7 +268,7 @@ func verifyStagedFile(path, sha256Hex string) error {
 	defer f.Close() //nolint:errcheck // read-only
 
 	hasher := sha256.New()
-	if _, err := io.Copy(hasher, f); err != nil {
+	if _, err := fsops.CopyContext(ctx, hasher, f); err != nil {
 		return fmt.Errorf("hash staged file %s: %w", path, err)
 	}
 	return verifyChecksum(hasher, sha256Hex)
@@ -380,7 +398,7 @@ func downloadOnce(ctx context.Context, url, tmpPath, displayName, sha256Hex stri
 		if err != nil {
 			return fmt.Errorf("open partial for hashing: %w", err)
 		}
-		if _, err := io.Copy(hasher, existing); err != nil {
+		if _, err := fsops.CopyContext(ctx, hasher, existing); err != nil {
 			existing.Close() //nolint:errcheck
 			return fmt.Errorf("hash existing partial: %w", err)
 		}
@@ -409,7 +427,7 @@ func downloadOnce(ctx context.Context, url, tmpPath, displayName, sha256Hex stri
 	sink.Report(progress.Event{Kind: progress.DownloadStarted, Subject: displayName, Bytes: existingSize, Total: totalSize})
 
 	reader := io.TeeReader(&advancingReader{r: resp.Body, sink: sink}, hasher)
-	if _, err := io.Copy(f, reader); err != nil {
+	if _, err := fsops.CopyContext(ctx, f, reader); err != nil {
 		sink.Report(progress.Event{Kind: progress.DownloadFinished, Err: err})
 		return fmt.Errorf("download write: %w", err)
 	}

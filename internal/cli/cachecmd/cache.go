@@ -29,7 +29,11 @@ func (r result) Text() string {
 	var b strings.Builder
 	fmt.Fprintln(&b, r.Path)
 	for _, e := range r.Entries {
-		fmt.Fprintf(&b, "%s  %s  %d bytes\n", e.Key, e.Kind, e.Size)
+		fmt.Fprintf(&b, "%s  %s  %d bytes", e.Key, e.Kind, e.Size)
+		if e.Problem != "" {
+			fmt.Fprintf(&b, "  (%s)", e.Problem)
+		}
+		fmt.Fprintln(&b)
 	}
 	return b.String()
 }

@@ -56,9 +56,9 @@ func InstallToolchainFromZip(ctx context.Context, name, archivePath, sha256 stri
 		return err
 	}
 	name = parsed.String()
-	return installLinkedToolchain(ctx, name, force, noStdx, opts, func(_ context.Context, _ *dist.Preparation) (string, error) {
+	return installLinkedToolchain(ctx, name, force, noStdx, opts, func(ctx context.Context, _ *dist.Preparation) (string, error) {
 		opts.emit(progress.Event{Kind: progress.LinkUsingArchive, Subject: archivePath})
-		if err := dist.VerifyArchive(archivePath, sha256); err != nil {
+		if err := dist.VerifyArchiveContext(ctx, archivePath, sha256); err != nil {
 			return "", err
 		}
 		return archivePath, nil
