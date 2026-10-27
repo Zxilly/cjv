@@ -13,13 +13,6 @@ The Chinese and English chapter sources are maintained side by side—synchroniz
 
 `docs/theme/cjv-i18n.js` and `cjv-i18n.css` provide the top-bar language switcher. The switcher works by replacing the `/zh-CN/` and `/en/` path segments in the current URL, which is why both languages must have matching page paths. Because translated headings generate different HTML anchor IDs, switching languages opens the corresponding chapter at the top and strips any previous `#anchor` hash.
 
-## Writing conventions
-
-- Use factual, direct descriptions of command behavior, prerequisites, defaults, and limitations.
-- Keep the project name, purpose, installation, and quick start in the README. Put detailed options in the user guide or command reference.
-- Use short topic or task headings. Avoid promotional claims, repeated chapter introductions, and decorative emphasis on links.
-- Base behavior descriptions on code and tests. Distinguish defaults, explicit options, and platform differences, and keep both languages consistent.
-
 ## Local preview
 
 ### Full site build and link check (recommended)
