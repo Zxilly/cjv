@@ -1,6 +1,6 @@
 # 贡献指南
 
-欢迎向 `cjv` 提交问题反馈、文档改进和代码 Pull Request！开始前，请从最新的 `master` 分支创建一个范围明确的工作分支。外部贡献者可以先 fork [Zxilly/cjv](https://github.com/Zxilly/cjv)，再向主仓库的 `master` 分支提交 PR：
+从最新的 `master` 创建工作分支。外部贡献者可先 fork [Zxilly/cjv](https://github.com/Zxilly/cjv)，将源仓库配置为 `upstream`，再向源仓库的 `master` 提交 Pull Request：
 
 ```bash
 git fetch upstream
@@ -16,7 +16,7 @@ git switch -c fix-windows-path upstream/master
 
 ## 原子提交与提交信息
 
-我们倾向于保持干净、原子的提交历史：每个 commit 只代表一个独立的逻辑改动，避免把无关的代码格式化、重构或依赖升级混入问题修复提交中。
+每个提交应包含一个独立的逻辑改动。无关的格式化、重构和依赖升级应分别提交。
 
 每次提交前，请先查看最近的提交历史并沿用仓库当前风格：
 

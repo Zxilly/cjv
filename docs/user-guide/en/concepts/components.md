@@ -1,6 +1,6 @@
 # Components and offline documentation
 
-Each [toolchain](toolchains.md) can have optional _components_ attached to it—specifically the `stdx` extension libraries and offline HTML documentation packages. Components belong to the individual toolchain they are installed on, and are automatically removed when that toolchain is uninstalled:
+Components are optional extension libraries and offline documentation attached to a [toolchain](toolchains.md). Each toolchain has its own components, which are removed when that toolchain is uninstalled:
 
 | Component | Contents | Location relative to `CJV_HOME` |
 | --- | --- | --- |

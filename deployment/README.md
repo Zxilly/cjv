@@ -1,9 +1,9 @@
 # Website edge functions
 
-The `deployment/` directory contains the edge function builders, provider adapters, and end-to-end verification scripts for the two public `cjv` website domains:
+`deployment/` contains edge function builders, provider adapters, and verification scripts for the two cjv website domains:
 
 - **`cjv.zxilly.dev`** — Hosted on GitHub Pages with a Cloudflare Worker route in front of the homepage.
-- **`cjv.zxilly.com`** — Hosted on Tencent Cloud EdgeOne Makers for low-latency access across mainland China and global regions.
+- **`cjv.zxilly.com`** — Hosted on Tencent Cloud EdgeOne Makers.
 
 Both domains serve the same static site artifact produced by GitHub Actions, while adapting the initial mirror toggle on the homepage to the visitor's region.
 
@@ -14,7 +14,7 @@ When a visitor requests `/` or `/index.html`, both edge providers inspect the tw
 - If the visitor's country code is `CN`, the edge function rewrites the homepage HTML to set `data-default-mirror="true"`.
 - For all other countries—or when geolocation metadata is unavailable—the edge function sets `data-default-mirror="false"`.
 
-When the React application in `web/` mounts for the first time, it reads `data-default-mirror` from the document to initialize the GitCode mirror switch. The visitor can still toggle the switch manually at any time, and the browser never needs to prompt for the HTML5 Geolocation API.
+When the React application in `web/` mounts for the first time, it reads `data-default-mirror` from the document to initialize the GitCode mirror switch. Visitors can change the switch manually. Region selection uses CDN metadata and does not request browser geolocation permission.
 
 Because the homepage HTML varies by visitor location, personalized responses carry `Cache-Control: private, no-store`. All other routes—including hashed frontend assets, `/dl/` standalone installers, `/book/` documentation pages, `install.sh`, `install.ps1`, and `404.html`—continue to use their standard static routes and cache policies.
 
@@ -29,7 +29,7 @@ node deployment/build-edge.mjs edgeone web/dist /path/to/edgeone-output/.edgeone
 edgeone makers deploy /path/to/edgeone-output/.edgeone --name cjv-web-global --env production
 ```
 
-> **Important:** The output directory passed to `edgeone makers deploy` **must** be named `.edgeone`. If you pass a directory with any other name, the EdgeOne CLI treats it as a plain static directory upload, leaving the edge function inactive and placing static assets under the wrong URL prefix.
+The output directory passed to `edgeone makers deploy` must be named `.edgeone`. If you pass a directory with any other name, the EdgeOne CLI treats it as a plain static directory upload, leaving the edge function inactive and placing static assets under the wrong URL prefix.
 
 After deploying, the CI workflow automatically runs `deployment/verify-site.mjs` against both public domains to confirm that the homepage, documentation books, installer scripts, and download routes respond as expected.
 
@@ -46,7 +46,7 @@ The `.github/workflows/cloudflare.yml` (`Deploy Cloudflare Worker`) workflow wat
 The Cloudflare workflow uses two GitHub repository settings:
 
 - **`CLOUDFLARE_ACCOUNT_ID`** (repository variable) — The target Cloudflare account ID.
-- **`CLOUDFLARE_API_TOKEN`** (repository secret) — An API token with account `Workers Scripts:Write` permission, plus `Workers Routes:Write` and `Zone:Read` for the `zxilly.dev` zone. The current CI token expires on **October 21, 2027** and should be rotated before that date.
+- **`CLOUDFLARE_API_TOKEN`** (repository secret) — An API token with account `Workers Scripts:Write` permission, plus `Workers Routes:Write` and `Zone:Read` for the `zxilly.dev` zone. Check the token expiry in Cloudflare and rotate it before it expires.
 
 To build and deploy the Cloudflare Worker locally with the npm `cf` CLI (`1.0.0-beta.6`):
 
@@ -60,7 +60,7 @@ The CLI requires an authenticated Cloudflare profile with Worker script and rout
 
 ## Validation
 
-You can run the automated test suite for both edge bundles locally with Node.js:
+Run the tests for both edge bundles locally with Node.js:
 
 ```sh
 node --test deployment/edge.test.mjs

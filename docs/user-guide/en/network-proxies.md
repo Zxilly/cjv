@@ -1,6 +1,6 @@
 # Network proxies
 
-Corporate and institutional networks often restrict direct outbound internet access and require traffic to pass through a proxy server. If you are on such a network, `cjv` honors the standard proxy environment variables for all of its network requests—including version manifests, SDK archives, components, and self-updates.
+cjv uses standard proxy environment variables for network access. Proxy settings apply to version manifests, SDK archives, components, and self-update requests.
 
 ## Configuring a proxy in your shell
 

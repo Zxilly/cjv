@@ -1,6 +1,6 @@
 # Cross-compilation
 
-Before going further, it is important to understand the distinction between a toolchain's _host platform_ and the _compilation targets_ it supports. A host toolchain runs on your current machine (for example, `linux-x64`) and compiles programs for that same platform out of the box. A _cross SDK_ (or target SDK) provides additional compilers, tools, and target libraries that run on your current host machine but produce code for another platform (such as `ohos` or `android`).
+A host toolchain runs on the host platform (for example, `linux-x64`) and compiles programs for that platform by default. A cross SDK runs on the same host and provides compiler tools and libraries for another target platform, such as `ohos` or `android`.
 
 `cjv` manages cross SDKs as attachments to an installed host [toolchain](concepts/toolchains.md). A target SDK's release version always matches its host toolchain's release, and the set of available targets depends on what the upstream distribution manifest publishes for that release and host.
 

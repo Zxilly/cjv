@@ -1,6 +1,6 @@
 # 自定义 SDK：目录、归档与 URL
 
-当你在本机自行编译仓颉 SDK、测试未正式发布的 CI 归档，或者在受限网络环境中工作时，可以使用 `cjv toolchain link` 将已解压的 SDK 目录、本地 `.zip` / `.tar.gz` 归档或 HTTP(S) URL 注册为自定义工具链：
+`cjv toolchain link` 可以从已解压的本机 SDK 目录、本地 `.zip` 或 `.tar.gz` 归档，以及 HTTP(S) URL 注册自定义工具链：
 
 ```bash
 cjv toolchain link local-sdk /path/to/sdk

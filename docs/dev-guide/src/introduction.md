@@ -1,6 +1,6 @@
 # cjv 开发指南
 
-欢迎阅读 _cjv_ 开发指南！本指南说明如何从源码构建 `cjv`、内部各 Go 模块的职责与架构不变量、如何运行测试与检查套件，以及网站部署和版本发布流程。如果你需要了解如何安装仓颉 SDK 并在日常项目中使用 `cjv`，请阅读 [**cjv 用户手册**](https://cjv.zxilly.com/book/user-guide/zh-CN/)。
+本指南说明 cjv 的构建、架构、测试、网站维护和版本发布流程。安装与使用仓颉 SDK 的说明见[用户手册](https://cjv.zxilly.com/book/user-guide/zh-CN/)。
 
 ## 仓库目录结构
 

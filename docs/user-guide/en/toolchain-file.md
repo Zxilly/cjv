@@ -1,6 +1,6 @@
 # Project toolchains
 
-`cjv` automatically determines which [toolchain](concepts/toolchains.md) to use whenever you run an installed proxy command like `cjc` or `cjpm`. In a team project, you can check a `cangjie-sdk.toml` file into the root of your repository so that every developer and CI runner automatically selects the right SDK version, components, and cross-compilation targets:
+When a proxy command such as `cjc` or `cjpm` runs, cjv selects a [toolchain](concepts/toolchains.md) for the current directory. Commit `cangjie-sdk.toml` in the project root to declare the SDK version, components, and cross-compilation targets for developers and CI:
 
 ```toml
 [toolchain]

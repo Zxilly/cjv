@@ -7,7 +7,9 @@ Run `cjv show active` to see which toolchain is currently active and which rule 
 1. Command-line selectors (`+name` or `--toolchain`).
 2. The `CJV_TOOLCHAIN` [environment variable](environment-variables.md).
 3. Per-directory overrides (`cjv override list`) and `cangjie-sdk.toml` files in your current directory and its parent directories. Remember that `cjv` walks upward one directory level at a time, and an override takes precedence over `cangjie-sdk.toml` at the same directory level. See [Project toolchains](toolchain-file.md#selection-order).
-4. If you evaluated `cjv envsetup` earlier in the current terminal session, your shell's `PATH` points directly to that SDK's `bin/` directory ahead of `<CJV_HOME>/bin`. Open a new terminal window to return to automatic proxy selection, or run `cjv envsetup` again for the toolchain you want.
+4. The global default toolchain (`cjv default`).
+
+If you evaluated `cjv envsetup` earlier in the current terminal session, your shell's `PATH` points directly to that SDK's `bin/` directory ahead of `<CJV_HOME>/bin`, bypassing proxy selection. Open a new terminal to restore automatic selection, or run `cjv envsetup` again for the toolchain you want.
 
 ## What happens when a field in `cangjie-sdk.toml` is misspelled?
 

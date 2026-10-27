@@ -33,7 +33,7 @@ cjv show active
 
 ## 详细行为说明
 
-- **路径与配置文件隔离（`CJV_HOME`、`CJV_CONFIG_FILE`、`CJV_FALLBACK_SETTINGS`）** — `CJV_HOME` 用于指定工具链、组件、缓存和历史快照的数据目录，必须为绝对路径。注意仅修改 `CJV_HOME` 不会移动用户的 `settings.toml`；在 CI 中做完全隔离时，请同时设置 `CJV_CONFIG_FILE`（或传入 `--config <path>`）。完整继承与优先级规则见[配置](configuration.md#继承与临时覆盖)。
+- **路径与配置文件隔离（`CJV_HOME`、`CJV_CONFIG_FILE`、`CJV_FALLBACK_SETTINGS`）** — `CJV_HOME` 指定工具链、组件、缓存和历史快照的数据目录，必须为绝对路径。它不会移动用户的 `settings.toml`。隔离 CI 用户设置时，还需设置 `CJV_CONFIG_FILE` 或传入 `--config <path>`。继承与优先级规则见[配置](configuration.md#继承与临时覆盖)。
 - **工具链选择与自动补装（`CJV_TOOLCHAIN`、`CJV_AUTO_INSTALL`）** — 设置 `CJV_TOOLCHAIN` 会覆盖本机目录覆盖、`cangjie-sdk.toml` 和全局默认工具链（仅次于命令行显式 `+name` 或 `--toolchain`）。`CJV_AUTO_INSTALL=0` 或 `1` 用于在当前进程树中临时关闭或开启自动补装。
 - **网络、重试与 HTTPS 限制（`CJV_OFFLINE`、`CJV_DIST_SERVER`、`CJV_MAX_RETRIES`、`CJV_DOWNLOAD_TIMEOUT`、`CJV_ALLOW_INSECURE_MANIFEST`）** — 如果 `CJV_MAX_RETRIES` 或 `CJV_DOWNLOAD_TIMEOUT` 设置了非法值，会自动回退到默认值（`3` 次和 `180` 秒）。由于版本清单同时提供制品 URL 与 SHA-256 校验和，默认强制要求使用 `https://`；本地回环测试服务器（`localhost`、`127.0.0.1`、`::1`）不受该限制，在测试内网明文源时可设置 `CJV_ALLOW_INSECURE_MANIFEST=1`。
 - **注入 SDK 运行环境的变量（`CANGJIE_HOME`、`CANGJIE_STDX_PATH_*`）** — 安装 `stdx` 组件后，`cjv` 会为所选 SDK 的运行环境自动注入 `CANGJIE_STDX_PATH_DYNAMIC` 和 `CANGJIE_STDX_PATH_STATIC`，分别指向组件的 `dynamic/` 与 `static/` 目录，通常无需手动设置。详见[运行命令与配置环境](runtime-environment.md)。

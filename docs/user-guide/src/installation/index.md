@@ -1,10 +1,10 @@
 # 安装 cjv
 
-`cjv` 是独立分发的单文件可执行程序，安装前不需要在系统中预装仓颉 SDK。完成安装后，`cjv` 会将自身以及 `cjc`、`cjpm` 等标准 SDK 工具的代理入口放置在 `<CJV_HOME>/bin` 目录下（Unix 默认为 `~/.cjv/bin`，Windows 默认为 `%USERPROFILE%\.cjv\bin`）。
+cjv 是独立分发的单文件程序，安装前不需要仓颉 SDK。安装后，cjv 及 `cjc`、`cjpm` 等 SDK 工具的代理入口位于 `<CJV_HOME>/bin`，默认路径为 Unix 上的 `~/.cjv/bin` 和 Windows 上的 `%USERPROFILE%\.cjv\bin`。
 
 ## 使用安装脚本
 
-安装 `cjv` 最简单的方式是运行对应平台的官方安装脚本。
+安装脚本支持 Linux、macOS、Windows 和鸿蒙 HiShell。
 
 在 Linux、macOS 或鸿蒙 HiShell 中执行：
 
@@ -48,7 +48,7 @@ curl -sSf https://cjv.zxilly.com/install.sh | sh -s -- --version v0.4.1 -y --def
 
 请将示例中的 `v0.4.1` 替换为实际需要的版本标签。两个脚本也会读取 `CJV_VERSION` [环境变量](../environment-variables.md)，但命令行显式传入的版本参数优先级更高；两者都未指定时，默认下载最新稳定版。
 
-请注意，`--version` / `CJV_VERSION` 选择的是 `cjv` 管理器本体的版本，而 `--default-toolchain` / `-DefaultToolchain` 选择的是仓颉 SDK 工具链，两者彼此独立。此外，显式设置的下载地址变量（`CJV_UPDATE_ROOT`、`CJV_GITHUB_ROOT`、`CJV_GITCODE_ROOT`）优先于版本参数；如果使用企业内部制品源，应将地址直接指向所选版本的制品目录。
+`--version` / `CJV_VERSION` 选择的是 `cjv` 管理器本体的版本，而 `--default-toolchain` / `-DefaultToolchain` 选择的是仓颉 SDK 工具链，两者彼此独立。此外，显式设置的下载地址变量（`CJV_UPDATE_ROOT`、`CJV_GITHUB_ROOT`、`CJV_GITCODE_ROOT`）优先于版本参数；如果使用企业内部制品源，应将地址直接指向所选版本的制品目录。
 
 ### 初始化时的 SDK 选择规则
 

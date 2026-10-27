@@ -1,6 +1,6 @@
 # Landing page
 
-`web/` contains the static landing page deployed at [cjv.zxilly.com](https://cjv.zxilly.com) and [cjv.zxilly.dev](https://cjv.zxilly.dev), providing one-line installer commands and platform-specific binary downloads. It is built with React, Vite, TypeScript, Tailwind CSS, and Lingui; exact dependency and `pnpm` versions are pinned in `web/package.json`.
+`web/` contains the static landing page at [cjv.zxilly.com](https://cjv.zxilly.com) and [cjv.zxilly.dev](https://cjv.zxilly.dev), with installer commands and platform-specific downloads. It uses React, Vite, TypeScript, Tailwind CSS, and Lingui. `web/package.json` declares dependency ranges and the pnpm version; `web/pnpm-lock.yaml` locks dependency versions.
 
 ## Development and files
 

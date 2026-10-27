@@ -1,6 +1,6 @@
 # Contributing
 
-Contributions to `cjv`—whether bug reports, documentation improvements, or code changes—are very welcome! To get started, create a focused branch from the latest `master`. External contributors can fork [Zxilly/cjv](https://github.com/Zxilly/cjv) on GitHub and open a pull request against the upstream `master` branch:
+Create a branch from the latest `master`. External contributors can fork [Zxilly/cjv](https://github.com/Zxilly/cjv), configure the original repository as `upstream`, and open a pull request against its `master` branch:
 
 ```bash
 git fetch upstream
@@ -16,7 +16,7 @@ git switch -c fix-windows-path upstream/master
 
 ## Atomic commits and commit messages
 
-We prefer atomic commits where each commit represents a single, self-contained logical change. Keep unrelated formatting cleanups, refactoring, and dependency upgrades in separate commits from behavioral fixes.
+Each commit should contain one logical change. Submit unrelated formatting, refactoring, and dependency upgrades separately.
 
 Before committing, inspect the recent git history and follow the repository's convention:
 
@@ -43,4 +43,4 @@ When opening a pull request, describe:
 
 After pushing your branch, check the GitHub Actions results, inspect any failures, and push follow-up fixes to the same branch as code review continues.
 
-Remember to update the [User Guide](https://cjv.zxilly.com/book/user-guide/en/) whenever a change alters CLI flags, configuration fields, or user-visible behavior. In the Developer Guide, keep [Architecture](architecture.md) focused on stable module responsibilities and invariants—low-level implementation details belong in code comments and tests.
+Update the [User Guide](https://cjv.zxilly.com/book/user-guide/en/) whenever a change alters CLI flags, configuration fields, or user-visible behavior. In the Developer Guide, keep [Architecture](architecture.md) focused on stable module responsibilities and invariants—low-level implementation details belong in code comments and tests.

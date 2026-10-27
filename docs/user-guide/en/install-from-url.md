@@ -1,6 +1,6 @@
 # Custom SDKs: directories, archives, and URLs
 
-For developers working with local builds of the Cangjie SDK, testing unreleased CI artifacts, or operating in restricted environments, `cjv toolchain link` can register a custom toolchain from an existing unpacked SDK directory, a local `.zip` or `.tar.gz` archive, or an HTTP(S) URL:
+`cjv toolchain link` registers a custom toolchain from an unpacked local SDK directory, a local `.zip` or `.tar.gz` archive, or an HTTP(S) URL:
 
 ```bash
 cjv toolchain link local-sdk /path/to/sdk

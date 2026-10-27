@@ -1,6 +1,6 @@
 # 落地页
 
-`web/` 是部署在 [cjv.zxilly.com](https://cjv.zxilly.com) 和 [cjv.zxilly.dev](https://cjv.zxilly.dev) 的静态落地页，提供一键安装脚本命令和各平台二进制下载。它使用 React、Vite、TypeScript、Tailwind CSS 和 Lingui 构建；依赖及 `pnpm` 版本均固定在 `web/package.json` 中。
+`web/` 是部署在 [cjv.zxilly.com](https://cjv.zxilly.com) 和 [cjv.zxilly.dev](https://cjv.zxilly.dev) 的静态落地页，提供安装命令和各平台二进制下载。前端使用 React、Vite、TypeScript、Tailwind CSS 和 Lingui；`web/package.json` 声明依赖范围及 pnpm 版本，`web/pnpm-lock.yaml` 锁定依赖版本。
 
 ## 开发与文件位置
 
@@ -35,7 +35,7 @@ pnpm dev
 
 这些兼容标记及 UA Client Hints 不会将鸿蒙覆盖识别为 Windows 或 Android，也不用于猜测鸿蒙设备的原生 CPU 架构；下载面板会说明如何用 `uname -m` 确认架构，以及如何在终端运行 `cjv-init`。
 
-修改平台识别逻辑后，请务必运行真实浏览器平台测试（`pnpm test:integration` 和 `pnpm test:built`），确认无法识别架构时不会错误推荐单一二进制。测试命令见[测试与检查](testing.md#安装脚本与前端)。
+修改平台识别逻辑后，运行真实浏览器平台测试（`pnpm test:integration` 和 `pnpm test:built`），确认无法识别架构时不会错误推荐单一二进制。测试命令见[测试与检查](testing.md#安装脚本与前端)。
 
 ## 翻译与样式
 

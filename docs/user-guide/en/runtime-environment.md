@@ -1,6 +1,6 @@
 # Running commands and setting the environment
 
-When `cjv` is installed, it places wrapper executables—called _proxies_—for standard Cangjie SDK tools such as `cjc` and `cjpm` into `<CJV_HOME>/bin`. Whenever you invoke one of these proxies, `cjv` determines which [project toolchain](toolchain-file.md) is active for your current directory, prepares the SDK's environment variables and library paths, and forwards your command-line arguments and exit code transparently.
+The `cjc`, `cjpm`, and other executables in `<CJV_HOME>/bin` are proxies for SDK tools. Each proxy selects an SDK using the [project toolchain](toolchain-file.md) rules, prepares environment variables and library paths, and forwards command-line arguments and the child process exit code.
 
 ## Running SDK tools and compiled programs
 
@@ -28,7 +28,7 @@ cjv exec -- +command
 
 ## Configuring the current shell with `envsetup`
 
-Sometimes—for example, when working with external build systems, custom Makefiles, or CMake scripts—you want the SDK's tool paths and environment variables loaded directly into your current shell session. The `cjv envsetup` command prints a shell script that you can evaluate in your terminal:
+`cjv envsetup` prints a script that loads SDK paths and environment variables into the current shell. Use it with external build systems, Makefiles, or CMake scripts that need the SDK environment:
 
 ```bash
 # Bash or Zsh
@@ -62,7 +62,7 @@ Whether you run a command via a proxy, `cjv run`, `cjv exec`, or `cjv envsetup`,
 
 Keep in mind that once you evaluate `cjv envsetup` in a terminal, your current shell session's `PATH` points directly to that specific SDK's `bin` directory ahead of `<CJV_HOME>/bin`. As a result, `cd`-ing into another project with a different `cangjie-sdk.toml` will not switch compilers in that terminal session.
 
-To return to automatic per-project proxy selection, simply open a new terminal window—or evaluate `cjv envsetup` again in the new directory to switch the active session.
+To return to automatic per-project proxy selection, open a new terminal window—or evaluate `cjv envsetup` again in the new directory to switch the active session.
 
 ## Loading a cross-compilation SDK environment
 

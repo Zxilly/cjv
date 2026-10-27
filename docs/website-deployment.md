@@ -32,7 +32,7 @@ Cloudflare Worker 由 `.github/workflows/cloudflare.yml` 独立部署。该工�
 | Repository variable | `CLOUDFLARE_ACCOUNT_ID` | Cloudflare Worker 所属账户 ID |
 | Repository secret | `CLOUDFLARE_API_TOKEN` | Cloudflare Worker 部署凭据（权限要求见 [deployment/README.md](../deployment/README.md)） |
 
-> **注意：** 缺少 EdgeOne 项目名称或 API Token 会使部署明确报错失败。请不要通过删除仓库凭据来暂停部署；如果确实需要临时暂停，请直接调整工作流文件。
+缺少 EdgeOne 项目名称或 API Token 会导致部署失败。暂停部署应调整工作流文件。
 
 ## EdgeOne 手动部署
 
@@ -59,20 +59,20 @@ node deployment/verify-site.mjs https://cjv.zxilly.dev/ https://cjv.zxilly.com/
 ### 域名绑定与回源 SSL
 
 - **`cjv.zxilly.com`（EdgeOne Makers）**：在 Makers 控制台中将自定义域名绑定到生产环境，按照控制台给出的目标地址在 Cloudflare DNS 中添加 CNAME 记录，并将代理状态设置为**仅 DNS（灰色云朵）**。项目的加速区域在创建项目时选定；包含中国大陆的加速区域要求域名已完成 ICP 备案。如果后续需要调整加速区域，应创建新项目并迁移自定义域名，根据控制台显示的域名释放状态决定切换时间。
-- **`cjv.zxilly.dev`（GitHub Pages + Cloudflare）**：保留 GitHub Pages 的自定义域名与 HTTPS 配置，并在 Cloudflare DNS 中开启代理（橙色云朵）。请通过 Cloudflare Configuration Rules 为 `cjv.zxilly.dev` 这一主机单独设置 **Full (strict)** 回源 SSL 模式，避免 `Flexible` 模式与 GitHub Pages 的 HTTPS 强制跳转产生循环重定向；切勿为此修改整个 `zxilly.dev` DNS 区域的全局 SSL 模式。
+- **`cjv.zxilly.dev`（GitHub Pages + Cloudflare）**：保留 GitHub Pages 的自定义域名与 HTTPS 配置，并在 Cloudflare DNS 中开启代理（橙色云朵）。请通过 Cloudflare Configuration Rules 为 `cjv.zxilly.dev` 这一主机单独设置 **Full (strict)** 回源 SSL 模式，避免 `Flexible` 模式与 GitHub Pages 的 HTTPS 强制跳转产生循环重定向；此规则不应修改整个 `zxilly.dev` DNS 区域的全局 SSL 模式。
 
 ### 中国大陆访问重定向规则
 
-为了中国大陆访问者获得更稳定的文档与页面加载体验，在 `cjv.zxilly.dev` 的 Cloudflare 入口配置了按地区重定向规则，匹配表达式如下：
+`cjv.zxilly.dev` 的 Cloudflare 入口将中国大陆访问者的首页和文档请求重定向到 `.com`，匹配表达式如下：
 
 ```text
 (http.host eq "cjv.zxilly.dev" and ip.src.country eq "CN" and
  (http.request.uri.path in {"/" "/index.html"} or starts_with(http.request.uri.path, "/book/")))
 ```
 
-重定向目标设为 `concat("https://cjv.zxilly.com", http.request.uri.path)`，状态码为 `302`，并开启保留查询参数（Preserve query string）。该规则严格按来源 IP 所属国家判断，不按浏览器语言判断；`cjv.zxilly.com` 不配置反向地区跳转。
+重定向目标设为 `concat("https://cjv.zxilly.com", http.request.uri.path)`，状态码为 `302`，并开启保留查询参数（Preserve query string）。该规则按来源 IP 所属国家判断，不按浏览器语言判断；`cjv.zxilly.com` 不配置反向地区跳转。
 
-请注意，这条规则**只匹配首页和 `/book/` 文档路径**，故意保留了 `.dev/install.sh`、`.dev/install.ps1` 和 `.dev/dl/` 直接返回内容。这是因为许多已发布的安装命令 `curl -sSf ... | sh` 默认不带 `-L` 参数，不会跟随 `302` 重定向。公开文档统一使用 `.com` 链接；而从境外直接访问 `.dev` 首页时，页面仍显示 `.dev` 域名下的安装命令。
+这条规则只匹配首页和 `/book/` 文档路径，保留了 `.dev/install.sh`、`.dev/install.ps1` 和 `.dev/dl/` 直接返回内容。这是因为许多已发布的安装命令 `curl -sSf ... | sh` 默认不带 `-L` 参数，不会跟随 `302` 重定向。公开文档统一使用 `.com` 链接；而从境外直接访问 `.dev` 首页时，页面仍显示 `.dev` 域名下的安装命令。
 
 ## 验证与故障回退
 

@@ -1,10 +1,10 @@
 # Install cjv
 
-`cjv` is a standalone, single-file executable and does not require an existing Cangjie SDK on your system. When installed, `cjv` places itself and proxy wrappers for standard Cangjie tools (`cjc`, `cjpm`, and others) into `<CJV_HOME>/bin`—which defaults to `~/.cjv/bin` on Unix and `%USERPROFILE%\.cjv\bin` on Windows.
+cjv is a standalone executable and does not require an existing Cangjie SDK. After installation, cjv and proxies for SDK tools such as `cjc` and `cjpm` reside in `<CJV_HOME>/bin`, which defaults to `~/.cjv/bin` on Unix and `%USERPROFILE%\.cjv\bin` on Windows.
 
 ## Installing via the installer scripts
 
-The easiest way to install `cjv` is to run the official installer script for your platform.
+Installer scripts are available for Linux, macOS, Windows, and HarmonyOS HiShell.
 
 On Linux, macOS, or HarmonyOS HiShell:
 
@@ -48,7 +48,7 @@ curl -sSf https://cjv.zxilly.com/install.sh | sh -s -- --version v0.4.1 -y --def
 
 Replace `v0.4.1` with the release tag you need. Both scripts also honor the `CJV_VERSION` [environment variable](../environment-variables.md), though an explicit `--version` or `-Version` flag on the command line takes precedence. When neither is specified, the installer fetches the latest stable release.
 
-Keep in mind that `--version` / `CJV_VERSION` selects the version of the `cjv` manager itself, whereas `--default-toolchain` / `-DefaultToolchain` independently selects which Cangjie SDK toolchain to install. Also note that explicit download root overrides (`CJV_UPDATE_ROOT`, `CJV_GITHUB_ROOT`, and `CJV_GITCODE_ROOT`) take precedence over version selection—if you point `cjv` at an internal artifact server, point the URL directly at the desired version's release directory.
+`--version` / `CJV_VERSION` selects the version of the `cjv` manager itself, whereas `--default-toolchain` / `-DefaultToolchain` independently selects which Cangjie SDK toolchain to install. Explicit download root overrides (`CJV_UPDATE_ROOT`, `CJV_GITHUB_ROOT`, and `CJV_GITCODE_ROOT`) take precedence over version selection—if you point `cjv` at an internal artifact server, point the URL directly at the desired version's release directory.
 
 ### How `cjv init` selects an initial SDK
 

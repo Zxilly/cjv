@@ -1,6 +1,6 @@
 # Toolchains and versions
 
-Many `cjv` commands deal with _toolchains_: a single installation of the Cangjie compiler (`cjc`), package manager (`cjpm`), build tools, and runtime libraries. `cjv` stores multiple toolchains side by side under `<CJV_HOME>/toolchains/`, while optional [components](components.md) (`stdx` and offline documentation) are stored in separate sibling directories.
+A toolchain is one Cangjie SDK installation containing the compiler (`cjc`), package manager (`cjpm`), build tools, and runtime libraries. cjv stores toolchains under `<CJV_HOME>/toolchains/` and optional [components](components.md) (`stdx` and offline documentation) in separate directories.
 
 `cjv` supports several kinds of toolchains. The most common track the official release channels—`lts`, `sts`, and `nightly`—but `cjv` can also install specific pinned versions from the release manifests, toolchains for alternate host platforms, and [custom toolchains](#custom-sdks) from local directories or archives.
 
@@ -31,7 +31,7 @@ Here is how the different toolchain selectors work in practice:
 | `nightly-2026-10-04` | Select the latest published nightly build for that date |
 | `my-sdk` | A custom toolchain registered with `cjv toolchain link` |
 
-The version numbers and dates in the table above simply illustrate the naming syntax. To see which versions are actually published by your distribution source for your platform, run `cjv toolchain list-remote`:
+The version numbers and dates in the table above illustrate the naming syntax. To see which versions are actually published by your distribution source for your platform, run `cjv toolchain list-remote`:
 
 ```bash
 cjv toolchain list-remote --channel lts

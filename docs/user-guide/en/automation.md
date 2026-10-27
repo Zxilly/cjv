@@ -1,6 +1,6 @@
 # Automation and JSON interfaces
 
-`cjv` is designed to work reliably in CI pipelines, build scripts, and editor integrations. This chapter covers pinning project versions, isolating CI configuration and offline caches, running non-destructive diagnostics and update dry runs, rolling back channel updates, and consuming `cjv`'s `--json` output.
+This page documents cjv usage in CI, build scripts, and editor integrations: version pinning and validation, configuration isolation, offline caches, read-only diagnostics, update rollback, and `--json` output.
 
 ## Pin a project version
 
@@ -13,7 +13,7 @@ cjv pin lts
 cjv pin --check
 ```
 
-In CI pipelines, `cjv pin --check` verifies that the current directory's `cangjie-sdk.toml` pins a concrete release without modifying the file or making network requests. Because `cangjie-sdk.toml` fixes the exact version and the distribution manifest supplies SHA-256 checksums for every artifact, no separate lockfile is needed.
+`cjv pin --check` verifies that the current directory's `cangjie-sdk.toml` pins a concrete release without modifying the file or making network requests. Artifact checksums come from the distribution manifest or an upstream checksum sidecar, rather than the project file; see [Internal distribution source](enterprise/distribution-server.md#nightlyjson-contract) for checksum availability.
 
 ## Configuration and network access
 

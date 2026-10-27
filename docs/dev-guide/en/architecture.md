@@ -1,6 +1,6 @@
 # Architecture
 
-At a high level, `cli` parses commands and renders output, `lifecycle` coordinates toolchain and component installations, and lower-level packages own distribution manifests, file ownership, and durable filesystem transactions. Proxy execution (`cjc`, `cjpm`, etc.) resolves the active SDK from the same local installation state without constructing the Cobra CLI command tree.
+`cli` parses commands and renders output, `lifecycle` coordinates toolchain and component installations, and lower-level packages own distribution manifests, file ownership, and durable filesystem transactions. Proxy execution (`cjc`, `cjpm`, etc.) resolves the active SDK from the same local installation state without constructing the Cobra CLI command tree.
 
 ## Entry point and modules
 

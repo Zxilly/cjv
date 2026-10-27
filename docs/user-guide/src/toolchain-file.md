@@ -1,6 +1,6 @@
 # 项目工具链
 
-每次运行 `cjc`、`cjpm` 等代理命令时，`cjv` 都会自动决定使用哪个[工具链](concepts/toolchains.md)。在团队项目中，将 `cangjie-sdk.toml` 放在项目根目录并提交到版本控制，即可让所有项目成员和 CI 流水线自动使用同一套工具链、组件与交叉编译目标声明：
+运行 `cjc`、`cjpm` 等代理命令时，cjv 按当前目录选择[工具链](concepts/toolchains.md)。在项目根目录提交 `cangjie-sdk.toml`，可以为开发者和 CI 声明 SDK 版本、组件和交叉编译目标：
 
 ```toml
 [toolchain]
@@ -23,7 +23,7 @@ components = ["stdx"]
 
 请特别留意第 3 步向上遍历目录树时的就近原则：目录覆盖和 `cangjie-sdk.toml` 都优先采用离当前工作目录更近的配置。因此在**同一层目录**中，本机目录覆盖优先于该目录的 `cangjie-sdk.toml`；但**子目录**中的 `cangjie-sdk.toml` 优先于**父目录**的本机目录覆盖。不同目录层级的 `cangjie-sdk.toml` 文件不会合并。
 
-要验证当前目录选中的工具链及其生效来源，可以随时运行：
+要验证当前目录选中的工具链及其生效来源，运行：
 
 ```bash
 cjv show active
@@ -101,4 +101,4 @@ cjv override unset
 cjv override unset --nonexistent
 ```
 
-目录覆盖保存在用户设置文件 [`settings.toml`](configuration.md) 中。`cjv override unset --nonexistent` 可以一键清除磁盘上已不存在目录的残留覆盖。
+目录覆盖保存在用户设置文件 [`settings.toml`](configuration.md) 中。`cjv override unset --nonexistent` 可以清除磁盘上已不存在目录的残留覆盖。

@@ -7,7 +7,9 @@
 1. 命令行显式参数（全局 `+name` 或 `--toolchain`）。
 2. `CJV_TOOLCHAIN` [环境变量](environment-variables.md)。
 3. 当前目录及父目录中的本机目录覆盖（`cjv override list`）和 `cangjie-sdk.toml`。`cjv` 从当前目录逐层向上检查，在同一层目录中目录覆盖优先于项目文件；完整规则见[项目工具链](toolchain-file.md#选择顺序)。
-4. 如果在当前终端中执行过 `cjv envsetup`，当前 shell 的 `PATH` 会直接指向某个具体 SDK 的工具目录。请打开一个新终端恢复代理自动选择，或重新加载所需工具链的环境。
+4. 全局默认工具链（`cjv default`）。
+
+如果在当前终端中执行过 `cjv envsetup`，shell 的 `PATH` 会直接指向具体 SDK 的工具目录，绕过代理选择。打开新终端可恢复代理自动选择，也可以重新加载所需工具链的环境。
 
 ## 项目文件拼错字段后会怎样？
 

@@ -1,6 +1,6 @@
 # Build from source
 
-To build `cjv` locally, use a Go version that satisfies the requirement in `go.mod`. The Go CLI builds completely independently of the `web/` frontend—all generated platform catalogs and embedded locale resources are committed to the repository and ready to compile out of the box:
+Build cjv with a Go version that satisfies `go.mod`. The Go CLI builds independently of the `web/` frontend. Generated platform catalogs and embedded locale resources are committed to the repository.
 
 ```bash
 go build ./...

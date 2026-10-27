@@ -1,6 +1,6 @@
 # cjv developer guide
 
-Welcome to the _cjv_ Developer Guide! This book covers how to build `cjv` from source, how its internal Go packages are structured, how to run the test and lint suites, and how website deployments and releases work. If you are looking for documentation on installing Cangjie SDKs and using `cjv` in your own projects, see [**The cjv User Guide**](https://cjv.zxilly.com/book/user-guide/en/).
+This guide covers cjv builds, architecture, testing, website maintenance, and releases. See the [user guide](https://cjv.zxilly.com/book/user-guide/en/) for installing and using Cangjie SDKs.
 
 ## Repository layout
 

@@ -1,6 +1,6 @@
 # Quick start
 
-Once you have [installed `cjv`](installation/index.md), you can use it to inspect your active SDK, switch between release channels, pin a specific compiler version for a project, and keep your toolchains up to date.
+After [installing cjv](installation/index.md), check the selected toolchain, set a default version, configure a project version, and manage updates.
 
 ## Checking your installation
 

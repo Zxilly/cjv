@@ -1,6 +1,6 @@
 # 快速上手
 
-完成[安装 cjv](installation/index.md) 后，你可以随时查看当前激活的工具链、切换默认发布通道、为项目固定所需的 SDK 版本，以及日常更新工具链。
+完成[安装 cjv](installation/index.md)后，可以检查工具链、设置默认版本、配置项目版本，以及更新和卸载工具链。
 
 ## 检查安装状态
 
@@ -57,7 +57,7 @@ cjv override unset
 
 ## 临时使用其他版本运行命令
 
-有时你只想用另一个工具链运行单条命令进行测试，而不改变默认或目录配置，可以使用 `cjv run`：
+使用 `cjv run` 临时选择工具链，不修改默认设置或目录配置：
 
 ```bash
 cjv run --install sts cjc --version
@@ -67,7 +67,7 @@ cjv run --install sts cjc --version
 
 ## 查看工具链状态
 
-以下三条命令最常用于查看本机工具链状态：
+查看本机工具链状态：
 
 ```bash
 cjv show active
@@ -83,7 +83,7 @@ cjv toolchain list
 
 ### 更新工具链与 `cjv` 本体
 
-当上游发布新版本时，可以检查可用更新并一键升级已跟踪的通道：
+检查可用更新并更新已安装的跟踪通道：
 
 ```bash
 cjv check
