@@ -144,7 +144,7 @@ func TestRunComponentListNonQuietShowsInstalledAndAvailable(t *testing.T) {
 	assert.Contains(t, stdout, "stdx")
 }
 
-func TestRunComponentLinkInvokesLinkFunc(t *testing.T) {
+func TestRunComponentLinkReplacesExistingSourceWithForce(t *testing.T) {
 	c := newTestCommands()
 	tcName := "lts-1.0.5"
 	tcDir := clitest.Home(t, tcName)
@@ -154,23 +154,19 @@ func TestRunComponentLinkInvokesLinkFunc(t *testing.T) {
 
 	c.toolchain = tcName
 	c.linkForce = true
-	var gotForce bool
-	var gotSource string
-	var gotTcDir string
-	c.link = func(roots componentlib.Roots, name componentlib.Name, source string, force bool) (string, error) {
-		gotForce = force
-		gotSource = source
-		gotTcDir = roots.TcDir
-		return source, componentlib.WriteManifest(roots.TcDir, name, []string{"dynamic", "static"})
+	previous := t.TempDir()
+	for _, child := range []string{"dynamic", "static"} {
+		require.NoError(t, os.MkdirAll(filepath.Join(previous, child), 0o755))
+		require.NoError(t, os.WriteFile(filepath.Join(src, child, "new"), []byte("new"), 0o644))
 	}
-
-	err := c.runLink(&cobra.Command{}, []string{"stdx", src})
-
+	roots, err := componentlib.RootsFor(tcName)
 	require.NoError(t, err)
-	assert.True(t, gotForce)
-	assert.Equal(t, src, gotSource)
-	assert.Equal(t, tcDir, gotTcDir)
+	_, err = componentlib.Link(roots, componentlib.Stdx, previous, false)
+	require.NoError(t, err)
+	require.NoError(t, c.runLink(&cobra.Command{}, []string{"stdx", src}))
 	assert.True(t, componentlib.IsInstalled(tcDir, componentlib.Stdx))
+	assert.FileExists(t, filepath.Join(roots.StdxDir, "dynamic", "new"))
+	assert.DirExists(t, filepath.Join(previous, "dynamic"))
 }
 
 func TestRunComponentLinkRejectsNonStdxComponent(t *testing.T) {
@@ -208,17 +204,13 @@ func TestRunComponentLinkAllowsCustomToolchain(t *testing.T) {
 	require.NoError(t, os.MkdirAll(filepath.Join(src, "static"), 0o755))
 
 	c.toolchain = tcName
-	var called bool
-	c.link = func(roots componentlib.Roots, name componentlib.Name, source string, force bool) (string, error) {
-		called = true
-		return source, componentlib.WriteManifest(roots.TcDir, name, []string{"dynamic", "static"})
-	}
-
 	err := c.runLink(&cobra.Command{}, []string{"stdx", src})
-
 	require.NoError(t, err)
-	assert.True(t, called, "Link should not be gated by IsCustom")
 	assert.True(t, componentlib.IsInstalled(tcDir, componentlib.Stdx))
+	roots, err := componentlib.RootsFor(tcName)
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(filepath.Join(src, "dynamic", "payload"), []byte("user"), 0o644))
+	assert.FileExists(t, filepath.Join(roots.StdxDir, "dynamic", "payload"))
 }
 
 func TestComponentAddJSONIncludesResultOnInstallAndSkip(t *testing.T) {

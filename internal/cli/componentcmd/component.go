@@ -15,7 +15,6 @@ import (
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/i18n"
 	"github.com/Zxilly/cjv/internal/lifecycle"
-	"github.com/Zxilly/cjv/internal/progress"
 	sdktarget "github.com/Zxilly/cjv/internal/target"
 	"github.com/Zxilly/cjv/internal/toolchain"
 	"github.com/fatih/color"
@@ -31,11 +30,10 @@ type commands struct {
 	linkForce         bool
 	listInstalledOnly bool
 	listQuiet         bool
-	link              func(componentlib.Roots, componentlib.Name, string, bool) (string, error)
 }
 
 func newCommands(ctx *clictx.Context) *commands {
-	return &commands{ctx: ctx, link: componentlib.Link}
+	return &commands{ctx: ctx}
 }
 
 // Register adds `component` and its subcommands to root.
@@ -230,45 +228,16 @@ func (c *commands) runRemove(cmd *cobra.Command, args []string) error {
 	}
 	toolchainName := filepath.Base(tcDir)
 
-	lock, err := toolchain.LockHome(cmd.Context())
-	if err != nil {
+	removed, err := lifecycle.RemoveComponents(cmd.Context(), toolchainName, parsed, c.ctx.LifecycleOptions())
+	if removed == nil {
 		return err
 	}
-	defer lock.Close() //nolint:errcheck
-	if err := lock.Recover(); err != nil {
-		return err
-	}
-
-	roots, err := componentlib.RootsFor(toolchainName)
-	if err != nil {
-		return err
-	}
-
-	var removeErrs []error
-	removeErrs = append(removeErrs, parseErrs...)
 	result := componentRemoveResult{}
-	sink := c.ctx.Progress()
-	for _, c := range parsed {
-		if !componentlib.IsInstalled(tcDir, c) {
-			removeErrs = append(removeErrs, &cjverr.ComponentNotInstalledError{
-				Toolchain: toolchainName,
-				Component: string(c),
-			})
-			continue
-		}
-		sink.Report(progress.Event{Kind: progress.RemovingComponent, Component: string(c)})
-		if err := componentlib.Remove(roots, c); err != nil {
-			removeErrs = append(removeErrs, err)
-			continue
-		}
-		result.Removed = append(result.Removed, componentRemovedEntry{
-			Toolchain: toolchainName,
-			Component: string(c),
-		})
+	for _, name := range removed.Removed {
+		result.Removed = append(result.Removed, componentRemovedEntry{Toolchain: toolchainName, Component: string(name)})
 	}
-	// Emit what was actually removed before surfacing any error so a partial
-	// removal is visible to the caller.
-	return c.ctx.Output.RenderOutcome(clictx.Out(cmd), result, errors.Join(removeErrs...))
+	// Preserve partial success, including valid removals alongside invalid args.
+	return c.ctx.Output.RenderOutcome(clictx.Out(cmd), result, errors.Join(append(parseErrs, err)...))
 }
 
 func (c *commands) runLink(cmd *cobra.Command, args []string) error {
@@ -283,23 +252,7 @@ func (c *commands) runLink(cmd *cobra.Command, args []string) error {
 	}
 	toolchainName := filepath.Base(tcDir)
 
-	lock, err := toolchain.LockHome(cmd.Context())
-	if err != nil {
-		return err
-	}
-	defer lock.Close() //nolint:errcheck
-	if err := lock.Recover(); err != nil {
-		return err
-	}
-
-	roots, err := componentlib.RootsFor(toolchainName)
-	if err != nil {
-		return err
-	}
-
-	c.ctx.Progress().Report(progress.Event{Kind: progress.InstallingComponent, Component: string(name)})
-
-	absPath, err := c.link(roots, name, args[1], c.linkForce)
+	absPath, err := lifecycle.LinkComponent(cmd.Context(), toolchainName, name, args[1], c.linkForce, c.ctx.LifecycleOptions())
 	if err != nil {
 		return err
 	}
