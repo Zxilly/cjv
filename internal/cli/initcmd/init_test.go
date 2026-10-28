@@ -259,13 +259,6 @@ func TestRunInitPassesConfiguredComponentsToDefaultToolchainInstall(t *testing.T
 		"the configured component is installed into the default toolchain")
 }
 
-func TestRenderInitMarkdown(t *testing.T) {
-	rendered, err := renderInitMarkdown("Use `cjv install lts` to install a toolchain.", false)
-
-	require.NoError(t, err)
-	assert.Contains(t, rendered, "cjv install lts")
-}
-
 func TestInitCustomizeFormEndToEnd(t *testing.T) {
 	userHome := t.TempDir()
 	target := filepath.Join(userHome, "custom", "cjv")

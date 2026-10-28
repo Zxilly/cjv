@@ -5,7 +5,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -19,13 +18,8 @@ import (
 	"github.com/Zxilly/cjv/internal/lifecycle"
 	"github.com/Zxilly/cjv/internal/reachable"
 	"github.com/Zxilly/cjv/internal/sdktools"
-	"github.com/charmbracelet/glamour"
-	"github.com/charmbracelet/glamour/styles"
-	glowutils "github.com/charmbracelet/glow/v2/utils"
 	"github.com/charmbracelet/huh"
-	"github.com/charmbracelet/lipgloss"
 	"github.com/fatih/color"
-	"github.com/mattn/go-isatty"
 	"github.com/spf13/cobra"
 )
 
@@ -65,67 +59,6 @@ func initComponentOptions() []huh.Option[string] {
 		options = append(options, huh.NewOption(name, name))
 	}
 	return options
-}
-
-// initConsole is where the init wizard talks to the user: the command's out
-// and err writers, so tests capture the dialogue in a buffer while a real
-// invocation still reaches the terminal.
-type initConsole struct {
-	out io.Writer
-	err io.Writer
-}
-
-func newInitConsole(cmd *cobra.Command) initConsole {
-	return initConsole{out: cmd.OutOrStdout(), err: cmd.ErrOrStderr()}
-}
-
-func (c initConsole) println(a ...any) {
-	_, _ = fmt.Fprintln(c.out, a...)
-}
-
-func (c initConsole) printf(format string, a ...any) {
-	_, _ = fmt.Fprintf(c.out, format, a...)
-}
-
-// markdown writes rendered markdown, or the raw text when rendering fails.
-func (c initConsole) markdown(markdown string) {
-	rendered, err := renderInitMarkdown(markdown, writerIsTerminal(c.out))
-	if err != nil {
-		c.println(markdown)
-		return
-	}
-	_, _ = io.WriteString(c.out, rendered)
-	if !strings.HasSuffix(rendered, "\n") {
-		c.println()
-	}
-}
-
-func renderInitMarkdown(markdown string, terminal bool) (string, error) {
-	style := styles.AutoStyle
-	if !terminal {
-		style = styles.NoTTYStyle
-	}
-	r, err := glamour.NewTermRenderer(
-		glamour.WithColorProfile(lipgloss.ColorProfile()),
-		glowutils.GlamourStyle(style, false),
-		glamour.WithWordWrap(100),
-		glamour.WithPreservedNewLines(),
-	)
-	if err != nil {
-		return "", err
-	}
-	return r.Render(markdown)
-}
-
-// writerIsTerminal reports whether w is an interactive terminal. A writer
-// that is not a file (a test buffer) is never one.
-func writerIsTerminal(w io.Writer) bool {
-	f, ok := w.(*os.File)
-	if !ok {
-		return false
-	}
-	fd := f.Fd()
-	return isatty.IsTerminal(fd) || isatty.IsCygwinTerminal(fd)
 }
 
 func normalizeInitHomePath(input string) (string, error) {
@@ -273,15 +206,15 @@ func (c *commands) run(cmd *cobra.Command, _ []string) error {
 	con.println()
 	_, _ = color.New(color.FgCyan).Fprintln(con.out, i18n.T("InitWelcome", nil))
 	con.println()
-	con.markdown(i18n.T("InitDescription", nil))
+	con.paragraph(i18n.T("InitDescription", nil))
 
 	con.println(i18n.T("InitDataDir", nil))
 	con.println()
 	con.printf("    %s\n", home)
 	con.println()
-	con.markdown(i18n.T("InitDataDirEnvHint", nil))
+	con.paragraph(i18n.T("InitDataDirEnvHint", nil))
 
-	con.markdown(i18n.T("InitCommandsAvailable", nil))
+	con.paragraph(i18n.T("InitCommandsAvailable", nil))
 	con.printf("    %s\n", binDir)
 	con.println()
 
@@ -302,7 +235,7 @@ func (c *commands) run(cmd *cobra.Command, _ []string) error {
 	}
 	con.println()
 
-	con.markdown(i18n.T("InitUninstallHint", nil))
+	con.paragraph(i18n.T("InitUninstallHint", nil))
 
 	// The interactive menu relies on huh forms reading from a terminal. When
 	// stdin is not a TTY (the documented `curl ... | sh` / `irm ... | iex`
@@ -491,8 +424,8 @@ func (c *commands) install(ctx context.Context, con initConsole, initialHome str
 	con.println()
 	_, _ = color.New(color.FgGreen).Fprintln(con.out, i18n.T("InitComplete", nil))
 	con.println()
-	con.markdown(i18n.T("InitSourceHint", nil))
-	con.markdown(i18n.T("InitSourceHintRun", nil))
+	con.paragraph(i18n.T("InitSourceHint", nil))
+	con.paragraph(i18n.T("InitSourceHintRun", nil))
 	if runtime.GOOS != "windows" {
 		envPath := filepath.Join(home, "env")
 		con.printf("    source \"%s\"\n", envPath)
@@ -505,7 +438,7 @@ func (c *commands) install(ctx context.Context, con initConsole, initialHome str
 	con.println()
 
 	if opts.toolchain == "none" {
-		con.markdown(i18n.T("InitInstallHint", nil))
+		con.paragraph(i18n.T("InitInstallHint", nil))
 		con.println("    cjv install <toolchain>")
 		con.println()
 	}
