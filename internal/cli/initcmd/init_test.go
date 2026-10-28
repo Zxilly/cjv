@@ -271,28 +271,23 @@ func TestInitCustomizeFormEndToEnd(t *testing.T) {
 
 	form := newInitCustomizeForm(&opts)
 	form.SubmitCmd = tea.Quit
-	tm := teatest.NewTestModel(t, formTestModel{form}, teatest.WithInitialTermSize(100, 40))
+	model := &formTestModel{Model: form}
+	tm := teatest.NewTestModel(t, model, teatest.WithInitialTermSize(100, 40))
 	t.Cleanup(func() {
 		_ = tm.Quit()
 	})
 
-	teatest.WaitFor(t, tm.Output(), func(out []byte) bool {
-		return bytes.Contains(out, []byte(i18n.T("InitInstallPathQuestion", nil)))
-	}, teatest.WithDuration(2*time.Second), teatest.WithCheckInterval(10*time.Millisecond))
+	model.waitForText(t, i18n.T("InitInstallPathQuestion", nil))
 	tm.Type(target)
 	tm.Send(tea.KeyPressMsg{Code: tea.KeyEnter})
 
-	teatest.WaitFor(t, tm.Output(), func(out []byte) bool {
-		return bytes.Contains(out, []byte(i18n.T("InitToolchainQuestion", nil)))
-	}, teatest.WithDuration(2*time.Second), teatest.WithCheckInterval(10*time.Millisecond))
+	model.waitForText(t, i18n.T("InitToolchainQuestion", nil))
 	for range 3 {
 		tm.Send(tea.KeyPressMsg{Code: tea.KeyDown})
 	}
 	tm.Send(tea.KeyPressMsg{Code: tea.KeyEnter})
 
-	teatest.WaitFor(t, tm.Output(), func(out []byte) bool {
-		return bytes.Contains(out, []byte(i18n.T("InitModifyPathQuestion", nil)))
-	}, teatest.WithDuration(2*time.Second), teatest.WithCheckInterval(10*time.Millisecond))
+	model.waitForText(t, i18n.T("InitModifyPathQuestion", nil))
 	tm.Type("n")
 	tm.FinalModel(t, teatest.WithFinalTimeout(2*time.Second))
 
