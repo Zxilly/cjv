@@ -50,12 +50,13 @@ test('built homepage detects the real browser and offers its installation path',
       return info
     })
     t.diagnostic(JSON.stringify({ host: `${process.platform}/${process.arch}`, ...exposed }))
-    // Assert what this real browser exposes. Playwright WebKit on Windows, for
-    // example, reports MacIntel/Macintosh; the webpage cannot infer the host OS.
-    const expectedOS = /^Win/.test(exposed.platform) ? 'Windows'
-      : /^Mac/.test(exposed.platform) ? 'macOS'
-        : /Linux/.test(exposed.platform) ? 'Linux' : undefined
-    assert.ok(expectedOS, `unsupported browser platform: ${exposed.platform}`)
+    // Assert the OS advertised by the real browser. Playwright WebKit on Windows
+    // uses a Macintosh UA even when navigator.platform says Win32; its host OS
+    // is not a reliable expectation for the page's detected download options.
+    const expectedOS = /\bWindows\b/.test(exposed.userAgent) ? 'Windows'
+      : /\bMacintosh\b/.test(exposed.userAgent) ? 'macOS'
+        : /\bLinux\b/.test(exposed.userAgent) ? 'Linux' : undefined
+    assert.ok(expectedOS, `unsupported browser user agent: ${exposed.userAgent}`)
     const hintArch = exposed.hints?.architecture?.toLowerCase()
     let expectedArch = { arm64: 'arm64', aarch64: 'arm64', amd64: 'amd64', x86_64: 'amd64' }[hintArch]
     if (exposed.hints?.bitness === '64') expectedArch ??= { arm: 'arm64', x86: 'amd64' }[hintArch]
