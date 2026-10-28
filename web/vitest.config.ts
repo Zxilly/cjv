@@ -7,9 +7,9 @@ import path from 'node:path'
 const browserName = (process.env.VITEST_BROWSER || 'chromium') as 'chromium' | 'firefox' | 'webkit'
 
 export default defineConfig({
-  plugins: [react({ babel: { plugins: ['@lingui/babel-plugin-lingui-macro'] } }), lingui()],
+  plugins: [react(), lingui({ macroTransform: true })],
   resolve: {
-    alias: { '@': path.resolve(__dirname, './src') },
+    alias: { '@': path.resolve(import.meta.dirname, './src') },
   },
   test: {
     globals: false,
