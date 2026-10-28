@@ -10,6 +10,7 @@ import (
 	"runtime"
 	"strings"
 
+	"charm.land/huh/v2"
 	"github.com/Zxilly/cjv/internal/cjverr"
 	"github.com/Zxilly/cjv/internal/cli/clictx"
 	componentlib "github.com/Zxilly/cjv/internal/component"
@@ -18,7 +19,6 @@ import (
 	"github.com/Zxilly/cjv/internal/lifecycle"
 	"github.com/Zxilly/cjv/internal/reachable"
 	"github.com/Zxilly/cjv/internal/sdktools"
-	"github.com/charmbracelet/huh"
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 )

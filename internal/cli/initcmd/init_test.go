@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	tea "charm.land/bubbletea/v2"
 	"github.com/Zxilly/cjv/internal/cli/clitest"
 	"github.com/Zxilly/cjv/internal/cli/settingscmd"
 	"github.com/Zxilly/cjv/internal/config"
@@ -17,8 +18,7 @@ import (
 	"github.com/Zxilly/cjv/internal/i18n"
 	"github.com/Zxilly/cjv/internal/sdktools"
 	"github.com/Zxilly/cjv/internal/testutil"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/x/exp/teatest"
+	"github.com/charmbracelet/x/exp/teatest/v2"
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -271,7 +271,7 @@ func TestInitCustomizeFormEndToEnd(t *testing.T) {
 
 	form := newInitCustomizeForm(&opts)
 	form.SubmitCmd = tea.Quit
-	tm := teatest.NewTestModel(t, form, teatest.WithInitialTermSize(100, 40))
+	tm := teatest.NewTestModel(t, formTestModel{form}, teatest.WithInitialTermSize(100, 40))
 	t.Cleanup(func() {
 		_ = tm.Quit()
 	})
@@ -280,15 +280,15 @@ func TestInitCustomizeFormEndToEnd(t *testing.T) {
 		return bytes.Contains(out, []byte(i18n.T("InitInstallPathQuestion", nil)))
 	}, teatest.WithDuration(2*time.Second), teatest.WithCheckInterval(10*time.Millisecond))
 	tm.Type(target)
-	tm.Send(tea.KeyMsg{Type: tea.KeyEnter})
+	tm.Send(tea.KeyPressMsg{Code: tea.KeyEnter})
 
 	teatest.WaitFor(t, tm.Output(), func(out []byte) bool {
 		return bytes.Contains(out, []byte(i18n.T("InitToolchainQuestion", nil)))
 	}, teatest.WithDuration(2*time.Second), teatest.WithCheckInterval(10*time.Millisecond))
 	for range 3 {
-		tm.Send(tea.KeyMsg{Type: tea.KeyDown})
+		tm.Send(tea.KeyPressMsg{Code: tea.KeyDown})
 	}
-	tm.Send(tea.KeyMsg{Type: tea.KeyEnter})
+	tm.Send(tea.KeyPressMsg{Code: tea.KeyEnter})
 
 	teatest.WaitFor(t, tm.Output(), func(out []byte) bool {
 		return bytes.Contains(out, []byte(i18n.T("InitModifyPathQuestion", nil)))

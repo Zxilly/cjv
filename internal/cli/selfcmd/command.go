@@ -3,13 +3,13 @@
 package selfcmd
 
 import (
+	"charm.land/huh/v2"
 	"github.com/Zxilly/cjv/internal/cjverr"
 	"github.com/Zxilly/cjv/internal/cli/clictx"
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/i18n"
 	"github.com/Zxilly/cjv/internal/reachable"
 	"github.com/Zxilly/cjv/internal/selfupdate"
-	"github.com/charmbracelet/huh"
 	"github.com/spf13/cobra"
 )
 

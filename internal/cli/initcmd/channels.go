@@ -6,11 +6,11 @@ import (
 	"fmt"
 	"slices"
 
+	"charm.land/huh/v2"
 	"github.com/Zxilly/cjv/internal/cjverr"
 	"github.com/Zxilly/cjv/internal/dist"
 	"github.com/Zxilly/cjv/internal/i18n"
 	"github.com/Zxilly/cjv/internal/toolchain"
-	"github.com/charmbracelet/huh"
 )
 
 // Discover native host builds from the configured manifests, including the
