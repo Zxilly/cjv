@@ -1,6 +1,6 @@
 # Build from source
 
-Build cjv with a Go version that satisfies `go.mod`. The Go CLI builds independently of the `web/` frontend. Generated platform catalogs and embedded locale resources are committed to the repository.
+`go.mod` declares Go 1.26.0 as the minimum version and `toolchain go1.27.3` as the preferred toolchain. With the default `GOTOOLCHAIN=auto`, Go selects or downloads that toolchain when needed. The Go CLI builds independently of the `web/` frontend. Generated platform catalogs and embedded locale resources are committed to the repository.
 
 ```bash
 go build ./...
@@ -52,7 +52,7 @@ After running `go generate ./...`, review the generated frontend platform list i
 
 ## OpenHarmony
 
-Building `cjv` for OpenHarmony (`GOOS=openharmony`) uses the Linux/amd64 toolchain from [Go-HMOS `go1.27.2-hmos.5`](https://github.com/ZxillyFork/go-hmos-build/releases/tag/go1.27.2-hmos.5) with `CGO_ENABLED=0`.
+Building `cjv` for OpenHarmony (`GOOS=openharmony`) uses the Linux/amd64 toolchain from [Go-HMOS `go1.27.2-hmos.5`](https://github.com/ZxillyFork/go-hmos-build/releases/tag/go1.27.2-hmos.5) with `CGO_ENABLED=0`. Keep `GOTOOLCHAIN=local` for this build so the preferred-toolchain directive does not switch the custom Go-HMOS toolchain to standard Go.
 
 From the repository root on a Linux x86_64 host, set the tool paths, build the host code-signing helper with your host Go toolchain, and then compile and sign the OpenHarmony executable:
 

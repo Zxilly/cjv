@@ -1,6 +1,6 @@
 # 从源码构建
 
-构建所需的 Go 版本以 `go.mod` 为准。Go CLI 可以独立于 `web/` 前端构建；生成的平台清单和嵌入的多语言资源已提交到仓库。
+`go.mod` 声明最低 Go 版本为 1.26.0，并通过 `toolchain go1.27.3` 指定首选工具链。使用默认的 `GOTOOLCHAIN=auto` 时，Go 会在需要时选择或下载该工具链。Go CLI 可以独立于 `web/` 前端构建；生成的平台清单和嵌入的多语言资源已提交到仓库。
 
 ```bash
 go build ./...
@@ -52,7 +52,7 @@ go generate ./...
 
 ## OpenHarmony
 
-编译 OpenHarmony 目标程序（`GOOS=openharmony`）需使用 [Go-HMOS `go1.27.2-hmos.5`](https://github.com/ZxillyFork/go-hmos-build/releases/tag/go1.27.2-hmos.5) 提供的 Linux/amd64 工具链，并设置 `CGO_ENABLED=0`。
+编译 OpenHarmony 目标程序（`GOOS=openharmony`）需使用 [Go-HMOS `go1.27.2-hmos.5`](https://github.com/ZxillyFork/go-hmos-build/releases/tag/go1.27.2-hmos.5) 提供的 Linux/amd64 工具链，并设置 `CGO_ENABLED=0`。此构建保持 `GOTOOLCHAIN=local`，避免首选工具链指令将定制的 Go-HMOS 切换为标准 Go。
 
 在仓库根目录设置工具路径，先用主机 Go 构建代码签名工具，再交叉编译并签名鸿蒙可执行文件：
 

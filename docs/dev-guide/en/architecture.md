@@ -49,16 +49,18 @@ The CLI layer renders each error once, and `main` maps the result to a process e
 
 A managed SDK installation proceeds through six distinct phases:
 
-1. `dist.Preparation` acquires the installation lock (`downloads/.lock`) and creates a private staging directory for the operation.
+1. `dist.Preparation` acquires the installation lock (`<CJV_HOME>/.install.lock`) and creates a private staging directory for the operation.
 2. Under `HomeLock`, `cjv` reads the target installation identity, current component selections, and host-target dependency snapshots.
 3. `cjv` releases `HomeLock` while resolving manifest versions, downloading archives, and extracting the host SDK, tracked cross targets, and components into staging (retaining the installation lock throughout).
 4. `cjv` reacquires `HomeLock` and verifies that local snapshots and dependencies did not change while the lock was released.
-5. `publication.go` publishes the SDK, `stdx`, and documentation roots together atomically through `fstx.NewToolchainGroupTransaction`.
+5. `publication.go` publishes the directories and metadata changed by each member in one durable transaction through `fstx.NewToolchainGroupTransaction`.
 6. `cjv` finishes command entry point setup in `<CJV_HOME>/bin`, marks preparation complete, and cleans up owned downloads and staging files.
 
 Installation flags adjust resolution without bypassing transactional publication: `--force` permits skipping and removing unavailable optional components or targets without reinstalling unchanged SDKs; `--no-update` preserves the installed host release; and `nightly` resolution searches published history for a release compatible with the required component and target set (requiring `--allow-downgrade` before selecting an older build).
 
-Managed component batches (`component add`, `component remove`) likewise stage outside `HomeLock`, revalidate under `HomeLock`, and publish contents and file manifests in a single transaction while leaving the SDK root in place. Tracked channels and pinned versions remain independent, and hard-link deduplication (`link_mode = "hardlink"`) applies only to regular SDK files with matching provenance and SHA-256 content (metadata and components are never shared).
+When the SDK release and provenance are unchanged and only components need updating, the group revalidates under the lock and copies only affected component directories and component metadata, leaving the SDK payload in place. Component manifests and installation records still commit in the same transaction as changes to other host or cross-target members of the group. SDK replacements and explicit `--reinstall` prepare and publish the complete SDK. All publication paths are staged in `.staging` trees beside their SDK, documentation, or `stdx` roots so interrupted operations can use the same recovery and cleanup paths.
+
+Managed component installation batches (`component add`) likewise stage outside `HomeLock`, revalidate under `HomeLock`, and publish contents and file manifests in a single transaction while leaving the SDK root in place. `component remove` removes each requested component under `HomeLock`, continues after individual failures, and reports successful removals with the combined errors; the batch is not atomic. Tracked channels and pinned versions remain independent, and hard-link deduplication (`link_mode = "hardlink"`) applies only to regular SDK files with matching provenance and SHA-256 content (metadata and components are never shared).
 
 Custom URL and local archive installations (`resolved_install.go`) commit the SDK first and then process any bundled `stdx` archive. A failure while extracting bundled `stdx` preserves the committed SDK and reports partial success, unlike the all-or-nothing group publication used for managed channels.
 
@@ -81,7 +83,7 @@ This allows concurrent readers (`cjc`, `cjv show active`, `cjv which`) to resolv
 
 Before creating snapshots or modifying files, `component` validates owned roots, the complete file manifest, and parent directory symlinks. Files shared with the base SDK are retained during removal; tracked leaf links can be removed without deleting their target sources; and archive merges refuse to traverse untracked symlinks. External SDK directory links cannot serve as component edit roots, and rollback validates destination roots as well.
 
-Note that while managed component batches use durable cross-process `fstx` journals, direct `component link` and custom archive component edits use backups and in-process rollback for ordinary errors (retaining backups on disk if restoration fails)—do not assume both mechanisms provide identical cross-process recovery guarantees.
+Managed component installation batches use durable cross-process `fstx` journals. `component remove` directly removes files for each requested component. `component link` and custom archive component edits use backups and in-process rollback for ordinary errors, retaining backups if restoration fails. Removal and linking do not provide the same durable transaction guarantees as managed component installation.
 
 Always derive `<CJV_HOME>` paths from `config/layout.go`, and use `fsops` for directory tree copies, merges, and Windows retry loops. All archive and tree operations reject paths or links that escape owned directories.
 
