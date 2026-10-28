@@ -7,6 +7,7 @@ package clictx
 import (
 	"io"
 	"os"
+	"path/filepath"
 
 	"github.com/Zxilly/cjv/internal/cli/output"
 	"github.com/Zxilly/cjv/internal/lifecycle"
@@ -84,36 +85,43 @@ func (c *Context) SelectedToolchain(flag string) (string, error) {
 	return "", err
 }
 
+// InstalledToolchain keeps the installation's directory identity separate
+// from the release it contains. A tracking identity such as lts remains lts
+// when its release changes.
+type InstalledToolchain struct {
+	Dir      string
+	Identity string
+	Release  toolchain.ToolchainName
+}
+
 // ResolveToolchainArg locates an installed toolchain, falling back to the
 // active toolchain when flagValue is empty.
-func ResolveToolchainArg(flagValue string) (string, toolchain.ToolchainName, error) {
+func ResolveToolchainArg(flagValue string) (*InstalledToolchain, error) {
 	if err := toolchain.RecoverHome(); err != nil {
-		return "", toolchain.ToolchainName{}, err
+		return nil, err
 	}
+	var dir string
+	var err error
 	if flagValue != "" {
 		parsed, err := toolchain.ParseToolchainName(flagValue)
 		if err != nil {
-			return "", toolchain.ToolchainName{}, err
+			return nil, err
 		}
-		dir, err := toolchain.FindInstalled(parsed)
+		dir, err = toolchain.FindInstalled(parsed)
 		if err != nil {
-			return "", toolchain.ToolchainName{}, err
+			return nil, err
 		}
-		actual, err := toolchain.InstalledRelease(dir)
+	} else {
+		dir, _, _, err = toolchain.ResolveActiveToolchain()
 		if err != nil {
-			return "", toolchain.ToolchainName{}, err
+			return nil, err
 		}
-		return dir, actual, nil
 	}
-	dir, _, _, err := toolchain.ResolveActiveToolchain()
+	release, err := toolchain.InstalledRelease(dir)
 	if err != nil {
-		return "", toolchain.ToolchainName{}, err
+		return nil, err
 	}
-	parsed, err := toolchain.InstalledRelease(dir)
-	if err != nil {
-		return "", toolchain.ToolchainName{}, err
-	}
-	return dir, parsed, nil
+	return &InstalledToolchain{Dir: dir, Identity: filepath.Base(dir), Release: release}, nil
 }
 
 // Out returns the writer a command renders its result to.

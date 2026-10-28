@@ -174,18 +174,20 @@ func (r componentLinkResult) Text() string {
 }
 
 func (c *commands) resolveToolchain() (string, toolchain.ToolchainName, error) {
-	dir, release, err := clictx.ResolveToolchainArg(c.ctx.Toolchain(c.toolchain))
-	if err == nil {
-		managed, rootErr := config.ToolchainDirFor(filepath.Base(dir))
-		if rootErr != nil {
-			return "", release, rootErr
-		}
-		if config.NormalizePath(managed) != config.NormalizePath(dir) {
-			return "", release, fmt.Errorf("components of external toolchain %s must be managed by its owner", dir)
-		}
+	installed, err := clictx.ResolveToolchainArg(c.ctx.Toolchain(c.toolchain))
+	if err != nil {
+		return "", toolchain.ToolchainName{}, err
 	}
-	if err != nil || c.target == "" {
-		return dir, release, err
+	dir, release := installed.Dir, installed.Release
+	managed, err := config.ToolchainDirFor(installed.Identity)
+	if err != nil {
+		return "", release, err
+	}
+	if config.NormalizePath(managed) != config.NormalizePath(dir) {
+		return "", release, fmt.Errorf("components of external toolchain %s must be managed by its owner", dir)
+	}
+	if c.target == "" {
+		return dir, release, nil
 	}
 	host, err := toolchain.ReadHostTargets(dir)
 	if err != nil {

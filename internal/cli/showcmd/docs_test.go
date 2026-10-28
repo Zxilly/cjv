@@ -1,6 +1,7 @@
 package showcmd
 
 import (
+	"encoding/json"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -9,6 +10,8 @@ import (
 
 	"github.com/Zxilly/cjv/internal/cli/clitest"
 	componentlib "github.com/Zxilly/cjv/internal/component"
+	"github.com/Zxilly/cjv/internal/config"
+	"github.com/Zxilly/cjv/internal/toolchain"
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -49,6 +52,38 @@ func TestRunDocPathPrintsResolvedDoc(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Equal(t, docFile, strings.TrimSpace(stdout))
+}
+
+func TestRunDocUsesTrackingInstallationIdentity(t *testing.T) {
+	for _, selection := range []string{"flag", "selector", "active"} {
+		t.Run(selection, func(t *testing.T) {
+			tcDir := clitest.Home(t, "lts")
+			require.NoError(t, toolchain.WriteInstallation(tcDir, toolchain.Installation{Release: "lts-1.0.5"}))
+			roots, err := componentlib.RootsFor("lts")
+			require.NoError(t, err)
+			docFile := filepath.Join(roots.DocsDir, "main", "index.html")
+			require.NoError(t, os.MkdirAll(filepath.Dir(docFile), 0o755))
+			require.NoError(t, os.WriteFile(docFile, []byte("docs"), 0o644))
+			require.NoError(t, componentlib.WriteManifest(tcDir, componentlib.Docs, []string{"index.html"}))
+
+			args := []string{"--json", "doc"}
+			switch selection {
+			case "flag":
+				args = append(args, "--toolchain", "lts")
+			case "selector":
+				args = append([]string{"+lts"}, args...)
+			case "active":
+				t.Setenv(config.EnvToolchain, "lts")
+			}
+			stdout, err := clitest.Execute(t, clitest.Root(Register), args...)
+			require.NoError(t, err)
+			var result docResult
+			require.NoError(t, json.Unmarshal([]byte(stdout), &result))
+			assert.Equal(t, "lts", result.Toolchain)
+			assert.Equal(t, docFile, result.Path)
+			assert.False(t, result.Opened)
+		})
+	}
 }
 
 func TestRunDocOpensEscapedFileURL(t *testing.T) {

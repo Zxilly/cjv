@@ -12,14 +12,14 @@ import (
 )
 
 func TestResolveToolchainArgValidationAndActiveFallback(t *testing.T) {
-	_, _, err := ResolveToolchainArg("+bad")
+	_, err := ResolveToolchainArg("+bad")
 	require.Error(t, err)
 
 	home := t.TempDir()
 	configtest.Isolate(t, home)
 	require.NoError(t, config.EnsureDirs())
 
-	_, _, err = ResolveToolchainArg("lts-1.0.5")
+	_, err = ResolveToolchainArg("lts-1.0.5")
 	require.Error(t, err)
 
 	tcName := "lts-1.0.5"
@@ -30,11 +30,12 @@ func TestResolveToolchainArgValidationAndActiveFallback(t *testing.T) {
 	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
 	config.ResetDefaultSettingsFileCache()
 
-	gotDir, gotName, err := ResolveToolchainArg("")
+	installed, err := ResolveToolchainArg("")
 
 	require.NoError(t, err)
-	assert.Equal(t, tcDir, gotDir)
-	assert.Equal(t, tcName, gotName.String())
+	assert.Equal(t, tcDir, installed.Dir)
+	assert.Equal(t, tcName, installed.Identity)
+	assert.Equal(t, tcName, installed.Release.String())
 }
 
 func TestToolchainPrefersFlagOverSelector(t *testing.T) {

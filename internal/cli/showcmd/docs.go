@@ -33,11 +33,11 @@ func (c *commands) runDoc(cmd *cobra.Command, args []string) error {
 		topic = args[0]
 	}
 
-	_, parsedName, err := clictx.ResolveToolchainArg(c.ctx.Toolchain(c.docToolchain))
+	installed, err := clictx.ResolveToolchainArg(c.ctx.Toolchain(c.docToolchain))
 	if err != nil {
 		return err
 	}
-	tcName := parsedName.String()
+	tcName := installed.Identity
 
 	roots, err := componentlib.RootsFor(tcName)
 	if err != nil {
