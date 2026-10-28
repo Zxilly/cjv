@@ -2,16 +2,15 @@ import { describe, expect, it } from 'vitest'
 import { render, screen } from '../test-utils'
 import userEvent from '@testing-library/user-event'
 import { BinaryInstall } from './binary-install'
-import { computePlatformResult } from '@/hooks/use-platform'
+import { computePlatformResult } from '@/lib/platform-detection'
+import { ALL_BINARIES, MAC_DOWNLOAD, HARMONY_DOWNLOAD, MANUAL_DOWNLOAD } from '@/lib/platform-catalog'
 
-const { allBinaries } = computePlatformResult('Windows', 'amd64')
-const winBinary = allBinaries.find(b => b.goos === 'windows')!
-const macArmBinary = allBinaries.find(b => b.goos === 'darwin' && b.goarch === 'arm64')!
-const macX86Binary = allBinaries.find(b => b.goos === 'darwin' && b.goarch === 'amd64')!
+const winDownload = computePlatformResult('Windows', 'amd64').download
+const macX86Download = computePlatformResult('macOS', 'amd64').download
 
 describe('BinaryInstall (HarmonyOS choices)', () => {
   it.each([false, true])('offers both native architectures with mirror=%s', mirror => {
-    render(<BinaryInstall binary={null} allBinaries={allBinaries} mirror={mirror} showHarmonyOSChoices />)
+    render(<BinaryInstall selection={HARMONY_DOWNLOAD} mirror={mirror} />)
     const origin = mirror ? 'mirror' : 'official'
     expect(screen.getByRole('link', { name: /HarmonyOS ARM64/ })).toHaveAttribute('href', `/dl/${origin}/openharmony_arm64/cjv-init`)
     expect(screen.getByRole('link', { name: /HarmonyOS x86_64/ })).toHaveAttribute('href', `/dl/${origin}/openharmony_amd64/cjv-init`)
@@ -23,7 +22,7 @@ describe('BinaryInstall (HarmonyOS choices)', () => {
 
 describe('BinaryInstall (binary detected)', () => {
   it('renders the primary download for the detected binary', () => {
-    render(<BinaryInstall binary={winBinary} allBinaries={allBinaries} mirror={false} />)
+    render(<BinaryInstall selection={winDownload} mirror={false} />)
 
     const link = screen.getByRole('link', { name: /cjv-init\.exe/ })
     expect(link).toHaveAttribute('href', '/dl/official/windows_amd64/cjv-init.exe')
@@ -32,18 +31,18 @@ describe('BinaryInstall (binary detected)', () => {
   })
 
   it('flips to the mirror URL when mirror=true', () => {
-    render(<BinaryInstall binary={winBinary} allBinaries={allBinaries} mirror />)
+    render(<BinaryInstall selection={winDownload} mirror />)
     expect(screen.getByRole('link', { name: /cjv-init\.exe/ })).toHaveAttribute('href', '/dl/mirror/windows_amd64/cjv-init.exe')
   })
 
   it('surfaces the macOS x86_64 warning', () => {
-    render(<BinaryInstall binary={macX86Binary} allBinaries={allBinaries} mirror={false} />)
+    render(<BinaryInstall selection={macX86Download} mirror={false} />)
     expect(screen.getByText(/⚠.*x86_64/)).toBeInTheDocument()
   })
 
   it('hides the current binary from the "其他平台" list', async () => {
     const user = userEvent.setup()
-    render(<BinaryInstall binary={winBinary} allBinaries={allBinaries} mirror={false} />)
+    render(<BinaryInstall selection={winDownload} mirror={false} />)
 
     await user.click(screen.getByRole('button', { name: /其他平台/ }))
 
@@ -58,7 +57,7 @@ describe('BinaryInstall (binary detected)', () => {
 
 describe('BinaryInstall (macOS choices)', () => {
   it('renders Apple Silicon and Intel download buttons when macOS choices are requested', () => {
-    render(<BinaryInstall binary={null} allBinaries={allBinaries} mirror={false} showMacOSChoices />)
+    render(<BinaryInstall selection={MAC_DOWNLOAD} mirror={false} />)
 
     const appleSilicon = screen.getByRole('link', { name: /Apple Silicon/ })
     const intel = screen.getByRole('link', { name: /Intel/ })
@@ -71,7 +70,7 @@ describe('BinaryInstall (macOS choices)', () => {
   })
 
   it('uses mirror URLs for both macOS choices when mirror=true', () => {
-    render(<BinaryInstall binary={macArmBinary} allBinaries={allBinaries} mirror showMacOSChoices />)
+    render(<BinaryInstall selection={MAC_DOWNLOAD} mirror />)
 
     expect(screen.getByRole('link', { name: /Apple Silicon/ })).toHaveAttribute('href', '/dl/mirror/darwin_arm64/cjv-init')
     expect(screen.getByRole('link', { name: /Intel/ })).toHaveAttribute('href', '/dl/mirror/darwin_amd64/cjv-init')
@@ -79,7 +78,7 @@ describe('BinaryInstall (macOS choices)', () => {
 
   it('omits macOS binaries from the expanded other-platform list', async () => {
     const user = userEvent.setup()
-    render(<BinaryInstall binary={macArmBinary} allBinaries={allBinaries} mirror={false} showMacOSChoices />)
+    render(<BinaryInstall selection={MAC_DOWNLOAD} mirror={false} />)
 
     await user.click(screen.getByRole('button', { name: /其他平台/ }))
 
@@ -93,19 +92,19 @@ describe('BinaryInstall (macOS choices)', () => {
 
 describe('BinaryInstall (no binary)', () => {
   it('shows the manual selection prompt', () => {
-    render(<BinaryInstall binary={null} allBinaries={allBinaries} mirror={false} />)
+    render(<BinaryInstall selection={MANUAL_DOWNLOAD} mirror={false} />)
     expect(screen.getByText(/请手动选择对应平台的二进制/)).toBeInTheDocument()
-    expect(screen.getAllByRole('link', { name: /cjv-init/ })).toHaveLength(allBinaries.length)
+    expect(screen.getAllByRole('link', { name: /cjv-init/ })).toHaveLength(ALL_BINARIES.length)
   })
 
   it('uses the GitCode releases link when mirror=true', () => {
-    render(<BinaryInstall binary={null} allBinaries={allBinaries} mirror />)
+    render(<BinaryInstall selection={MANUAL_DOWNLOAD} mirror />)
     const release = screen.getByRole('link', { name: /GitCode Releases/ })
     expect(release).toHaveAttribute('href', 'https://gitcode.com/Zxilly/cjv/releases')
   })
 
   it('uses the GitHub releases link when mirror=false', () => {
-    render(<BinaryInstall binary={null} allBinaries={allBinaries} mirror={false} />)
+    render(<BinaryInstall selection={MANUAL_DOWNLOAD} mirror={false} />)
     const release = screen.getByRole('link', { name: /GitHub Releases/ })
     expect(release).toHaveAttribute('href', 'https://github.com/Zxilly/cjv/releases')
   })

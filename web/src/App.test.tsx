@@ -2,11 +2,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import App from './App'
-import { computePlatformResult } from '@/hooks/use-platform'
+import { computePlatformResult } from '@/lib/platform-detection'
 
 vi.mock('@/hooks/use-platform', async (importOriginal) => {
   const real = await importOriginal<typeof import('@/hooks/use-platform')>()
-  return { ...real, usePlatform: vi.fn(() => real.computePlatformResult('Windows', 'amd64')) }
+  const { computePlatformResult } = await import('@/lib/platform-detection')
+  return { ...real, usePlatform: vi.fn(() => computePlatformResult('Windows', 'amd64')) }
 })
 
 const platformModule = await import('@/hooks/use-platform')

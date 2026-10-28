@@ -11,7 +11,8 @@ import { CollapsibleSection } from '@/components/collapsible-section'
 import { BinaryInstall } from '@/components/binary-install'
 import { LangSwitch } from '@/components/lang-switch'
 import { SlidingTabIndicator } from '@/components/sliding-tab-indicator'
-import { usePlatform, type InstallMethod } from '@/hooks/use-platform'
+import { usePlatform } from '@/hooks/use-platform'
+import type { InstallMethod } from '@/lib/platform-catalog'
 import { useLanguageSwitch } from '@/hooks/use-language-switch'
 import { useMirror } from '@/hooks/use-mirror'
 import { INSTALL_TABS, getInstallTabDirection, type InstallTab } from '@/lib/tab-motion'
@@ -66,7 +67,7 @@ export default function App() {
 function AppContent() {
   const { t } = useLingui()
   const platform = usePlatform()
-  const { methods, otherMethods, sourceMethod, allBinaries } = platform
+  const { methods, otherMethods, sourceMethod } = platform
   const prefersReducedMotion = useReducedMotion()
   const [tab, setTab] = useState<InstallTab>('command')
   const [slideDirection, setSlideDirection] = useState(0)
@@ -77,11 +78,6 @@ function AppContent() {
   const heightTransition = prefersReducedMotion ? NO_MOTION : HEIGHT_EASE
 
   const { fadeControls, switchLang } = useLanguageSwitch()
-  // macOS on Safari/Firefox exposes no CPU architecture, so detection lands in the
-  // 'ready' state with no concrete binary. Only then do we offer an explicit Apple
-  // Silicon / Intel choice; once the arch is known (Chromium via UA Client Hints) the
-  // detected single binary is shown instead. This is the sole ready+null-binary case.
-  const choiceOS = platform.state === 'ready' ? platform.info.choiceOS : undefined
   const otherPlatformsTitle = t`其他平台`
 
   function handleTabChange(value: string) {
@@ -125,13 +121,7 @@ function AppContent() {
       </>
     ),
     download: (
-      <BinaryInstall
-        binary={platform.binary}
-        allBinaries={allBinaries}
-        mirror={mirror}
-        showMacOSChoices={choiceOS === 'darwin'}
-        showHarmonyOSChoices={choiceOS === 'openharmony'}
-      />
+      <BinaryInstall selection={platform.download} mirror={mirror} />
     ),
     source: (
       <div className="p-6 text-center">

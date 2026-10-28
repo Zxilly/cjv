@@ -2,14 +2,11 @@ import { Apple, Cpu, Download, type LucideIcon } from 'lucide-react'
 import { Trans, useLingui } from '@lingui/react/macro'
 import { CollapsibleSection } from './collapsible-section'
 import { i18n } from '@/lib/i18n'
-import type { BinaryInfo } from '@/hooks/use-platform'
+import type { ArchitectureDownload, BinaryInfo, DownloadSelection } from '@/lib/platform-catalog'
 
 interface BinaryInstallProps {
-  binary: BinaryInfo | null
-  allBinaries: BinaryInfo[]
+  selection: DownloadSelection
   mirror: boolean
-  showMacOSChoices?: boolean
-  showHarmonyOSChoices?: boolean
 }
 
 const platformKey = (b: BinaryInfo) => `${b.goos}_${b.goarch}`
@@ -94,16 +91,14 @@ function ManualDownloadList({
 }
 
 function MacOSDownloadChoices({
-  allBinaries,
+  selection,
   mirror,
 }: {
-  allBinaries: BinaryInfo[]
+  selection: ArchitectureDownload
   mirror: boolean
 }) {
   const { t } = useLingui()
-  // ALL_BINARIES always carries both darwin variants, ordered arm64 then amd64.
-  const choices = allBinaries.filter(b => b.goos === 'darwin')
-  const otherBinaries = allBinaries.filter(b => b.goos !== 'darwin')
+  const { binaries: choices, alternatives: otherBinaries } = selection
   const warning = choices.find(b => b.warning)?.warning
 
   return (
@@ -166,46 +161,46 @@ function MacOSDownloadChoices({
   )
 }
 
-export function BinaryInstall({ binary, allBinaries, mirror, showMacOSChoices = false, showHarmonyOSChoices = false }: BinaryInstallProps) {
+export function BinaryInstall({ selection, mirror }: BinaryInstallProps) {
   const { t } = useLingui()
 
-  if (showHarmonyOSChoices) {
+  if (selection.kind === 'choose-architecture' && selection.goos === 'openharmony') {
     return (
       <>
         <div className="px-6 pt-6 pb-4">
           <p className="text-base text-gray-600 dark:text-gray-300"><Trans>为鸿蒙电脑或二合一设备下载 cjv 安装器</Trans></p>
           <p className="mt-2 mb-4 text-sm text-gray-500 dark:text-gray-400"><Trans>在终端运行 uname -m：aarch64 对应 ARM64，x86_64 对应 x86_64。</Trans></p>
-          <ManualDownloadList binaries={allBinaries.filter(b => b.goos === 'openharmony')} mirror={mirror} showFullReleaseHint={false} />
+          <ManualDownloadList binaries={selection.binaries} mirror={mirror} showFullReleaseHint={false} />
           <p className="mt-3 text-sm text-gray-500 dark:text-gray-400"><Trans>下载后在终端运行 chmod +x cjv-init && ./cjv-init，按提示完成安装。</Trans></p>
         </div>
         <CollapsibleSection title={t`其他平台`} initial={false}>
           <div className="mt-2">
-            <ManualDownloadList binaries={allBinaries.filter(b => b.goos !== 'openharmony')} mirror={mirror} />
+            <ManualDownloadList binaries={selection.alternatives} mirror={mirror} />
           </div>
         </CollapsibleSection>
       </>
     )
   }
 
-  if (showMacOSChoices) {
-    return <MacOSDownloadChoices allBinaries={allBinaries} mirror={mirror} />
+  if (selection.kind === 'choose-architecture') {
+    return <MacOSDownloadChoices selection={selection} mirror={mirror} />
   }
 
-  if (!binary) {
+  if (selection.kind === 'manual') {
     return (
       <>
         <div className="px-6 pt-6 pb-2 text-center">
           <p className="text-base text-gray-500 dark:text-gray-400"><Trans>请手动选择对应平台的二进制：</Trans></p>
         </div>
         <div className="px-6 pb-4">
-          <ManualDownloadList binaries={allBinaries} mirror={mirror} />
+          <ManualDownloadList binaries={selection.binaries} mirror={mirror} />
         </div>
       </>
     )
   }
 
+  const { binary, alternatives } = selection
   const primaryUrl = binaryUrl(binary, mirror)
-  const others = allBinaries.filter(b => b !== binary)
 
   return (
     <>
@@ -231,7 +226,7 @@ export function BinaryInstall({ binary, allBinaries, mirror, showMacOSChoices = 
 
       <CollapsibleSection title={t`其他平台`} initial={false}>
         <div className="mt-2">
-          <ManualDownloadList binaries={others} mirror={mirror} />
+          <ManualDownloadList binaries={alternatives} mirror={mirror} />
         </div>
       </CollapsibleSection>
     </>
