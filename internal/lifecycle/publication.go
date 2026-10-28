@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/BurntSushi/toml"
+	"github.com/Zxilly/cjv/internal/component"
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/fsops"
 	"github.com/Zxilly/cjv/internal/fstx"
@@ -16,9 +17,100 @@ import (
 	"github.com/Zxilly/cjv/internal/toolchain"
 )
 
+// rootChange replaces a destination with prepared content. An empty source
+// explicitly removes the destination without installing a replacement.
+type rootChange struct {
+	source      string
+	destination string
+}
+
+// toolchainPublication keeps each installation identity with its root changes.
+// Component-only changes need not replace the SDK or every component root.
+type toolchainPublication struct {
+	identity string
+	roots    []rootChange
+	removed  bool
+}
+
+func toolchainRoots(source, destination component.Roots) []rootChange {
+	return []rootChange{
+		{source.TcDir, destination.TcDir},
+		{source.DocsDir, destination.DocsDir},
+		{source.StdxDir, destination.StdxDir},
+	}
+}
+
+// rootPublication owns one durable commit decision, including rollback when
+// placement, finalization or settings publication fails. Callers choose the
+// transaction scope and retain their staging until recovery has succeeded.
+type rootPublication struct {
+	roots      []rootChange
+	history    *preparedHistory
+	finalize   func() error
+	publish    func() error
+	afterRoot  func(string) error
+	createOnly bool
+}
+
+func (p rootPublication) commit(ctx context.Context, tx *fstx.Transaction) (committed bool, retErr error) {
+	defer func() {
+		if !committed {
+			if err := tx.Rollback(); err != nil {
+				retErr = errors.Join(retErr, fmt.Errorf("rollback publication: %w", err))
+			}
+		}
+	}()
+	if p.history != nil {
+		if err := tx.IncludeHistory(p.history.entry.ID); err != nil {
+			return false, err
+		}
+		if err := tx.RenameFile(p.history.staging, p.history.path); err != nil {
+			return false, err
+		}
+	}
+	for _, change := range p.roots {
+		if err := ctx.Err(); err != nil {
+			return false, err
+		}
+		if !p.createOnly {
+			if _, err := os.Lstat(change.destination); err == nil {
+				if err := tx.RemoveDir(change.destination); err != nil {
+					return false, fmt.Errorf("remove existing %s: %w", change.destination, err)
+				}
+			} else if !errors.Is(err, os.ErrNotExist) {
+				return false, err
+			}
+		}
+		if change.source != "" {
+			if err := tx.RenameFile(change.source, change.destination); err != nil {
+				return false, fmt.Errorf("place %s: %w", change.destination, err)
+			}
+		}
+		if p.afterRoot != nil {
+			if err := p.afterRoot(change.destination); err != nil {
+				return false, err
+			}
+		}
+	}
+	if p.finalize != nil {
+		if err := p.finalize(); err != nil {
+			return false, err
+		}
+	}
+	if err := ctx.Err(); err != nil {
+		return false, err
+	}
+	publicationErr, err := commitInstallation(tx, p.publish)
+	if err != nil {
+		return false, err
+	}
+	committed = true
+	return true, publicationErr
+}
+
 // publishPrepared runs with the home lock, after all members have been staged
 // and revalidated. Every root shares the same commit and recovery decision.
-func publishPrepared(ctx context.Context, home string, identities []string, pairs [][2]string, publish func() error, opts Options) (retErr error) {
+func publishPrepared(ctx context.Context, home string, members []toolchainPublication, publish func() error, opts Options) (retErr error) {
 	root, err := os.OpenRoot(home)
 	if err != nil {
 		return err
@@ -34,27 +126,41 @@ func publishPrepared(ctx context.Context, home string, identities []string, pair
 	defer func() {
 		var recovery *fstx.RecoveryError
 		if !errors.As(retErr, &recovery) {
-			for _, pair := range pairs {
-				_ = removeStaging(pair[1])
+			for _, member := range members {
+				for _, change := range member.roots {
+					_ = removeStaging(change.destination)
+				}
 			}
 		}
 	}()
-	for _, pair := range pairs {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		stage := config.StagingDir(pair[1])
-		if err := removeStaging(pair[1]); err != nil {
-			return err
-		}
-		if _, err := os.Lstat(pair[0]); err == nil {
-			if err := fsops.RenameRetry(pair[0], stage); err != nil {
-				if err := fsops.CopyTree(pair[0], stage); err != nil {
+	var identities []string
+	publication := rootPublication{history: opts.history, publish: publish, finalize: func() error {
+		return finalizeInstalledToolchain(ctx)
+	}}
+	for _, member := range members {
+		identities = append(identities, member.identity)
+		for _, change := range member.roots {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+			stage := config.StagingDir(change.destination)
+			if err := removeStaging(change.destination); err != nil {
+				return err
+			}
+			staged := rootChange{destination: change.destination}
+			if change.source != "" {
+				if _, err := os.Lstat(change.source); err == nil {
+					if err := fsops.RenameRetry(change.source, stage); err != nil {
+						if err := fsops.CopyTree(change.source, stage); err != nil {
+							return err
+						}
+					}
+					staged.source = stage
+				} else if !errors.Is(err, os.ErrNotExist) {
 					return err
 				}
 			}
-		} else if !errors.Is(err, os.ErrNotExist) {
-			return err
+			publication.roots = append(publication.roots, staged)
 		}
 	}
 	if afterStagingHook != nil {
@@ -65,83 +171,48 @@ func publishPrepared(ctx context.Context, home string, identities []string, pair
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	transactionNames := identities
-	if opts.history != nil && len(identities) > 0 {
-		owner := opts.history.entry.Toolchain
-		parsedOwner, err := toolchain.ParseToolchainName(owner)
-		if err != nil || parsedOwner.IsCustom() || parsedOwner.Channel == toolchain.UnknownChannel || parsedOwner.Version != "" || parsedOwner.Target != "" {
-			return fmt.Errorf("history snapshot owner must be a tracking host")
-		}
-		// A target-only replacement still publishes history owned by its
-		// unchanged host. Include that owner in the journal's allowed scope,
-		// without moving its SDK or emitting an installation event for it.
-		transactionNames = []string{owner}
-		for _, identity := range identities {
-			if identity == owner {
-				continue
-			}
-			name, err := toolchain.ParseToolchainName(identity)
-			if err != nil || name.IsCustom() || name.Channel != parsedOwner.Channel || name.Version != "" || name.Host != "" || !strings.HasPrefix(name.Target, opts.history.entry.HostTuple+"-") {
-				return fmt.Errorf("history snapshot owner does not match the published group")
-			}
-			transactionNames = append(transactionNames, identity)
-		}
+	transactionNames, err := publicationNames(identities, opts.history)
+	if err != nil {
+		return err
 	}
 	tx, err := fstx.NewToolchainGroupTransaction(home, transactionNames)
 	if err != nil {
 		return err
 	}
-	committed := false
-	defer func() {
-		if !committed {
-			retErr = errors.Join(retErr, tx.Rollback())
-		}
-	}()
-	if opts.history != nil {
-		if err := tx.IncludeHistory(opts.history.entry.ID); err != nil {
-			return err
-		}
-		if err := tx.RenameFile(opts.history.staging, opts.history.path); err != nil {
-			return err
-		}
+	committed, publicationErr := publication.commit(ctx, tx)
+	if !committed {
+		return publicationErr
 	}
-	for _, pair := range pairs {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		if _, err := os.Lstat(pair[1]); err == nil {
-			if err := tx.RemoveDir(pair[1]); err != nil {
-				return err
-			}
-		} else if !errors.Is(err, os.ErrNotExist) {
-			return err
-		}
-		stage := config.StagingDir(pair[1])
-		if _, err := os.Lstat(stage); err == nil {
-			if err := tx.RenameFile(stage, pair[1]); err != nil {
-				return err
-			}
-		} else if !errors.Is(err, os.ErrNotExist) {
-			return err
-		}
-	}
-	if err := finalizeInstalledToolchain(ctx); err != nil {
-		return err
-	}
-	if err := ctx.Err(); err != nil {
-		return err
-	}
-	publicationErr, err := commitInstallation(tx, publish)
-	if err != nil {
-		return err
-	}
-	committed = true
-	for i, identity := range identities {
-		if pairs[i*3][0] != "" {
-			opts.emit(progress.Event{Kind: progress.ToolchainInstalled, Toolchain: identity})
+	for _, member := range members {
+		if !member.removed {
+			opts.emit(progress.Event{Kind: progress.ToolchainInstalled, Toolchain: member.identity})
 		}
 	}
 	return publicationErr
+}
+
+func publicationNames(identities []string, history *preparedHistory) ([]string, error) {
+	if history == nil || len(identities) == 0 {
+		return identities, nil
+	}
+	owner := history.entry.Toolchain
+	parsedOwner, err := toolchain.ParseToolchainName(owner)
+	if err != nil || parsedOwner.IsCustom() || parsedOwner.Channel == toolchain.UnknownChannel || parsedOwner.Version != "" || parsedOwner.Target != "" {
+		return nil, fmt.Errorf("history snapshot owner must be a tracking host")
+	}
+	// An unchanged host still owns history for target-only replacements.
+	names := []string{owner}
+	for _, identity := range identities {
+		if identity == owner {
+			continue
+		}
+		name, err := toolchain.ParseToolchainName(identity)
+		if err != nil || name.IsCustom() || name.Channel != parsedOwner.Channel || name.Version != "" || name.Host != "" || !strings.HasPrefix(name.Target, history.entry.HostTuple+"-") {
+			return nil, fmt.Errorf("history snapshot owner does not match the published group")
+		}
+		names = append(names, identity)
+	}
+	return names, nil
 }
 
 // publishedSettingsError means restoring references failed. Retain the usable

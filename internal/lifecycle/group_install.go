@@ -320,8 +320,7 @@ func installGroup(ctx context.Context, d *installationDistribution, name toolcha
 		opts.emit(progress.Event{Kind: kind, Toolchain: identity})
 		return false, nil
 	}
-	var pairs [][2]string
-	var identities []string
+	var publications []toolchainPublication
 	for _, m := range changed {
 		roots, err := component.RootsFor(m.identity)
 		if err != nil {
@@ -332,8 +331,7 @@ func installGroup(ctx context.Context, d *installationDistribution, name toolcha
 				return false, err
 			}
 		}
-		identities = append(identities, m.identity)
-		pairs = append(pairs, [2]string{m.prepared.TcDir, roots.TcDir}, [2]string{m.prepared.DocsDir, roots.DocsDir}, [2]string{m.prepared.StdxDir, roots.StdxDir})
+		publications = append(publications, toolchainPublication{identity: m.identity, roots: toolchainRoots(m.prepared, roots), removed: m.drop})
 	}
 	if trackingHost && !req.Reinstall && host.before != nil && slices.ContainsFunc(changed, func(m *groupMember) bool {
 		return m.before != nil && (m.drop || !m.canReuseSDK())
@@ -349,7 +347,7 @@ func installGroup(ctx context.Context, d *installationDistribution, name toolcha
 			return false, err
 		}
 	}
-	publishErr := publishPrepared(ctx, home, identities, pairs, publishDefault, opts)
+	publishErr := publishPrepared(ctx, home, publications, publishDefault, opts)
 	if opts.history != nil {
 		opts.history.cleanup(publishErr)
 	}

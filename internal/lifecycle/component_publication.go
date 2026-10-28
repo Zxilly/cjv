@@ -1,8 +1,8 @@
 package lifecycle
 
 import (
+	"context"
 	"errors"
-	"os"
 	"path/filepath"
 	"slices"
 
@@ -41,49 +41,26 @@ func publishComponentBatch(home, identity string, prepared component.Roots, name
 	if err := component.StagePreparedBatch(roots, prepared, staging, names, force); err != nil {
 		return err
 	}
-	var pairs [][2]string
+	var changes []rootChange
 	for _, name := range names {
 		spec, err := component.SpecFor(name)
 		if err != nil {
 			return err
 		}
-		pair := [2]string{spec.InstallRoot(staging), spec.InstallRoot(roots)}
-		if !slices.Contains(pairs, pair) {
-			pairs = append(pairs, pair)
+		change := rootChange{spec.InstallRoot(staging), spec.InstallRoot(roots)}
+		if !slices.Contains(changes, change) {
+			changes = append(changes, change)
 		}
 	}
-	pairs = append(pairs, [2]string{filepath.Join(staging.TcDir, component.MetaDir), filepath.Join(roots.TcDir, component.MetaDir)})
+	changes = append(changes, rootChange{filepath.Join(staging.TcDir, component.MetaDir), filepath.Join(roots.TcDir, component.MetaDir)})
 	tx, err := fstx.NewToolchainTransaction(home, identity)
 	if err != nil {
 		return err
 	}
-	committed := false
-	defer func() {
-		if !committed {
-			retErr = errors.Join(retErr, tx.Rollback())
-		}
-	}()
-	for _, pair := range pairs {
-		if _, err := os.Lstat(pair[1]); err == nil {
-			if err := tx.RemoveDir(pair[1]); err != nil {
-				return err
-			}
-		} else if !errors.Is(err, os.ErrNotExist) {
-			return err
-		}
-		if err := tx.RenameFile(pair[0], pair[1]); err != nil {
-			return err
-		}
-		if afterComponentRootHook != nil {
-			if err := afterComponentRootHook(pair[1]); err != nil {
-				return err
-			}
-		}
-	}
-	if err := tx.Commit(); err != nil {
+	publication := rootPublication{roots: changes, afterRoot: afterComponentRootHook}
+	if _, err := publication.commit(context.Background(), tx); err != nil {
 		return err
 	}
-	committed = true
 	for _, name := range names {
 		opts.emit(progress.Event{Kind: progress.ComponentInstalled, Toolchain: identity, Component: string(name)})
 	}

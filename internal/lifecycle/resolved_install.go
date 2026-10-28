@@ -256,33 +256,19 @@ func swapInstalledToolchain(stagingDir, destDir string, isReinstall bool, afterS
 	if txErr != nil {
 		return fmt.Errorf("failed to begin install transaction: %w", txErr)
 	}
-	committed := false
-	defer func() {
-		if committed {
-			return
-		}
-		if rbErr := tx.Rollback(); rbErr != nil {
-			err = errors.Join(err, fmt.Errorf("rollback after failed install also failed: %w", rbErr))
-		}
-	}()
-
-	if isReinstall {
-		if err := tx.RemoveDir(destDir); err != nil {
-			return fmt.Errorf("failed to remove existing toolchain: %w", err)
-		}
+	publication := rootPublication{
+		roots:      []rootChange{{stagingDir, destDir}},
+		publish:    publish,
+		createOnly: !isReinstall,
+		finalize: func() error {
+			if err := afterSwap(); err != nil {
+				return fmt.Errorf("failed to finalize installation: %w", err)
+			}
+			return nil
+		},
 	}
-	if err := tx.RenameFile(stagingDir, destDir); err != nil {
-		return fmt.Errorf("failed to place new toolchain: %w", err)
-	}
-	if err := afterSwap(); err != nil {
-		return fmt.Errorf("failed to finalize installation: %w", err)
-	}
-	publicationErr, err := commitInstallation(tx, publish)
-	if err != nil {
-		return err
-	}
-	committed = true
-	return publicationErr
+	_, err = publication.commit(context.Background(), tx)
+	return err
 }
 
 // publishFirstDefault runs under the home lock and restores its settings if

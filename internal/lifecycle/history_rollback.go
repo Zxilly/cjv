@@ -120,7 +120,7 @@ func RollbackHistory(ctx context.Context, name, id string, opts Options) (Rollba
 		result.PreviousSnapshot = opts.history.entry.ID
 	}
 	identities := make([]string, 0, len(entry.Members)+len(tracked))
-	var pairs [][2]string
+	var publications []toolchainPublication
 	for _, member := range entry.Members {
 		identities = append(identities, member.Name)
 		from := historyRoots(stage, member.Name)
@@ -128,9 +128,7 @@ func RollbackHistory(ctx context.Context, name, id string, opts Options) (Rollba
 		if err != nil {
 			return result, err
 		}
-		for i, pair := range historyRootPaths(from) {
-			pairs = append(pairs, [2]string{pair[1], historyRootPaths(to)[i][1]})
-		}
+		publications = append(publications, toolchainPublication{identity: member.Name, roots: toolchainRoots(from, to)})
 	}
 	for _, currentName := range tracked {
 		if slices.Contains(identities, currentName) {
@@ -141,13 +139,11 @@ func RollbackHistory(ctx context.Context, name, id string, opts Options) (Rollba
 		if err != nil {
 			return result, err
 		}
-		for _, pair := range historyRootPaths(to) {
-			pairs = append(pairs, [2]string{"", pair[1]})
-		}
+		publications = append(publications, toolchainPublication{identity: currentName, roots: toolchainRoots(component.Roots{}, to), removed: true})
 	}
 	// Channel references stay attached to the same identity. Fixed versions
 	// and other hosts never enter this transaction.
-	publishErr := publishPrepared(ctx, home, identities, pairs, nil, opts)
+	publishErr := publishPrepared(ctx, home, publications, nil, opts)
 	if opts.history != nil {
 		opts.history.cleanup(publishErr)
 	}
