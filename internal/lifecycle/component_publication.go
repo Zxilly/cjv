@@ -41,18 +41,10 @@ func publishComponentBatch(home, identity string, prepared component.Roots, name
 	if err := component.StagePreparedBatch(roots, prepared, staging, names, force); err != nil {
 		return err
 	}
-	var changes []rootChange
-	for _, name := range names {
-		spec, err := component.SpecFor(name)
-		if err != nil {
-			return err
-		}
-		change := rootChange{spec.InstallRoot(staging), spec.InstallRoot(roots)}
-		if !slices.Contains(changes, change) {
-			changes = append(changes, change)
-		}
+	changes, err := componentRootChanges(staging, roots, names)
+	if err != nil {
+		return err
 	}
-	changes = append(changes, rootChange{filepath.Join(staging.TcDir, component.MetaDir), filepath.Join(roots.TcDir, component.MetaDir)})
 	tx, err := fstx.NewToolchainTransaction(home, identity)
 	if err != nil {
 		return err
@@ -65,6 +57,22 @@ func publishComponentBatch(home, identity string, prepared component.Roots, name
 		opts.emit(progress.Event{Kind: progress.ComponentInstalled, Toolchain: identity, Component: string(name)})
 	}
 	return nil
+}
+
+func componentRootChanges(staging, roots component.Roots, names []component.Name) ([]rootChange, error) {
+	var changes []rootChange
+	for _, name := range names {
+		spec, err := component.SpecFor(name)
+		if err != nil {
+			return nil, err
+		}
+		change := rootChange{spec.InstallRoot(staging), spec.InstallRoot(roots)}
+		if !slices.Contains(changes, change) {
+			changes = append(changes, change)
+		}
+	}
+	changes = append(changes, rootChange{filepath.Join(staging.TcDir, component.MetaDir), filepath.Join(roots.TcDir, component.MetaDir)})
+	return changes, nil
 }
 
 // Tests interrupt or obstruct publication after one durable root placement.

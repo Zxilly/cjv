@@ -15,6 +15,14 @@ import (
 // Applying normal ownership rules to these copies preserves untracked files,
 // shared assets and user links without touching the live installation on error.
 func StagePreparedBatch(roots, prepared, staging Roots, names []Name, force bool) error {
+	return StagePreparedChanges(roots, prepared, staging, names, nil, force)
+}
+
+// StagePreparedChanges also handles components removed by a toolchain group
+// plan. All affected roots and their metadata remain private until the caller
+// publishes them together with any SDK or target changes.
+func StagePreparedChanges(roots, prepared, staging Roots, added, removed []Name, force bool) error {
+	names := append(slices.Clone(added), removed...)
 	if err := checkEditRoots(roots, names); err != nil {
 		return err
 	}
@@ -38,7 +46,12 @@ func StagePreparedBatch(roots, prepared, staging Roots, names []Name, force bool
 			copied = append(copied, source)
 		}
 	}
-	for _, name := range names {
+	for _, name := range removed {
+		if err := Remove(staging, name); err != nil {
+			return err
+		}
+	}
+	for _, name := range added {
 		if err := installPrepared(staging, prepared, name, force); err != nil {
 			return err
 		}

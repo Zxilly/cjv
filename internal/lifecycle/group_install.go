@@ -14,7 +14,6 @@ import (
 	"github.com/Zxilly/cjv/internal/component"
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/dist"
-	"github.com/Zxilly/cjv/internal/fsops"
 	"github.com/Zxilly/cjv/internal/progress"
 	sdktarget "github.com/Zxilly/cjv/internal/target"
 	"github.com/Zxilly/cjv/internal/toolchain"
@@ -215,31 +214,7 @@ func installGroup(ctx context.Context, d *installationDistribution, name toolcha
 			opts.emit(progress.Event{Kind: progress.UpdateFound, Toolchain: m.identity, Replacement: m.release.Name})
 		}
 		m.prepared = component.Roots{TcDir: filepath.Join(base, "sdk"), DocsDir: filepath.Join(base, "docs"), StdxDir: filepath.Join(base, "stdx")}
-		if reuse {
-			roots, err := component.RootsFor(m.identity)
-			if err != nil {
-				return false, err
-			}
-			if err := fsops.CopyTree(roots.TcDir, m.prepared.TcDir); err != nil {
-				return false, err
-			}
-			for _, pair := range [][2]string{{roots.DocsDir, m.prepared.DocsDir}, {roots.StdxDir, m.prepared.StdxDir}} {
-				if _, err := os.Lstat(pair[0]); err == nil {
-					if err := fsops.CopyTree(pair[0], pair[1]); err != nil {
-						return false, err
-					}
-				} else if !errors.Is(err, os.ErrNotExist) {
-					return false, err
-				}
-			}
-			for _, intent := range m.original {
-				if !slices.ContainsFunc(m.intents, func(selected component.Intent) bool { return selected.Name == intent.Name }) {
-					if err := component.Remove(m.prepared, intent.Name); err != nil {
-						return false, err
-					}
-				}
-			}
-		} else {
+		if !reuse {
 			archive, err := preparation.Download(ctx, m.release.URL, m.release.SHA256, m.release.ArchiveName, opts.sink())
 			if err != nil {
 				return false, err
@@ -248,12 +223,12 @@ func installGroup(ctx context.Context, d *installationDistribution, name toolcha
 			if err := dist.InstallSDK(ctx, archive, m.prepared.TcDir); err != nil {
 				return false, err
 			}
-		}
-		if err := validateInstallation(m.prepared.TcDir, m.release.Tuple); err != nil {
-			return false, err
-		}
-		if err := toolchain.WriteInstallation(m.prepared.TcDir, toolchain.Installation{Release: m.release.Name, Tuple: m.release.Tuple, SHA256: m.release.SHA256}); err != nil {
-			return false, err
+			if err := validateInstallation(m.prepared.TcDir, m.release.Tuple); err != nil {
+				return false, err
+			}
+			if err := toolchain.WriteInstallation(m.prepared.TcDir, toolchain.Installation{Release: m.release.Name, Tuple: m.release.Tuple, SHA256: m.release.SHA256}); err != nil {
+				return false, err
+			}
 		}
 		concrete, _ := toolchain.ParseToolchainName(m.release.Name)
 		for _, intent := range m.intents {
@@ -326,12 +301,19 @@ func installGroup(ctx context.Context, d *installationDistribution, name toolcha
 		if err != nil {
 			return false, err
 		}
-		if !m.drop && d.Settings.LinkMode == "hardlink" {
+		if !m.drop && !m.canReuseSDK() && d.Settings.LinkMode == "hardlink" {
 			if err := deduplicateSDK(m.prepared.TcDir, m.identity); err != nil {
 				return false, err
 			}
 		}
-		publications = append(publications, toolchainPublication{identity: m.identity, roots: toolchainRoots(m.prepared, roots), removed: m.drop})
+		publication := toolchainPublication{identity: m.identity, roots: toolchainRoots(m.prepared, roots), removed: m.drop}
+		if !m.drop && m.canReuseSDK() {
+			publication.roots, err = prepareGroupComponents(preparation, m, roots)
+			if err != nil {
+				return false, err
+			}
+		}
+		publications = append(publications, publication)
 	}
 	if trackingHost && !req.Reinstall && host.before != nil && slices.ContainsFunc(changed, func(m *groupMember) bool {
 		return m.before != nil && (m.drop || !m.canReuseSDK())

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/BurntSushi/toml"
@@ -116,20 +117,19 @@ func publishPrepared(ctx context.Context, home string, members []toolchainPublic
 		return err
 	}
 	defer root.Close() //nolint:errcheck
-	removeStaging := func(destination string) error {
-		rel, err := filepath.Rel(home, config.StagingDir(destination))
+	removeStaging := func(stage string) error {
+		rel, err := filepath.Rel(home, stage)
 		if err != nil {
 			return err
 		}
 		return fsops.RemoveOwnedTree(root, rel)
 	}
+	var stagingRoots []string
 	defer func() {
 		var recovery *fstx.RecoveryError
 		if !errors.As(retErr, &recovery) {
-			for _, member := range members {
-				for _, change := range member.roots {
-					_ = removeStaging(change.destination)
-				}
+			for _, stage := range stagingRoots {
+				_ = removeStaging(stage)
 			}
 		}
 	}()
@@ -143,13 +143,22 @@ func publishPrepared(ctx context.Context, home string, members []toolchainPublic
 			if err := ctx.Err(); err != nil {
 				return err
 			}
-			stage := config.StagingDir(change.destination)
-			if err := removeStaging(change.destination); err != nil {
+			stageRoot, stage, err := publicationStaging(member.identity, change.destination)
+			if err != nil {
 				return err
+			}
+			if !slices.Contains(stagingRoots, stageRoot) {
+				stagingRoots = append(stagingRoots, stageRoot)
+				if err := removeStaging(stageRoot); err != nil {
+					return err
+				}
 			}
 			staged := rootChange{destination: change.destination}
 			if change.source != "" {
 				if _, err := os.Lstat(change.source); err == nil {
+					if err := os.MkdirAll(filepath.Dir(stage), 0o755); err != nil {
+						return err
+					}
 					if err := fsops.RenameRetry(change.source, stage); err != nil {
 						if err := fsops.CopyTree(change.source, stage); err != nil {
 							return err
@@ -189,6 +198,24 @@ func publishPrepared(ctx context.Context, home string, members []toolchainPublic
 		}
 	}
 	return publicationErr
+}
+
+// Nested component and metadata changes stage below the ordinary SDK/docs/stdx
+// staging roots. Recovery can therefore clean an interrupted preparation even
+// before a transaction journal exists, without leaving scratch in a live SDK.
+func publicationStaging(identity, destination string) (string, string, error) {
+	roots, err := component.RootsFor(identity)
+	if err != nil {
+		return "", "", err
+	}
+	for _, root := range []string{roots.TcDir, roots.DocsDir, roots.StdxDir} {
+		rel, err := filepath.Rel(root, destination)
+		if err == nil && filepath.IsLocal(rel) {
+			stage := config.StagingDir(root)
+			return stage, filepath.Join(stage, rel), nil
+		}
+	}
+	return "", "", fmt.Errorf("publication destination %s is outside toolchain %s", destination, identity)
 }
 
 func publicationNames(identities []string, history *preparedHistory) ([]string, error) {
@@ -275,6 +302,8 @@ func deduplicateSDK(prepared, identity string) error {
 
 func readPreparedRecord(dir string) (toolchain.Installation, error) {
 	var record toolchain.Installation
-	_, err := toml.DecodeFile(filepath.Join(dir, ".cjv", "toolchain.toml"), &record)
+	_, err := toml.DecodeFile(preparedRecordPath(dir), &record)
 	return record, err
 }
+
+func preparedRecordPath(dir string) string { return filepath.Join(dir, ".cjv", "toolchain.toml") }
