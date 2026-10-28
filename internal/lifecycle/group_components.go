@@ -12,7 +12,7 @@ import (
 // prepareGroupComponents runs after the installed snapshot has been revalidated
 // under HomeLock. It reuses the standalone component staging rules while the
 // caller keeps every member's changes in the same toolchain-group transaction.
-func prepareGroupComponents(preparation *dist.Preparation, member *groupMember, roots component.Roots) ([]rootChange, error) {
+func prepareGroupComponents(preparation *dist.Preparation, member *preparedGroupMember, roots component.Roots) ([]rootChange, error) {
 	if err := validateInstallation(roots.TcDir, member.release.Tuple); err != nil {
 		return nil, err
 	}
@@ -23,11 +23,11 @@ func prepareGroupComponents(preparation *dist.Preparation, member *groupMember, 
 	staging := component.Roots{TcDir: filepath.Join(base, "sdk"), DocsDir: filepath.Join(base, "docs"), StdxDir: filepath.Join(base, "stdx")}
 	var added, removed []component.Name
 	for _, intent := range member.intents {
-		if !slices.Contains(member.original, intent) {
+		if !slices.Contains(member.installed.intents, intent) {
 			added = append(added, intent.Name)
 		}
 	}
-	for _, intent := range member.original {
+	for _, intent := range member.installed.intents {
 		if !slices.Contains(member.intents, intent) {
 			removed = append(removed, intent.Name)
 		}

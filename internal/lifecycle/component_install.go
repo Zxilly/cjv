@@ -3,6 +3,7 @@ package lifecycle
 import (
 	"context"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -96,30 +97,29 @@ func installComponents(ctx context.Context, d *Distribution, resolvedName string
 	if err := lock.MigrateLegacy(); err != nil {
 		return err
 	}
-	roots, err := component.RootsFor(resolvedName)
+	snapshot, err := readInstallationSnapshot(resolvedName)
 	if err != nil {
 		return err
 	}
-	resolvedTC, err := toolchain.InstalledRelease(roots.TcDir)
+	if snapshot.record == nil {
+		return os.ErrNotExist
+	}
+	roots := snapshot.roots
+	resolvedTC, err := toolchain.ParseToolchainName(snapshot.record.Release)
 	if err != nil {
 		return err
 	}
 	if resolvedTC.IsCustom() {
 		return &cjverr.ComponentRequiresHostError{Component: strings.Join(components, ", ")}
 	}
-	record, err := toolchain.ReadInstallation(roots.TcDir)
-	if err != nil {
-		return err
-	}
-	tuple := record.Tuple
+	tuple := snapshot.record.Tuple
 	if tuple == "" {
 		tuple = resolvedTC.Target
 	}
 	if tuple == "" {
 		tuple = d.HostTuple
 	}
-	state, err := installationComponentState(roots.TcDir)
-	if err != nil {
+	if err := snapshot.captureMetadata(); err != nil {
 		return err
 	}
 	var selected []component.Name
@@ -155,9 +155,7 @@ func installComponents(ctx context.Context, d *Distribution, resolvedName string
 	if err := lock.Recover(); err != nil {
 		return err
 	}
-	current, err := toolchain.ReadInstallation(roots.TcDir)
-	currentState, stateErr := installationComponentState(roots.TcDir)
-	if err != nil || current != record || stateErr != nil || currentState != state {
+	if !snapshot.matches() {
 		return fmt.Errorf("toolchain %s changed during component installation; retry", resolvedName)
 	}
 	if err := publishComponentBatch(home, resolvedName, prepared, selected, force, opts); err != nil {

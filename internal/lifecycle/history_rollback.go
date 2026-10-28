@@ -2,7 +2,6 @@ package lifecycle
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -90,21 +89,13 @@ func RollbackHistory(ctx context.Context, name, id string, opts Options) (Rollba
 	currentNames := append([]string{owner}, tracked...)
 	var current []*groupMember
 	for _, currentName := range currentNames {
-		roots, err := component.RootsFor(currentName)
+		member, err := snapshotGroupMember(currentName)
 		if err != nil {
 			return result, err
 		}
-		record, err := toolchain.ReadInstallation(roots.TcDir)
-		if errors.Is(err, os.ErrNotExist) {
-			continue
-		} else if err != nil {
-			return result, err
+		if member.installed.record != nil {
+			current = append(current, member)
 		}
-		intents, err := component.InstalledIntents(roots)
-		if err != nil {
-			return result, err
-		}
-		current = append(current, &groupMember{identity: currentName, before: &record, original: intents})
 	}
 	if len(current) > 0 && current[0].identity == owner {
 		if err := lock.WithStableReads(ctx, func() error {

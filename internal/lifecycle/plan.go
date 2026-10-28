@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"slices"
 
-	"github.com/Zxilly/cjv/internal/component"
 	"github.com/Zxilly/cjv/internal/dist"
 	"github.com/Zxilly/cjv/internal/toolchain"
 )
@@ -81,30 +80,18 @@ func PlanUpdates(ctx context.Context, inputs []string, opts Options) (UpdatePlan
 	}
 	grouped := make(map[string]bool)
 	if all {
+		records := make(map[string]toolchain.Installation)
 		for _, input := range inputs {
 			name, err := toolchain.ParseToolchainName(input)
 			if err != nil || name.IsCustom() || name.Version != "" || name.Target != "" {
 				continue
 			}
-			member, err := snapshotPlanMember(input)
-			if err != nil || member.before == nil {
-				continue
-			}
-			tuple := member.before.Tuple
-			if tuple == "" {
-				tuple = d.HostTuple
-				if name.Host != "" {
-					tuple = name.Host
-				}
-			}
-			targets, err := trackedGroupTargets(name.Channel, tuple, true)
-			if err != nil {
-				return report, err
-			}
-			for _, target := range targets {
-				grouped[target] = true
+			member, err := snapshotGroupMember(input)
+			if err == nil && member.installed.record != nil {
+				records[input] = *member.installed.record
 			}
 		}
+		grouped = groupedTrackingTargets(inputs, records, d.HostTuple)
 	}
 	var errs []error
 	for _, input := range inputs {
@@ -152,12 +139,12 @@ func planUpdate(ctx context.Context, d *Distribution, name toolchain.ToolchainNa
 		if err != nil {
 			return plan, err
 		}
-		member, err := snapshotPlanMember(host.String())
+		member, err := snapshotGroupMember(host.String())
 		if err != nil {
 			return plan, err
 		}
-		if member.before != nil {
-			selector, err = selectTargetRelease(selector, host, *member.before)
+		if member.installed.record != nil {
+			selector, err = selectTargetRelease(selector, host, *member.installed.record)
 			if err != nil {
 				return plan, err
 			}
@@ -170,13 +157,13 @@ func planUpdate(ctx context.Context, d *Distribution, name toolchain.ToolchainNa
 	plan.Latest = resolved.Name
 	identity := selectedIdentity(resolved, name.Version == "")
 	plan.Name = identity
-	host, err := snapshotPlanMember(identity)
+	host, err := snapshotGroupMember(identity)
 	if err != nil {
 		return plan, err
 	}
 	host.release = resolved
-	if host.before != nil {
-		plan.Current = host.before.Release
+	if host.installed.record != nil {
+		plan.Current = host.installed.record.Release
 	}
 	members := []*groupMember{host}
 	targets, err := trackedGroupTargets(name.Channel, resolved.Tuple, name.Version == "" && name.Target == "")
@@ -184,7 +171,7 @@ func planUpdate(ctx context.Context, d *Distribution, name toolchain.ToolchainNa
 		return plan, err
 	}
 	for _, target := range targets {
-		member, err := snapshotPlanMember(target)
+		member, err := snapshotGroupMember(target)
 		if err != nil {
 			return plan, err
 		}
@@ -203,14 +190,14 @@ func planUpdate(ctx context.Context, d *Distribution, name toolchain.ToolchainNa
 	plan.Selected = members[0].release.Name
 	for _, member := range members {
 		entry := PlannedMember{Name: member.identity, Selected: member.release.Name, Removed: member.drop}
-		if member.before != nil {
-			entry.Current = member.before.Release
+		if member.installed.record != nil {
+			entry.Current = member.installed.record.Release
 		}
 		for _, intent := range member.intents {
 			entry.Components = append(entry.Components, string(intent.Name))
 		}
 		plan.Members = append(plan.Members, entry)
-		if member.drop || !member.canReuseSDK() || member.addedComponents {
+		if member.drop || !member.canReuseSDK() || member.componentsChanged() {
 			plan.UpdateAvailable = true
 		}
 	}
@@ -224,23 +211,4 @@ func planUpdate(ctx context.Context, d *Distribution, name toolchain.ToolchainNa
 		plan.Status = "blocked"
 	}
 	return plan, nil
-}
-
-func snapshotPlanMember(identity string) (*groupMember, error) {
-	roots, err := component.RootsFor(identity)
-	if err != nil {
-		return nil, err
-	}
-	member := &groupMember{identity: identity}
-	record, err := toolchain.ReadInstallation(roots.TcDir)
-	if errors.Is(err, os.ErrNotExist) {
-		return member, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	member.before = &record
-	member.intents, err = component.InstalledIntents(roots)
-	member.original = slices.Clone(member.intents)
-	return member, err
 }

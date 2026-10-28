@@ -4,10 +4,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
-	"os"
-	"path/filepath"
 
-	"github.com/Zxilly/cjv/internal/component"
 	"github.com/Zxilly/cjv/internal/i18n"
 	sdktarget "github.com/Zxilly/cjv/internal/target"
 	"github.com/Zxilly/cjv/internal/toolchain"
@@ -56,53 +53,22 @@ func UpdateInstalled(ctx context.Context, name toolchain.ToolchainName, opts Opt
 	if name.IsCustom() {
 		return UpdateOutcome{}, errors.New(i18n.T("UpdateCustomToolchain", i18n.MsgData{"Name": name.String()}))
 	}
-	switch {
-	case name.Target != "" && name.Version != "":
-		// Versioned target names are fixed versions just like host names.
-		if err := Install(ctx, InstallRequest{Toolchain: name.String()}, opts); err != nil {
-			return UpdateOutcome{}, err
-		}
-		return UpdateOutcome{Name: name.String(), Status: UpdatePinned}, nil
-	case name.Version == "":
-		d, err := openInstallationDistribution(ctx, opts)
-		if err != nil {
-			return UpdateOutcome{}, err
-		}
-		selector := name
-		if name.Target != "" {
-			selector, opts, err = selectTargetHost(ctx, name, opts)
-			if err != nil {
-				return UpdateOutcome{}, err
-			}
-		}
-		resolved, err := d.Resolve(ctx, selector, name.Target)
-		if err != nil {
-			return UpdateOutcome{}, err
-		}
-		changed, err := installGroup(ctx, d, name, resolved, InstallRequest{Toolchain: name.String()}, opts)
-		if err != nil {
-			return UpdateOutcome{}, err
-		}
-		dir, err := toolchain.FindInstalled(name)
-		if err != nil {
-			return UpdateOutcome{}, err
-		}
-		record, err := toolchain.ReadInstallation(dir)
-		if err != nil {
-			return UpdateOutcome{}, err
-		}
-		status := UpdateUpToDate
-		if changed {
-			status = UpdateApplied
-		}
-		return UpdateOutcome{Name: name.String(), Replacement: record.Release, Status: status}, nil
-	default:
-		// Specific version: install it (already installed is a no-op).
+	if name.Version != "" {
+		// Specific host and target versions remain pinned, installing if missing.
 		if err := Install(ctx, InstallRequest{Toolchain: name.String()}, opts); err != nil {
 			return UpdateOutcome{}, err
 		}
 		return UpdateOutcome{Name: name.String(), Status: UpdatePinned}, nil
 	}
+	d, err := openInstallationDistribution(ctx, opts)
+	if err != nil {
+		return UpdateOutcome{}, err
+	}
+	outcome, err := updateTrackingToolchain(ctx, d, name, false, opts)
+	if err != nil {
+		return UpdateOutcome{}, err
+	}
+	return outcome, nil
 }
 
 // UpdateAll updates recorded tracking identities, retaining explicit and legacy
@@ -133,16 +99,7 @@ func UpdateAll(ctx context.Context, opts Options) (_ UpdateReport, updateErr err
 	var errs []error
 	// A host owns the publication of its tracking cross SDKs. Do not process
 	// those targets again using the pre-publication distribution snapshot.
-	grouped := make(map[string]bool)
-	for _, identity := range installed {
-		p, err := toolchain.ParseToolchainName(identity)
-		if err != nil || p.IsCustom() || p.Version != "" || p.Target != "" {
-			continue
-		}
-		if record, ok := d.installed[identity]; ok && record.Tuple != "" {
-			grouped[p.Channel.String()+"-"+record.Tuple] = true
-		}
-	}
+	grouped := groupedTrackingTargets(installed, d.installed, d.HostTuple)
 	for _, identity := range installed {
 		parsed, err := toolchain.ParseToolchainName(identity)
 		if err != nil {
@@ -158,16 +115,16 @@ func UpdateAll(ctx context.Context, opts Options) (_ UpdateReport, updateErr err
 			continue
 		}
 		if parsed.Target != "" {
-			parts, err := sdktarget.ParseTuple(parsed.Target)
+			_, err := sdktarget.ParseTuple(parsed.Target)
 			if err != nil {
 				errs = append(errs, err)
 				continue
 			}
-			if grouped[parsed.Channel.String()+"-"+parts.Host] {
+			if grouped[identity] {
 				continue
 			}
 		}
-		outcome, err := upgradeChannelToolchain(ctx, d, parsed.Channel, identity, parsed.Target, opts)
+		outcome, err := updateTrackingToolchain(ctx, d, parsed, true, opts)
 		report.Outcomes = append(report.Outcomes, outcome)
 		if err != nil {
 			errs = append(errs, err)
@@ -176,85 +133,53 @@ func UpdateAll(ctx context.Context, opts Options) (_ UpdateReport, updateErr err
 	return report, errors.Join(errs...)
 }
 
-func upgradeChannelToolchain(ctx context.Context, d *installationDistribution, channel toolchain.Channel, currentName, tuple string, opts Options) (UpdateOutcome, error) {
-	selector := toolchain.ToolchainName{Channel: channel}
-	if installedName, err := toolchain.ParseToolchainName(currentName); err == nil {
-		selector.Host = installedName.Host
-	}
-	if tuple != "" {
-		var err error
-		selector.Target = tuple
-		selector, opts, err = selectTargetHost(ctx, selector, opts)
-		if err != nil {
-			return UpdateOutcome{}, err
-		}
-	}
-	resolved, err := d.Resolve(ctx, selector, tuple)
-	if err != nil {
-		return UpdateOutcome{Name: currentName, Status: UpdateFailed, Err: err}, err
-	}
-	outcome := UpdateOutcome{Name: currentName, Replacement: resolved.Name, Status: UpdateUpToDate}
-	currentIdentity, err := toolchain.ParseToolchainName(currentName)
-	if err != nil {
-		return outcome, err
-	}
-	dir, err := toolchain.FindInstalled(currentIdentity)
-	if err != nil {
-		return outcome, err
-	}
-	updated, err := installGroup(ctx, d, currentIdentity, resolved, InstallRequest{Toolchain: currentName}, opts)
-	if err != nil {
+// updateTrackingToolchain applies one host/target group against an already-open
+// distribution. Single and bulk updates share resolution, publication and the
+// final installed release; bulk callers retain the outcome alongside any error.
+// requireInstalled preserves bulk updates' refusal to recreate a removed SDK.
+func updateTrackingToolchain(ctx context.Context, d *installationDistribution, identity toolchain.ToolchainName, requireInstalled bool, opts Options) (UpdateOutcome, error) {
+	outcome := UpdateOutcome{Name: identity.String(), Status: UpdateUpToDate}
+	failed := func(err error) (UpdateOutcome, error) {
 		outcome.Status, outcome.Err = UpdateFailed, err
 		return outcome, err
+	}
+	selector := identity
+	if identity.Target != "" {
+		var err error
+		selector, opts, err = selectTargetHost(ctx, selector, opts)
+		if err != nil {
+			return failed(err)
+		}
+	}
+	resolved, err := d.Resolve(ctx, selector, identity.Target)
+	if err != nil {
+		return failed(err)
+	}
+	outcome.Replacement = resolved.Name
+	var dir string
+	if requireInstalled {
+		dir, err = toolchain.FindInstalled(identity)
+		if err != nil {
+			return failed(err)
+		}
+	}
+	updated, err := installGroup(ctx, d, identity, resolved, InstallRequest{Toolchain: identity.String()}, opts)
+	if err != nil {
+		return failed(err)
 	}
 	if updated {
 		outcome.Status = UpdateApplied
 	}
+	if dir == "" {
+		dir, err = toolchain.FindInstalled(identity)
+		if err != nil {
+			return failed(err)
+		}
+	}
 	record, err := toolchain.ReadInstallation(dir)
 	if err != nil {
-		return outcome, err
+		return failed(err)
 	}
 	outcome.Replacement = record.Release
 	return outcome, nil
-}
-
-func componentState(dir string) (string, error) {
-	var state string
-	entries, err := os.ReadDir(dir)
-	if errors.Is(err, os.ErrNotExist) {
-		return "", nil
-	}
-	if err != nil {
-		return "", err
-	}
-	for _, entry := range entries {
-		if entry.IsDir() {
-			continue
-		}
-		data, err := os.ReadFile(filepath.Join(dir, entry.Name()))
-		if err != nil {
-			return "", err
-		}
-		state += entry.Name() + "\x00" + string(data) + "\x00"
-	}
-	return state, nil
-}
-
-func installationComponentState(dir string) (string, error) {
-	state, err := componentState(filepath.Join(dir, component.MetaDir))
-	if err != nil {
-		return "", err
-	}
-	roots, err := component.RootsFor(filepath.Base(dir))
-	if err != nil {
-		return "", err
-	}
-	intents, err := component.InstalledIntents(roots)
-	if err != nil {
-		return "", err
-	}
-	for _, intent := range intents {
-		state += string(intent.Name) + "\x00" + intent.Source + "\x00"
-	}
-	return state, nil
 }

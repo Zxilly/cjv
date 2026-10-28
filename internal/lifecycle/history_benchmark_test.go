@@ -52,7 +52,7 @@ func BenchmarkActiveLookupDuringHistorySnapshot(b *testing.B) {
 			must(lock.Recover())
 			must(lock.MigrateLegacy())
 			must(lock.Close())
-			members := []*groupMember{{identity: "sts", before: &record}}
+			members := []*groupMember{{identity: "sts", installed: installationSnapshot{record: &record}}}
 			var waited time.Duration
 			b.SetBytes(int64(len(payload) * 4))
 			b.ResetTimer()

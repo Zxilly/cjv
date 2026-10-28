@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"os"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -19,25 +18,32 @@ import (
 	"github.com/Zxilly/cjv/internal/toolchain"
 )
 
+// groupMember is a compatibility plan against one immutable installed snapshot.
+// Scratch paths belong to preparedGroupMember and never enter read-only plans.
 type groupMember struct {
-	identity        string
-	release         ResolvedToolchain
-	before          *toolchain.Installation
-	state           string
-	intents         []component.Intent
-	original        []component.Intent
-	prepared        component.Roots
-	addedComponents bool
-	drop            bool
-	reinstall       bool
+	identity  string
+	installed installationSnapshot
+	release   ResolvedToolchain
+	intents   []component.Intent
+	drop      bool
+	reinstall bool
+}
+
+type preparedGroupMember struct {
+	*groupMember
+	prepared component.Roots
+}
+
+func (m *groupMember) componentsChanged() bool {
+	return !slices.Equal(m.installed.intents, m.intents)
 }
 
 // canReuseSDK must agree during component selection and preparation: a fresh
 // SDK also needs fresh copies of its published components.
 func (m *groupMember) canReuseSDK() bool {
-	return !m.reinstall && m.before != nil && m.before.Release == m.release.Name &&
-		(m.before.Tuple == "" || m.before.Tuple == m.release.Tuple) &&
-		(m.release.URL == "" || strings.EqualFold(m.before.SHA256, m.release.SHA256))
+	return !m.reinstall && m.installed.record != nil && m.installed.record.Release == m.release.Name &&
+		(m.installed.record.Tuple == "" || m.installed.record.Tuple == m.release.Tuple) &&
+		(m.release.URL == "" || strings.EqualFold(m.installed.record.SHA256, m.release.SHA256))
 }
 
 // installGroup prepares a host and all its tracking targets before changing any
@@ -79,45 +85,33 @@ func installGroup(ctx context.Context, d *installationDistribution, name toolcha
 	}
 	var members []*groupMember
 	snapshot := func(memberIdentity string) (*groupMember, error) {
-		roots, err := component.RootsFor(memberIdentity)
+		m, err := snapshotGroupMember(memberIdentity)
 		if err != nil {
 			return nil, err
 		}
-		m := &groupMember{identity: memberIdentity, reinstall: req.Reinstall}
-		record, err := toolchain.ReadInstallation(roots.TcDir)
-		if errors.Is(err, os.ErrNotExist) {
-			if _, existed := d.installed[memberIdentity]; existed {
+		m.reinstall = req.Reinstall
+		if old, existed := d.installed[memberIdentity]; existed {
+			if m.installed.record == nil {
 				return nil, fmt.Errorf("toolchain %s was removed during installation; retry", memberIdentity)
 			}
-			return m, nil
+			if old != *m.installed.record {
+				return nil, fmt.Errorf("toolchain %s changed during installation; retry", memberIdentity)
+			}
 		}
-		if err != nil {
-			return nil, err
-		}
-		if old, existed := d.installed[memberIdentity]; existed && old != record {
-			return nil, fmt.Errorf("toolchain %s changed during installation; retry", memberIdentity)
-		}
-		m.before = &record
-		m.state, err = installationComponentState(roots.TcDir)
-		if err != nil {
-			return nil, err
-		}
-		m.intents, err = component.InstalledIntents(roots)
-		m.original = slices.Clone(m.intents)
-		return m, err
+		return m, m.installed.captureMetadata()
 	}
 	host, err := snapshot(identity)
 	if err != nil {
 		_ = lock.Close()
 		return false, err
 	}
-	if !req.Reinstall && (req.NoUpdate || !tracking) && host.before != nil {
-		release, err := toolchain.ParseToolchainName(host.before.Release)
+	if !req.Reinstall && (req.NoUpdate || !tracking) && host.installed.record != nil {
+		release, err := toolchain.ParseToolchainName(host.installed.record.Release)
 		if err != nil {
 			_ = lock.Close()
 			return false, err
 		}
-		rt.Name, rt.Tuple, rt.SHA256, rt.URL = release.String(), host.before.Tuple, host.before.SHA256, ""
+		rt.Name, rt.Tuple, rt.SHA256, rt.URL = release.String(), host.installed.record.Tuple, host.installed.record.SHA256, ""
 		if rt.Tuple == "" {
 			rt.Tuple = release.Target
 			if rt.Tuple == "" {
@@ -174,12 +168,11 @@ func installGroup(ctx context.Context, d *installationDistribution, name toolcha
 		for _, c := range requested {
 			if !slices.ContainsFunc(m.intents, func(intent component.Intent) bool { return intent.Name == c }) {
 				m.intents = append(m.intents, component.Intent{Name: c})
-				m.addedComponents = true
 			}
 		}
 	}
 	selection := name
-	if req.Reinstall && host.before != nil {
+	if req.Reinstall && host.installed.record != nil {
 		// Repair selects the recorded artifact even when a newer compatible
 		// nightly exists. Keep tracking identities while pinning this solve.
 		concrete, err := toolchain.ParseToolchainName(host.release.Name)
@@ -195,22 +188,23 @@ func installGroup(ctx context.Context, d *installationDistribution, name toolcha
 	if err != nil {
 		return false, err
 	}
-	var changed []*groupMember
-	for i, m := range members {
+	var changed []*preparedGroupMember
+	for i, member := range members {
+		m := &preparedGroupMember{groupMember: member}
 		if m.drop {
-			if m.before != nil {
+			if m.installed.record != nil {
 				changed = append(changed, m)
 			}
 			continue
 		}
 		reuse := m.canReuseSDK()
 		if reuse {
-			if !m.addedComponents {
+			if !m.componentsChanged() {
 				continue
 			}
 		}
 		base := filepath.Join(stage, fmt.Sprint(i))
-		if m.before != nil && m.before.Release != m.release.Name {
+		if m.installed.record != nil && m.installed.record.Release != m.release.Name {
 			opts.emit(progress.Event{Kind: progress.UpdateFound, Toolchain: m.identity, Replacement: m.release.Name})
 		}
 		m.prepared = component.Roots{TcDir: filepath.Join(base, "sdk"), DocsDir: filepath.Join(base, "docs"), StdxDir: filepath.Join(base, "stdx")}
@@ -232,7 +226,7 @@ func installGroup(ctx context.Context, d *installationDistribution, name toolcha
 		}
 		concrete, _ := toolchain.ParseToolchainName(m.release.Name)
 		for _, intent := range m.intents {
-			if reuse && slices.ContainsFunc(m.original, func(old component.Intent) bool { return old == intent }) {
+			if reuse && slices.ContainsFunc(m.installed.intents, func(old component.Intent) bool { return old == intent }) {
 				continue
 			}
 			if intent.Source != "" {
@@ -265,16 +259,7 @@ func installGroup(ctx context.Context, d *installationDistribution, name toolcha
 		return false, fmt.Errorf("toolchain %s targets changed during installation; retry", identity)
 	}
 	for _, m := range members {
-		roots, err := component.RootsFor(m.identity)
-		if err != nil {
-			return false, err
-		}
-		current, err := toolchain.ReadInstallation(roots.TcDir)
-		if m.before == nil {
-			if !errors.Is(err, os.ErrNotExist) {
-				return false, fmt.Errorf("toolchain %s changed during installation; retry", m.identity)
-			}
-		} else if state, stateErr := installationComponentState(roots.TcDir); err != nil || current != *m.before || stateErr != nil || state != m.state {
+		if !m.installed.matches() {
 			return false, fmt.Errorf("toolchain %s changed during installation; retry", m.identity)
 		}
 	}
@@ -315,8 +300,8 @@ func installGroup(ctx context.Context, d *installationDistribution, name toolcha
 		}
 		publications = append(publications, publication)
 	}
-	if trackingHost && !req.Reinstall && host.before != nil && slices.ContainsFunc(changed, func(m *groupMember) bool {
-		return m.before != nil && (m.drop || !m.canReuseSDK())
+	if trackingHost && !req.Reinstall && host.installed.record != nil && slices.ContainsFunc(changed, func(m *preparedGroupMember) bool {
+		return m.installed.record != nil && (m.drop || !m.canReuseSDK())
 	}) {
 		if err := lock.WithStableReads(ctx, func() error {
 			var err error
@@ -405,7 +390,7 @@ func resolveGroupPlan(ctx context.Context, d *Distribution, name toolchain.Toolc
 	}
 	var unavailable error
 	for _, version := range versions {
-		if before := members[0].before; before != nil && !opts.AllowDowngrade {
+		if before := members[0].installed.record; before != nil && !opts.AllowDowngrade {
 			old, _ := toolchain.ParseToolchainName(before.Release)
 			if versionLess(version, old.Version) {
 				break
@@ -423,13 +408,13 @@ func resolveGroupPlan(ctx context.Context, d *Distribution, name toolchain.Toolc
 		for i, m := range members {
 			if i > 0 {
 				child, _ := toolchain.ParseToolchainName(m.identity)
-				if host.URL == "" && m.before != nil {
-					previous, parseErr := toolchain.ParseToolchainName(m.before.Release)
+				if host.URL == "" && m.installed.record != nil {
+					previous, parseErr := toolchain.ParseToolchainName(m.installed.record.Release)
 					if parseErr != nil {
 						return parseErr
 					}
 					if previous.Version == candidate.Version {
-						m.release = ResolvedToolchain{Name: m.before.Release, Tuple: child.Target, SHA256: m.before.SHA256}
+						m.release = ResolvedToolchain{Name: m.installed.record.Release, Tuple: child.Target, SHA256: m.installed.record.SHA256}
 						err = nil
 					} else {
 						m.release, err = d.Resolve(ctx, candidate, child.Target)
@@ -449,7 +434,7 @@ func resolveGroupPlan(ctx context.Context, d *Distribution, name toolchain.Toolc
 			}
 			var selected []component.Intent
 			for _, intent := range m.intents {
-				preserved := m.canReuseSDK() && slices.ContainsFunc(m.original, func(old component.Intent) bool { return old == intent })
+				preserved := m.canReuseSDK() && slices.ContainsFunc(m.installed.intents, func(old component.Intent) bool { return old == intent })
 				if intent.Source == "" && !preserved {
 					platform := ""
 					if intent.Name == component.Stdx {
@@ -479,7 +464,6 @@ func resolveGroupPlan(ctx context.Context, d *Distribution, name toolchain.Toolc
 			}
 			if opts.AllowMissing {
 				m.intents = selected
-				m.addedComponents = !slices.Equal(m.original, selected)
 			}
 		}
 		if unavailable == nil {

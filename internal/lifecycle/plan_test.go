@@ -7,6 +7,8 @@ import (
 
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/config/configtest"
+	"github.com/Zxilly/cjv/internal/target"
+	"github.com/Zxilly/cjv/internal/toolchain"
 	"github.com/stretchr/testify/require"
 )
 
@@ -56,4 +58,29 @@ func TestUpdatePlanDoesNotCreateOrRecoverHome(t *testing.T) {
 	_, err = PlanUpdates(t.Context(), nil, Options{})
 	require.NoError(t, err)
 	require.DirExists(t, filepath.Join(home, config.ToolchainsSubdir, "sts.staging"))
+}
+
+func TestPlanAndUpdateGroupLegacyHostWithoutTupleOnce(t *testing.T) {
+	home := updateHome(t)
+	selectRelease(t, "1.0.0", "ohos")
+	require.NoError(t, Install(t.Context(), InstallRequest{Toolchain: "sts", Targets: []string{"ohos"}}, Options{}))
+	hostDir := filepath.Join(home, "toolchains", "sts")
+	record, err := toolchain.ReadInstallation(hostDir)
+	require.NoError(t, err)
+	record.Tuple = ""
+	require.NoError(t, toolchain.WriteInstallation(hostDir, record))
+	selectRelease(t, "2.0.0", "ohos")
+	plan, err := PlanUpdates(t.Context(), nil, Options{})
+	require.NoError(t, err)
+	require.Len(t, plan.Toolchains, 1)
+	require.Len(t, plan.Toolchains[0].Members, 2)
+	report, err := UpdateAll(t.Context(), Options{})
+	require.NoError(t, err)
+	require.Len(t, report.Outcomes, 1, "the target is already published by its host group")
+	require.Equal(t, "sts", report.Outcomes[0].Name)
+	require.Equal(t, UpdateApplied, report.Outcomes[0].Status)
+	tuple, err := target.CurrentTargetTuple("", "ohos")
+	require.NoError(t, err)
+	require.Equal(t, "sts-2.0.0", readRelease(t, home, "sts").Release)
+	require.Equal(t, "sts-2.0.0-"+tuple, readRelease(t, home, "sts-"+tuple).Release)
 }

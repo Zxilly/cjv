@@ -100,7 +100,7 @@ func TestHistoryRollbackDoesNotSilentlySkipNewestDamagedSnapshot(t *testing.T) {
 	}
 	old := toolchain.Installation{Release: "sts-1.0.0", Tuple: tuple}
 	require.NoError(t, toolchain.WriteInstallation(sdk, old))
-	snapshot, err := prepareHistorySnapshot(t.Context(), home, "sts", tuple, []*groupMember{{identity: "sts", before: &old}})
+	snapshot, err := prepareHistorySnapshot(t.Context(), home, "sts", tuple, []*groupMember{{identity: "sts", installed: installationSnapshot{record: &old}}})
 	require.NoError(t, err)
 	require.NoError(t, os.Rename(snapshot.staging, snapshot.path))
 	current := toolchain.Installation{Release: "sts-2.0.0", Tuple: tuple}

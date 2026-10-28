@@ -57,7 +57,7 @@ func prepareHistorySnapshot(ctx context.Context, home, owner, hostTuple string, 
 		}
 	}()
 	for _, member := range members {
-		if member.before == nil {
+		if member.installed.record == nil {
 			continue
 		}
 		current, err := component.RootsFor(member.identity)
@@ -66,7 +66,7 @@ func prepareHistorySnapshot(ctx context.Context, home, owner, hostTuple string, 
 		}
 		stored := historyRoots(snapshot.staging, member.identity)
 		materialize := make(map[string]bool)
-		for _, intent := range member.original {
+		for _, intent := range member.installed.intents {
 			if intent.Source == "" {
 				continue
 			}
@@ -90,7 +90,7 @@ func prepareHistorySnapshot(ctx context.Context, home, owner, hostTuple string, 
 		}
 		// Linked component roots are now owned copies. Expand their manifests
 		// so later component removal removes files, not a nonempty directory.
-		for _, intent := range member.original {
+		for _, intent := range member.installed.intents {
 			if intent.Source == "" {
 				continue
 			}
@@ -120,7 +120,7 @@ func prepareHistorySnapshot(ctx context.Context, home, owner, hostTuple string, 
 				return nil, err
 			}
 		}
-		record := member.before
+		record := member.installed.record
 		entry := HistoryMember{Name: member.identity, Release: record.Release, Tuple: record.Tuple, SHA256: record.SHA256, Roots: []HistoryRoot{}}
 		for _, pair := range historyRootPaths(stored) {
 			if _, err := os.Lstat(pair[1]); errors.Is(err, os.ErrNotExist) {
