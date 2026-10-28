@@ -122,6 +122,38 @@ test('installation content stays visible while font requests are pending', async
   }
 })
 
+test('normal animations settle after tab, mirror, and language changes', async () => {
+  const page = await openPage({ reducedMotion: 'no-preference' })
+  const errors = []
+  page.on('pageerror', error => errors.push(error.message))
+  try {
+    await page.goto(origin, { waitUntil: 'networkidle' })
+    const otherPlatforms = page.getByRole('button', { name: 'Show install methods for other platforms', exact: true })
+    if (await otherPlatforms.count()) await otherPlatforms.click()
+    for (const [name, panel] of [['Download', 'download'], ['Source', 'source'], ['Command', 'command']]) {
+      await page.getByRole('tab', { name, exact: true }).click()
+      await page.waitForFunction(expected => {
+        const panels = document.querySelectorAll('[role="tabpanel"]')
+        if (panels.length !== 1 || panels[0].id !== `install-panel-${expected}`) return false
+        const transform = getComputedStyle(panels[0]).transform
+        return transform === 'none' || Math.abs(new DOMMatrixReadOnly(transform).m41) < 0.1
+      }, panel)
+    }
+    await page.getByRole('switch').click()
+    await page.getByText('GitCode · mirror', { exact: true }).waitFor()
+    for (const [name, lang] of [['中文', 'zh-CN'], ['English', 'en']]) {
+      await page.getByRole('button', { name, exact: true }).click()
+      await page.waitForFunction(expected => {
+        const content = document.querySelector('#app > div')
+        return document.documentElement.lang === expected && content && getComputedStyle(content).opacity === '1'
+      }, lang)
+    }
+    assert.deepEqual(errors, [])
+  } finally {
+    await page.close()
+  }
+})
+
 test('built homepage fits desktop and narrow mobile viewports', async () => {
   const page = await openPage()
   try {
