@@ -29,8 +29,14 @@ class ScopeTest(unittest.TestCase):
             self.assertIn("installers", scope.scopes_for([path]))
 
     def test_ci_changes_keep_full_coverage(self):
-        self.assertEqual(scope.scopes_for([".github/workflows/ci.yml"]), set(scope.SCOPES))
-        self.assertEqual(scope.scopes_for(["scripts/ci-scope.py"]), set(scope.SCOPES))
+        for path in [
+            ".github/workflows/ci.yml",
+            ".github/actions/setup-web/action.yml",
+            ".github/actions/setup-playwright/action.yml",
+            "scripts/ci-scope.py",
+        ]:
+            with self.subTest(path=path):
+                self.assertEqual(scope.scopes_for([path]), set(scope.SCOPES))
 
     def run_event(self, name, event, git_result=None):
         with tempfile.TemporaryDirectory() as directory:

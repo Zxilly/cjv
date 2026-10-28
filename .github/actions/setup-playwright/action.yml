@@ -1,0 +1,38 @@
+name: Set up Playwright browser
+description: Cache and install a browser after web dependencies have been installed
+inputs:
+  browser:
+    description: Browser to install (chromium, firefox, or webkit)
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: Resolve Playwright version
+      id: version
+      working-directory: web
+      shell: bash
+      run: |
+        version=$(node -p "require('playwright/package.json').version")
+        echo "version=$version" >> "$GITHUB_OUTPUT"
+    - name: Cache Playwright browser
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: |
+          ~/.cache/ms-playwright
+          ~/Library/Caches/ms-playwright
+          ~/AppData/Local/ms-playwright
+        # Share browsers across jobs on the same OS and CPU architecture.
+        key: playwright-${{ runner.os }}-${{ runner.arch }}-${{ inputs.browser }}-${{ steps.version.outputs.version }}
+    - name: Install Playwright browser
+      working-directory: web
+      shell: bash
+      env:
+        CJV_PLAYWRIGHT_BROWSER: ${{ inputs.browser }}
+        DEBUG: pw:install
+        PLAYWRIGHT_SKIP_BROWSER_GC: '1'
+      run: |
+        if [[ "$RUNNER_OS" == Linux ]]; then
+          pnpm exec playwright install --with-deps "$CJV_PLAYWRIGHT_BROWSER"
+        else
+          pnpm exec playwright install "$CJV_PLAYWRIGHT_BROWSER"
+        fi
