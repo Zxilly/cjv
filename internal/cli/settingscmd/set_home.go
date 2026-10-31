@@ -21,7 +21,7 @@ func newSetHomeCommand() *cobra.Command {
 			if val != "" {
 				abs, err := filepath.Abs(val)
 				if err != nil {
-					return fmt.Errorf("invalid path %q: %w", val, err)
+					return fmt.Errorf(i18n.T("SetInvalidPath", nil), val, err)
 				}
 				stored = abs
 			}

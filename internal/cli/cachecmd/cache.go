@@ -2,12 +2,14 @@
 package cachecmd
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"time"
 
 	"github.com/Zxilly/cjv/internal/cli/clictx"
 	"github.com/Zxilly/cjv/internal/dist"
+	"github.com/Zxilly/cjv/internal/i18n"
 	"github.com/spf13/cobra"
 )
 
@@ -24,12 +26,12 @@ func (r result) Text() string {
 		return r.Path
 	}
 	if r.Removed != nil {
-		return fmt.Sprintf("Removed %d cache entries", *r.Removed)
+		return fmt.Sprintf(i18n.T("CacheRemoved", nil), *r.Removed)
 	}
 	var b strings.Builder
 	fmt.Fprintln(&b, r.Path)
 	for _, e := range r.Entries {
-		fmt.Fprintf(&b, "%s  %s  %d bytes", e.Key, e.Kind, e.Size)
+		fmt.Fprintf(&b, i18n.T("CacheEntry", nil), e.Key, e.Kind, e.Size)
 		if e.Problem != "" {
 			fmt.Fprintf(&b, "  (%s)", e.Problem)
 		}
@@ -39,10 +41,14 @@ func (r result) Text() string {
 }
 
 func Register(root *cobra.Command, shared *clictx.Context) {
-	cache := &cobra.Command{Use: "cache", Short: "Inspect or remove reusable SDK downloads and metadata"}
+	cache := &cobra.Command{Use: "cache", Short: i18n.T("CacheCmdShort", nil)}
+	shortIDs := map[string]string{
+		"dir": "CacheDirShort", "list": "CacheListShort",
+		"clean": "CacheCleanShort", "prune": "CachePruneShort",
+	}
 	for _, action := range []string{"dir", "list", "clean", "prune"} {
 		var age time.Duration
-		cmd := &cobra.Command{Use: action, Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, _ []string) error {
+		cmd := &cobra.Command{Use: action, Short: i18n.T(shortIDs[action], nil), Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, _ []string) error {
 			directory, err := dist.CacheDirectory()
 			if err != nil {
 				return err
@@ -55,7 +61,7 @@ func Register(root *cobra.Command, shared *clictx.Context) {
 				var cutoff time.Time
 				if action == "prune" {
 					if age < 0 {
-						return fmt.Errorf("max-age must not be negative")
+						return errors.New(i18n.T("CacheInvalidMaxAge", nil))
 					}
 					cutoff = time.Now().Add(-age)
 				}
@@ -69,7 +75,7 @@ func Register(root *cobra.Command, shared *clictx.Context) {
 			return shared.Output.RenderTo(cmd.OutOrStdout(), r)
 		}}
 		if action == "prune" {
-			cmd.Flags().DurationVar(&age, "max-age", 30*24*time.Hour, "Remove entries older than this duration")
+			cmd.Flags().DurationVar(&age, "max-age", 30*24*time.Hour, i18n.T("CacheFlagMaxAge", nil))
 		}
 		cache.AddCommand(cmd)
 	}

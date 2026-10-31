@@ -18,6 +18,7 @@ import (
 	"github.com/Zxilly/cjv/internal/component"
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/config/configtest"
+	"github.com/Zxilly/cjv/internal/i18n"
 	"github.com/Zxilly/cjv/internal/sdktools"
 	"github.com/Zxilly/cjv/internal/testutil"
 	"github.com/Zxilly/cjv/internal/toolchain"
@@ -162,6 +163,8 @@ func TestPinCheckRejectsUnpinnedOrInvalidWithoutWrites(t *testing.T) {
 }
 
 func TestPinRejectsCustomAndPreservesInvalidFile(t *testing.T) {
+	i18n.Init("en")
+	t.Cleanup(func() { i18n.Init("en") })
 	home, project := isolateProject(t)
 	installedTracking(t, home)
 	path := filepath.Join(project, config.ToolchainFileName)
@@ -214,6 +217,8 @@ func TestDoctorIsReadOnlyAndReportsOneJSONDocument(t *testing.T) {
 }
 
 func TestDoctorDiagnosesBrokenRecordToolsAndShadowedProxy(t *testing.T) {
+	i18n.Init("en")
+	t.Cleanup(func() { i18n.Init("en") })
 	home, project, dir := setupHealthyDoctor(t)
 	writeFile(t, filepath.Join(project, config.ToolchainFileName), "[toolchain]\nchannel = 'lts'\ntargets = ['ohos']\n")
 	writeFile(t, filepath.Join(dir, ".cjv", "toolchain.toml"), "release = 'sts-1.0.5'\n")
@@ -258,6 +263,8 @@ func TestDoctorDiagnosesBrokenRecordToolsAndShadowedProxy(t *testing.T) {
 }
 
 func TestDoctorBrokenRecordRequiresTrustedBackup(t *testing.T) {
+	i18n.Init("en")
+	t.Cleanup(func() { i18n.Init("en") })
 	for _, test := range []struct {
 		name, contents string
 	}{

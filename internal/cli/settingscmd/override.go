@@ -72,7 +72,7 @@ func newOverrideSetCommand() *cobra.Command {
 			return err
 		},
 	}
-	cmd.Flags().StringVar(&path, "path", "", "Set override for specified directory instead of current directory")
+	cmd.Flags().StringVar(&path, "path", "", i18n.T("OverrideFlagPath", nil))
 	return cmd
 }
 
@@ -116,8 +116,8 @@ func newOverrideUnsetCommand() *cobra.Command {
 			return err
 		},
 	}
-	cmd.Flags().StringVar(&path, "path", "", "Unset override for specified directory instead of current directory")
-	cmd.Flags().BoolVar(&nonexistent, "nonexistent", false, "Remove all overrides for directories that no longer exist")
+	cmd.Flags().StringVar(&path, "path", "", i18n.T("OverrideUnsetFlagPath", nil))
+	cmd.Flags().BoolVar(&nonexistent, "nonexistent", false, i18n.T("OverrideFlagNonexistent", nil))
 	return cmd
 }
 

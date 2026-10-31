@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/Zxilly/cjv/internal/i18n"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -30,6 +31,8 @@ func TestRemoveHomeDirDeletesHomeWhenManagedExeIsNotCurrentProcess(t *testing.T)
 }
 
 func TestRemoveHomeDirRejectsDangerousAndMissingManagedPath(t *testing.T) {
+	i18n.Init("en")
+	t.Cleanup(func() { i18n.Init("en") })
 	driveRoot := filepath.VolumeName(t.TempDir()) + `\`
 	require.Error(t, removeHomeDir(driveRoot, filepath.Join(driveRoot, "bin", "cjv.exe")))
 

@@ -27,7 +27,7 @@ func newSetAutoSelfUpdateCommand() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			val := args[0]
 			if !config.ValidAutoSelfUpdate(val) {
-				return fmt.Errorf("invalid value %q: must be enable, disable, or check", val)
+				return fmt.Errorf(i18n.T("SetInvalidAutoUpdate", nil), val)
 			}
 			return updateSetting(cmd.OutOrStdout(), "auto-self-update", val, config.SettingsUpdate{AutoSelfUpdate: &val})
 		},
@@ -43,7 +43,7 @@ func newSetAutoInstallCommand() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			val := args[0]
 			if val != "true" && val != "false" {
-				return fmt.Errorf("invalid value %q: must be true or false", val)
+				return fmt.Errorf(i18n.T("SetInvalidBool", nil), val)
 			}
 			newVal := val == "true"
 			return updateSetting(cmd.OutOrStdout(), "auto-install", val, config.SettingsUpdate{AutoInstall: &newVal})
@@ -59,7 +59,7 @@ func newSetDefaultHostCommand() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			val := args[0]
 			if _, err := sdktarget.CurrentHostTuple(val); err != nil {
-				return fmt.Errorf("invalid default-host %q: %w", val, err)
+				return fmt.Errorf(i18n.T("SetInvalidHost", nil), val, err)
 			}
 			return updateSetting(cmd.OutOrStdout(), "default-host", val, config.SettingsUpdate{DefaultHost: &val})
 		},

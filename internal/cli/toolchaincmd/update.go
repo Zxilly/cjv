@@ -172,9 +172,9 @@ func (c *update) command() *cobra.Command {
 		RunE:  c.run,
 	}
 	cmd.Flags().BoolVar(&c.noSelfUpdate, "no-self-update", false, i18n.T("UpdateFlagNoSelfUpdate", nil))
-	cmd.Flags().BoolVar(&c.dryRun, "dry-run", false, "Show the compatible update plan without changing installed files")
-	cmd.Flags().BoolVar(&c.force, "force", false, "Update even when optional components or targets are unavailable")
-	cmd.Flags().BoolVar(&c.allowDowngrade, "allow-downgrade", false, "Allow an older compatible nightly")
+	cmd.Flags().BoolVar(&c.dryRun, "dry-run", false, i18n.T("UpdateFlagDryRun", nil))
+	cmd.Flags().BoolVar(&c.force, "force", false, i18n.T("UpdateFlagForce", nil))
+	cmd.Flags().BoolVar(&c.allowDowngrade, "allow-downgrade", false, i18n.T("UpdateFlagAllowDowngrade", nil))
 	return cmd
 }
 
@@ -193,7 +193,7 @@ func (r updatePlanResult) Text() string {
 		if plan.Selected != "" {
 			fmt.Fprintf(&b, " (%s", plan.Selected)
 			if plan.Latest != "" && plan.Latest != plan.Selected {
-				fmt.Fprintf(&b, "; latest %s", plan.Latest)
+				fmt.Fprintf(&b, i18n.T("UpdatePlanLatest", nil), plan.Latest)
 			}
 			b.WriteString(")")
 		}

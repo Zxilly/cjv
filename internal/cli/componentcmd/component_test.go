@@ -11,6 +11,7 @@ import (
 	componentlib "github.com/Zxilly/cjv/internal/component"
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/config/configtest"
+	"github.com/Zxilly/cjv/internal/i18n"
 	"github.com/Zxilly/cjv/internal/lifecycle"
 	"github.com/Zxilly/cjv/internal/progress"
 	"github.com/Zxilly/cjv/internal/testutil"
@@ -264,6 +265,8 @@ func TestComponentProgressUsesCommandWriter(t *testing.T) {
 }
 
 func TestAbsoluteSDKComponentsCannotMutateNamesake(t *testing.T) {
+	i18n.Init("en")
+	t.Cleanup(func() { i18n.Init("en") })
 	configtest.Isolate(t, t.TempDir())
 	external := filepath.Join(t.TempDir(), "outside-sdk")
 	require.NoError(t, os.MkdirAll(external, 0o755))

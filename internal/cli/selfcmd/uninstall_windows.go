@@ -13,6 +13,7 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/Zxilly/cjv/internal/i18n"
 	"golang.org/x/sys/windows"
 )
 
@@ -37,13 +38,13 @@ func removeHomeDir(home, managedExe string) error {
 	cleaned := filepath.Clean(home)
 	if cleaned == "/" || cleaned == "\\" || cleaned == "." ||
 		(len(cleaned) == 3 && cleaned[1] == ':' && (cleaned[2] == '/' || cleaned[2] == '\\')) {
-		return fmt.Errorf("refusing to remove dangerous path: %s", home)
+		return fmt.Errorf(i18n.T("SelfUnsafePath", nil), home)
 	}
 	if userHome, err := os.UserHomeDir(); err == nil && filepath.Clean(userHome) == cleaned {
-		return fmt.Errorf("refusing to remove dangerous path: %s", home)
+		return fmt.Errorf(i18n.T("SelfUnsafePath", nil), home)
 	}
 	if _, err := os.Stat(managedExe); err != nil {
-		return fmt.Errorf("path %s does not appear to be a cjv home directory (managed binary not found)", home)
+		return fmt.Errorf(i18n.T("SelfNotHome", nil), home)
 	}
 
 	currentExe, err := currentExecutablePath()
@@ -52,14 +53,14 @@ func removeHomeDir(home, managedExe string) error {
 	}
 	if !strings.EqualFold(filepath.Clean(currentExe), filepath.Clean(managedExe)) {
 		if err := os.RemoveAll(home); err != nil {
-			return fmt.Errorf("failed to remove %s: %w", home, err)
+			return fmt.Errorf(i18n.T("SelfRemoveFailed", nil), home, err)
 		}
 		return nil
 	}
 
 	// Remove symlinks first — Remove-Item -Recurse can fail on them.
 	if err := removeSymlinks(filepath.Join(home, "bin")); err != nil {
-		return fmt.Errorf("failed to remove symlinks in bin directory: %w", err)
+		return fmt.Errorf(i18n.T("SelfSymlinkRemovalFailed", nil), err)
 	}
 
 	b := make([]byte, 4)
@@ -70,14 +71,14 @@ func removeHomeDir(home, managedExe string) error {
 	stem := strings.TrimSuffix(filepath.Base(managedExe), ext)
 	gcName := filepath.Join(filepath.Dir(managedExe), stem+"-gc-"+hex.EncodeToString(b)+ext)
 	if err := os.Rename(managedExe, gcName); err != nil {
-		return fmt.Errorf("failed to prepare managed binary for removal: %w", err)
+		return fmt.Errorf(i18n.T("SelfPrepareRemovalFailed", nil), err)
 	}
 
 	if err := startDetachedUninstallCleanup(home); err != nil {
 		if restoreErr := os.Rename(gcName, managedExe); restoreErr != nil {
-			return fmt.Errorf("failed to start detached uninstall cleanup: %w; additionally failed to restore managed binary: %w", err, restoreErr)
+			return fmt.Errorf(i18n.T("SelfCleanupRestoreFailed", nil), err, restoreErr)
 		}
-		return fmt.Errorf("failed to start detached uninstall cleanup: %w", err)
+		return fmt.Errorf(i18n.T("SelfCleanupFailed", nil), err)
 	}
 
 	return nil

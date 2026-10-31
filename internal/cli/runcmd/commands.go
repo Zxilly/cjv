@@ -53,6 +53,6 @@ func (c *commands) whichCommand() *cobra.Command {
 		Args:  cobra.MaximumNArgs(1),
 		RunE:  c.runWhich,
 	}
-	cmd.Flags().StringVar(&c.whichToolchain, "toolchain", "", "Select the toolchain")
+	cmd.Flags().StringVar(&c.whichToolchain, "toolchain", "", i18n.T("WhichFlagToolchain", nil))
 	return cmd
 }

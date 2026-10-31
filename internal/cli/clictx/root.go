@@ -2,7 +2,7 @@ package clictx
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -20,11 +20,11 @@ import (
 func (c *Context) ConfigureRoot(root *cobra.Command) {
 	c.Root = root
 	root.PersistentFlags().BoolVar(&c.Output.JSON, "json", false, i18n.T("RootFlagJSON", nil))
-	root.PersistentFlags().BoolVarP(&c.Quiet, "quiet", "q", false, "Disable progress output")
-	root.PersistentFlags().BoolVar(&c.Verbose, "verbose", false, "Enable debug logging")
-	root.PersistentFlags().BoolVar(&c.Offline, "offline", false, "Use only local files and cached downloads; disable network access")
-	root.PersistentFlags().StringVar(&c.ConfigFile, "config", "", "Use the specified user settings file (or CJV_CONFIG_FILE)")
-	root.PersistentFlags().BoolVar(&c.NoAutoInstall, "no-auto-install", false, "Disable automatic installation for this invocation")
+	root.PersistentFlags().BoolVarP(&c.Quiet, "quiet", "q", false, i18n.T("RootFlagQuiet", nil))
+	root.PersistentFlags().BoolVar(&c.Verbose, "verbose", false, i18n.T("RootFlagVerbose", nil))
+	root.PersistentFlags().BoolVar(&c.Offline, "offline", false, i18n.T("RootFlagOffline", nil))
+	root.PersistentFlags().StringVar(&c.ConfigFile, "config", "", i18n.T("RootFlagConfig", nil))
+	root.PersistentFlags().BoolVar(&c.NoAutoInstall, "no-auto-install", false, i18n.T("RootFlagNoAutoInstall", nil))
 	root.MarkFlagsMutuallyExclusive("quiet", "verbose")
 	root.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
 		// run/exec parse a global prefix themselves and must finish parsing
@@ -40,7 +40,7 @@ func (c *Context) ConfigureRoot(root *cobra.Command) {
 // scoped environment carries these policies to nested proxy invocations.
 func (c *Context) ApplyInvocation(cmd *cobra.Command) error {
 	if c.Quiet && c.Verbose {
-		return fmt.Errorf("--quiet and --verbose cannot be used together")
+		return errors.New(i18n.T("RootConflictingOutputFlags", nil))
 	}
 	c.Output.Quiet = c.Quiet
 	if os.Getenv(config.EnvLog) == "" && c.Verbose {
@@ -55,7 +55,7 @@ func (c *Context) ApplyInvocation(cmd *cobra.Command) error {
 			return err
 		}
 	} else if flag := c.Root.PersistentFlags().Lookup("config"); flag != nil && flag.Changed {
-		return fmt.Errorf("--config requires a non-empty path")
+		return errors.New(i18n.T("RootConfigEmpty", nil))
 	}
 	if c.NoAutoInstall {
 		if err := c.setEnvironment(config.EnvAutoInstall, "0"); err != nil {
@@ -110,10 +110,10 @@ func (c *Context) Execute(args []string) error {
 	for len(args) > 0 {
 		if selector, rest, present := toolchain.SplitPlusSelector(args); present {
 			if c.Selector != "" {
-				return c.Output.RenderErrorTo(c.Root.OutOrStdout(), c.Root.ErrOrStderr(), fmt.Errorf("only one +toolchain selector is allowed"))
+				return c.Output.RenderErrorTo(c.Root.OutOrStdout(), c.Root.ErrOrStderr(), errors.New(i18n.T("RootMultipleSelectors", nil)))
 			}
 			if selector == "" {
-				return c.Output.RenderErrorTo(c.Root.OutOrStdout(), c.Root.ErrOrStderr(), fmt.Errorf("toolchain name cannot be empty after '+'"))
+				return c.Output.RenderErrorTo(c.Root.OutOrStdout(), c.Root.ErrOrStderr(), errors.New(i18n.T("RootEmptySelector", nil)))
 			}
 			c.Selector = selector
 			args = rest

@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/Zxilly/cjv/internal/cli/clictx"
+	"github.com/Zxilly/cjv/internal/i18n"
 	"github.com/Zxilly/cjv/internal/lifecycle"
 	sdktarget "github.com/Zxilly/cjv/internal/target"
 	"github.com/Zxilly/cjv/internal/toolchain"
@@ -28,7 +29,7 @@ func (r targetListResult) Text() string {
 	for _, target := range r.Targets {
 		label := ""
 		if target.Installed {
-			label = " (installed)"
+			label = i18n.T("TargetInstalledLabel", nil)
 		}
 		fmt.Fprintf(&b, "%s%s\n", target.Name, label)
 	}
@@ -38,8 +39,8 @@ func (r targetListResult) Text() string {
 func targetCommand(ctx *clictx.Context) *cobra.Command {
 	var selected string
 	var installedOnly bool
-	command := &cobra.Command{Use: "target", Short: "Manage cross SDKs for a host toolchain", Args: cobra.NoArgs}
-	command.PersistentFlags().StringVar(&selected, "toolchain", "", "Host toolchain (defaults to the active toolchain)")
+	command := &cobra.Command{Use: "target", Short: i18n.T("TargetCmdShort", nil), Args: cobra.NoArgs}
+	command.PersistentFlags().StringVar(&selected, "toolchain", "", i18n.T("TargetFlagToolchain", nil))
 	resolveHost := func() (toolchain.HostTargets, error) {
 		input, err := ctx.SelectedToolchain(selected)
 		if err != nil {
@@ -50,11 +51,11 @@ func targetCommand(ctx *clictx.Context) *cobra.Command {
 			return toolchain.HostTargets{}, err
 		}
 		if identity.IsCustom() {
-			return toolchain.HostTargets{}, fmt.Errorf("custom toolchain %s has no published targets", input)
+			return toolchain.HostTargets{}, fmt.Errorf(i18n.T("TargetCustomUnavailable", nil), input)
 		}
 		return toolchain.ReadHostTargets(dir)
 	}
-	list := &cobra.Command{Use: "list", Short: "List published or installed targets", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, args []string) error {
+	list := &cobra.Command{Use: "list", Short: i18n.T("TargetListShort", nil), Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, args []string) error {
 		host, err := resolveHost()
 		if err != nil {
 			return err
@@ -93,8 +94,8 @@ func targetCommand(ctx *clictx.Context) *cobra.Command {
 		}
 		return ctx.Output.RenderTo(clictx.Out(cmd), result)
 	}}
-	list.Flags().BoolVar(&installedOnly, "installed", false, "List only installed targets without accessing the distribution")
-	add := &cobra.Command{Use: "add <target>...", Short: "Install targets for the selected host release", Args: cobra.MinimumNArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
+	list.Flags().BoolVar(&installedOnly, "installed", false, i18n.T("TargetFlagInstalled", nil))
+	add := &cobra.Command{Use: "add <target>...", Short: i18n.T("TargetAddShort", nil), Args: cobra.MinimumNArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
 		host, err := resolveHost()
 		if err != nil {
 			return err
@@ -104,7 +105,7 @@ func targetCommand(ctx *clictx.Context) *cobra.Command {
 		}
 		return ctx.Output.RenderTo(clictx.Out(cmd), installResult{Toolchain: filepath.Base(host.Dir), Targets: args})
 	}}
-	remove := &cobra.Command{Use: "remove <target>...", Aliases: []string{"uninstall"}, Short: "Remove targets without removing their host", Args: cobra.MinimumNArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
+	remove := &cobra.Command{Use: "remove <target>...", Aliases: []string{"uninstall"}, Short: i18n.T("TargetRemoveShort", nil), Args: cobra.MinimumNArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
 		host, err := resolveHost()
 		if err != nil {
 			return err

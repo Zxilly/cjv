@@ -24,8 +24,8 @@ func (c *commands) newEnvsetupCmd() *cobra.Command {
 	// Unlike exec/run, envsetup does not forward arguments to a child process,
 	// so it lets cobra parse flags normally: --json is the global persistent
 	// flag and +toolchain is an ordinary positional argument.
-	cmd.Flags().String("shell", "", "shell type to format for (bash, fish, powershell, cmd)")
-	cmd.Flags().String("target", "", "cross-compilation target suffix (e.g. ohos) to emit the environment for the installed target SDK")
+	cmd.Flags().String("shell", "", i18n.T("EnvsetupFlagShell", nil))
+	cmd.Flags().String("target", "", i18n.T("EnvsetupFlagTarget", nil))
 	return cmd
 }
 
@@ -208,7 +208,7 @@ func envsetupRunWithShell(cmd *cobra.Command, args []string, shellFlag, target s
 	} else {
 		st, detected := env.DetectShell()
 		if !detected {
-			_, _ = fmt.Fprintln(cmd.ErrOrStderr(), "cjv: could not detect shell type, defaulting to posix. Use --shell=TYPE to override (bash, fish, powershell, cmd)")
+			_, _ = fmt.Fprintln(cmd.ErrOrStderr(), i18n.T("EnvsetupShellFallback", nil))
 		}
 		shellType = st
 	}

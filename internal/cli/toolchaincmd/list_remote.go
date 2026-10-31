@@ -308,10 +308,10 @@ func (c *listRemote) command() *cobra.Command {
 		Args:  cobra.NoArgs,
 		RunE:  c.run,
 	}
-	cmd.Flags().StringVar(&c.channel, "channel", "all", "Channel to list (all|lts|sts|nightly)")
-	cmd.Flags().StringVarP(&c.target, "target", "t", "", "Cross-compilation target suffix (e.g. ohos)")
-	cmd.Flags().BoolVar(&c.allPlatforms, "all-platforms", false, "List versions grouped by every target tuple")
-	cmd.Flags().IntVar(&c.limit, "limit", 0, "Show at most N versions per channel/platform (0 = no limit)")
+	cmd.Flags().StringVar(&c.channel, "channel", "all", i18n.T("ListRemoteFlagChannel", nil))
+	cmd.Flags().StringVarP(&c.target, "target", "t", "", i18n.T("ListRemoteFlagTarget", nil))
+	cmd.Flags().BoolVar(&c.allPlatforms, "all-platforms", false, i18n.T("ListRemoteFlagAllPlatforms", nil))
+	cmd.Flags().IntVar(&c.limit, "limit", 0, i18n.T("ListRemoteFlagLimit", nil))
 	cmd.MarkFlagsMutuallyExclusive("target", "all-platforms")
 	return cmd
 }

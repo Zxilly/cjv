@@ -9,6 +9,7 @@ import (
 
 	"github.com/Zxilly/cjv/internal/cli/clitest"
 	"github.com/Zxilly/cjv/internal/config/configtest"
+	"github.com/Zxilly/cjv/internal/i18n"
 	"github.com/stretchr/testify/require"
 )
 
@@ -25,6 +26,8 @@ func TestCacheListDoesNotCreateDirectories(t *testing.T) {
 }
 
 func TestCachePruneRejectsInvalidAgeBeforeWriting(t *testing.T) {
+	i18n.Init("en")
+	t.Cleanup(func() { i18n.Init("en") })
 	home := t.TempDir()
 	configtest.Isolate(t, home)
 	_, err := clitest.Execute(t, clitest.Root(Register), "cache", "prune", "--max-age=-1h")

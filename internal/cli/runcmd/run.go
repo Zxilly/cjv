@@ -2,13 +2,14 @@ package runcmd
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
 
 	"github.com/Zxilly/cjv/internal/cjverr"
 	"github.com/Zxilly/cjv/internal/env"
+	"github.com/Zxilly/cjv/internal/i18n"
 	"github.com/Zxilly/cjv/internal/lifecycle"
 	"github.com/Zxilly/cjv/internal/process"
 	"github.com/Zxilly/cjv/internal/proxy"
@@ -55,7 +56,7 @@ flagLoop:
 
 	if len(args) < 2 {
 		_ = cmd.Help()
-		return fmt.Errorf("requires at least 2 arguments: <toolchain> <command>")
+		return errors.New(i18n.T("RunMissingCommand", nil))
 	}
 
 	tcInput := args[0]

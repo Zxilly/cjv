@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/Zxilly/cjv/internal/cli/clictx"
+	"github.com/Zxilly/cjv/internal/i18n"
 	"github.com/Zxilly/cjv/internal/lifecycle"
 	"github.com/spf13/cobra"
 )
@@ -16,17 +17,17 @@ type historyListResult struct {
 
 func (r historyListResult) Text() string {
 	if len(r.Snapshots) == 0 && len(r.Invalid) == 0 {
-		return "No retained toolchain history."
+		return i18n.T("HistoryEmpty", nil)
 	}
 	var lines []string
 	for _, snapshot := range r.Snapshots {
-		lines = append(lines, fmt.Sprintf("%s  %s  %s  (%d members)", snapshot.Toolchain, snapshot.ID, snapshot.Members[0].Release, len(snapshot.Members)))
+		lines = append(lines, fmt.Sprintf(i18n.T("HistorySnapshot", nil), snapshot.Toolchain, snapshot.ID, snapshot.Members[0].Release, len(snapshot.Members)))
 	}
 	for _, invalid := range r.Invalid {
-		lines = append(lines, fmt.Sprintf("%s  %s  [invalid] %s", invalid.Toolchain, invalid.ID, invalid.Error))
+		lines = append(lines, fmt.Sprintf(i18n.T("HistoryInvalid", nil), invalid.Toolchain, invalid.ID, invalid.Error))
 	}
 	if len(r.Invalid) > 0 {
-		lines = append(lines, "Use history prune --keep 0 to remove all retained snapshots, including invalid entries.")
+		lines = append(lines, i18n.T("HistoryPruneHint", nil))
 	}
 	return strings.Join(lines, "\n")
 }
@@ -38,13 +39,13 @@ type historyPruneResult struct {
 }
 
 func (r historyPruneResult) Text() string {
-	return fmt.Sprintf("Removed %d history snapshots; retained at most %d per toolchain.", r.Removed, r.Keep)
+	return fmt.Sprintf(i18n.T("HistoryPruned", nil), r.Removed, r.Keep)
 }
 
 type historyRollbackResult struct{ lifecycle.RollbackResult }
 
 func (r historyRollbackResult) Text() string {
-	return fmt.Sprintf("Restored %s from %s (%d members).", r.Toolchain, r.Snapshot, len(r.Members))
+	return fmt.Sprintf(i18n.T("HistoryRestored", nil), r.Toolchain, r.Snapshot, len(r.Members))
 }
 
 func historyCommand(ctx *clictx.Context) *cobra.Command {
@@ -59,10 +60,10 @@ func historyCommand(ctx *clictx.Context) *cobra.Command {
 		}
 		return ctx.Output.RenderTo(clictx.Out(cmd), historyListResult{SchemaVersion: 1, HistoryReport: report})
 	}
-	cmd := &cobra.Command{Use: "history [toolchain]", Short: "List retained tracking toolchain snapshots", Args: cobra.MaximumNArgs(1), RunE: runList}
-	cmd.AddCommand(&cobra.Command{Use: "list [toolchain]", Short: "List retained tracking toolchain snapshots", Args: cobra.MaximumNArgs(1), RunE: runList})
+	cmd := &cobra.Command{Use: "history [toolchain]", Short: i18n.T("HistoryListShort", nil), Args: cobra.MaximumNArgs(1), RunE: runList}
+	cmd.AddCommand(&cobra.Command{Use: "list [toolchain]", Short: i18n.T("HistoryListShort", nil), Args: cobra.MaximumNArgs(1), RunE: runList})
 	keep := lifecycle.DefaultHistoryRetention
-	prune := &cobra.Command{Use: "prune [toolchain]", Short: "Remove older retained toolchain snapshots", Args: cobra.MaximumNArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
+	prune := &cobra.Command{Use: "prune [toolchain]", Short: i18n.T("HistoryPruneShort", nil), Args: cobra.MaximumNArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
 		name := ""
 		if len(args) > 0 {
 			name = args[0]
@@ -73,13 +74,13 @@ func historyCommand(ctx *clictx.Context) *cobra.Command {
 		}
 		return ctx.Output.RenderTo(clictx.Out(cmd), historyPruneResult{SchemaVersion: 1, Removed: removed, Keep: keep})
 	}}
-	prune.Flags().IntVar(&keep, "keep", lifecycle.DefaultHistoryRetention, "Number of readable snapshots to retain per tracking toolchain; 0 also removes invalid entries")
+	prune.Flags().IntVar(&keep, "keep", lifecycle.DefaultHistoryRetention, i18n.T("HistoryFlagKeep", nil))
 	cmd.AddCommand(prune)
 	return cmd
 }
 
 func rollbackCommand(ctx *clictx.Context) *cobra.Command {
-	return &cobra.Command{Use: "rollback <toolchain> [snapshot]", Short: "Restore a retained tracking toolchain group", Args: cobra.RangeArgs(1, 2), RunE: func(cmd *cobra.Command, args []string) error {
+	return &cobra.Command{Use: "rollback <toolchain> [snapshot]", Short: i18n.T("RollbackCmdShort", nil), Args: cobra.RangeArgs(1, 2), RunE: func(cmd *cobra.Command, args []string) error {
 		id := ""
 		if len(args) > 1 {
 			id = args[1]

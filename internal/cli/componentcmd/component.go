@@ -74,7 +74,7 @@ func (c *commands) command() *cobra.Command {
 	}
 
 	component.PersistentFlags().StringVar(&c.toolchain, "toolchain", "", i18n.T("ComponentFlagToolchain", nil))
-	component.PersistentFlags().StringVar(&c.target, "target", "", "Cross SDK environment whose components to manage")
+	component.PersistentFlags().StringVar(&c.target, "target", "", i18n.T("ComponentFlagTarget", nil))
 	add.Flags().BoolVar(&c.addForce, "force", false, i18n.T("InstallFlagForce", nil))
 	list.Flags().BoolVar(&c.listInstalledOnly, "installed", false, i18n.T("ComponentFlagInstalled", nil))
 	list.Flags().BoolVarP(&c.listQuiet, "quiet", "q", false, i18n.T("ComponentFlagQuiet", nil))
@@ -182,7 +182,7 @@ func (c *commands) resolveToolchain() (string, toolchain.ToolchainName, error) {
 		return "", release, err
 	}
 	if config.NormalizePath(managed) != config.NormalizePath(dir) {
-		return "", release, fmt.Errorf("components of external toolchain %s must be managed by its owner", dir)
+		return "", release, fmt.Errorf(i18n.T("ComponentExternalOwner", nil), dir)
 	}
 	if c.target == "" {
 		return dir, release, nil

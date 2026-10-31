@@ -1,11 +1,13 @@
 package clictx
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"strconv"
 	"strings"
 
+	"github.com/Zxilly/cjv/internal/i18n"
 	"github.com/Zxilly/cjv/internal/toolchain"
 	"github.com/mattn/go-isatty"
 )
@@ -25,12 +27,12 @@ func (c *Context) ApplyGlobalFlag(args []string) (int, error) {
 		count := 1
 		if !hasValue {
 			if len(args) < 2 {
-				return 0, fmt.Errorf("flag needs an argument: --config")
+				return 0, errors.New(i18n.T("RootConfigMissing", nil))
 			}
 			value, count = args[1], 2
 		}
 		if strings.TrimSpace(value) == "" {
-			return 0, fmt.Errorf("--config requires a non-empty path")
+			return 0, errors.New(i18n.T("RootConfigEmpty", nil))
 		}
 		c.ConfigFile = value
 		return count, c.setGlobalFlag("config", value)
@@ -55,7 +57,7 @@ func (c *Context) ApplyGlobalFlag(args []string) (int, error) {
 	}
 	enabled, err := strconv.ParseBool(value)
 	if err != nil {
-		return 0, fmt.Errorf("invalid %s value %q", name, value)
+		return 0, fmt.Errorf(i18n.T("RootInvalidFlagValue", nil), name, value)
 	}
 	*target = enabled
 	return 1, c.setGlobalFlag(strings.TrimPrefix(name, "--"), value)

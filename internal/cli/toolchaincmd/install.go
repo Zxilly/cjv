@@ -110,9 +110,9 @@ func (c *install) command() *cobra.Command {
 	cmd.Flags().BoolVar(&c.force, "force", false, i18n.T("InstallFlagForce", nil))
 	cmd.Flags().StringSliceVarP(&c.targets, "target", "t", nil, i18n.T("InstallFlagTarget", nil))
 	cmd.Flags().StringSliceVarP(&c.components, "component", "c", nil, i18n.T("InstallFlagComponent", nil))
-	cmd.Flags().BoolVar(&c.noUpdate, "no-update", false, "Keep an existing SDK release while adding targets or components")
-	cmd.Flags().BoolVar(&c.reinstall, "reinstall", false, "Replace the selected SDK release and restore its components")
-	cmd.Flags().BoolVar(&c.allowDowngrade, "allow-downgrade", false, "Allow an older nightly that supplies the requested components")
+	cmd.Flags().BoolVar(&c.noUpdate, "no-update", false, i18n.T("InstallFlagNoUpdate", nil))
+	cmd.Flags().BoolVar(&c.reinstall, "reinstall", false, i18n.T("InstallFlagReinstall", nil))
+	cmd.Flags().BoolVar(&c.allowDowngrade, "allow-downgrade", false, i18n.T("InstallFlagAllowDowngrade", nil))
 	cmd.MarkFlagsMutuallyExclusive("force", "no-update")
 	cmd.MarkFlagsMutuallyExclusive("reinstall", "no-update")
 	return cmd

@@ -719,3 +719,357 @@ Fix the error above, then retry in your terminal (PowerShell on Windows):
 To check versions available for this platform:
     {{.List}}
 """
+
+# === Command and flag help ===
+
+[CacheCmdShort]
+other = "Inspect or remove reusable SDK downloads and metadata"
+
+[CacheFlagMaxAge]
+other = "Remove entries older than this duration"
+
+[DoctorCmdShort]
+other = "Diagnose configuration, SDKs, and command entry points without changing them"
+
+[PinCmdShort]
+other = "Pin a concrete SDK release in the current project"
+
+[PinFlagCheck]
+other = "Check that the current project pins a concrete release without writing or accessing the network"
+
+[TargetCmdShort]
+other = "Manage cross SDKs for a host toolchain"
+
+[TargetFlagToolchain]
+other = "Host toolchain (defaults to the active toolchain)"
+
+[TargetListShort]
+other = "List published or installed targets"
+
+[TargetFlagInstalled]
+other = "List only installed targets without accessing the distribution"
+
+[TargetAddShort]
+other = "Install targets for the selected host release"
+
+[TargetRemoveShort]
+other = "Remove targets without removing their host"
+
+[HistoryListShort]
+other = "List retained tracking toolchain snapshots"
+
+[HistoryPruneShort]
+other = "Remove older retained toolchain snapshots"
+
+[HistoryFlagKeep]
+other = "Number of readable snapshots to retain per tracking toolchain; 0 also removes invalid entries"
+
+[RollbackCmdShort]
+other = "Restore a retained tracking toolchain group"
+
+[RootFlagQuiet]
+other = "Disable progress output"
+
+[RootFlagVerbose]
+other = "Enable debug logging"
+
+[RootFlagOffline]
+other = "Use only local files and cached downloads; disable network access"
+
+[RootFlagConfig]
+other = "Use the specified user settings file (or CJV_CONFIG_FILE)"
+
+[RootFlagNoAutoInstall]
+other = "Disable automatic installation for this invocation"
+
+[InstallFlagNoUpdate]
+other = "Keep an existing SDK release while adding targets or components"
+
+[InstallFlagReinstall]
+other = "Replace the selected SDK release and restore its components"
+
+[InstallFlagAllowDowngrade]
+other = "Allow an older nightly that supplies the requested components"
+
+[ListRemoteFlagChannel]
+other = "Channel to list (all|lts|sts|nightly)"
+
+[ListRemoteFlagTarget]
+other = "Cross-compilation target suffix (e.g. ohos)"
+
+[ListRemoteFlagAllPlatforms]
+other = "List versions grouped by every target tuple"
+
+[ListRemoteFlagLimit]
+other = "Show at most N versions per channel/platform (0 = no limit)"
+
+[EnvsetupFlagShell]
+other = "shell type to format for (bash, fish, powershell, cmd)"
+
+[EnvsetupFlagTarget]
+other = "cross-compilation target suffix (e.g. ohos) to emit the environment for the installed target SDK"
+
+[UpdateFlagDryRun]
+other = "Show the compatible update plan without changing installed files"
+
+[UpdateFlagForce]
+other = "Update even when optional components or targets are unavailable"
+
+[UpdateFlagAllowDowngrade]
+other = "Allow an older compatible nightly"
+
+[ComponentFlagTarget]
+other = "Cross SDK environment whose components to manage"
+
+[WhichFlagToolchain]
+other = "Select the toolchain"
+
+[OverrideFlagPath]
+other = "Set override for specified directory instead of current directory"
+
+[OverrideUnsetFlagPath]
+other = "Unset override for specified directory instead of current directory"
+
+[OverrideFlagNonexistent]
+other = "Remove all overrides for directories that no longer exist"
+
+# === CLI results and diagnostics ===
+
+[CacheRemoved]
+other = "Removed %d cache entries"
+
+[CacheEntry]
+other = "%s  %s  %d bytes"
+
+[CacheInvalidMaxAge]
+other = "max-age must not be negative"
+
+[HistoryEmpty]
+other = "No retained toolchain history."
+
+[HistorySnapshot]
+other = "%s  %s  %s  (%d members)"
+
+[HistoryInvalid]
+other = "%s  %s  [invalid] %s"
+
+[HistoryPruneHint]
+other = "Use history prune --keep 0 to remove all retained snapshots, including invalid entries."
+
+[HistoryPruned]
+other = "Removed %d history snapshots; retained at most %d per toolchain."
+
+[HistoryRestored]
+other = "Restored %s from %s (%d members)."
+
+[TargetInstalledLabel]
+other = " (installed)"
+
+[TargetCustomUnavailable]
+other = "custom toolchain %s has no published targets"
+
+[PinChecked]
+other = "%s pins %s"
+
+[PinWritten]
+other = "Pinned %s in %s"
+
+[PinCheckSelector]
+other = "pin --check validates the current project file and does not accept a toolchain selector"
+
+[PinNotConcrete]
+other = "%s does not pin a concrete published release; run cjv pin <toolchain>"
+
+[PinInvalidRelease]
+other = "%q is not a concrete published release"
+
+[PinPathUnsupported]
+other = "cannot pin a path SDK as a published release; specify an official toolchain, for example cjv pin lts"
+
+[PinCustomUnsupported]
+other = "cannot pin custom SDK %q as a published release; specify an official toolchain, for example cjv pin lts"
+
+[DoctorFix]
+other = "  Fix: %s\n"
+
+[DoctorSettingsLoaded]
+other = "Settings loaded"
+
+[DoctorAutoInstallValid]
+other = "Automatic installation policy is valid"
+
+[DoctorAutoInstallFix]
+other = "Set CJV_AUTO_INSTALL to 0 or 1"
+
+[DoctorHomeNotDirectory]
+other = "CJV_HOME is not a directory"
+
+[DoctorHomeAccessible]
+other = "Data directory is accessible"
+
+[DoctorCommandLine]
+other = "command line"
+
+[DoctorCustomFix]
+other = "Restore the custom SDK directory or select an installed SDK with cjv default <toolchain>"
+
+[DoctorInstallationExists]
+other = "Selected SDK directory exists"
+
+[DoctorPathMismatch]
+other = "PATH resolves %s to %s instead of %s"
+
+[DoctorPathValid]
+other = "PATH selects the cjv proxy"
+
+[DoctorProxyMismatch]
+other = "proxy does not match the managed cjv binary"
+
+[DoctorProxyValid]
+other = "Proxy matches the managed cjv binary"
+
+[DoctorComponentNamesValid]
+other = "Component names are valid"
+
+[DoctorComponentsFix]
+other = "Correct components in cangjie-sdk.toml"
+
+[DoctorComponentIndexReadable]
+other = "Component index is readable"
+
+[DoctorComponentPresent]
+other = "Component installation record and files are present"
+
+[DoctorTargetMatches]
+other = "Target matches the selected host release"
+
+[DoctorComponentInvalidPath]
+other = "component %s contains an invalid installed path %q"
+
+[DoctorNotRegularFile]
+other = "%s is not a regular file"
+
+[DoctorNotExecutable]
+other = "%s is not executable"
+
+[EnvsetupShellFallback]
+other = "cjv: could not detect shell type, defaulting to posix. Use --shell=TYPE to override (bash, fish, powershell, cmd)"
+
+[ExecMissingCommand]
+other = "requires at least 1 argument: <command>"
+
+[RunMissingCommand]
+other = "requires at least 2 arguments: <toolchain> <command>"
+
+[RootConflictingOutputFlags]
+other = "--quiet and --verbose cannot be used together"
+
+[RootConfigEmpty]
+other = "--config requires a non-empty path"
+
+[RootConfigMissing]
+other = "flag needs an argument: --config"
+
+[RootInvalidFlagValue]
+other = "invalid %s value %q"
+
+[RootMultipleSelectors]
+other = "only one +toolchain selector is allowed"
+
+[RootEmptySelector]
+other = "toolchain name cannot be empty after '+'"
+
+[ComponentExternalOwner]
+other = "components of external toolchain %s must be managed by its owner"
+
+[DocNoBrowser]
+other = "no suitable browser launcher found"
+
+[SetInvalidAutoUpdate]
+other = "invalid value %q: must be enable, disable, or check"
+
+[SetInvalidBool]
+other = "invalid value %q: must be true or false"
+
+[SetInvalidHost]
+other = "invalid default-host %q: %w"
+
+[SetInvalidPath]
+other = "invalid path %q: %w"
+
+[DoctorSettingsFix]
+other = "Correct the TOML settings in {{.Path}}"
+
+[DoctorRecordFix]
+other = "Restore {{.Path}} from a trusted backup of the same SDK installation, then run cjv doctor again"
+
+[DoctorToolPresent]
+other = "{{.Tool}} is present"
+
+[DoctorProxyFix]
+other = "cjv init --yes --default-toolchain none; then reopen the shell"
+
+# === Shell completion help ===
+
+[CompletionCmdShort]
+other = "Generate the autocompletion script for the specified shell"
+
+[CompletionCmdLong]
+other = "Generate the autocompletion script for {{.Command}} for the specified shell.\nSee each sub-command's help for details on how to use the generated script."
+
+[CompletionShellShort]
+other = "Generate the autocompletion script for {{.Shell}}"
+
+[CompletionFlagNoDescriptions]
+other = "disable completion descriptions"
+
+[CompletionBashLong]
+other = "Generate the autocompletion script for the bash shell.\n\nThis script depends on the 'bash-completion' package.\nIf it is not installed already, you can install it via your OS's package manager.\n\nTo load completions in your current shell session:\n\n\tsource <({{.Command}} completion bash)\n\nTo load completions for every new session, execute once:\n\n#### Linux:\n\n\t{{.Command}} completion bash > /etc/bash_completion.d/{{.Command}}\n\n#### macOS:\n\n\t{{.Command}} completion bash > $(brew --prefix)/etc/bash_completion.d/{{.Command}}\n\nYou will need to start a new shell for this setup to take effect.\n"
+
+[CompletionZshLong]
+other = "Generate the autocompletion script for the zsh shell.\n\nIf shell completion is not already enabled in your environment you will need\nto enable it.  You can execute the following once:\n\n\techo \"autoload -U compinit; compinit\" >> ~/.zshrc\n\nTo load completions in your current shell session:\n\n\tsource <({{.Command}} completion zsh)\n\nTo load completions for every new session, execute once:\n\n#### Linux:\n\n\t{{.Command}} completion zsh > \"${fpath[1]}/_{{.Command}}\"\n\n#### macOS:\n\n\t{{.Command}} completion zsh > $(brew --prefix)/share/zsh/site-functions/_{{.Command}}\n\nYou will need to start a new shell for this setup to take effect.\n"
+
+[CompletionFishLong]
+other = "Generate the autocompletion script for the fish shell.\n\nTo load completions in your current shell session:\n\n\t{{.Command}} completion fish | source\n\nTo load completions for every new session, execute once:\n\n\t{{.Command}} completion fish > ~/.config/fish/completions/{{.Command}}.fish\n\nYou will need to start a new shell for this setup to take effect.\n"
+
+[CompletionPowershellLong]
+other = "Generate the autocompletion script for powershell.\n\nTo load completions in your current shell session:\n\n\t{{.Command}} completion powershell | Out-String | Invoke-Expression\n\nTo load completions for every new session, add the output of the above command\nto your powershell profile.\n"
+
+[CacheDirShort]
+other = "Print the cache directory"
+
+[CacheListShort]
+other = "List cached downloads and metadata"
+
+[CacheCleanShort]
+other = "Remove all cached downloads and metadata"
+
+[CachePruneShort]
+other = "Remove expired cache entries"
+
+[SelfUnsafePath]
+other = "refusing to remove dangerous path: %s"
+
+[SelfNotHome]
+other = "path %s does not appear to be a cjv home directory (managed binary not found)"
+
+[SelfRemoveFailed]
+other = "failed to remove %s: %w"
+
+[SelfSymlinkRemovalFailed]
+other = "failed to remove symlinks in bin directory: %w"
+
+[SelfPrepareRemovalFailed]
+other = "failed to prepare managed binary for removal: %w"
+
+[SelfCleanupRestoreFailed]
+other = "failed to start detached uninstall cleanup: %w; additionally failed to restore managed binary: %w"
+
+[SelfCleanupFailed]
+other = "failed to start detached uninstall cleanup: %w"
+
+[CheckSelectedVersion]
+other = "  %s: selected %s (latest %s)\n"
+
+[UpdatePlanLatest]
+other = "; latest %s"

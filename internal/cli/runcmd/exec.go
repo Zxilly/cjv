@@ -2,12 +2,13 @@ package runcmd
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"os"
 	"os/exec"
 
 	"github.com/Zxilly/cjv/internal/cjverr"
 	"github.com/Zxilly/cjv/internal/env"
+	"github.com/Zxilly/cjv/internal/i18n"
 	"github.com/Zxilly/cjv/internal/process"
 	"github.com/Zxilly/cjv/internal/resolve"
 	"github.com/spf13/cobra"
@@ -38,7 +39,7 @@ func (c *commands) execRun(cmd *cobra.Command, args []string) error {
 
 	if len(remaining) == 0 {
 		_ = cmd.Help()
-		return fmt.Errorf("requires at least 1 argument: <command>")
+		return errors.New(i18n.T("ExecMissingCommand", nil))
 	}
 
 	command := remaining[0]

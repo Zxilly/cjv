@@ -45,7 +45,7 @@ func (r checkResult) Text() string {
 		case e.Error != "":
 			fmt.Fprintf(&b, "  %s: %s\n", e.Name, e.Error)
 		case len(e.Blockers) > 0:
-			fmt.Fprintf(&b, "  %s: selected %s (latest %s)\n", e.Name, e.Selected, e.Latest)
+			fmt.Fprintf(&b, i18n.T("CheckSelectedVersion", nil), e.Name, e.Selected, e.Latest)
 			for _, blocker := range e.Blockers {
 				fmt.Fprintf(&b, "    %s\n", blocker)
 			}

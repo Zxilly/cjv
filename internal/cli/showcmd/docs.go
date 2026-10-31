@@ -1,7 +1,7 @@
 package showcmd
 
 import (
-	"fmt"
+	"errors"
 	"net/url"
 	"os/exec"
 	"path/filepath"
@@ -96,7 +96,7 @@ func openURL(url string) error {
 			}
 			return exec.Command(launcher, url).Start()
 		}
-		return fmt.Errorf("no suitable browser launcher found")
+		return errors.New(i18n.T("DocNoBrowser", nil))
 	}
 }
 

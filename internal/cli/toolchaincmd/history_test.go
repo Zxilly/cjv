@@ -7,11 +7,14 @@ import (
 	"testing"
 
 	"github.com/Zxilly/cjv/internal/config/configtest"
+	"github.com/Zxilly/cjv/internal/i18n"
 	"github.com/Zxilly/cjv/internal/lifecycle"
 	"github.com/stretchr/testify/require"
 )
 
 func TestHistoryReportsDamagedSnapshotsInTextAndJSON(t *testing.T) {
+	i18n.Init("en")
+	t.Cleanup(func() { i18n.Init("en") })
 	home := t.TempDir()
 	configtest.Isolate(t, home)
 	const id = "20261026T000000.000000000Z-aabbccddeeff"

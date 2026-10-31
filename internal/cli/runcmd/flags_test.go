@@ -12,6 +12,7 @@ import (
 	"github.com/Zxilly/cjv/internal/cli/clitest"
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/config/configtest"
+	"github.com/Zxilly/cjv/internal/i18n"
 	"github.com/Zxilly/cjv/internal/resolve"
 	"github.com/Zxilly/cjv/internal/testutil"
 	"github.com/stretchr/testify/assert"
@@ -142,6 +143,8 @@ func TestWhichAndEnvsetupQuietAutomaticInstallation(t *testing.T) {
 }
 
 func TestRunExecVerboseConflictAndFlagErrors(t *testing.T) {
+	i18n.Init("en")
+	t.Cleanup(func() { i18n.Init("en") })
 	for _, command := range []string{"run", "exec"} {
 		t.Run(command, func(t *testing.T) {
 			t.Setenv(config.EnvLog, "")

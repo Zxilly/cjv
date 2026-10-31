@@ -55,9 +55,57 @@ var registerHelpTemplates = sync.OnceFunc(func() {
 
 func configureCobraHelp(cmd *cobra.Command) {
 	registerHelpTemplates()
+	localizeCompletionCommand(cmd)
 	cmd.SetHelpTemplate(localizedHelpTemplate)
 	cmd.SetUsageTemplate(localizedUsageTemplate)
 	localizeCobraHelpTree(cmd)
+}
+
+// Cobra normally creates completion commands during Execute, after our help
+// tree has been localized. Create them now so their help and flags participate.
+func localizeCompletionCommand(root *cobra.Command) {
+	root.InitDefaultCompletionCmd()
+	for _, cmd := range root.Commands() {
+		if cmd.Name() != "completion" {
+			continue
+		}
+		data := i18n.MsgData{"Command": root.Name()}
+		cmd.Short = i18n.T("CompletionCmdShort", nil)
+		cmd.Long = i18n.T("CompletionCmdLong", data)
+		longIDs := map[string]string{
+			"bash": "CompletionBashLong", "zsh": "CompletionZshLong",
+			"fish": "CompletionFishLong", "powershell": "CompletionPowershellLong",
+		}
+		for _, shell := range cmd.Commands() {
+			shell.Short = i18n.T("CompletionShellShort", i18n.MsgData{"Shell": shell.Name()})
+			shell.Long = i18n.T(longIDs[shell.Name()], data)
+			if flag := shell.Flags().Lookup("no-descriptions"); flag != nil {
+				flag.Usage = i18n.T("CompletionFlagNoDescriptions", nil)
+			}
+			// Cobra's generated closures capture the output writer at creation.
+			// Resolve it at execution time, as other cjv commands do.
+			shell.RunE = func(cmd *cobra.Command, _ []string) error {
+				noDesc, _ := cmd.Flags().GetBool("no-descriptions")
+				out := cmd.OutOrStdout()
+				switch cmd.Name() {
+				case "bash":
+					return root.GenBashCompletionV2(out, !noDesc)
+				case "zsh":
+					if noDesc {
+						return root.GenZshCompletionNoDesc(out)
+					}
+					return root.GenZshCompletion(out)
+				case "fish":
+					return root.GenFishCompletion(out, !noDesc)
+				default:
+					if noDesc {
+						return root.GenPowerShellCompletion(out)
+					}
+					return root.GenPowerShellCompletionWithDesc(out)
+				}
+			}
+		}
+	}
 }
 
 func localizeCobraHelpTree(cmd *cobra.Command) {

@@ -14,6 +14,7 @@ import (
 	"github.com/Zxilly/cjv/internal/component"
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/fsops"
+	"github.com/Zxilly/cjv/internal/i18n"
 	"github.com/Zxilly/cjv/internal/lifecycle"
 	sdktarget "github.com/Zxilly/cjv/internal/target"
 	"github.com/Zxilly/cjv/internal/toolchain"
@@ -29,19 +30,19 @@ type pinResult struct {
 
 func (r pinResult) Text() string {
 	if r.Checked {
-		return fmt.Sprintf("%s pins %s", r.Path, r.Toolchain)
+		return fmt.Sprintf(i18n.T("PinChecked", nil), r.Path, r.Toolchain)
 	}
-	return fmt.Sprintf("Pinned %s in %s", r.Toolchain, r.Path)
+	return fmt.Sprintf(i18n.T("PinWritten", nil), r.Toolchain, r.Path)
 }
 
 func newPinCommand(shared *clictx.Context) *cobra.Command {
 	var check bool
 	cmd := &cobra.Command{
-		Use: "pin [toolchain]", Short: "Pin a concrete SDK release in the current project",
+		Use: "pin [toolchain]", Short: i18n.T("PinCmdShort", nil),
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if check && (len(args) != 0 || shared.Selector != "") {
-				return fmt.Errorf("pin --check validates the current project file and does not accept a toolchain selector")
+				return errors.New(i18n.T("PinCheckSelector", nil))
 			}
 			path, err := filepath.Abs(config.ToolchainFileName)
 			if err != nil {
@@ -53,7 +54,7 @@ func newPinCommand(shared *clictx.Context) *cobra.Command {
 			}
 			if check {
 				if _, err := concretePin(project.Toolchain.Channel); err != nil || project.Toolchain.Path != "" {
-					return fmt.Errorf("%s does not pin a concrete published release; run cjv pin <toolchain>", path)
+					return fmt.Errorf(i18n.T("PinNotConcrete", nil), path)
 				}
 				return shared.Output.RenderTo(cmd.OutOrStdout(), pinResult{1, path, project.Toolchain.Channel, true})
 			}
@@ -90,7 +91,7 @@ func newPinCommand(shared *clictx.Context) *cobra.Command {
 			return shared.Output.RenderTo(cmd.OutOrStdout(), pinResult{1, path, release, false})
 		},
 	}
-	cmd.Flags().BoolVar(&check, "check", false, "Check that the current project pins a concrete release without writing or accessing the network")
+	cmd.Flags().BoolVar(&check, "check", false, i18n.T("PinFlagCheck", nil))
 	return cmd
 }
 
@@ -118,21 +119,21 @@ func concretePin(raw string) (toolchain.ToolchainName, error) {
 		return name, err
 	}
 	if name.IsCustom() || name.Channel == toolchain.UnknownChannel || !concreteVersion.MatchString(name.Version) || toolchain.IsVersionSelector(name.Version) {
-		return name, fmt.Errorf("%q is not a concrete published release", raw)
+		return name, fmt.Errorf(i18n.T("PinInvalidRelease", nil), raw)
 	}
 	return name, nil
 }
 
 func resolvePin(ctx context.Context, raw string, shared *clictx.Context) (string, error) {
 	if filepath.IsAbs(raw) {
-		return "", fmt.Errorf("cannot pin a path SDK as a published release; specify an official toolchain, for example cjv pin lts")
+		return "", errors.New(i18n.T("PinPathUnsupported", nil))
 	}
 	name, err := toolchain.ParseActiveName(raw)
 	if err != nil {
 		return "", err
 	}
 	if name.IsCustom() {
-		return "", fmt.Errorf("cannot pin custom SDK %q as a published release; specify an official toolchain, for example cjv pin lts", raw)
+		return "", fmt.Errorf(i18n.T("PinCustomUnsupported", nil), raw)
 	}
 	if dir, err := toolchain.FindInstalled(name); err == nil {
 		release, err := toolchain.InstalledRelease(dir)

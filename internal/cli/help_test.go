@@ -3,9 +3,11 @@ package cli
 import (
 	"bytes"
 	"testing"
+	"unicode"
 
 	"github.com/Zxilly/cjv/internal/i18n"
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -50,4 +52,72 @@ func TestConfigureCobraHelpLocalizesInstallHelp(t *testing.T) {
 	assert.NotContains(t, help, "Flags:")
 	assert.NotContains(t, help, "help for install")
 	assert.NotContains(t, help, "Cross-compilation target")
+}
+
+// Check the assembled tree, including Cobra-generated commands, rather than
+// just comparing catalogs: hard-coded English never appears in the catalogs.
+func TestAllCommandHelpLocalized(t *testing.T) {
+	t.Cleanup(func() { i18n.Init("en") })
+	for _, lang := range []string{"zh-CN", "en"} {
+		t.Run(lang, func(t *testing.T) {
+			i18n.Init(lang)
+			app := newApplication("dev", "")
+			checkText := func(label, text string) {
+				t.Helper()
+				require.NotEmpty(t, text, label)
+				hasChinese := false
+				for _, r := range text {
+					hasChinese = hasChinese || unicode.Is(unicode.Han, r)
+				}
+				assert.Equal(t, lang == "zh-CN", hasChinese, "%s: %s", label, text)
+			}
+			var walk func(*cobra.Command)
+			walk = func(cmd *cobra.Command) {
+				if cmd.Hidden {
+					return
+				}
+				checkText(cmd.CommandPath()+" short", cmd.Short)
+				if cmd.Long != "" {
+					checkText(cmd.CommandPath()+" long", cmd.Long)
+				}
+				checkFlag := func(flag *pflag.Flag) {
+					if !flag.Hidden {
+						checkText(cmd.CommandPath()+" --"+flag.Name, flag.Usage)
+					}
+				}
+				cmd.LocalFlags().VisitAll(checkFlag)
+				cmd.InheritedFlags().VisitAll(checkFlag)
+				var out bytes.Buffer
+				cmd.SetOut(&out)
+				require.NoError(t, cmd.Help())
+				expected := cmd.Long
+				if expected == "" {
+					expected = cmd.Short
+				}
+				assert.Contains(t, out.String(), expected)
+				for _, child := range cmd.Commands() {
+					walk(child)
+				}
+			}
+			walk(app.rootCmd)
+		})
+	}
+}
+
+func TestCompletionUsesCommandWriter(t *testing.T) {
+	i18n.Init("zh-CN")
+	t.Cleanup(func() { i18n.Init("en") })
+	for _, shell := range []string{"bash", "zsh", "fish", "powershell"} {
+		for _, noDescriptions := range []bool{false, true} {
+			app := newApplication("dev", "")
+			var out bytes.Buffer
+			app.rootCmd.SetOut(&out)
+			args := []string{"completion", shell}
+			if noDescriptions {
+				args = append(args, "--no-descriptions")
+			}
+			require.NoError(t, app.execute(args))
+			assert.Contains(t, out.String(), "cjv", shell)
+		}
+	}
 }

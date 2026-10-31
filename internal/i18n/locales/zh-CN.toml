@@ -719,3 +719,357 @@ other = """
 查看当前平台可用的版本：
     {{.List}}
 """
+
+# === Command and flag help ===
+
+[CacheCmdShort]
+other = "查看或清理可复用的 SDK 下载和元数据"
+
+[CacheFlagMaxAge]
+other = "清理超过此时长的缓存条目"
+
+[DoctorCmdShort]
+other = "检查配置、SDK 和命令入口，不作修改"
+
+[PinCmdShort]
+other = "在当前项目中固定 SDK 的具体版本"
+
+[PinFlagCheck]
+other = "检查当前项目是否固定了具体版本，不写入文件或访问网络"
+
+[TargetCmdShort]
+other = "管理主机工具链的交叉编译 SDK"
+
+[TargetFlagToolchain]
+other = "指定主机工具链（默认为当前活跃工具链）"
+
+[TargetListShort]
+other = "列出已发布或已安装的目标"
+
+[TargetFlagInstalled]
+other = "仅列出已安装的目标，不访问发行源"
+
+[TargetAddShort]
+other = "为选定的主机版本安装目标"
+
+[TargetRemoveShort]
+other = "移除目标，保留其主机工具链"
+
+[HistoryListShort]
+other = "列出保留的跟踪工具链快照"
+
+[HistoryPruneShort]
+other = "清理较旧的工具链快照"
+
+[HistoryFlagKeep]
+other = "每个跟踪工具链保留的可读快照数量；设为 0 时也会清理无效条目"
+
+[RollbackCmdShort]
+other = "从保留的快照恢复跟踪工具链组"
+
+[RootFlagQuiet]
+other = "关闭进度输出"
+
+[RootFlagVerbose]
+other = "启用调试日志"
+
+[RootFlagOffline]
+other = "仅使用本地文件和缓存下载，禁止访问网络"
+
+[RootFlagConfig]
+other = "使用指定的用户配置文件（或 CJV_CONFIG_FILE）"
+
+[RootFlagNoAutoInstall]
+other = "本次运行禁止自动安装"
+
+[InstallFlagNoUpdate]
+other = "添加目标或组件时保留现有 SDK 版本"
+
+[InstallFlagReinstall]
+other = "替换选定的 SDK 版本并恢复其组件"
+
+[InstallFlagAllowDowngrade]
+other = "允许使用包含所需组件的较旧 nightly 版本"
+
+[ListRemoteFlagChannel]
+other = "要列出的通道（all|lts|sts|nightly）"
+
+[ListRemoteFlagTarget]
+other = "交叉编译目标后缀（如 ohos）"
+
+[ListRemoteFlagAllPlatforms]
+other = "按各目标元组分组列出版本"
+
+[ListRemoteFlagLimit]
+other = "每个通道或平台最多显示 N 个版本（0 表示不限制）"
+
+[EnvsetupFlagShell]
+other = "输出格式对应的 shell 类型（bash、fish、powershell、cmd）"
+
+[EnvsetupFlagTarget]
+other = "输出已安装目标 SDK 环境的交叉编译目标后缀（如 ohos）"
+
+[UpdateFlagDryRun]
+other = "显示兼容的更新计划，不修改已安装的文件"
+
+[UpdateFlagForce]
+other = "即使可选组件或目标不可用也执行更新"
+
+[UpdateFlagAllowDowngrade]
+other = "允许使用兼容的较旧 nightly 版本"
+
+[ComponentFlagTarget]
+other = "要管理组件的交叉编译 SDK 环境"
+
+[WhichFlagToolchain]
+other = "选择工具链"
+
+[OverrideFlagPath]
+other = "为指定目录设置工具链覆盖（默认为当前目录）"
+
+[OverrideUnsetFlagPath]
+other = "取消指定目录的工具链覆盖（默认为当前目录）"
+
+[OverrideFlagNonexistent]
+other = "移除所有已不存在目录的工具链覆盖"
+
+# === CLI results and diagnostics ===
+
+[CacheRemoved]
+other = "已清理 %d 个缓存条目"
+
+[CacheEntry]
+other = "%s  %s  %d 字节"
+
+[CacheInvalidMaxAge]
+other = "max-age 不能为负数"
+
+[HistoryEmpty]
+other = "没有保留的工具链快照。"
+
+[HistorySnapshot]
+other = "%s  %s  %s  （%d 个成员）"
+
+[HistoryInvalid]
+other = "%s  %s  [无效] %s"
+
+[HistoryPruneHint]
+other = "使用 history prune --keep 0 清理所有保留的快照，包括无效条目。"
+
+[HistoryPruned]
+other = "已清理 %d 个历史快照；每个工具链最多保留 %d 个。"
+
+[HistoryRestored]
+other = "已恢复 %s，来源快照：%s（%d 个成员）。"
+
+[TargetInstalledLabel]
+other = " （已安装）"
+
+[TargetCustomUnavailable]
+other = "自定义工具链 %s 没有已发布的目标"
+
+[PinChecked]
+other = "%s 已固定版本 %s"
+
+[PinWritten]
+other = "已固定版本 %s，配置文件：%s"
+
+[PinCheckSelector]
+other = "pin --check 仅验证当前项目文件，不接受工具链选择器"
+
+[PinNotConcrete]
+other = "%s 未固定已发布的具体版本；请运行 cjv pin <toolchain>"
+
+[PinInvalidRelease]
+other = "%q 不是已发布的具体版本"
+
+[PinPathUnsupported]
+other = "无法将路径 SDK 固定为已发布的版本；请指定官方工具链，例如 cjv pin lts"
+
+[PinCustomUnsupported]
+other = "无法将自定义 SDK %q 固定为已发布的版本；请指定官方工具链，例如 cjv pin lts"
+
+[DoctorFix]
+other = "  修复建议：%s\n"
+
+[DoctorSettingsLoaded]
+other = "配置已加载"
+
+[DoctorAutoInstallValid]
+other = "自动安装策略有效"
+
+[DoctorAutoInstallFix]
+other = "将 CJV_AUTO_INSTALL 设为 0 或 1"
+
+[DoctorHomeNotDirectory]
+other = "CJV_HOME 不是目录"
+
+[DoctorHomeAccessible]
+other = "数据目录可访问"
+
+[DoctorCommandLine]
+other = "命令行"
+
+[DoctorCustomFix]
+other = "恢复自定义 SDK 目录，或使用 cjv default <toolchain> 选择已安装的 SDK"
+
+[DoctorInstallationExists]
+other = "选定的 SDK 目录存在"
+
+[DoctorPathMismatch]
+other = "PATH 将 %s 解析为 %s，预期为 %s"
+
+[DoctorPathValid]
+other = "PATH 指向 cjv 代理"
+
+[DoctorProxyMismatch]
+other = "代理与 cjv 管理的二进制文件不一致"
+
+[DoctorProxyValid]
+other = "代理与 cjv 管理的二进制文件一致"
+
+[DoctorComponentNamesValid]
+other = "组件名称有效"
+
+[DoctorComponentsFix]
+other = "修正 cangjie-sdk.toml 中的组件配置"
+
+[DoctorComponentIndexReadable]
+other = "组件索引可读取"
+
+[DoctorComponentPresent]
+other = "组件安装记录和文件存在"
+
+[DoctorTargetMatches]
+other = "目标与选定的主机版本匹配"
+
+[DoctorComponentInvalidPath]
+other = "组件 %s 包含无效的安装路径 %q"
+
+[DoctorNotRegularFile]
+other = "%s 不是普通文件"
+
+[DoctorNotExecutable]
+other = "%s 不可执行"
+
+[EnvsetupShellFallback]
+other = "cjv：无法检测 shell 类型，默认使用 posix。可通过 --shell=TYPE 指定（bash、fish、powershell、cmd）"
+
+[ExecMissingCommand]
+other = "至少需要 1 个参数：<command>"
+
+[RunMissingCommand]
+other = "至少需要 2 个参数：<toolchain> <command>"
+
+[RootConflictingOutputFlags]
+other = "--quiet 和 --verbose 不能同时使用"
+
+[RootConfigEmpty]
+other = "--config 需要非空路径"
+
+[RootConfigMissing]
+other = "选项需要参数：--config"
+
+[RootInvalidFlagValue]
+other = "%s 的值 %q 无效"
+
+[RootMultipleSelectors]
+other = "只允许指定一个 +toolchain 选择器"
+
+[RootEmptySelector]
+other = "'+' 后的工具链名称不能为空"
+
+[ComponentExternalOwner]
+other = "外部工具链 %s 的组件必须由其所有者管理"
+
+[DocNoBrowser]
+other = "未找到合适的浏览器启动程序"
+
+[SetInvalidAutoUpdate]
+other = "无效值 %q：必须为 enable、disable 或 check"
+
+[SetInvalidBool]
+other = "无效值 %q：必须为 true 或 false"
+
+[SetInvalidHost]
+other = "无效的 default-host %q：%w"
+
+[SetInvalidPath]
+other = "无效路径 %q：%w"
+
+[DoctorSettingsFix]
+other = "修正 {{.Path}} 中的 TOML 配置"
+
+[DoctorRecordFix]
+other = "从同一 SDK 安装的可信备份中恢复 {{.Path}}，然后重新运行 cjv doctor"
+
+[DoctorToolPresent]
+other = "{{.Tool}} 已存在"
+
+[DoctorProxyFix]
+other = "运行 cjv init --yes --default-toolchain none，然后重新打开 shell"
+
+# === Shell completion help ===
+
+[CompletionCmdShort]
+other = "为指定的 shell 生成自动补全脚本"
+
+[CompletionCmdLong]
+other = "为指定的 shell 生成 {{.Command}} 的自动补全脚本。\n请查看各子命令的帮助，了解生成脚本的使用方法。"
+
+[CompletionShellShort]
+other = "为 {{.Shell}} 生成自动补全脚本"
+
+[CompletionFlagNoDescriptions]
+other = "关闭补全描述"
+
+[CompletionBashLong]
+other = "为 bash 生成自动补全脚本。\n\n此脚本依赖 bash-completion 包，可通过系统包管理器安装。\n\n在当前 shell 会话中加载补全：\n\n    source <({{.Command}} completion bash)\n\n为以后每次会话加载补全，请执行一次：\n\nLinux：\n\n    {{.Command}} completion bash > /etc/bash_completion.d/{{.Command}}\n\nmacOS：\n\n    {{.Command}} completion bash > $(brew --prefix)/etc/bash_completion.d/{{.Command}}\n\n请启动新的 shell 使配置生效。\n"
+
+[CompletionZshLong]
+other = "为 zsh 生成自动补全脚本。\n\n如果尚未启用 shell 补全，请执行一次：\n\n    echo \"autoload -U compinit; compinit\" >> ~/.zshrc\n\n在当前 shell 会话中加载补全：\n\n    source <({{.Command}} completion zsh)\n\n为以后每次会话加载补全，请执行一次：\n\nLinux：\n\n    {{.Command}} completion zsh > \"${fpath[1]}/_{{.Command}}\"\n\nmacOS：\n\n    {{.Command}} completion zsh > $(brew --prefix)/share/zsh/site-functions/_{{.Command}}\n\n请启动新的 shell 使配置生效。\n"
+
+[CompletionFishLong]
+other = "为 fish 生成自动补全脚本。\n\n在当前 shell 会话中加载补全：\n\n    {{.Command}} completion fish | source\n\n为以后每次会话加载补全，请执行一次：\n\n    {{.Command}} completion fish > ~/.config/fish/completions/{{.Command}}.fish\n\n请启动新的 shell 使配置生效。\n"
+
+[CompletionPowershellLong]
+other = "为 PowerShell 生成自动补全脚本。\n\n在当前 shell 会话中加载补全：\n\n    {{.Command}} completion powershell | Out-String | Invoke-Expression\n\n如需在以后每次会话中加载补全，请将上述命令的输出添加到 PowerShell 配置文件。\n"
+
+[CacheDirShort]
+other = "显示缓存目录"
+
+[CacheListShort]
+other = "列出缓存下载和元数据"
+
+[CacheCleanShort]
+other = "清理所有缓存下载和元数据"
+
+[CachePruneShort]
+other = "清理过期缓存条目"
+
+[SelfUnsafePath]
+other = "拒绝删除危险路径：%s"
+
+[SelfNotHome]
+other = "路径 %s 不是有效的 cjv 数据目录（未找到受管理的二进制文件）"
+
+[SelfRemoveFailed]
+other = "删除 %s 失败：%w"
+
+[SelfSymlinkRemovalFailed]
+other = "删除 bin 目录中的符号链接失败：%w"
+
+[SelfPrepareRemovalFailed]
+other = "准备删除受管理的二进制文件失败：%w"
+
+[SelfCleanupRestoreFailed]
+other = "启动独立卸载清理进程失败：%w；恢复受管理的二进制文件也失败：%w"
+
+[SelfCleanupFailed]
+other = "启动独立卸载清理进程失败：%w"
+
+[CheckSelectedVersion]
+other = "  %s：选定 %s（最新 %s）\n"
+
+[UpdatePlanLatest]
+other = "；最新 %s"
