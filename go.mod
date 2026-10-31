@@ -18,6 +18,7 @@ require (
 	github.com/mattn/go-isatty v0.0.24
 	github.com/nicksnyder/go-i18n/v2 v2.7.0
 	github.com/spf13/cobra v1.10.2
+	github.com/spf13/pflag v1.0.10
 	github.com/stretchr/testify v1.12.1
 	github.com/vbauerster/mpb/v8 v8.16.3
 	golang.org/x/sys v0.49.0
@@ -54,7 +55,6 @@ require (
 	github.com/muesli/cancelreader v0.2.2 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
 	github.com/rogpeppe/go-internal v1.16.0 // indirect
-	github.com/spf13/pflag v1.0.10 // indirect
 	github.com/ulikunitz/xz v0.5.17 // indirect
 	github.com/vbauerster/cupwriter v0.0.5 // indirect
 	github.com/xo/terminfo v1.2.0 // indirect
