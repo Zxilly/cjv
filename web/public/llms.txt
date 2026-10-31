@@ -1,0 +1,46 @@
+# cjv - Cangjie Version Manager
+
+> cjv is a version manager for the Cangjie SDK. It installs multiple toolchains, selects an SDK for each project, and routes commands such as cjc and cjpm to that SDK's tools.
+
+The website provides installers and bilingual user and developer guides. Documentation links below point to the Markdown sources on the repository's master branch.
+
+cjv manages LTS, STS, and nightly toolchains. SDK availability depends on the distribution source and platform. Projects declare toolchain versions, components such as stdx, and cross-compilation targets in cangjie-sdk.toml. `cjv pin` records a resolved version without installing an SDK; `cjv default` installs a missing toolchain before selecting it. Consult the command reference for options and defaults.
+
+## Getting started
+
+- [English overview](https://raw.githubusercontent.com/Zxilly/cjv/master/README.EN.md): Installation commands, quick start, project version pinning, and coding agent skill setup.
+- [中文概览](https://raw.githubusercontent.com/Zxilly/cjv/master/README.md): 安装命令、快速开始、项目版本固定和编码智能体技能安装。
+- [Installation](https://raw.githubusercontent.com/Zxilly/cjv/master/docs/user-guide/en/installation/index.md): Supported platforms, installer scripts, manual installation, and source builds.
+- [Quick start](https://raw.githubusercontent.com/Zxilly/cjv/master/docs/user-guide/en/basic-usage.md): Common toolchain workflows.
+
+## User guide
+
+- [Command reference](https://raw.githubusercontent.com/Zxilly/cjv/master/docs/user-guide/en/command-reference.md): Commands, flags, and default behavior.
+- [Project toolchains](https://raw.githubusercontent.com/Zxilly/cjv/master/docs/user-guide/en/toolchain-file.md): cangjie-sdk.toml, toolchain selection order, and directory overrides.
+- [Toolchains and versions](https://raw.githubusercontent.com/Zxilly/cjv/master/docs/user-guide/en/concepts/toolchains.md): Channels, version names, and toolchain management.
+- [Components and offline documentation](https://raw.githubusercontent.com/Zxilly/cjv/master/docs/user-guide/en/concepts/components.md): stdx and SDK documentation management.
+- [Running commands and setting the environment](https://raw.githubusercontent.com/Zxilly/cjv/master/docs/user-guide/en/runtime-environment.md): Command routing and shell environments.
+- [Cross-compilation](https://raw.githubusercontent.com/Zxilly/cjv/master/docs/user-guide/en/cross-compilation.md): Target SDK installation and use.
+- [Configuration](https://raw.githubusercontent.com/Zxilly/cjv/master/docs/user-guide/en/configuration.md): Persistent settings and distribution sources.
+- [Automation and JSON interfaces](https://raw.githubusercontent.com/Zxilly/cjv/master/docs/user-guide/en/automation.md): CI, version pinning, offline use, structured output, and rollback.
+- [Environment variables](https://raw.githubusercontent.com/Zxilly/cjv/master/docs/user-guide/en/environment-variables.md): Environment configuration reference.
+- [Network proxies](https://raw.githubusercontent.com/Zxilly/cjv/master/docs/user-guide/en/network-proxies.md): Proxy configuration for downloads.
+- [Custom SDKs](https://raw.githubusercontent.com/Zxilly/cjv/master/docs/user-guide/en/install-from-url.md): Local SDKs and custom download URLs.
+- [Enterprise and offline deployment](https://raw.githubusercontent.com/Zxilly/cjv/master/docs/user-guide/en/enterprise/index.md): Managed clients and internal distribution.
+- [Common questions](https://raw.githubusercontent.com/Zxilly/cjv/master/docs/user-guide/en/faq.md): Troubleshooting and frequently asked questions.
+
+## 中文用户手册
+
+- [目录](https://raw.githubusercontent.com/Zxilly/cjv/master/docs/user-guide/src/SUMMARY.md): 完整中文用户手册索引，相对链接基于此文件所在目录。
+- [安装 cjv](https://raw.githubusercontent.com/Zxilly/cjv/master/docs/user-guide/src/installation/index.md): 支持的平台、脚本安装和手动安装。
+- [项目工具链](https://raw.githubusercontent.com/Zxilly/cjv/master/docs/user-guide/src/toolchain-file.md): 项目版本声明和工具链选择规则。
+- [命令参考](https://raw.githubusercontent.com/Zxilly/cjv/master/docs/user-guide/src/command-reference.md): 命令选项与默认行为。
+- [自动化与 JSON 接口](https://raw.githubusercontent.com/Zxilly/cjv/master/docs/user-guide/src/automation.md): CI、离线使用与结构化输出。
+
+## Optional
+
+- [Developer guide](https://raw.githubusercontent.com/Zxilly/cjv/master/docs/dev-guide/en/SUMMARY.md): Build, architecture, testing, contribution, and release documentation; resolve relative links against this file's directory.
+- [开发指南](https://raw.githubusercontent.com/Zxilly/cjv/master/docs/dev-guide/src/SUMMARY.md): 构建、架构、测试与发布文档；相对链接基于此文件所在目录。
+- [Coding agent skill](https://raw.githubusercontent.com/Zxilly/cjv/master/skills/cjv/SKILL.md): Command workflows and project toolchain rules for coding agents.
+- [Source repository](https://github.com/Zxilly/cjv): Source code and issue tracking.
+- [Releases](https://github.com/Zxilly/cjv/releases): Published binaries and release notes.
