@@ -18,6 +18,10 @@ async function verify(site) {
   const bundle = await bundleResponse.text()
   assert.ok(bundle.includes('dataset.defaultMirror'), `${site}: application does not read injected default`)
   assert.ok(!bundle.includes('get.geojs.io'), `${site}: obsolete GeoJS request`)
+  const llmsResponse = await get(new URL('llms.txt', site))
+  assert.equal(llmsResponse.status, 200, `${site}: llms.txt status`)
+  assert.match(llmsResponse.headers.get('content-type') || '', /text\/plain/, `${site}: llms.txt content type`)
+  assert.match(await llmsResponse.text(), /^# cjv - Cangjie Version Manager\r?\n/, `${site}: llms.txt content`)
   for (const route of ['install.sh', 'book/user-guide/zh-CN/', 'dl/mirror/linux_amd64/cjv-init']) {
     const staticResponse = await get(new URL(route, site), 'HEAD')
     assert.equal(staticResponse.status, 200, `${site}: static route ${route}`)
