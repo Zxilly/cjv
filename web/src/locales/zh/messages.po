@@ -13,20 +13,20 @@ msgstr ""
 "Language-Team: \n"
 "Plural-Forms: \n"
 
-#: src/App.tsx:244
+#: src/App.tsx:235
 msgid "<0>仓颉</0>编程语言 SDK 工具链管理器"
 msgstr "<0>仓颉</0>编程语言 SDK 工具链管理器"
 
-#: src/components/binary-install.tsx:120
+#: src/components/binary-install.tsx:115
 msgid "2020 年前的 Intel 机型"
 msgstr "2020 年前的 Intel 机型"
 
-#: src/App.tsx:287
+#: src/App.tsx:278
 msgid "cjv 支持 Linux、macOS、Windows，以及鸿蒙电脑和二合一设备。"
 msgstr "cjv 支持 Linux、macOS、Windows，以及鸿蒙电脑和二合一设备。"
 
 #. placeholder {0}: platform.info.label
-#: src/App.tsx:260
+#: src/App.tsx:251
 msgid "cjv 暂不支持 <0>{0}</0> 平台。"
 msgstr "cjv 暂不支持 <0>{0}</0> 平台。"
 
@@ -34,39 +34,39 @@ msgstr "cjv 暂不支持 <0>{0}</0> 平台。"
 #~ msgid "cjv 目前仅在 Linux、macOS 和 Windows 桌面系统上提供。"
 #~ msgstr "cjv 目前仅在 Linux、macOS 和 Windows 桌面系统上提供。"
 
-#: src/App.tsx:227
+#: src/App.tsx:218
 msgid "GitCode · 镜像源"
 msgstr "GitCode · 镜像源"
 
-#: src/App.tsx:227
+#: src/App.tsx:218
 msgid "GitHub · 默认源"
 msgstr "GitHub · 默认源"
 
-#: src/components/binary-install.tsx:120
+#: src/components/binary-install.tsx:115
 msgid "M1 / M2 / M3 及更新机型"
 msgstr "M1 / M2 / M3 及更新机型"
 
-#: src/components/binary-install.tsx:179
+#: src/components/binary-install.tsx:174
 msgid "下载后在终端运行 chmod +x cjv-init && ./cjv-init，按提示完成安装。"
 msgstr "下载后在终端运行 chmod +x cjv-init && ./cjv-init，按提示完成安装。"
 
-#: src/App.tsx:148
+#: src/App.tsx:139
 msgid "下载安装"
 msgstr "下载安装"
 
-#: src/components/binary-install.tsx:114
+#: src/components/binary-install.tsx:109
 msgid "不确定？打开 Apple 菜单 →「关于本机」查看芯片型号"
 msgstr "不确定？打开 Apple 菜单 →「关于本机」查看芯片型号"
 
-#: src/components/binary-install.tsx:176
+#: src/components/binary-install.tsx:171
 msgid "为鸿蒙电脑或二合一设备下载 cjv 安装器"
 msgstr "为鸿蒙电脑或二合一设备下载 cjv 安装器"
 
-#: src/App.tsx:324
+#: src/App.tsx:315
 msgid "仓颉官网"
 msgstr "仓颉官网"
 
-#: src/App.tsx:278
+#: src/App.tsx:269
 msgid "你可以尝试 x86_64（amd64）版本（多数情况下可通过系统模拟运行），或从 <0>Releases</0> 手动下载。"
 msgstr "你可以尝试 x86_64（amd64）版本（多数情况下可通过系统模拟运行），或从 <0>Releases</0> 手动下载。"
 
@@ -74,50 +74,50 @@ msgstr "你可以尝试 x86_64（amd64）版本（多数情况下可通过系统
 #~ msgid "你正在使用鸿蒙二合一设备的平板模式，Windows 安装包不适用于此系统。"
 #~ msgstr "你正在使用鸿蒙二合一设备的平板模式，Windows 安装包不适用于此系统。"
 
-#: src/App.tsx:266
+#: src/App.tsx:257
 msgid "你正在使用鸿蒙平板。"
 msgstr "你正在使用鸿蒙平板。"
 
-#: src/App.tsx:268
+#: src/App.tsx:259
 msgid "你正在使用鸿蒙手机。"
 msgstr "你正在使用鸿蒙手机。"
 
-#: src/App.tsx:270
+#: src/App.tsx:261
 msgid "你正在使用鸿蒙设备。"
 msgstr "你正在使用鸿蒙设备。"
 
-#: src/App.tsx:137
+#: src/App.tsx:128
 msgid "使用 Go 从源码编译安装："
 msgstr "使用 Go 从源码编译安装："
 
-#: src/App.tsx:216
+#: src/App.tsx:207
 msgid "使用镜像源"
 msgstr "使用镜像源"
 
-#: src/App.tsx:84
-#: src/components/binary-install.tsx:160
-#: src/components/binary-install.tsx:181
-#: src/components/binary-install.tsx:232
+#: src/App.tsx:81
+#: src/components/binary-install.tsx:155
+#: src/components/binary-install.tsx:176
+#: src/components/binary-install.tsx:227
 msgid "其他平台"
 msgstr "其他平台"
 
-#: src/App.tsx:147
+#: src/App.tsx:138
 msgid "命令安装"
 msgstr "命令安装"
 
-#: src/hooks/use-platform.ts:105
+#: src/lib/platform-catalog.ts:46
 msgid "在 PowerShell 中运行："
 msgstr "在 PowerShell 中运行："
 
-#: src/hooks/use-platform.ts:104
+#: src/lib/platform-catalog.ts:45
 msgid "在终端中运行："
 msgstr "在终端中运行："
 
-#: src/components/binary-install.tsx:177
+#: src/components/binary-install.tsx:172
 msgid "在终端运行 uname -m：aarch64 对应 ARM64，x86_64 对应 x86_64。"
 msgstr "在终端运行 uname -m：aarch64 对应 ARM64，x86_64 对应 x86_64。"
 
-#: src/hooks/use-platform.ts:365
+#: src/lib/platform-catalog.ts:145
 msgid "在鸿蒙电脑或二合一设备的终端中运行："
 msgstr "在鸿蒙电脑或二合一设备的终端中运行："
 
@@ -137,66 +137,66 @@ msgstr "复制失败，请手动复制"
 msgid "已复制"
 msgstr "已复制"
 
-#: src/components/binary-install.tsx:121
+#: src/components/binary-install.tsx:116
 msgid "常见"
 msgstr "常见"
 
 #. placeholder {0}: mirror ? 'GitCode Releases' : 'GitHub Releases'
-#: src/components/binary-install.tsx:78
+#: src/components/binary-install.tsx:75
 msgid "或 <0>{0}</0> 下载完整发布包。"
 msgstr "或 <0>{0}</0> 下载完整发布包。"
 
-#: src/App.tsx:318
+#: src/App.tsx:309
 msgid "文档"
 msgstr "文档"
 
-#: src/App.tsx:117
+#: src/App.tsx:114
 msgid "无法识别你的平台，以下是所有支持的安装方式。"
 msgstr "无法识别你的平台，以下是所有支持的安装方式。"
 
-#: src/App.tsx:305
+#: src/App.tsx:296
 msgid "查看其他平台的安装方式"
 msgstr "查看其他平台的安装方式"
 
 #. placeholder {0}: binary.label
 #. placeholder {0}: platform.info.label
-#: src/App.tsx:101
-#: src/components/binary-install.tsx:226
+#: src/App.tsx:98
+#: src/components/binary-install.tsx:221
 msgid "检测到你的平台：{0}"
 msgstr "检测到你的平台：{0}"
 
-#: src/components/binary-install.tsx:225
+#: src/components/binary-install.tsx:220
 msgid "然后按屏幕提示完成安装。"
 msgstr "然后按屏幕提示完成安装。"
 
-#: src/App.tsx:149
+#: src/App.tsx:140
 msgid "编译安装"
 msgstr "编译安装"
 
-#: src/components/binary-install.tsx:214
+#: src/components/binary-install.tsx:209
 msgid "要安装 cjv，下载并运行"
 msgstr "要安装 cjv，下载并运行"
 
-#: src/App.tsx:276
+#: src/App.tsx:267
 msgid "该架构暂无预编译版本。"
 msgstr "该架构暂无预编译版本。"
 
-#: src/App.tsx:289
+#: src/App.tsx:280
 msgid "请在桌面设备上访问此页面，或查看 <0>GitHub</0> 了解更多。"
 msgstr "请在桌面设备上访问此页面，或查看 <0>GitHub</0> 了解更多。"
 
-#: src/components/binary-install.tsx:198
+#: src/components/binary-install.tsx:193
 msgid "请手动选择对应平台的二进制："
 msgstr "请手动选择对应平台的二进制："
 
-#: src/components/binary-install.tsx:113
+#: src/components/binary-install.tsx:108
 msgid "选择你的 Mac 芯片，下载 cjv 安装器"
 msgstr "选择你的 Mac 芯片，下载 cjv 安装器"
 
-#: src/hooks/use-platform.ts:13
+#: src/lib/platform-catalog.ts:12
 msgid "部分 LTS 和 STS 版本可能不包含 macOS x86_64 的预编译 SDK。"
 msgstr "部分 LTS 和 STS 版本可能不包含 macOS x86_64 的预编译 SDK。"
 
-#: src/App.tsx:139
+#: src/App.tsx:130
 msgid "需要本机已安装 Go 环境。"
 msgstr "需要本机已安装 Go 环境。"
