@@ -114,6 +114,14 @@ func DownloadCachedWithName(ctx context.Context, url, sha256Hex, cacheDir, displ
 	}
 
 	err = retryTransfer(ctx, func() error {
+		// Without a digest or a persisted entity validator, the URL may refer
+		// to a different artifact on the next attempt. Never splice its suffix
+		// onto an unverified prefix from the previous response.
+		if sha256Hex == "" {
+			if err := os.Truncate(partialPath, 0); err != nil && !errors.Is(err, os.ErrNotExist) {
+				return &nonRetriableError{err: err}
+			}
+		}
 		return downloadOnce(ctx, url, partialPath, displayName, sha256Hex, progress.Or(sink))
 	})
 	if err == nil {
