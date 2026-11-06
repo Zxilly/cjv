@@ -27,16 +27,31 @@ func readInstallationSnapshot(identity string) (installationSnapshot, error) {
 		return installationSnapshot{}, err
 	}
 	snapshot := installationSnapshot{roots: roots}
-	record, err := toolchain.ReadInstallation(roots.TcDir)
-	if errors.Is(err, os.ErrNotExist) {
-		return snapshot, nil
-	}
+	record, err := readOptionalInstallation(roots.TcDir)
 	if err != nil {
 		return snapshot, err
 	}
-	snapshot.record = &record
+	if record == nil {
+		return snapshot, nil
+	}
+	snapshot.record = record
 	snapshot.intents, err = component.InstalledIntents(roots)
 	return snapshot, err
+}
+
+// Only a missing root is absent. A present root with missing metadata (or a
+// dangling link) must not be treated as an empty slot that can be overwritten.
+func readOptionalInstallation(dir string) (*toolchain.Installation, error) {
+	if _, err := os.Lstat(dir); errors.Is(err, os.ErrNotExist) {
+		return nil, nil
+	} else if err != nil {
+		return nil, err
+	}
+	record, err := toolchain.ReadInstallation(dir)
+	if err != nil {
+		return nil, err
+	}
+	return &record, nil
 }
 
 // captureMetadata records the file contents that a writer must revalidate on

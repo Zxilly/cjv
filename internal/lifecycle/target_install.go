@@ -2,10 +2,8 @@ package lifecycle
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"maps"
-	"os"
 	"path/filepath"
 
 	"github.com/Zxilly/cjv/internal/component"
@@ -78,9 +76,13 @@ func captureDependency(ctx context.Context, identity string, opts Options) (tool
 	if err != nil {
 		return toolchain.Installation{}, opts, err
 	}
-	record, err := toolchain.ReadInstallation(dir.TcDir)
-	if err != nil && !errors.Is(err, os.ErrNotExist) {
+	current, err := readOptionalInstallation(dir.TcDir)
+	if err != nil {
 		return toolchain.Installation{}, opts, err
+	}
+	var record toolchain.Installation
+	if current != nil {
+		record = *current
 	}
 	opts.dependencies = maps.Clone(opts.dependencies)
 	if opts.dependencies == nil {
@@ -115,10 +117,13 @@ func targetHostIdentity(selector toolchain.ToolchainName) (toolchain.ToolchainNa
 		if rootErr != nil {
 			return hostIdentity, rootErr
 		}
-		current, readErr := toolchain.ReadInstallation(roots.TcDir)
-		if readErr == nil && current.Tuple != "" && current.Tuple != parts.Host {
+		current, readErr := readOptionalInstallation(roots.TcDir)
+		if readErr != nil {
+			return hostIdentity, readErr
+		}
+		if current != nil && current.Tuple != "" && current.Tuple != parts.Host {
 			hostIdentity.Host = parts.Host
-		} else if errors.Is(readErr, os.ErrNotExist) {
+		} else if current == nil {
 			candidate := toolchain.ToolchainName{Channel: selector.Channel, Host: parts.Host}
 			if _, err := toolchain.FindInstalled(candidate); err == nil {
 				hostIdentity = candidate
@@ -153,11 +158,11 @@ func validateDependencies(opts Options) error {
 		if err != nil {
 			return err
 		}
-		current, err := toolchain.ReadInstallation(roots.TcDir)
-		if expected.Release == "" && errors.Is(err, os.ErrNotExist) {
+		current, err := readOptionalInstallation(roots.TcDir)
+		if expected.Release == "" && err == nil && current == nil {
 			continue
 		}
-		if err != nil || current != expected {
+		if err != nil || current == nil || *current != expected {
 			return fmt.Errorf("toolchain %s changed during target installation; retry", identity)
 		}
 	}
