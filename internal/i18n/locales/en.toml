@@ -1,4 +1,22 @@
 # === Toolchain management ===
+[RunCmdLong]
+other = "Run any command in an explicitly selected toolchain environment. Missing SDKs and project requirements follow auto_install, as with exec. --install enables installation for this invocation; --no-auto-install disables it."
+
+[RunFlagInstall]
+other = "Install missing SDKs and project requirements for this invocation"
+
+[RunInstallConflict]
+other = "cannot combine --install with --no-auto-install"
+
+[EnvsetupInvalidSelector]
+other = "envsetup accepts at most one +toolchain selector; unexpected argument: %s"
+
+[QueryInstallHint]
+other = "Install it explicitly with 'cjv install {{.Name}}'."
+
+[QueryLinkHint]
+other = "Register the SDK with 'cjv toolchain link {{.Name}} <path>'."
+
 [ToolchainInstalled]
 other = "Toolchain '{{.Name}}' installed successfully"
 
@@ -536,7 +554,7 @@ other = "Execute any command with the correct Cangjie runtime library paths inje
 other = "Show the path of an SDK tool for the active toolchain"
 
 [WhichCmdLong]
-other = "Show the path of an SDK tool for the active toolchain.\nIf no command is given, print the toolchain root directory."
+other = "Show the path of an SDK tool in an installed toolchain without downloading SDKs, components, or targets.\nIf no command is given, print the installed SDK root directory."
 
 [UpdateCmdShort]
 other = "Update installed toolchains"
@@ -575,7 +593,7 @@ other = "Uninstall a toolchain"
 other = "Print shell commands to configure Cangjie runtime environment"
 
 [EnvsetupCmdLong]
-other = """Output shell commands that set environment variables for the active Cangjie toolchain.
+other = """Output shell commands for an installed toolchain. This query never installs SDKs, components, or targets; install missing project requirements first.
 
 Usage:
   eval "$(cjv envsetup)"          # bash/zsh
@@ -589,7 +607,7 @@ other = "Modify cjv settings"
 other = "Set auto-self-update behavior"
 
 [SetAutoInstallShort]
-other = "Set whether to auto-install missing toolchains in proxy mode"
+other = "Set automatic installation of missing execution requirements"
 
 [SetDefaultHostShort]
 other = "Set the default host platform triple"
@@ -604,7 +622,7 @@ other = "Persist the cjv data directory in settings.toml. Pass an empty string t
 other = "Set or show the default toolchain"
 
 [DefaultCmdLong]
-other = "Without arguments, shows the current default toolchain.\nUse 'none' to clear the default."
+other = "Without arguments, show the user-level default toolchain. Setting a name installs a missing SDK unless --no-auto-install is supplied; existing SDKs keep their release.\nUse 'none' to clear the default. Directory overrides and project files can select a different active toolchain."
 
 [OverrideCmdShort]
 other = "Manage directory toolchain overrides"

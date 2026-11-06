@@ -1,19 +1,15 @@
 package runcmd
 
 import (
-	"context"
 	"errors"
-	"os"
-	"os/exec"
-	"path/filepath"
+	"fmt"
+	"strconv"
+	"strings"
 
 	"github.com/Zxilly/cjv/internal/cjverr"
 	"github.com/Zxilly/cjv/internal/env"
 	"github.com/Zxilly/cjv/internal/i18n"
-	"github.com/Zxilly/cjv/internal/lifecycle"
-	"github.com/Zxilly/cjv/internal/process"
-	"github.com/Zxilly/cjv/internal/proxy"
-	"github.com/Zxilly/cjv/internal/toolchain"
+	"github.com/Zxilly/cjv/internal/resolve"
 	"github.com/spf13/cobra"
 )
 
@@ -23,6 +19,7 @@ func (c *commands) runRun(cmd *cobra.Command, args []string) error {
 	// Manual flag parsing since DisableFlagParsing is true.
 	// Consume all flags before the positional <toolchain> argument.
 	install := false
+	installSpecified := false
 flagLoop:
 	for len(args) > 0 {
 		consumed, err := c.ctx.ApplyGlobalFlag(args)
@@ -33,9 +30,20 @@ flagLoop:
 			args = args[consumed:]
 			continue
 		}
+		if value, found := strings.CutPrefix(args[0], "--install="); found {
+			enabled, err := strconv.ParseBool(value)
+			if err != nil {
+				return fmt.Errorf(i18n.T("RootInvalidFlagValue", nil), "--install", value)
+			}
+			install = enabled
+			installSpecified = true
+			args = args[1:]
+			continue
+		}
 		switch args[0] {
 		case "--install":
 			install = true
+			installSpecified = true
 			args = args[1:]
 		case "--help", "-h":
 			return cmd.Help()
@@ -46,10 +54,16 @@ flagLoop:
 			break flagLoop
 		}
 	}
+	if install && c.ctx.NoAutoInstall {
+		return errors.New(i18n.T("RunInstallConflict", nil))
+	}
 	if err := c.ctx.ApplyInvocation(cmd); err != nil {
 		return err
 	}
 	ctx := cmd.Context()
+	if installSpecified {
+		ctx = resolve.WithAutoInstall(ctx, install)
+	}
 	if c.ctx.Output.IsJSON() {
 		return &cjverr.UnsupportedForJSONError{Command: "run"}
 	}
@@ -59,49 +73,7 @@ flagLoop:
 		return errors.New(i18n.T("RunMissingCommand", nil))
 	}
 
-	tcInput := args[0]
-	toolName := args[1]
-	toolArgs := args[2:]
-
-	var installMissing func(context.Context) error
-	if install {
-		installMissing = func(ctx context.Context) error {
-			return lifecycle.Install(ctx, lifecycle.InstallRequest{Toolchain: tcInput}, c.ctx.LifecycleOptions())
-		}
-	}
-	tcDir, _, err := toolchain.PrepareActive(ctx, tcInput, installMissing)
-	if err != nil {
-		return err
-	}
-
-	count := proxy.GetRecursionCount()
-
-	rt, err := env.RuntimeForToolchain(tcDir, filepath.Base(tcDir))
-	if err != nil {
-		return err
-	}
-
-	procEnv := rt.ProxyEnv(os.Environ(), count)
-
-	toolPath, found := resolveToolchainToolPath(tcDir, toolName)
-	if !found {
-		// Not a toolchain-local tool. Resolve it against the PATH we just built
-		// (toolchain bin dirs prepended) instead of letting exec.Command
-		// resolve a bare name against the parent process PATH — exec.LookPath
-		// reads os.Getenv("PATH"), not c.Env, so the toolchain dirs would
-		// otherwise be ignored.
-		if resolved, ok := env.LookPathInEnv(toolName, procEnv); ok {
-			toolPath = resolved
-		}
-	}
-
-	child := exec.CommandContext(ctx, toolPath, toolArgs...)
-	child.Env = procEnv
-	child.Stdin = os.Stdin
-	child.Stdout = os.Stdout
-	child.Stderr = os.Stderr
-
-	return process.Run(child)
+	return runRuntimeCommand(ctx, args[0], args[1], args[2:])
 }
 
 // resolveToolchainToolPath resolves command to an absolute path within tcDir,

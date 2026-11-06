@@ -62,7 +62,7 @@ func TestRunWhichNoActiveToolchain(t *testing.T) {
 	assert.Error(t, err, "should error when no toolchain is active")
 }
 
-func TestRunWhichToolchainFileTargetsTriggerAutoInstall(t *testing.T) {
+func TestRunWhichDoesNotInstallProjectTargets(t *testing.T) {
 	c := newTestCommands()
 	home := t.TempDir()
 	cwd := t.TempDir()
@@ -110,6 +110,6 @@ targets = ["ohos"]
 	cmd := &cobra.Command{}
 	err := c.runWhich(cmd, []string{"cjc"})
 	require.NoError(t, err)
-	assert.Equal(t, "sts", gotInput)
-	assert.Equal(t, []string{"ohos"}, gotTargets)
+	assert.Empty(t, gotInput)
+	assert.Empty(t, gotTargets)
 }

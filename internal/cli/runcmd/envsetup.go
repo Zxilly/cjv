@@ -2,14 +2,18 @@ package runcmd
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
+	"strings"
 
+	"github.com/Zxilly/cjv/internal/cjverr"
 	"github.com/Zxilly/cjv/internal/cli/clictx"
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/env"
 	"github.com/Zxilly/cjv/internal/i18n"
 	"github.com/Zxilly/cjv/internal/resolve"
+	"github.com/Zxilly/cjv/internal/toolchain"
 	"github.com/spf13/cobra"
 )
 
@@ -18,7 +22,7 @@ func (c *commands) newEnvsetupCmd() *cobra.Command {
 		Use:   "envsetup [+toolchain] [--target=SUFFIX] [--shell=TYPE]",
 		Short: i18n.T("EnvsetupCmdShort", nil),
 		Long:  i18n.T("EnvsetupCmdLong", nil),
-		Args:  cobra.ArbitraryArgs,
+		Args:  validateEnvsetupArgs,
 		RunE:  c.envsetupRun,
 	}
 	// Unlike exec/run, envsetup does not forward arguments to a child process,
@@ -27,6 +31,33 @@ func (c *commands) newEnvsetupCmd() *cobra.Command {
 	cmd.Flags().String("shell", "", i18n.T("EnvsetupFlagShell", nil))
 	cmd.Flags().String("target", "", i18n.T("EnvsetupFlagTarget", nil))
 	return cmd
+}
+
+func validateEnvsetupArgs(cmd *cobra.Command, args []string) error {
+	if len(args) > 1 {
+		return cobra.MaximumNArgs(1)(cmd, args)
+	}
+	if len(args) == 0 {
+		return nil
+	}
+	name, ok := strings.CutPrefix(args[0], "+")
+	if !ok || name == "" {
+		return fmt.Errorf(i18n.T("EnvsetupInvalidSelector", nil), args[0])
+	}
+	_, err := toolchain.ParseActiveName(name)
+	return err
+}
+
+func queryInstallError(err error) error {
+	var missing *cjverr.ToolchainNotInstalledError
+	if errors.As(err, &missing) {
+		key := "QueryInstallHint"
+		if name, parseErr := toolchain.ParseToolchainName(missing.Name); parseErr == nil && name.IsCustom() {
+			key = "QueryLinkHint"
+		}
+		return fmt.Errorf("%w; %s", err, i18n.T(key, i18n.MsgData{"Name": missing.Name}))
+	}
+	return err
 }
 
 func (c *commands) envsetupRun(cmd *cobra.Command, args []string) error {
@@ -86,9 +117,7 @@ type envsetupLibraryPathJSON struct {
 func (r envsetupJSONResult) Text() string { return "" }
 
 func loadEnvsetupData(ctx context.Context, tcOverride, target string) (envsetupData, error) {
-	if ctx == nil {
-		ctx = context.Background()
-	}
+	ctx = resolve.WithAutoInstall(ctx, false)
 
 	var rt resolve.Runtime
 	var err error
@@ -98,7 +127,7 @@ func loadEnvsetupData(ctx context.Context, tcOverride, target string) (envsetupD
 		rt, err = resolve.ActiveRuntime(ctx, tcOverride)
 	}
 	if err != nil {
-		return envsetupData{}, err
+		return envsetupData{}, queryInstallError(err)
 	}
 
 	home, err := config.Home()

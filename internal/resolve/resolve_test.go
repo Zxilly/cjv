@@ -24,12 +24,12 @@ func TestShouldAutoInstall_RespectsExplicitSetting(t *testing.T) {
 	s := config.DefaultSettings()
 
 	s.AutoInstall = true
-	enabled, err := shouldAutoInstall(&s)
+	enabled, err := shouldAutoInstall(t.Context(), &s)
 	require.NoError(t, err)
 	assert.True(t, enabled, "should auto-install when explicitly enabled")
 
 	s.AutoInstall = false
-	enabled, err = shouldAutoInstall(&s)
+	enabled, err = shouldAutoInstall(t.Context(), &s)
 	require.NoError(t, err)
 	assert.False(t, enabled, "should not auto-install when explicitly disabled")
 }
@@ -89,9 +89,22 @@ func TestLegacyMigrationKeepsTargetsAlignedWithSelectedHost(t *testing.T) {
 }
 
 func TestShouldAutoInstall_NilSettingsReturnsFalse(t *testing.T) {
-	enabled, err := shouldAutoInstall(nil)
+	enabled, err := shouldAutoInstall(t.Context(), nil)
 	require.NoError(t, err)
 	assert.False(t, enabled, "should return false when settings is nil")
+}
+
+func TestOperationAutoInstallPolicyOverridesEnvironmentWithoutChangingIt(t *testing.T) {
+	configtest.Isolate(t, t.TempDir())
+	for _, value := range []string{"0", "1"} {
+		t.Setenv(config.EnvAutoInstall, value)
+		for _, enabled := range []bool{false, true} {
+			got, err := shouldAutoInstall(WithAutoInstall(t.Context(), enabled), nil)
+			require.NoError(t, err)
+			assert.Equal(t, enabled, got)
+			assert.Equal(t, value, os.Getenv(config.EnvAutoInstall))
+		}
+	}
 }
 
 func TestActiveRejectsTargetVariantAsActiveToolchain(t *testing.T) {

@@ -15,6 +15,7 @@ import (
 	"github.com/Zxilly/cjv/internal/cjverr"
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/config/configtest"
+	"github.com/Zxilly/cjv/internal/resolve"
 	"github.com/Zxilly/cjv/internal/testutil"
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
@@ -93,7 +94,8 @@ func TestRunPreparationInstallsOnlyMissingOfficialToolchain(t *testing.T) {
 	sf, err := config.DefaultSettingsFile()
 	require.NoError(t, err)
 	url := server.URL + "/sdk-versions.json"
-	_, err = sf.Update(config.SettingsUpdate{ManifestURL: &url})
+	autoInstall := false
+	_, err = sf.Update(config.SettingsUpdate{ManifestURL: &url, AutoInstall: &autoInstall})
 	require.NoError(t, err)
 
 	_, err = execute(t, "run", "lts", "go", "version")
@@ -109,6 +111,51 @@ func TestRunPreparationInstallsOnlyMissingOfficialToolchain(t *testing.T) {
 	_, err = execute(t, "run", "--install", "lts", "go", "version")
 	require.NoError(t, err)
 	assert.Equal(t, afterInstall, requests.Load(), "an installed host does not need the distribution")
+}
+
+func TestRunAndExecFollowAutomaticInstallationPolicy(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		args        []string
+		autoInstall bool
+		wantCall    bool
+	}{
+		{"run enabled", []string{"run", "lts", "go", "version"}, true, true},
+		{"exec enabled", []string{"exec", "+lts", "go", "version"}, true, true},
+		{"run disabled", []string{"run", "lts", "go", "version"}, false, false},
+		{"exec disabled", []string{"exec", "+lts", "go", "version"}, false, false},
+		{"run explicit install", []string{"run", "--install", "lts", "go", "version"}, false, true},
+		{"run explicit false", []string{"run", "--install=false", "lts", "go", "version"}, false, false},
+		{"run explicit false overrides enabled", []string{"run", "--install=false", "lts", "go", "version"}, true, false},
+		{"run forbid", []string{"--no-auto-install", "run", "lts", "go", "version"}, true, false},
+		{"exec forbid", []string{"--no-auto-install", "exec", "+lts", "go", "version"}, true, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			configtest.Isolate(t, t.TempDir())
+			t.Chdir(t.TempDir())
+			sf, err := config.DefaultSettingsFile()
+			require.NoError(t, err)
+			_, err = sf.Update(config.SettingsUpdate{AutoInstall: &tc.autoInstall})
+			require.NoError(t, err)
+			previous := resolve.AutoInstallFunc
+			t.Cleanup(func() { resolve.AutoInstallFunc = previous })
+			calls := 0
+			sentinel := errors.New("installer stopped by policy test")
+			resolve.AutoInstallFunc = func(context.Context, string, []string) error { calls++; return sentinel }
+			_, err = execute(t, tc.args...)
+			require.Error(t, err)
+			assert.Equal(t, tc.wantCall, calls > 0)
+			assert.Equal(t, tc.wantCall, errors.Is(err, sentinel))
+		})
+	}
+}
+
+func TestRunRejectsConflictingInstallationFlags(t *testing.T) {
+	configtest.Isolate(t, t.TempDir())
+	_, err := execute(t, "run", "--install", "--no-auto-install", "lts", "go", "version")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "--install")
+	assert.Contains(t, err.Error(), "--no-auto-install")
 }
 
 func TestResolveRunCommandFallsBackForUnknownCommand(t *testing.T) {

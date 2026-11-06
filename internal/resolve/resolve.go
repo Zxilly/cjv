@@ -33,6 +33,17 @@ var AutoInstallComponentsFunc func(ctx context.Context, input string, components
 // tool, so every message and the download bar go to stderr.
 type progressKey struct{}
 
+type autoInstallKey struct{}
+
+// WithAutoInstall overrides automatic preparation for one operation. Query
+// commands use false without changing process-wide configuration.
+func WithAutoInstall(ctx context.Context, enabled bool) context.Context {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	return context.WithValue(ctx, autoInstallKey{}, enabled)
+}
+
 // WithProgress lets CLI callers honor their output policy during automatic
 // installation. Proxy callers retain the default stderr-only progress sink.
 func WithProgress(ctx context.Context, sink progress.Sink) context.Context {
@@ -69,7 +80,7 @@ func Active(ctx context.Context, tcOverride string) (ActiveToolchain, error) {
 
 	tcName, source, targets, components := selected.Name, selected.Source, selected.Targets, selected.Components
 	sink := autoInstallProgress(ctx)
-	autoInstall, err := shouldAutoInstall(settings)
+	autoInstall, err := shouldAutoInstall(ctx, settings)
 	if err != nil {
 		return ActiveToolchain{}, err
 	}
@@ -180,7 +191,7 @@ func ensureTargets(ctx context.Context, tcInput, tcDir string, settings *config.
 	}
 
 	installFunc := autoInstallTargetsFunc(sink)
-	autoInstall, err := shouldAutoInstall(settings)
+	autoInstall, err := shouldAutoInstall(ctx, settings)
 	if err != nil {
 		return err
 	}
@@ -203,7 +214,10 @@ func ensureTargets(ctx context.Context, tcInput, tcDir string, settings *config.
 	return nil
 }
 
-func shouldAutoInstall(settings *config.Settings) (bool, error) {
+func shouldAutoInstall(ctx context.Context, settings *config.Settings) (bool, error) {
+	if enabled, ok := ctx.Value(autoInstallKey{}).(bool); ok {
+		return enabled, nil
+	}
 	return config.ResolveAutoInstall(settings != nil && settings.AutoInstall)
 }
 
@@ -260,7 +274,7 @@ func ensureComponents(ctx context.Context, tcInput, tcDir string, settings *conf
 	}
 
 	installComponentsFunc := autoInstallComponentsFunc(sink)
-	autoInstall, err := shouldAutoInstall(settings)
+	autoInstall, err := shouldAutoInstall(ctx, settings)
 	if err != nil {
 		return err
 	}

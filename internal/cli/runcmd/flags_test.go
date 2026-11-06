@@ -115,7 +115,7 @@ func TestExecQuietSuppressesAutomaticInstallationProgress(t *testing.T) {
 	require.DirExists(t, filepath.Join(home, "toolchains", "lts"))
 }
 
-func TestWhichAndEnvsetupQuietAutomaticInstallation(t *testing.T) {
+func TestWhichAndEnvsetupQuietStillReportMissingSDK(t *testing.T) {
 	for _, command := range []string{"which", "envsetup"} {
 		t.Run(command, func(t *testing.T) {
 			home := t.TempDir()
@@ -134,10 +134,10 @@ func TestWhichAndEnvsetupQuietAutomaticInstallation(t *testing.T) {
 				args = append(args, "--shell=bash")
 			}
 			output, err := clitest.Execute(t, root, args...)
-			require.NoError(t, err)
-			assert.NotEmpty(t, output)
-			assert.Empty(t, stderr.String())
-			require.DirExists(t, filepath.Join(home, "toolchains", "lts"))
+			require.Error(t, err)
+			assert.Empty(t, output)
+			assert.Contains(t, stderr.String(), "cjv install lts")
+			require.NoDirExists(t, filepath.Join(home, "toolchains", "lts"))
 		})
 	}
 }

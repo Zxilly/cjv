@@ -1,4 +1,22 @@
 # === 工具链管理 ===
+[RunCmdLong]
+other = "在显式选择的工具链环境中运行任意命令。缺失的 SDK 和项目要求与 exec 一样遵循 auto_install。--install 在本次调用启用安装，--no-auto-install 禁止安装。"
+
+[RunFlagInstall]
+other = "在本次调用安装缺失的 SDK 和项目要求"
+
+[RunInstallConflict]
+other = "不能同时使用 --install 和 --no-auto-install"
+
+[EnvsetupInvalidSelector]
+other = "envsetup 只接受一个 +toolchain 选择器，收到意外参数：%s"
+
+[QueryInstallHint]
+other = "请先运行 'cjv install {{.Name}}' 安装。"
+
+[QueryLinkHint]
+other = "请先运行 'cjv toolchain link {{.Name}} <path>' 注册 SDK。"
+
 [ToolchainInstalled]
 other = "工具链 '{{.Name}}' 安装成功"
 
@@ -536,7 +554,7 @@ other = "在注入正确的仓颉运行时库路径的环境中执行任意命�
 other = "显示当前工具链中某个 SDK 工具的路径"
 
 [WhichCmdLong]
-other = "显示当前工具链中某个 SDK 工具的路径。\n若未指定命令，则打印工具链根目录。"
+other = "只读查询已安装工具链中的 SDK 工具路径，不下载 SDK、组件或目标。\n若未指定命令，则打印已安装的 SDK 根目录。"
 
 [UpdateCmdShort]
 other = "更新已安装的工具链"
@@ -575,7 +593,7 @@ other = "卸载工具链"
 other = "打印用于配置仓颉运行时环境的 shell 命令"
 
 [EnvsetupCmdLong]
-other = """输出为当前活跃仓颉工具链设置环境变量的 shell 命令。
+other = """输出已安装工具链的 shell 环境脚本。本查询不会安装 SDK、组件或目标；请先安装缺失的项目要求。
 
 用法:
   eval "$(cjv envsetup)"          # bash/zsh
@@ -589,7 +607,7 @@ other = "修改 cjv 设置"
 other = "设置自动自更新行为"
 
 [SetAutoInstallShort]
-other = "设置在代理模式下是否自动安装缺失的工具链"
+other = "设置执行命令时是否自动安装缺失的 SDK、组件和目标"
 
 [SetDefaultHostShort]
 other = "设置默认主机平台三元组"
@@ -604,7 +622,7 @@ other = "将 cjv 数据目录持久化到 settings.toml。传入空字符串可�
 other = "设置或显示默认工具链"
 
 [DefaultCmdLong]
-other = "不带参数时显示当前默认工具链。\n使用 'none' 清除默认设置。"
+other = "不带参数时显示用户级默认工具链。设置名称时会安装缺失的 SDK；--no-auto-install 可禁止补装。已有 SDK 保留当前发行版。\n使用 'none' 清除默认设置。目录覆盖和项目文件可以选择不同的活跃工具链。"
 
 [OverrideCmdShort]
 other = "管理目录工具链覆盖"

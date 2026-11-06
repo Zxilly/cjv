@@ -69,9 +69,13 @@ func runDefault(ctx *clictx.Context, cmd *cobra.Command, args []string) error {
 	// Choosing a default installs a missing toolchain but, unlike install,
 	// leaves PATH configuration alone.
 	opts := lifecycle.Options{Progress: renderer.ProgressTo(cmd.OutOrStdout(), cmd.ErrOrStderr())}
-	if _, _, err := toolchain.PrepareActive(cmd.Context(), normalizedName, func(ctx context.Context) error {
-		return lifecycle.Install(ctx, lifecycle.InstallRequest{Toolchain: normalizedName}, opts)
-	}); err != nil {
+	var installMissing func(context.Context) error
+	if !ctx.NoAutoInstall {
+		installMissing = func(ctx context.Context) error {
+			return lifecycle.Install(ctx, lifecycle.InstallRequest{Toolchain: normalizedName}, opts)
+		}
+	}
+	if _, _, err := toolchain.PrepareActive(cmd.Context(), normalizedName, installMissing); err != nil {
 		return err
 	}
 

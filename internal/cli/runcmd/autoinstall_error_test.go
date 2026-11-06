@@ -5,8 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
-	"net"
-	"os"
 	"strings"
 	"testing"
 
@@ -18,7 +16,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestInspectionJSONRetainsOfflineAutoInstallCause(t *testing.T) {
+func TestInspectionJSONReportsMissingSDKWithoutOfflineInstall(t *testing.T) {
 	for _, args := range [][]string{{"which", "cjc"}, {"envsetup"}} {
 		t.Run(args[0], func(t *testing.T) {
 			home := t.TempDir()
@@ -34,47 +32,34 @@ func TestInspectionJSONRetainsOfflineAutoInstallCause(t *testing.T) {
 			require.NoError(t, err)
 
 			out, err := execute(t, append([]string{"--json"}, args...)...)
-			require.ErrorIs(t, err, os.ErrNotExist)
 			var missing *cjverr.ToolchainNotInstalledError
 			require.ErrorAs(t, err, &missing)
 			payload := decodeAutoInstallError(t, out)
-			assert.Equal(t, cjverr.ErrorCodeOfflineCacheMiss, payload.Code)
-			assert.Equal(t, "metadata", payload.Details["kind"])
-			assert.Equal(t, manifest, payload.Details["url"])
-			assert.Contains(t, missing.Error(), "not cached")
+			assert.Empty(t, payload.Code, "a read-only query has no installer failure cause")
+			assert.NotContains(t, out, string(cjverr.ErrorCodeOfflineCacheMiss))
+			assert.Contains(t, err.Error(), "cjv install lts")
 		})
 	}
 }
 
-func TestWhichJSONRetainsAutoInstallFailures(t *testing.T) {
-	for _, test := range []struct {
-		name  string
-		cause error
-		code  cjverr.ErrorCode
-	}{
-		{"checksum", &cjverr.ChecksumMismatchError{Expected: "expected", Actual: "actual"}, cjverr.ErrorCodeChecksumMismatch},
-		{"network", &net.DNSError{Err: "no such host", Name: "example.invalid"}, cjverr.ErrorCodeNetwork},
-		{"canceled", context.Canceled, cjverr.ErrorCodeCanceled},
-		{"deadline", context.DeadlineExceeded, cjverr.ErrorCodeDeadlineExceeded},
-	} {
-		t.Run(test.name, func(t *testing.T) {
+func TestInspectionJSONNeverInvokesInstaller(t *testing.T) {
+	for _, command := range []string{"which", "envsetup"} {
+		t.Run(command, func(t *testing.T) {
 			home := t.TempDir()
 			configtest.Isolate(t, home)
 			t.Chdir(home)
 			t.Setenv(config.EnvToolchain, "lts")
 			t.Setenv(config.EnvAutoInstall, "1")
 			previous := resolve.AutoInstallFunc
-			resolve.AutoInstallFunc = func(context.Context, string, []string) error { return test.cause }
-			t.Cleanup(func() { resolve.AutoInstallFunc = previous })
-			out, err := execute(t, "--json", "which", "cjc")
-			require.ErrorIs(t, err, test.cause)
-			payload := decodeAutoInstallError(t, out)
-			assert.Equal(t, test.code, payload.Code)
-			assert.Equal(t, test.cause.Error(), payload.Message)
-			if test.code == cjverr.ErrorCodeChecksumMismatch {
-				assert.Equal(t, "expected", payload.Details["expected"])
-				assert.Equal(t, "actual", payload.Details["actual"])
+			resolve.AutoInstallFunc = func(context.Context, string, []string) error {
+				t.Fatal("JSON queries must not invoke an installer")
+				return nil
 			}
+			t.Cleanup(func() { resolve.AutoInstallFunc = previous })
+			out, err := execute(t, "--json", command)
+			require.Error(t, err)
+			payload := decodeAutoInstallError(t, out)
+			assert.Empty(t, payload.Code)
 		})
 	}
 }

@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/Zxilly/cjv/internal/cjverr"
 	"github.com/Zxilly/cjv/internal/cli/clitest"
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/config/configtest"
@@ -69,6 +70,23 @@ func TestRunDefault_ClearsDefault(t *testing.T) {
 
 	reloaded, _ := config.LoadSettings(settingsPath)
 	assert.Empty(t, reloaded.DefaultToolchain)
+}
+
+func TestDefaultNoAutoInstallRequiresExistingSDK(t *testing.T) {
+	home := t.TempDir()
+	configtest.Isolate(t, home)
+	t.Chdir(t.TempDir())
+	t.Setenv("CJV_OFFLINE", "1")
+	_, err := executeSettingsOutput(t, "--no-auto-install", "default", "lts-1.0.5")
+	var missing *cjverr.ToolchainNotInstalledError
+	require.ErrorAs(t, err, &missing)
+	assert.NotContains(t, err.Error(), "offline mode", "the installer must not attempt distribution resolution")
+	_, settings, err := config.LoadDefaultSettings()
+	require.NoError(t, err)
+	assert.Empty(t, settings.DefaultToolchain)
+	require.NoError(t, os.MkdirAll(filepath.Join(home, "toolchains", "lts-1.0.5"), 0o755))
+	_, err = executeSettingsOutput(t, "--no-auto-install", "default", "lts-1.0.5")
+	require.NoError(t, err)
 }
 
 func TestShowDefault(t *testing.T) {

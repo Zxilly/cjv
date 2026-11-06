@@ -22,9 +22,10 @@ func Register(root *cobra.Command, ctx *clictx.Context) {
 }
 
 func (c *commands) runCommand() *cobra.Command {
-	return &cobra.Command{
+	cmd := &cobra.Command{
 		Use:   "run [--install] <toolchain> <command> [args...]",
 		Short: i18n.T("RunCmdShort", nil),
+		Long:  i18n.T("RunCmdLong", nil),
 		// Use ArbitraryArgs because DisableFlagParsing treats all tokens
 		// (including --help, --install) as positional args, making MinimumNArgs
 		// reject valid inputs like "cjv run --help". Validation is done in runRun.
@@ -32,6 +33,8 @@ func (c *commands) runCommand() *cobra.Command {
 		RunE:               c.runRun,
 		DisableFlagParsing: true,
 	}
+	cmd.Flags().Bool("install", false, i18n.T("RunFlagInstall", nil))
+	return cmd
 }
 
 func (c *commands) execCommand() *cobra.Command {

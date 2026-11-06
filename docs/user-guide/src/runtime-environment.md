@@ -8,15 +8,15 @@
 
 ```bash
 cjc --version
-cjv run --install sts cjc --version
+cjv exec +sts cjc --version
 cjv exec ./my_binary arg1 arg2
 cjv exec +nightly ./my_binary
 ```
 
 理解两者的定位可以帮助你快速选择合适的命令：
 
-- **`cjv run [--install] <toolchain> <command> [args...]`** — 显式指定要使用的 `<toolchain>`。它会先查找该 SDK 的工具目录，再查找该环境的 `PATH`；只有传入 `--install` 时，才会在指定的工具链缺失时自动下载安装。
-- **`cjv exec [+toolchain] <command> [args...]`** — 按照当前激活的工具链选择（或 `+name` 指定的工具链）准备完整的 SDK 运行环境，包括仓颉运行时库和 `stdx` 动态库搜索路径。因此，`cjv exec` 非常适合用来运行你自己编译出的、依赖仓颉动态库的二进制程序。
+- **`cjv run [--install] <toolchain> <command> [args...]`** — 保留显式工具链位置参数的兼容入口，可执行任意程序。它与 `exec` 使用相同运行环境和 `auto_install` 补装策略；`--install` 显式开启补装，`--install=false` 关闭补装，显式开启与 `--no-auto-install` 互斥。
+- **`cjv exec [+toolchain] <command> [args...]`** — 推荐入口，使用当前项目选择或指定工具链，配置 SDK、运行时及 stdx 库路径，并按 `auto_install` 补齐缺失需求。显式指定工具链时使用该选择；当前项目中的组件和目标声明在使用项目选择时生效。
 
 `run` 和 `exec` 都只改变子进程的运行环境，不会污染当前终端会话，并且会原样转发标准输入、标准输出、标准错误和退出码。
 
@@ -25,6 +25,8 @@ cjv exec +nightly ./my_binary
 ```bash
 cjv exec -- +command
 ```
+
+`which` 只读取工具路径（省略工具名时读取 SDK 根目录），不安装缺失项，也不要求补齐无关的项目组件或目标。
 
 ## 使用 `envsetup` 配置当前 shell
 
@@ -46,6 +48,8 @@ cjv envsetup | Invoke-Expression
 ```
 
 你可以运行 `cjv envsetup +nightly` 显式指定工具链版本，或者传入 `--shell=bash|fish|powershell|cmd` 指定输出脚本的语法格式。省略 `--shell` 时，`cjv` 会自动检测当前 shell；如果检测失败，会在 `stderr` 打印提示并回退到 POSIX shell 格式。此外，运行 `cjv --json envsetup` 可以输出结构化的环境变量 JSON 数据，供编辑器插件或自动化脚本读取（详见[自动化与 JSON 接口](automation.md)）。
+
+`envsetup` 只读取已安装 SDK 并验证项目声明的组件和目标；缺失时给出显式安装命令，不会触发自动补装。它只接受至多一个 `+toolchain` 位置参数，多余参数会报错。
 
 ### 设置的环境变量
 

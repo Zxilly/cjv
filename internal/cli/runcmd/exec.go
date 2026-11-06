@@ -10,6 +10,7 @@ import (
 	"github.com/Zxilly/cjv/internal/env"
 	"github.com/Zxilly/cjv/internal/i18n"
 	"github.com/Zxilly/cjv/internal/process"
+	"github.com/Zxilly/cjv/internal/proxy"
 	"github.com/Zxilly/cjv/internal/resolve"
 	"github.com/spf13/cobra"
 )
@@ -42,18 +43,21 @@ func (c *commands) execRun(cmd *cobra.Command, args []string) error {
 		return errors.New(i18n.T("ExecMissingCommand", nil))
 	}
 
-	command := remaining[0]
-	commandArgs := remaining[1:]
+	return runRuntimeCommand(ctx, tcOverride, remaining[0], remaining[1:])
+}
 
-	runtimeEnv, err := resolve.ActiveRuntimeEnv(ctx, tcOverride)
+func runRuntimeCommand(ctx context.Context, tcOverride, command string, commandArgs []string) error {
+	rt, err := resolve.ActiveRuntime(ctx, tcOverride)
 	if err != nil {
 		return err
 	}
+	runtimeEnv := rt.ProxyEnv(os.Environ(), proxy.GetRecursionCount())
 
 	// Resolve a bare command against the runtime env's PATH (toolchain bin dirs
 	// prepended) rather than letting exec.Command resolve it against the parent
 	// process PATH — exec.LookPath reads os.Getenv("PATH"), not c.Env, so a tool
-	// present only in the toolchain would otherwise not be found (mirrors run.go).
+	// present only in the toolchain would otherwise not be found. Both execution
+	// commands share this lookup.
 	if resolved, ok := env.LookPathInEnv(command, runtimeEnv); ok {
 		command = resolved
 	}
