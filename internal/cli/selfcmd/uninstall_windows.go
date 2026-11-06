@@ -3,13 +3,11 @@
 package selfcmd
 
 import (
-	"crypto/rand"
-	"encoding/hex"
-	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 
@@ -20,13 +18,25 @@ import (
 var currentExecutablePath = os.Executable
 
 var startDetachedUninstallCleanup = func(home string) error {
-	script := `Start-Sleep -Seconds 3; Remove-Item -LiteralPath $env:CJV_UNINSTALL_DIR -Recurse -Force`
+	cmd := uninstallCleanupCommand(home, os.Getpid())
+	if err := cmd.Start(); err != nil {
+		return err
+	}
+	_ = cmd.Process.Release() //nolint:errcheck // the detached helper owns its lifetime
+	return nil
+}
+
+func uninstallCleanupCommand(home string, parentPID int) *exec.Cmd {
+	script := `Wait-Process -Id $env:CJV_UNINSTALL_PID -ErrorAction SilentlyContinue
+Get-ChildItem -LiteralPath (Join-Path $env:CJV_UNINSTALL_DIR 'home\bin') -Force -ErrorAction SilentlyContinue | Where-Object { $_.LinkType -eq 'SymbolicLink' } | ForEach-Object { Remove-Item -LiteralPath $_.FullName -Force }
+Remove-Item -LiteralPath $env:CJV_UNINSTALL_DIR -Recurse -Force`
 	cmd := exec.Command("powershell.exe", "-NoProfile", "-NonInteractive", "-Command", script)
-	cmd.Env = append(os.Environ(), "CJV_UNINSTALL_DIR="+home)
+	cmd.Env = append(os.Environ(), "CJV_UNINSTALL_DIR="+home, "CJV_UNINSTALL_PID="+strconv.Itoa(parentPID))
 	cmd.SysProcAttr = &syscall.SysProcAttr{
 		CreationFlags: windows.CREATE_NEW_PROCESS_GROUP,
+		HideWindow:    true,
 	}
-	return cmd.Start()
+	return cmd
 }
 
 // removeHomeDir removes the cjv home directory on Windows.
@@ -58,46 +68,26 @@ func removeHomeDir(home, managedExe string) error {
 		return nil
 	}
 
-	// Remove symlinks first — Remove-Item -Recurse can fail on them.
-	if err := removeSymlinks(filepath.Join(home, "bin")); err != nil {
-		return fmt.Errorf(i18n.T("SelfSymlinkRemovalFailed", nil), err)
-	}
-
-	b := make([]byte, 4)
-	if _, err := rand.Read(b); err != nil {
+	// Retire this installation under a unique sibling before scheduling any
+	// deletion. A new installation can immediately reuse home without becoming
+	// the target of this operation's delayed cleanup.
+	retired, err := os.MkdirTemp(filepath.Dir(cleaned), ".cjv-uninstall-*")
+	if err != nil {
 		return err
 	}
-	ext := filepath.Ext(managedExe)
-	stem := strings.TrimSuffix(filepath.Base(managedExe), ext)
-	gcName := filepath.Join(filepath.Dir(managedExe), stem+"-gc-"+hex.EncodeToString(b)+ext)
-	if err := os.Rename(managedExe, gcName); err != nil {
+	retiredHome := filepath.Join(retired, "home")
+	if err := os.Rename(cleaned, retiredHome); err != nil {
+		_ = os.Remove(retired) //nolint:errcheck // empty reservation only
 		return fmt.Errorf(i18n.T("SelfPrepareRemovalFailed", nil), err)
 	}
 
-	if err := startDetachedUninstallCleanup(home); err != nil {
-		if restoreErr := os.Rename(gcName, managedExe); restoreErr != nil {
+	if err := startDetachedUninstallCleanup(retired); err != nil {
+		if restoreErr := os.Rename(retiredHome, cleaned); restoreErr != nil {
 			return fmt.Errorf(i18n.T("SelfCleanupRestoreFailed", nil), err, restoreErr)
 		}
+		_ = os.Remove(retired) //nolint:errcheck // empty reservation only
 		return fmt.Errorf(i18n.T("SelfCleanupFailed", nil), err)
 	}
 
-	return nil
-}
-
-func removeSymlinks(dir string) error {
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return nil
-		}
-		return err
-	}
-	for _, e := range entries {
-		if e.Type()&os.ModeSymlink != 0 {
-			if err := os.Remove(filepath.Join(dir, e.Name())); err != nil {
-				return err
-			}
-		}
-	}
 	return nil
 }

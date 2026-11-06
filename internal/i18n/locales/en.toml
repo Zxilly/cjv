@@ -1176,14 +1176,11 @@ other = "path %s does not appear to be a cjv home directory (managed binary not 
 [SelfRemoveFailed]
 other = "failed to remove %s: %w"
 
-[SelfSymlinkRemovalFailed]
-other = "failed to remove symlinks in bin directory: %w"
-
 [SelfPrepareRemovalFailed]
-other = "failed to prepare managed binary for removal: %w"
+other = "failed to retire the installation directory for removal: %w"
 
 [SelfCleanupRestoreFailed]
-other = "failed to start detached uninstall cleanup: %w; additionally failed to restore managed binary: %w"
+other = "failed to start detached uninstall cleanup: %w; additionally failed to restore the installation directory: %w"
 
 [SelfCleanupFailed]
 other = "failed to start detached uninstall cleanup: %w"

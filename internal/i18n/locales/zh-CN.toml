@@ -1176,14 +1176,11 @@ other = "路径 %s 不是有效的 cjv 数据目录（未找到受管理的二�
 [SelfRemoveFailed]
 other = "删除 %s 失败：%w"
 
-[SelfSymlinkRemovalFailed]
-other = "删除 bin 目录中的符号链接失败：%w"
-
 [SelfPrepareRemovalFailed]
-other = "准备删除受管理的二进制文件失败：%w"
+other = "迁移安装目录以准备卸载失败：%w"
 
 [SelfCleanupRestoreFailed]
-other = "启动独立卸载清理进程失败：%w；恢复受管理的二进制文件也失败：%w"
+other = "启动独立卸载清理进程失败：%w；恢复安装目录也失败：%w"
 
 [SelfCleanupFailed]
 other = "启动独立卸载清理进程失败：%w"
