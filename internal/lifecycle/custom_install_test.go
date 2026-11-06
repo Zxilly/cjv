@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -199,6 +200,36 @@ func TestLinkURL_NoSDKArchiveRejected(t *testing.T) {
 	require.Error(t, linkURL(t, "empty", outer, "", false, false))
 	assert.NoDirExists(t, filepath.Join(home, "toolchains", "empty"))
 	assert.NoDirExists(t, filepath.Join(home, "toolchains", "empty.staging"))
+}
+
+func TestLinkURLRetryFetchesCorrectedArchive(t *testing.T) {
+	for _, broken := range []string{"truncated-zip", "missing-sdk"} {
+		t.Run(broken, func(t *testing.T) {
+			home := linkHome(t)
+			good := sdkInnerArchive(t)
+			bad := good[:len(good)/2]
+			if broken == "missing-sdk" {
+				bad = zipBytes(t, map[string][]byte{"README": []byte("not an SDK")})
+			}
+			var requests atomic.Int32
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				if requests.Add(1) == 1 {
+					_, _ = w.Write(bad)
+					return
+				}
+				_, _ = w.Write(good)
+			}))
+			defer server.Close()
+			install := func() error {
+				return lifecycle.InstallToolchainFromURL(t.Context(), "retry-sdk", server.URL, "", false, true, lifecycle.Options{})
+			}
+			require.Error(t, install())
+			require.NoDirExists(t, filepath.Join(home, "toolchains", "retry-sdk"))
+			require.NoError(t, install(), "retry must not remain pinned to a rejected checksumless archive")
+			require.EqualValues(t, 2, requests.Load())
+			require.FileExists(t, filepath.Join(home, "toolchains", "retry-sdk", "bin", sdktools.PlatformBinaryName("cjc")))
+		})
+	}
 }
 
 func TestLinkURL_SHA256Mismatch(t *testing.T) {

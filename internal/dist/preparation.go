@@ -19,7 +19,7 @@ type Preparation struct {
 	directory string
 	lock      *os.File
 	scratch   []string
-	archives  map[string]struct{}
+	archives  map[string]bool // whether each owned download has a verified digest
 	complete  bool
 }
 
@@ -44,7 +44,7 @@ func BeginPreparation(ctx context.Context, downloadsDir string) (*Preparation, e
 		_ = lock.Close() //nolint:errcheck // preserve the directory error
 		return nil, err
 	}
-	return &Preparation{directory: directory, lock: lock, archives: make(map[string]struct{})}, nil
+	return &Preparation{directory: directory, lock: lock, archives: make(map[string]bool)}, nil
 }
 
 // TempDir creates private scratch removed on Close regardless of the outcome.
@@ -65,8 +65,25 @@ func (p *Preparation) Download(ctx context.Context, url, sha256, displayName str
 	if err != nil {
 		return "", err
 	}
-	p.archives[archive] = struct{}{}
+	p.archives[archive] = sha256 != ""
 	return archive, nil
+}
+
+// RejectArchive propagates a preparation failure and discards an owned download
+// without a digest so a corrected response at the same URL can be fetched next
+// time. Magic bytes alone do not prove that an archive contains a usable SDK.
+// Local inputs and digest-verified downloads are retained, as are downloads
+// whose preparation was only canceled.
+func (p *Preparation) RejectArchive(archive string, cause error) error {
+	verified, owned := p.archives[archive]
+	if cause == nil || !owned || verified || errors.Is(cause, context.Canceled) || errors.Is(cause, context.DeadlineExceeded) {
+		return cause
+	}
+	if err := CleanupDownload(archive); err != nil {
+		return errors.Join(cause, fmt.Errorf("discard rejected download: %w", err))
+	}
+	delete(p.archives, archive)
+	return cause
 }
 
 // Complete marks successful publication. Close will now discard the downloads;

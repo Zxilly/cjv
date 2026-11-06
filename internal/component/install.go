@@ -81,7 +81,7 @@ func PrepareFromSource(ctx context.Context, roots Roots, tc toolchain.ToolchainN
 	}
 	sink.Report(progress.Event{Kind: progress.InstallingComponent, Toolchain: tc.String(), Component: string(name)})
 
-	return stageAndInstall(ctx, roots, spec, name, archivePath, force, alreadyInstalled)
+	return preparation.RejectArchive(archivePath, stageAndInstall(ctx, roots, spec, name, archivePath, force, alreadyInstalled))
 }
 
 // InstallFromArchive installs a component from a local archive file already on

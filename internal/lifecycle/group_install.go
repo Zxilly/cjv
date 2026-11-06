@@ -217,10 +217,10 @@ func installGroup(ctx context.Context, d *installationDistribution, name toolcha
 			}
 			opts.emit(progress.Event{Kind: progress.Extracting})
 			if err := dist.InstallSDK(ctx, archive, m.prepared.TcDir); err != nil {
-				return false, err
+				return false, preparation.RejectArchive(archive, err)
 			}
 			if err := validateInstallation(m.prepared.TcDir, m.release.Tuple); err != nil {
-				return false, err
+				return false, preparation.RejectArchive(archive, err)
 			}
 			if err := toolchain.WriteInstallation(m.prepared.TcDir, toolchain.Installation{Release: m.release.Name, Tuple: m.release.Tuple, SHA256: m.release.SHA256}); err != nil {
 				return false, err

@@ -83,10 +83,10 @@ func placeToolchain(ctx context.Context, name string, force bool, tuple string, 
 	preparedDir := filepath.Join(preparedRoot, "sdk")
 	opts.emit(progress.Event{Kind: progress.Extracting})
 	if err := acq.extract(ctx, archivePath, preparedDir); err != nil {
-		return err
+		return preparation.RejectArchive(archivePath, err)
 	}
 	if err := validateInstallation(preparedDir, tuple); err != nil {
-		return err
+		return preparation.RejectArchive(archivePath, err)
 	}
 
 	lock, isReinstall, err := lockPlacement(ctx, destDir, force)

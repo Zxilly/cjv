@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -68,4 +69,45 @@ func TestPreparationCanceledWaitPreservesLiveScratch(t *testing.T) {
 	next, err := BeginPreparation(t.Context(), downloads)
 	require.NoError(t, err)
 	require.NoError(t, next.Close())
+}
+
+func TestPreparationRejectArchivePreservesUnownedAndVerifiedInputs(t *testing.T) {
+	for _, scenario := range []string{"local", "verified", "canceled", "rejected"} {
+		t.Run(scenario, func(t *testing.T) {
+			payload := []byte{'P', 'K', 3, 4, 1, 2, 3, 4}
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				_, _ = w.Write(payload)
+			}))
+			defer server.Close()
+			preparation, err := BeginPreparation(t.Context(), filepath.Join(t.TempDir(), "downloads"))
+			require.NoError(t, err)
+			defer preparation.Close()
+			var archive string
+			if scenario == "local" {
+				archive = filepath.Join(t.TempDir(), "user.zip")
+				require.NoError(t, os.WriteFile(archive, payload, 0o644))
+			} else {
+				checksum := ""
+				if scenario == "verified" {
+					digest := sha256.Sum256(payload)
+					checksum = hex.EncodeToString(digest[:])
+				}
+				archive, err = preparation.Download(t.Context(), server.URL, checksum, "sdk.zip", nil)
+				require.NoError(t, err)
+			}
+			cause := errors.New("invalid SDK archive")
+			if scenario == "canceled" {
+				cause = context.Canceled
+			}
+			require.ErrorIs(t, preparation.RejectArchive(archive, cause), cause)
+			require.NoError(t, preparation.Close())
+			if scenario == "rejected" {
+				require.NoFileExists(t, archive)
+			} else {
+				data, err := os.ReadFile(archive)
+				require.NoError(t, err)
+				require.Equal(t, payload, data)
+			}
+		})
+	}
 }
