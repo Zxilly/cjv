@@ -121,3 +121,27 @@ func TestUpdateSettingsAfterUninstallDoesNotPromoteTargetVariantToDefault(t *tes
 	require.NoError(t, err)
 	assert.Empty(t, loaded.DefaultToolchain)
 }
+
+func TestUninstallDoesNotSelectDamagedTrackingDefault(t *testing.T) {
+	for _, replacement := range []string{"", "nightly-2026.10.30"} {
+		t.Run(replacement, func(t *testing.T) {
+			home := t.TempDir()
+			configtest.Isolate(t, home)
+			require.NoError(t, toolchain.RecoverHome())
+			for _, name := range []string{"sts-2.0.0", "lts", replacement} {
+				if name != "" {
+					require.NoError(t, os.MkdirAll(filepath.Join(home, "toolchains", name), 0o755))
+				}
+			}
+			sf, err := config.DefaultSettingsFile()
+			require.NoError(t, err)
+			selected := "sts-2.0.0"
+			_, err = sf.Update(config.SettingsUpdate{DefaultToolchain: &selected})
+			require.NoError(t, err)
+			require.NoError(t, lifecycle.RemoveToolchain(selected))
+			settings, err := sf.Load()
+			require.NoError(t, err)
+			require.Equal(t, replacement, settings.DefaultToolchain, "damaged tracking roots must not become the new default")
+		})
+	}
+}

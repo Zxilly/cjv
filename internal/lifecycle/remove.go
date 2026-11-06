@@ -222,7 +222,21 @@ func referencesAfterRemovalsFromInstalled(settings *config.Settings, names, inst
 func nextDefaultAfterRemovals(names, installed []string) string {
 	idx := slices.IndexFunc(installed, func(candidate string) bool {
 		parsed, err := toolchain.ParseToolchainName(candidate)
-		return !slices.Contains(names, candidate) && err == nil && parsed.Target == ""
+		if slices.Contains(names, candidate) || err != nil || parsed.Target != "" {
+			return false
+		}
+		dir, err := config.ToolchainDirFor(candidate)
+		if err != nil {
+			return false
+		}
+		if parsed.IsCustom() {
+			info, err := os.Stat(dir)
+			return err == nil && info.IsDir()
+		}
+		// Listing includes damaged roots for diagnostics. They must not become
+		// the replacement default merely because their names sort first.
+		_, err = toolchain.ReadInstallation(dir)
+		return err == nil
 	})
 	if idx < 0 {
 		return ""
