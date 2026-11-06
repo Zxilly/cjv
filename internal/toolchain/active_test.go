@@ -58,6 +58,42 @@ func TestPrepareActivePreservesInstallationAndFilesystemErrors(t *testing.T) {
 	require.ErrorIs(t, err, os.ErrNotExist)
 }
 
+func TestPrepareActiveRejectsInvalidInstalledHosts(t *testing.T) {
+	for _, tc := range []struct {
+		name, record string
+		file         bool
+	}{
+		{name: "sts"}, // Tracking identities require release metadata.
+		{name: "sts", record: "broken = ["},
+		{name: "sts", record: "release = 'lts-1.0.0'"},
+		{name: "sts-1.0.0", record: "release = 'sts-2.0.0'"},
+		{name: "custom-sdk", file: true},
+	} {
+		t.Run(tc.name+tc.record, func(t *testing.T) {
+			home := t.TempDir()
+			configtest.Isolate(t, home)
+			require.NoError(t, RecoverHome())
+			dir := filepath.Join(home, "toolchains", tc.name)
+			require.NoError(t, os.MkdirAll(filepath.Dir(dir), 0o755))
+			if tc.file {
+				require.NoError(t, os.WriteFile(dir, []byte("not a directory"), 0o644))
+			} else {
+				require.NoError(t, os.MkdirAll(filepath.Join(dir, ".cjv"), 0o755))
+				if tc.record != "" {
+					require.NoError(t, os.WriteFile(filepath.Join(dir, installationFile), []byte(tc.record), 0o644))
+				}
+			}
+			_, _, err := PrepareActive(t.Context(), tc.name, func(context.Context) error {
+				t.Fatal("an invalid installation must not trigger automatic replacement")
+				return nil
+			})
+			require.Error(t, err)
+			var missing *cjverr.ToolchainNotInstalledError
+			require.NotErrorAs(t, err, &missing)
+		})
+	}
+}
+
 func TestSelectActivePrefersOverrideThenEnvironment(t *testing.T) {
 	settings := config.DefaultSettings()
 	settings.DefaultToolchain = "lts-1.0.5"

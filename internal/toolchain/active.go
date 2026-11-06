@@ -117,7 +117,25 @@ func prepareActiveLookup(ctx context.Context, rawName string) (dir, displayName 
 	if err := ctx.Err(); err != nil {
 		return "", rawName, ToolchainName{}, err
 	}
-	return FindActiveDir(rawName)
+	dir, displayName, parsed, err = FindActiveDir(rawName)
+	if err != nil {
+		return dir, displayName, parsed, err
+	}
+	if parsed.IsCustom() {
+		info, err := os.Stat(dir)
+		if err != nil {
+			return "", displayName, parsed, err
+		}
+		if !info.IsDir() {
+			return "", displayName, parsed, fmt.Errorf("toolchain path %s is not a directory", dir)
+		}
+	} else if _, err := ReadInstallation(dir); err != nil {
+		// An existing directory with a broken record is not a missing SDK.
+		// Validate here, under the lookup lock, so raw lookup remains available
+		// to doctor for diagnosing damaged installations.
+		return "", displayName, parsed, err
+	}
+	return dir, displayName, parsed, nil
 }
 
 // SelectActive applies the common selector precedence while retaining project
