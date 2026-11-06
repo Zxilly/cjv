@@ -38,3 +38,22 @@ func TestLookPathInEnv_ExtensionHandling(t *testing.T) {
 	assert.False(t, found)
 	assert.Equal(t, "definitely-not-present-xyz", got)
 }
+
+func TestLookPathInEnv_WindowsDottedCommand(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("PATHEXT lookup is Windows-specific")
+	}
+	dir := t.TempDir()
+	exe := filepath.Join(dir, "tool.v1.exe")
+	require.NoError(t, os.WriteFile(exe, []byte("MZ"), 0o644))
+	environ := []string{"PATH=" + dir, "PATHEXT=.EXE;.CMD"}
+	got, found := LookPathInEnv("tool.v1", environ)
+	require.True(t, found, "a dot in a command name must not disable PATHEXT lookup")
+	assert.Equal(t, exe, got)
+
+	// An explicitly named executable still takes precedence over appended extensions.
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "tool.v1.exe.cmd"), []byte("stub"), 0o644))
+	got, found = LookPathInEnv("tool.v1.exe", environ)
+	require.True(t, found)
+	assert.Equal(t, exe, got)
+}

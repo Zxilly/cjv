@@ -124,13 +124,16 @@ func LookPathInEnv(command string, environ []string) (string, bool) {
 }
 
 func executableExtensions(command, pathext string) []string {
-	if runtime.GOOS != "windows" || filepath.Ext(command) != "" {
+	if runtime.GOOS != "windows" {
 		return []string{""}
 	}
 	if pathext == "" {
 		pathext = ".COM;.EXE;.BAT;.CMD"
 	}
 	var exts []string
+	if filepath.Ext(command) != "" {
+		exts = append(exts, "")
+	}
 	for p := range strings.SplitSeq(pathext, ";") {
 		p = strings.TrimSpace(p)
 		if p == "" {
