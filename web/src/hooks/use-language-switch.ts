@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { useAnimationControls, useReducedMotion, type Transition } from 'framer-motion'
 import { useLingui } from '@lingui/react/macro'
 import { i18n, activateLang, persistLang, type Lang } from '@/lib/i18n'
@@ -18,28 +18,46 @@ export function useLanguageSwitch() {
   const { i18n: active } = useLingui()
   const fadeControls = useAnimationControls()
   const prefersReducedMotion = useReducedMotion()
+  const generation = useRef(0)
+  const mounted = useRef(true)
+
+  useEffect(() => {
+    mounted.current = true
+    return () => {
+      mounted.current = false
+      generation.current++
+    }
+  }, [])
 
   // Keep the document language attribute in sync for a11y and correct font selection.
   useEffect(() => {
     document.documentElement.lang = active.locale === 'en' ? 'en' : 'zh-CN'
   }, [active.locale])
 
-  // Concurrent clicks just interrupt each other on the shared controls — last wins.
+  // Every choice invalidates pending work, including choosing the current locale.
   async function switchLang(next: Lang) {
-    if (next === i18n.locale) return
-    if (prefersReducedMotion) {
-      activateLang(next)
-      persistLang(next)
+    if (!mounted.current) return
+    const request = ++generation.current
+    if (next === i18n.locale || prefersReducedMotion) {
+      fadeControls.stop()
+      fadeControls.set({ opacity: 1 })
+      if (next !== i18n.locale) {
+        activateLang(next)
+        persistLang(next)
+      }
       return
     }
     await fadeControls.start({ opacity: 0, transition: PAGE_FADE_OUT })
+    if (!mounted.current || request !== generation.current) return
     // Always fade back in, even if the locale swap throws — otherwise the page would be
     // stranded invisible at opacity 0 with no recovery path.
     try {
       activateLang(next)
       persistLang(next)
     } finally {
-      await fadeControls.start({ opacity: 1, transition: PAGE_FADE_IN })
+      if (mounted.current && request === generation.current) {
+        await fadeControls.start({ opacity: 1, transition: PAGE_FADE_IN })
+      }
     }
   }
 

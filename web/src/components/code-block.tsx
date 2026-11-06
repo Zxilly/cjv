@@ -36,7 +36,7 @@ function legacyCopy(text: string): boolean {
   return ok
 }
 
-async function copyToClipboard(text: string): Promise<boolean> {
+async function copyToClipboard(text: string, isCurrent: () => boolean): Promise<boolean> {
   if (navigator.clipboard?.writeText) {
     try {
       await navigator.clipboard.writeText(text)
@@ -45,26 +45,34 @@ async function copyToClipboard(text: string): Promise<boolean> {
       // fall through to the legacy path below
     }
   }
-  return legacyCopy(text)
+  return isCurrent() && legacyCopy(text)
 }
 
 export function CodeBlock({ command, primary }: CodeBlockProps) {
   const { t } = useLingui()
   const [status, setStatus] = useState<CopyStatus>('idle')
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined)
+  const generation = useRef(0)
   const iconCls = primary ? 'w-4 h-4' : 'w-3.5 h-3.5'
 
-  useEffect(() => () => { if (timer.current) clearTimeout(timer.current) }, [])
   useEffect(() => {
     setStatus('idle')
     if (timer.current) {
       clearTimeout(timer.current)
       timer.current = undefined
     }
+    return () => {
+      generation.current++
+      if (timer.current) clearTimeout(timer.current)
+    }
   }, [command])
 
   async function copy() {
-    const ok = await copyToClipboard(command)
+    const request = ++generation.current
+    const isCurrent = () => request === generation.current
+    if (timer.current) clearTimeout(timer.current)
+    const ok = await copyToClipboard(command, isCurrent)
+    if (!isCurrent()) return
     setStatus(ok ? 'copied' : 'error')
     if (timer.current) clearTimeout(timer.current)
     timer.current = setTimeout(() => setStatus('idle'), ok ? 1500 : 2500)

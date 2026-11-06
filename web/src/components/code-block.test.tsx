@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { render, screen, waitFor } from '../test-utils'
+import { act, render, screen, waitFor } from '../test-utils'
 import userEvent from '@testing-library/user-event'
 import { CodeBlock } from './code-block'
 
@@ -92,5 +92,34 @@ describe('CodeBlock', () => {
 
     expect(await screen.findByText('mirror')).toBeInTheDocument()
     await waitFor(() => expect(container.querySelector('.text-cj')).toBeNull())
+  })
+
+  it('ignores a pending copy result after the displayed command changes', async () => {
+    const user = userEvent.setup()
+    let finish!: () => void
+    const writeText = vi.fn(() => new Promise<void>(resolve => { finish = resolve }))
+    vi.spyOn(navigator, 'clipboard', 'get').mockReturnValue({ writeText } as unknown as Clipboard)
+    const { rerender } = render(<CodeBlock command="official" />)
+    await user.click(screen.getByRole('button', COPY_BUTTON))
+    rerender(<CodeBlock command="mirror" />)
+    await act(async () => { finish() })
+    expect(screen.queryByText('已复制')).not.toBeInTheDocument()
+  })
+
+  it('does not run a stale fallback after a newer copy succeeds', async () => {
+    const user = userEvent.setup()
+    let rejectFirst!: (error: Error) => void
+    const writeText = vi.fn()
+      .mockImplementationOnce(() => new Promise<void>((_, reject) => { rejectFirst = reject }))
+      .mockResolvedValue(undefined)
+    vi.spyOn(navigator, 'clipboard', 'get').mockReturnValue({ writeText } as unknown as Clipboard)
+    const fallback = vi.spyOn(document, 'execCommand').mockReturnValue(false)
+    const { rerender } = render(<CodeBlock command="official" />)
+    await user.click(screen.getByRole('button', COPY_BUTTON))
+    rerender(<CodeBlock command="mirror" />)
+    await user.click(screen.getByRole('button', COPY_BUTTON))
+    await act(async () => { rejectFirst(new Error('late rejection')) })
+    expect(fallback).not.toHaveBeenCalled()
+    expect(screen.getByText('已复制')).toBeInTheDocument()
   })
 })
