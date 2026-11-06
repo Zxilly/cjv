@@ -1,18 +1,25 @@
 package progress
 
 import (
+	"fmt"
 	"io"
 	"os"
 	"time"
 
 	"github.com/Zxilly/cjv/internal/i18n"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/fatih/color"
 	"github.com/mattn/go-isatty"
 	"github.com/vbauerster/mpb/v8"
 	"github.com/vbauerster/mpb/v8/decor"
 )
 
-const downloadBarWidth = 24
+const (
+	downloadBarWidth        = 24
+	downloadMinBarWidth     = 10
+	downloadMinNameWidth    = 8
+	downloadPercentageWidth = 6
+)
 
 // Text is the human-readable adapter: each event becomes its i18n message on
 // the messages writer, and a download draws an animated bar on the bar writer
@@ -115,20 +122,46 @@ func (t *Text) startBar(e Event) {
 		mpb.WithRefreshRate(100*time.Millisecond),
 	)
 	t.total = e.Total
-	t.bar = t.progress.New(e.Total,
-		mpb.BarStyle().Lbound("|").Filler("=").Tip(">").Padding(" ").Rbound("|"),
-		mpb.BarWidth(downloadBarWidth),
-		mpb.PrependDecorators(
-			decor.Name(e.Subject, decor.WC{C: decor.DindentRight | decor.DextraSpace}),
-			decor.Percentage(decor.WC{C: decor.DindentRight | decor.DextraSpace}),
-		),
-		mpb.AppendDecorators(
-			decor.CountersKibiByte("% .1f / % .1f"),
-		),
-	)
+	t.bar = newDownloadBar(t.progress, e)
 	if e.Bytes > 0 {
 		t.bar.SetCurrent(e.Bytes)
 	}
+}
+
+func newDownloadBar(p *mpb.Progress, e Event) *mpb.Bar {
+	return p.New(e.Total,
+		mpb.BarStyle().Lbound("|").Filler("=").Tip(">").Padding(" ").Rbound("|"),
+		mpb.BarWidth(downloadBarWidth),
+		mpb.PrependDecorators(
+			decor.Any(func(s decor.Statistics) string {
+				// Reserve a readable bar and percentage before spending columns
+				// on the filename. Recompute on every frame to handle resizing.
+				width := s.AvailableWidth - downloadPercentageWidth - downloadMinBarWidth - 2
+				counters := downloadCounters(s)
+				if width >= ansi.StringWidth(counters)+downloadMinNameWidth+1 {
+					width -= ansi.StringWidth(counters)
+				}
+				if width <= 1 {
+					return ""
+				}
+				return ansi.Truncate(e.Subject, width-1, "…") + " "
+			}),
+			decor.Percentage(decor.WC{W: downloadPercentageWidth, C: decor.DindentRight}),
+		),
+		mpb.AppendDecorators(
+			decor.Any(func(s decor.Statistics) string {
+				counters := downloadCounters(s)
+				if s.AvailableWidth < downloadMinBarWidth+2+ansi.StringWidth(counters) {
+					return ""
+				}
+				return counters
+			}),
+		),
+	)
+}
+
+func downloadCounters(s decor.Statistics) string {
+	return fmt.Sprintf("% .1f / % .1f", decor.SizeB1024(s.Current), decor.SizeB1024(s.Total))
 }
 
 func (t *Text) finishBar(err error) {
