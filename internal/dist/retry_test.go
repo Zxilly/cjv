@@ -5,10 +5,12 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -18,6 +20,22 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func TestMaximumRetryCountStillPerformsTransfer(t *testing.T) {
+	t.Setenv("CJV_MAX_RETRIES", strconv.Itoa(math.MaxInt))
+	var requests atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests.Add(1)
+		_, _ = w.Write([]byte("downloaded"))
+	}))
+	defer server.Close()
+	dest := filepath.Join(t.TempDir(), "artifact")
+	require.NoError(t, DownloadFile(t.Context(), server.URL, dest, "", nil))
+	data, err := os.ReadFile(dest)
+	require.NoError(t, err, "success must imply a published file")
+	require.Equal(t, "downloaded", string(data))
+	require.EqualValues(t, 1, requests.Load())
+}
 
 func TestNightlyChecksumRetryPolicy(t *testing.T) {
 	for _, status := range []int{403, 404, 408, 429, 500} {

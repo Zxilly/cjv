@@ -357,14 +357,17 @@ func downloadOnce(ctx context.Context, url, tmpPath, displayName, sha256Hex stri
 	// Determine whether to resume or start fresh.
 	var f *os.File
 	resumed := false
+	var rangeEnd, rangeTotal int64
 
 	switch resp.StatusCode {
 	case http.StatusPartialContent:
-		if existingSize > 0 {
-			if err := validateContentRangeStart(resp.Header.Get("Content-Range"), existingSize); err != nil {
-				cleanupDownloadTemp(tmpPath)
-				return fmt.Errorf("invalid resume response for %s: %w", url, err)
-			}
+		if existingSize == 0 {
+			return fmt.Errorf("unsolicited partial response for %s", redactURL(url))
+		}
+		rangeEnd, rangeTotal, err = parseContentRange(resp.Header.Get("Content-Range"), existingSize)
+		if err != nil {
+			cleanupDownloadTemp(tmpPath)
+			return fmt.Errorf("invalid resume response for %s: %w", redactURL(url), err)
 		}
 		resumed = true
 	case http.StatusOK:
@@ -424,12 +427,33 @@ func downloadOnce(ctx context.Context, url, tmpPath, displayName, sha256Hex stri
 	if resp.ContentLength > 0 {
 		totalSize = resp.ContentLength + existingSize
 	}
+	if resumed && rangeTotal >= 0 {
+		totalSize = rangeTotal
+	}
 	sink.Report(progress.Event{Kind: progress.DownloadStarted, Subject: displayName, Bytes: existingSize, Total: totalSize})
 
 	reader := io.TeeReader(&advancingReader{r: resp.Body, sink: sink}, hasher)
-	if _, err := fsops.CopyContext(ctx, f, reader); err != nil {
+	written, err := fsops.CopyContext(ctx, f, reader)
+	if err != nil {
 		sink.Report(progress.Event{Kind: progress.DownloadFinished, Err: err})
 		return fmt.Errorf("download write: %w", err)
+	}
+	if resumed {
+		expected := rangeEnd - existingSize + 1
+		if written > expected {
+			// Bytes outside the advertised range cannot be used for another resume.
+			_ = f.Close()
+			cleanupDownloadTemp(tmpPath)
+			err = fmt.Errorf("resume body exceeds Content-Range")
+		} else if written < expected || rangeTotal >= 0 && existingSize+written < rangeTotal {
+			// Some servers limit each range response. Keep the verified prefix and
+			// request the remaining bytes before checking the complete-file hash.
+			err = io.ErrUnexpectedEOF
+		}
+		if err != nil {
+			sink.Report(progress.Event{Kind: progress.DownloadFinished, Err: err})
+			return fmt.Errorf("incomplete resume response for %s: %w", redactURL(url), err)
+		}
 	}
 	sink.Report(progress.Event{Kind: progress.DownloadFinished})
 
@@ -454,30 +478,41 @@ func (a *advancingReader) Read(p []byte) (int, error) {
 	return n, err
 }
 
-func validateContentRangeStart(header string, expectedStart int64) error {
+func parseContentRange(header string, expectedStart int64) (end, total int64, err error) {
 	if header == "" {
-		return fmt.Errorf("missing Content-Range header")
+		return 0, 0, fmt.Errorf("missing Content-Range header")
 	}
 	unit, spec, ok := strings.Cut(header, " ")
 	if !ok || !strings.EqualFold(unit, "bytes") {
-		return fmt.Errorf("invalid Content-Range header %q", header)
+		return 0, 0, fmt.Errorf("invalid Content-Range header %q", header)
 	}
-	rangeSpec, _, ok := strings.Cut(spec, "/")
+	rangeSpec, totalText, ok := strings.Cut(spec, "/")
 	if !ok {
-		return fmt.Errorf("invalid Content-Range header %q", header)
+		return 0, 0, fmt.Errorf("invalid Content-Range header %q", header)
 	}
 	startText, endText, ok := strings.Cut(rangeSpec, "-")
 	if !ok || startText == "" || endText == "" {
-		return fmt.Errorf("invalid Content-Range header %q", header)
+		return 0, 0, fmt.Errorf("invalid Content-Range header %q", header)
 	}
 	start, err := strconv.ParseInt(startText, 10, 64)
 	if err != nil {
-		return fmt.Errorf("invalid Content-Range start %q: %w", startText, err)
+		return 0, 0, fmt.Errorf("invalid Content-Range start %q: %w", startText, err)
 	}
 	if start != expectedStart {
-		return fmt.Errorf("Content-Range starts at %d, expected %d", start, expectedStart)
+		return 0, 0, fmt.Errorf("Content-Range starts at %d, expected %d", start, expectedStart)
 	}
-	return nil
+	end, err = strconv.ParseInt(endText, 10, 64)
+	if err != nil || end < start {
+		return 0, 0, fmt.Errorf("invalid Content-Range end %q", endText)
+	}
+	total = -1
+	if totalText != "*" {
+		total, err = strconv.ParseInt(totalText, 10, 64)
+		if err != nil || total <= end {
+			return 0, 0, fmt.Errorf("invalid Content-Range total %q", totalText)
+		}
+	}
+	return end, total, nil
 }
 
 // verifyArchiveMagic checks that path starts with a recognized archive header

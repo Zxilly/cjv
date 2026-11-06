@@ -34,16 +34,15 @@ func getMaxDownloadRetries() int {
 // retryTransfer owns the stopping and waiting policy shared by archives and
 // checksum metadata. Each operation retains its own partial-file lifecycle.
 func retryTransfer(ctx context.Context, transfer func() error) error {
-	maxAttempts := getMaxDownloadRetries() + 1
-	var err error
-	for attempt := 0; attempt < maxAttempts; attempt++ {
+	maxRetries := getMaxDownloadRetries()
+	for attempt := 0; ; attempt++ {
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
 		if attempt > 0 {
-			slog.Info("retrying download", "attempt", attempt+1, "max", maxAttempts)
+			slog.Info("retrying download", "retry", attempt, "max_retries", maxRetries)
 		}
-		err = transfer()
+		err := transfer()
 		if err == nil {
 			return nil
 		}
@@ -51,7 +50,7 @@ func retryTransfer(ctx context.Context, transfer func() error) error {
 			return ctx.Err()
 		}
 		var permanent *nonRetriableError
-		if errors.As(err, &permanent) || attempt == maxAttempts-1 {
+		if errors.As(err, &permanent) || attempt == maxRetries {
 			return err
 		}
 		delay := 250 * time.Millisecond * time.Duration(1<<min(attempt, 5))
@@ -67,7 +66,6 @@ func retryTransfer(ctx context.Context, transfer func() error) error {
 		case <-timer.C:
 		}
 	}
-	return err
 }
 
 type retryAfterError struct {
