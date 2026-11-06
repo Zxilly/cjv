@@ -60,20 +60,12 @@ func RemoveToolchain(name string) error {
 	}
 	name = filepath.Base(dir)
 	names := []string{name}
-	if parsed.IsChannelOnly() {
-		record, err := toolchain.ReadInstallation(dir)
+	if !parsed.IsCustom() && parsed.Target == "" {
+		host, err := toolchain.ReadHostTargets(dir)
 		if err != nil {
 			return err
 		}
-		hostTuple := record.Tuple
-		if hostTuple == "" {
-			d, err := OpenDistribution(Options{})
-			if err != nil {
-				return err
-			}
-			hostTuple = d.HostTuple
-		}
-		variants, err := trackedGroupTargets(parsed.Channel, hostTuple, true)
+		variants, err := host.OwnedTargets()
 		if err != nil {
 			return err
 		}

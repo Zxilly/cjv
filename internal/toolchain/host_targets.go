@@ -108,18 +108,36 @@ func (h HostTargets) FindTarget(environment string) (string, ToolchainName, erro
 	return dir, release, nil
 }
 
-// Installed lists only targets usable with this host's current release.
-// Broken records remain errors; targets from older releases are simply absent.
-func (h HostTargets) Installed() ([]string, error) {
+// OwnedTargets lists target identities belonging to this host, including stale
+// or damaged installations that still need to be retired with their owner.
+func (h HostTargets) OwnedTargets() ([]string, error) {
 	installed, err := ListInstalled()
 	if err != nil {
 		return nil, err
 	}
-	var environments []string
+	var names []string
 	for _, raw := range installed {
 		name, err := ParseToolchainName(raw)
 		if err != nil || name.Channel != h.identity.Channel || name.Version != h.identity.Version || !strings.HasPrefix(name.Target, h.Tuple+"-") {
 			continue
+		}
+		names = append(names, raw)
+	}
+	return names, nil
+}
+
+// Installed lists only targets usable with this host's current release.
+// Broken records remain errors; targets from older releases are simply absent.
+func (h HostTargets) Installed() ([]string, error) {
+	owned, err := h.OwnedTargets()
+	if err != nil {
+		return nil, err
+	}
+	var environments []string
+	for _, raw := range owned {
+		name, err := ParseToolchainName(raw)
+		if err != nil {
+			return nil, err
 		}
 		environment := strings.TrimPrefix(name.Target, h.Tuple+"-")
 		if _, _, err := h.FindTarget(environment); err != nil {
