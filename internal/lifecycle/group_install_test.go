@@ -13,6 +13,7 @@ import (
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/config/configtest"
 	"github.com/Zxilly/cjv/internal/dist"
+	"github.com/Zxilly/cjv/internal/progress"
 	"github.com/Zxilly/cjv/internal/target"
 	"github.com/Zxilly/cjv/internal/testutil"
 	"github.com/Zxilly/cjv/internal/toolchain"
@@ -48,8 +49,46 @@ func TestNoUpdateWithTargetsIsOffline(t *testing.T) {
 	selectRelease(t, "1.0.0", "ohos")
 	require.NoError(t, Install(t.Context(), InstallRequest{Toolchain: "sts", Targets: []string{"ohos"}}, Options{}))
 	selectRelease(t, "2.0.0")
-	require.NoError(t, Install(t.Context(), InstallRequest{Toolchain: "sts", NoUpdate: true}, Options{}))
+	recorder := &testutil.ProgressRecorder{}
+	require.NoError(t, Install(t.Context(), InstallRequest{Toolchain: "sts", NoUpdate: true}, Options{Progress: recorder}))
+	require.Contains(t, recorder.Kinds, progress.ToolchainAlreadyInstalled)
+	require.NotContains(t, recorder.Kinds, progress.AlreadyUpToDate, "keeping a local release does not check remote freshness")
 	require.Equal(t, "sts-1.0.0", readRelease(t, home, "sts").Release)
+}
+
+func TestNoUpdateTargetInstallationPreservesHostOwnership(t *testing.T) {
+	for _, identity := range []string{"sts", "sts-1.0.0"} {
+		for _, existing := range []string{"none", "host", "host and target"} {
+			t.Run(identity+"/"+existing, func(t *testing.T) {
+				home := updateHome(t)
+				selectRelease(t, "1.0.0", "ohos")
+				if existing != "none" {
+					req := InstallRequest{Toolchain: identity}
+					if existing == "host and target" {
+						req.Targets = []string{"ohos"}
+					}
+					require.NoError(t, Install(t.Context(), req, Options{}))
+				}
+				req := InstallRequest{Toolchain: identity, Targets: []string{"ohos"}, NoUpdate: true}
+				require.NoError(t, Install(t.Context(), req, Options{}))
+				host, err := toolchain.ReadHostTargets(filepath.Join(home, "toolchains", identity))
+				require.NoError(t, err)
+				crossDir, release, err := host.FindTarget("ohos")
+				require.NoError(t, err, "the newly installed target must belong to its host identity")
+				tuple, err := target.CurrentTargetTuple("", "ohos")
+				require.NoError(t, err)
+				require.Equal(t, identity+"-"+tuple, filepath.Base(crossDir))
+				require.Equal(t, "sts-1.0.0-"+tuple, release.String())
+				require.Equal(t, "sts-1.0.0", readRelease(t, home, identity).Release)
+				// A second ensure must not create a fixed counterpart for a
+				// tracking target that is already installed.
+				require.NoError(t, Install(t.Context(), req, Options{}))
+				installed, err := toolchain.ListInstalled()
+				require.NoError(t, err)
+				require.Len(t, installed, 2, "%v", installed)
+			})
+		}
+	}
 }
 
 func TestExplicitCurrentHostHasOneTargetOwner(t *testing.T) {

@@ -156,6 +156,26 @@ func TestSelfCommandsKeepUninstallConfirmationPerInvocation(t *testing.T) {
 	require.ErrorAs(t, second.Execute(), &unsupported)
 }
 
+func TestSelfUninstallRequiresExplicitYesWithoutTerminal(t *testing.T) {
+	if clictx.StdinIsTerminal() {
+		t.Skip("requires noninteractive input")
+	}
+	home := t.TempDir()
+	configtest.Isolate(t, home)
+	previous := ensureSelfManagedExecutable
+	t.Cleanup(func() { ensureSelfManagedExecutable = previous })
+	ensureSelfManagedExecutable = func() (string, error) {
+		t.Fatal("unconfirmed noninteractive uninstall must not prepare deletion")
+		return "", nil
+	}
+	cmd := newTestSelfCommand("dev", "", &output.Renderer{})
+	cmd.SetOut(io.Discard)
+	cmd.SetErr(io.Discard)
+	cmd.SetArgs([]string{"uninstall"})
+	require.ErrorContains(t, cmd.Execute(), "--yes")
+	assert.DirExists(t, home)
+}
+
 // newTestSelfCommand builds the self command for one invocation's context.
 func newTestSelfCommand(version, updateURL string, renderer *output.Renderer) *cobra.Command {
 	ctx := clictx.New(version, updateURL)

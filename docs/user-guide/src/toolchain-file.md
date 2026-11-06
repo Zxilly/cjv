@@ -48,7 +48,7 @@ cjv show active
 
 每个 `cangjie-sdk.toml` 必须且只能指定 `channel` 和 `path` 中的一个：
 
-- **`channel`** 指定官方通道（`lts`、`sts`、`nightly`）、版本选择器（`lts-1.0.5`、`1.2`、`nightly-2026-10-04`）或通过 `cjv toolchain link` 注册的自定义工具链名称。
+- **`channel`** 指定官方通道（`lts`、`sts`、`nightly`）、版本选择器（`lts-1.0.5`、`1.2`、`nightly-2026-10-04`）或通过 `toolchain import` / `toolchain link` 注册的自定义工具链名称。
 - **`path`** 使用绝对路径直接指向本机已解压的外部 SDK 目录：
 
 ```toml

@@ -4,7 +4,7 @@ Organizations can deploy `cjv` across developer workstations and CI runners unde
 
 - **Outbound access via proxy** — When client machines can reach upstream servers through a corporate proxy, configure [network proxy variables](../network-proxies.md) and your corporate CA certificate.
 - **Internal-only network** — When clients can only reach internal hosts, publish approved SDKs, components, and manifests to an [internal distribution server](distribution-server.md) and point `dist_server` at it.
-- **Fully air-gapped environments** — When clients have no network access at all, distribute local SDK archives or pre-staged directories and register them with `cjv toolchain link`.
+- **Fully air-gapped environments** — Import local archives with `toolchain import`, or reference pre-staged directories with `toolchain link`.
 
 Keep in mind that `dist_server` controls Cangjie SDK and component distribution only. Upgrades to the `cjv` binary itself and `cjpm` package dependency repositories are configured and managed separately.
 
@@ -63,12 +63,12 @@ Use the exact same full version name (`lts-1.0.5`) in each project's [`cangjie-s
 On air-gapped workstations or build nodes without an internal HTTP server, register toolchains from local archives or pre-staged directories:
 
 ```bash
-cjv toolchain link corp-sdk ./cangjie-sdk.zip --sha256 <approved-sha256>
+cjv toolchain import corp-sdk ./cangjie-sdk.zip --sha256 <approved-sha256>
 cjv component link stdx /opt/corp/cangjie-stdx --toolchain corp-sdk
 cjv default corp-sdk
 ```
 
-Pass `--sha256 <approved-sha256>` when linking an archive so `cjv` verifies the archive's integrity before extraction. Alternatively, you can link an unpacked read-only SDK directory (`cjv toolchain link corp-sdk /opt/corp/sdk`), in which case the owner of that directory maintains its components directly. In project repositories, reference the custom toolchain name (`channel = "corp-sdk"`) in `cangjie-sdk.toml`, and make sure any required `cjpm` project dependencies are pre-staged for offline builds.
+Pass `--sha256 <approved-sha256>` when importing an archive so `cjv` verifies the archive's integrity before extraction. Alternatively, you can link an unpacked read-only SDK directory (`cjv toolchain link corp-sdk /opt/corp/sdk`), in which case the owner of that directory maintains its components directly. In project repositories, reference the custom toolchain name (`channel = "corp-sdk"`) in `cangjie-sdk.toml`, and make sure any required `cjpm` project dependencies are pre-staged for offline builds.
 
 See [Custom SDKs](../install-from-url.md) for supported archive formats. Because `docs` and `stdx-docs` do not support local directory links, install them from a distribution source before disconnecting the machine (or include them in a pre-staged `CJV_HOME`).
 

@@ -9,7 +9,6 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
-	"strings"
 	"sync/atomic"
 	"testing"
 
@@ -82,12 +81,22 @@ func TestIntegrationLegacyMigrationAndUpgradeKeepPinnedSDK(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, stdout, "lts-1.0.5", "the old explicit default must remain fixed")
 
-	stdout, stderr, err = runCJV(t, binary, home, "uninstall", "lts")
+	stdout, stderr, err = runCJV(t, binary, home, "uninstall", "lts", "--yes")
 	require.NoError(t, err, "uninstall failed: stdout=%s stderr=%s", stdout, stderr)
-	stdout, _, err = runCJV(t, binary, home, "toolchain", "list")
+	stdout, _, err = runCJV(t, binary, home, "toolchain", "list", "--json")
 	require.NoError(t, err)
-	assert.Contains(t, stdout, "lts-1.0.5")
-	assert.NotContains(t, strings.ReplaceAll(stdout, "\r\n", "\n"), "  lts\n")
+	var installed struct {
+		Toolchains []struct {
+			Name string `json:"name"`
+		} `json:"toolchains"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(stdout), &installed))
+	var names []string
+	for _, entry := range installed.Toolchains {
+		names = append(names, entry.Name)
+	}
+	assert.Contains(t, names, "lts-1.0.5")
+	assert.NotContains(t, names, "lts")
 	assert.NoDirExists(t, channelDir, "a completed migration must not resurrect the channel")
 	assert.FileExists(t, filepath.Join(legacyDir, "user.txt"))
 }

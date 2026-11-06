@@ -134,3 +134,13 @@ func TestRunCheckLeavesFixedTargetsPinned(t *testing.T) {
 	assert.False(t, got.Toolchains[0].UpdateAvailable)
 	assert.False(t, got.Toolchains[0].NotForTarget)
 }
+
+func TestRunCheckHonorsExplicitSelector(t *testing.T) {
+	c := newTestCommands()
+	checkHome(t, manifestSettings(testutil.ValidMockServer(t).URL))
+	clitest.InstallToolchain(t, c.ctx, "lts")
+	clitest.InstallToolchain(t, c.ctx, "sts")
+	c.ctx.Selector = "lts"
+	got := runCheckJSON(t, c)
+	require.Equal(t, []string{"lts"}, entryNames(got.Toolchains))
+}

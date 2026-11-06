@@ -5,10 +5,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -17,6 +19,7 @@ import (
 	"github.com/Zxilly/cjv/internal/cli/clitest"
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/config/configtest"
+	"github.com/Zxilly/cjv/internal/dist"
 	"github.com/Zxilly/cjv/internal/lifecycle"
 	"github.com/Zxilly/cjv/internal/toolchain"
 	"github.com/spf13/cobra"
@@ -27,6 +30,64 @@ import (
 // Tests for the update command: argument handling, the self-update decision
 // and result rendering. Update semantics live with lifecycle.UpdateInstalled
 // and UpdateAll.
+
+type planUpdateTransport func(*http.Request) (*http.Response, error)
+
+func (f planUpdateTransport) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
+
+func TestUpdateDryRunIncludesSelfPolicyWithoutPublishingCache(t *testing.T) {
+	for _, policy := range []string{config.AutoSelfUpdateCheck, config.AutoSelfUpdateEnable, config.AutoSelfUpdateDisable} {
+		t.Run(policy, func(t *testing.T) {
+			home := t.TempDir()
+			configtest.Isolate(t, home)
+			require.NoError(t, config.EnsureDirs())
+			require.NoError(t, os.MkdirAll(filepath.Join(home, "toolchains", "local-sdk"), 0o755))
+			settings := config.DefaultSettings()
+			settings.AutoSelfUpdate = policy
+			require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
+			client := dist.HTTPClient()
+			previous := client.Transport
+			requests := 0
+			client.Transport = planUpdateTransport(func(r *http.Request) (*http.Response, error) {
+				requests++
+				if r.Method == http.MethodHead {
+					return &http.Response{StatusCode: http.StatusFound, Header: http.Header{"Location": []string{"/owner/repo/releases/tag/v2.0.0"}}, Body: io.NopCloser(strings.NewReader("")), Request: r}, nil
+				}
+				return &http.Response{StatusCode: http.StatusOK, Header: http.Header{}, Body: io.NopCloser(strings.NewReader(`{"tag_name":"v2.0.0"}`)), Request: r}, nil
+			})
+			t.Cleanup(func() { client.Transport = previous })
+			ctx := clitest.Root(Register)
+			ctx.Version, ctx.UpdateURL = "1.0.0", "https://example.test/owner/repo/releases"
+			out, err := clitest.Execute(t, ctx, "update", "--dry-run", "--json")
+			require.NoError(t, err, out)
+			var result updatePlanResult
+			require.NoError(t, json.Unmarshal([]byte(out), &result))
+			if policy == config.AutoSelfUpdateDisable {
+				require.Nil(t, result.SelfUpdate)
+				require.Zero(t, requests)
+			} else {
+				require.NotNil(t, result.SelfUpdate)
+				require.Equal(t, "2.0.0", result.SelfUpdate.Latest)
+				wantAction := "check"
+				if policy == config.AutoSelfUpdateEnable {
+					wantAction = "update"
+				}
+				require.Equal(t, wantAction, result.SelfUpdate.Action)
+				require.Greater(t, requests, 0)
+			}
+			require.NoDirExists(t, filepath.Join(home, "cache"))
+			require.NoDirExists(t, filepath.Join(home, "cache.locks"))
+			binEntries, err := os.ReadDir(filepath.Join(home, "bin"))
+			require.NoError(t, err)
+			require.Empty(t, binEntries, "planning must not install a managed executable")
+			out, err = clitest.Execute(t, clitest.Root(Register), "update", "local-sdk", "--dry-run", "--json")
+			require.NoError(t, err, out)
+			result = updatePlanResult{}
+			require.NoError(t, json.Unmarshal([]byte(out), &result))
+			require.Nil(t, result.SelfUpdate, "an explicitly scoped update never self-updates")
+		})
+	}
+}
 
 // runUpdateJSON runs update with args in JSON mode and decodes the result.
 func runUpdateJSON(t *testing.T, c *update, args ...string) updateResult {

@@ -25,9 +25,11 @@ cjv component remove stdx-docs
 - 未指定 `--toolchain` 时，命令默认作用于当前激活的工具链。
 - 传入 `--target <suffix>` 时，命令作用于该宿主工具链下已安装的[交叉编译](../cross-compilation.md)目标 SDK（例如 `cjv component add stdx --toolchain sts --target ohos`）。
 - 组件名可以传入多个参数，也可以用逗号分隔（如 `stdx,docs`）。
-- `cjv component add` 默认跳过已安装的组件；加上 `--force` 可以强制重新下载安装。
+- `cjv component add` 默认跳过已安装的组件；加上 `--reinstall` 可以重新下载安装。
 
 实际可下载的组件制品取决于所选通道、版本和平台。自定义工具链没有上游官方清单记录，因此无法通过 `cjv component add` 下载官方组件。在团队项目中，也可以在 [`cangjie-sdk.toml`](../toolchain-file.md) 中声明 `components`，由自动安装按需补齐。
+
+`component list --names-only` 单列打印名称；全局 `--quiet` / `-q` 只关闭进度，在命令前后含义相同。旧 `add --force` 和 `link --force` 分别保留为 `--reinstall` 和 `--replace` 的隐藏兼容标志。
 
 ### 更新行为
 
@@ -38,10 +40,10 @@ cjv component remove stdx-docs
 如果你在本机编译了 `stdx` 或有现成的本地目录，可以使用 `cjv component link` 将其挂载到指定工具链：
 
 ```bash
-cjv component link stdx /path/to/local/stdx --toolchain lts --force
+cjv component link stdx /path/to/local/stdx --toolchain lts --replace
 ```
 
-指定的源目录必须同时包含 `dynamic/` 和 `static/` 子目录。`--force` 用于替换该工具链上已有的 `stdx` 组件；运行 `cjv component remove stdx` 移除链接时，只会删除 `cjv` 内部管理的链接记录，保留你的本地源目录不变。注意 `docs` 和 `stdx-docs` 不支持本地目录链接。
+指定的源目录必须同时包含 `dynamic/` 和 `static/` 子目录。`--replace` 用于替换该工具链上已有的 `stdx` 组件；运行 `cjv component remove stdx` 移除链接时，只会删除 `cjv` 内部管理的链接记录，保留你的本地源目录不变。注意 `docs` 和 `stdx-docs` 不支持本地目录链接。
 
 ### 自定义 SDK 的组件管理
 
@@ -50,7 +52,7 @@ cjv component link stdx /path/to/local/stdx --toolchain lts --force
 如果需要让 `cjv` 为自定义 SDK 管理组件（例如挂载本地 `stdx`），请先从[本地归档或 URL](../install-from-url.md) 安装该自定义 SDK：
 
 ```bash
-cjv toolchain link my-sdk ./cangjie-sdk.zip
+cjv toolchain import my-sdk ./cangjie-sdk.zip
 cjv component link stdx /path/to/local/stdx --toolchain my-sdk
 ```
 

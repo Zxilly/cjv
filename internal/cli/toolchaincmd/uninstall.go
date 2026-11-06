@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"charm.land/huh/v2"
+	"github.com/Zxilly/cjv/internal/cjverr"
 	"github.com/Zxilly/cjv/internal/cli/clictx"
 	"github.com/Zxilly/cjv/internal/i18n"
 	"github.com/Zxilly/cjv/internal/lifecycle"
@@ -44,10 +45,15 @@ func (c *uninstall) runOne(name string) (*uninstallResult, error) {
 		return nil, err
 	}
 
-	// Confirm before destroying the toolchain and its components. Skipped with
-	// --yes, in JSON mode, or when stdin is not an interactive terminal (so
-	// scripts/CI are not blocked waiting on a prompt).
-	if !c.yes && !c.ctx.Output.IsJSON() && clictx.StdinIsTerminal() {
+	// Output format never grants permission to remove content. Without a
+	// terminal the caller must explicitly opt in instead of receiving a prompt.
+	if !c.yes && c.ctx.Output.IsJSON() {
+		return nil, &cjverr.UnsupportedForJSONError{Command: "uninstall (without --yes)"}
+	}
+	if !c.yes && !clictx.StdinIsTerminal() {
+		return nil, errors.New(i18n.T("UninstallRequiresYes", nil))
+	}
+	if !c.yes {
 		confirm := false
 		if err := huh.NewConfirm().
 			Title(i18n.T("ToolchainUninstallConfirm", i18n.MsgData{"Name": name})).

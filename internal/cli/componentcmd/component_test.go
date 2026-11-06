@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Zxilly/cjv/internal/cli/clictx"
 	"github.com/Zxilly/cjv/internal/cli/clitest"
 	componentlib "github.com/Zxilly/cjv/internal/component"
 	"github.com/Zxilly/cjv/internal/config"
@@ -81,10 +82,51 @@ func TestRunComponentAddInstallsForResolvedToolchain(t *testing.T) {
 	require.NoError(t, err)
 	assert.NoFileExists(t, docsIndex, "an installed component is kept without --force")
 
-	_, err = execute(t, "component", "add", "docs", "--toolchain", tcName, "--force")
+	_, err = execute(t, "component", "add", "docs", "--toolchain", tcName, "--reinstall")
 	require.NoError(t, err)
 	assert.FileExists(t, docsIndex)
 	assert.True(t, componentlib.IsInstalled(tcDir, componentlib.Docs))
+}
+
+func TestComponentQuietHasSameMeaningBeforeAndAfterCommand(t *testing.T) {
+	i18n.Init("en")
+	t.Cleanup(func() { i18n.Init("en") })
+	tcName := "lts-1.0.5"
+	clitest.Home(t, tcName)
+	var previous string
+	for _, args := range [][]string{
+		{"-q", "component", "list", "--toolchain", tcName},
+		{"component", "list", "--toolchain", tcName, "-q"},
+		{"component", "list", "--toolchain", tcName, "--quiet"},
+	} {
+		ctx := clitest.Root(Register)
+		out, err := clitest.Execute(t, ctx, args...)
+		require.NoError(t, err)
+		assert.True(t, ctx.Quiet)
+		assert.Contains(t, out, "(", "quiet controls progress, not the result format")
+		if previous != "" {
+			assert.Equal(t, previous, out)
+		}
+		previous = out
+	}
+	out, err := execute(t, "component", "list", "--toolchain", tcName, "--names-only")
+	require.NoError(t, err)
+	assert.Equal(t, []string{"docs", "stdx", "stdx-docs"}, strings.Fields(out))
+}
+
+func TestComponentReplacementFlagContracts(t *testing.T) {
+	ctx := clictx.New("dev", "")
+	cmd := newCommands(ctx).command()
+	add, _, err := cmd.Find([]string{"add"})
+	require.NoError(t, err)
+	assert.NotNil(t, add.Flags().Lookup("reinstall"))
+	assert.True(t, add.Flags().Lookup("force").Hidden)
+	link, _, err := cmd.Find([]string{"link"})
+	require.NoError(t, err)
+	assert.NotNil(t, link.Flags().Lookup("replace"))
+	assert.True(t, link.Flags().Lookup("force").Hidden)
+	_, err = execute(t, "component", "add", "docs", "--force", "--reinstall")
+	require.Error(t, err)
 }
 
 func TestRunComponentAddRejectsCustomToolchain(t *testing.T) {

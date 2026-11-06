@@ -77,6 +77,10 @@ func localizeCompletionCommand(root *cobra.Command) {
 			"fish": "CompletionFishLong", "powershell": "CompletionPowershellLong",
 		}
 		for _, shell := range cmd.Commands() {
+			if shell.Annotations == nil {
+				shell.Annotations = make(map[string]string)
+			}
+			shell.Annotations["cjv.native-output"] = "true"
 			shell.Short = i18n.T("CompletionShellShort", i18n.MsgData{"Shell": shell.Name()})
 			shell.Long = i18n.T(longIDs[shell.Name()], data)
 			if flag := shell.Flags().Lookup("no-descriptions"); flag != nil {

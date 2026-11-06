@@ -4,12 +4,13 @@ import (
 	"fmt"
 	"path/filepath"
 
+	"github.com/Zxilly/cjv/internal/cli/clictx"
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/i18n"
 	"github.com/spf13/cobra"
 )
 
-func newSetHomeCommand() *cobra.Command {
+func newSetHomeCommand(ctx *clictx.Context) *cobra.Command {
 	return &cobra.Command{
 		Use:   "home <path>",
 		Short: i18n.T("SetHomeShort", nil),
@@ -28,9 +29,9 @@ func newSetHomeCommand() *cobra.Command {
 
 			display := stored
 			if display == "" {
-				display = "(unset)"
+				display = i18n.T("SettingUnsetValue", nil)
 			}
-			return updateSetting(cmd.OutOrStdout(), "home", display, config.SettingsUpdate{Home: &stored})
+			return updateSetting(ctx, cmd.OutOrStdout(), "home", display, stored, config.SettingsUpdate{Home: &stored})
 		},
 	}
 }

@@ -75,10 +75,10 @@ cjv pin --check
 临时使用其他版本运行命令：
 
 ```bash
-cjv run --install sts cjc --version
+cjv +sts exec cjc --version
 ```
 
-`--install` 允许安装缺失的工具链。版本选择顺序和目录覆盖见[项目工具链](https://cjv.zxilly.com/book/user-guide/zh-CN/toolchain-file.html)。
+`exec` 与代理命令一样按 `auto_install` 补齐缺失项；使用 `--no-auto-install` 可禁止补装。`which` 和 `envsetup` 只查询已安装内容。版本选择顺序和目录覆盖见[项目工具链](https://cjv.zxilly.com/book/user-guide/zh-CN/toolchain-file.html)。
 
 检查当前环境或预览更新：
 

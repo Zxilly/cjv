@@ -47,10 +47,11 @@ func (r toolchainLinkResult) Text() string {
 
 // link holds the flags of `cjv toolchain link` for one invocation.
 type link struct {
-	ctx    *clictx.Context
-	sha256 string
-	force  bool
-	noStdx bool
+	ctx        *clictx.Context
+	sha256     string
+	force      bool
+	noStdx     bool
+	importOnly bool
 }
 
 // renderMaterialized renders the result of a URL or archive link, whose
@@ -81,6 +82,7 @@ func (c *link) run(cmd *cobra.Command, args []string) error {
 
 	// URL target: download and materialize a cjv-owned toolchain.
 	if isURLPath(targetPath) {
+		c.noteLegacyImport(cmd)
 		if err := lifecycle.InstallToolchainFromURL(cmd.Context(), name, targetPath, c.sha256, c.force, c.noStdx, c.ctx.LifecycleOptions()); err != nil {
 			return err
 		}
@@ -101,10 +103,14 @@ func (c *link) run(cmd *cobra.Command, args []string) error {
 	// apply here too. A directory is referenced in place via a symlink, and
 	// those flags do not apply to it.
 	if !info.IsDir() {
+		c.noteLegacyImport(cmd)
 		if err := lifecycle.InstallToolchainFromZip(cmd.Context(), name, absPath, c.sha256, c.force, c.noStdx, c.ctx.LifecycleOptions()); err != nil {
 			return err
 		}
 		return c.renderMaterialized(cmd, name)
+	}
+	if c.importOnly {
+		return errors.New(i18n.T("ToolchainImportUseArchive", nil))
 	}
 
 	// Directory link: the archive/URL-only flags must not be used here. Reject
@@ -121,16 +127,37 @@ func (c *link) run(cmd *cobra.Command, args []string) error {
 	return c.ctx.Output.RenderTo(clictx.Out(cmd), toolchainLinkResult{Name: name, Path: absPath})
 }
 
+func (c *link) noteLegacyImport(cmd *cobra.Command) {
+	if !c.importOnly {
+		c.ctx.Output.Note(cmd.ErrOrStderr(), i18n.T("LegacyLinkImport", nil))
+	}
+}
+
+func (c *link) importCommand() *cobra.Command {
+	c.importOnly = true
+	cmd := &cobra.Command{
+		Use: "import <name> <archive|url>", Short: i18n.T("ToolchainImportShort", nil),
+		Args: cobra.ExactArgs(2), RunE: c.run,
+	}
+	cmd.Flags().StringVar(&c.sha256, "sha256", "", i18n.T("LinkFlagSHA256", nil))
+	cmd.Flags().BoolVar(&c.force, "replace", false, i18n.T("ImportFlagReplace", nil))
+	cmd.Flags().BoolVar(&c.noStdx, "no-stdx", false, i18n.T("LinkFlagNoStdx", nil))
+	return cmd
+}
+
 func (c *link) command() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "link <name> <path>",
-		Short: i18n.T("ToolchainLinkShort", nil),
+		Short: i18n.T("ToolchainLinkDirectoryShort", nil),
 		Args:  cobra.ExactArgs(2),
 		RunE:  c.run,
 	}
 	cmd.Flags().StringVar(&c.sha256, "sha256", "", i18n.T("LinkFlagSHA256", nil))
 	cmd.Flags().BoolVar(&c.force, "force", false, i18n.T("LinkFlagForce", nil))
 	cmd.Flags().BoolVar(&c.noStdx, "no-stdx", false, i18n.T("LinkFlagNoStdx", nil))
+	for _, name := range []string{"sha256", "force", "no-stdx"} {
+		_ = cmd.Flags().MarkDeprecated(name, i18n.T("LegacyImportFlag", nil))
+	}
 	return cmd
 }
 
@@ -146,10 +173,13 @@ func toolchainCommand(ctx *clictx.Context) *cobra.Command {
 			return showcmd.RunShowInstalled(ctx, cmd)
 		},
 	}
+	legacyUninstall := newUninstall(ctx).command("uninstall <name>...", i18n.T("ToolchainUninstallShort", nil))
+	legacyUninstall.Hidden = true
 	cmd.AddCommand(
 		list,
 		(&link{ctx: ctx}).command(),
-		newUninstall(ctx).command("uninstall <name>...", i18n.T("ToolchainUninstallShort", nil)),
+		(&link{ctx: ctx}).importCommand(),
+		legacyUninstall,
 		(&listRemote{ctx: ctx}).command(),
 		historyCommand(ctx),
 		rollbackCommand(ctx),

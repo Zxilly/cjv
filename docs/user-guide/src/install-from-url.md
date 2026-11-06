@@ -1,11 +1,11 @@
 # 自定义 SDK：目录、归档与 URL
 
-`cjv toolchain link` 可以从已解压的本机 SDK 目录、本地 `.zip` 或 `.tar.gz` 归档，以及 HTTP(S) URL 注册自定义工具链：
+`cjv toolchain link` 引用已解压的 SDK 目录；`cjv toolchain import` 从本地 `.zip` / `.tar.gz` 归档或 HTTP(S) URL 创建受管安装：
 
 ```bash
 cjv toolchain link local-sdk /path/to/sdk
-cjv toolchain link archive-sdk ./cangjie-sdk.zip
-cjv toolchain link remote-sdk https://example.com/cangjie-sdk.tar.gz
+cjv toolchain import archive-sdk ./cangjie-sdk.zip
+cjv toolchain import remote-sdk https://example.com/cangjie-sdk.tar.gz
 ```
 
 这三条命令使用各自独立的名称，可以分别执行。注册自定义工具链不会修改当前的全局默认工具链；如果需要将其设为默认，请运行 `cjv default <name>`，或者在项目的 [`cangjie-sdk.toml`](toolchain-file.md) 中配置 `channel = "<name>"`。
@@ -28,19 +28,21 @@ cjv toolchain link remote-sdk https://example.com/cangjie-sdk.tar.gz
 
 ## 归档选项
 
-当安装来源为本地 `.zip` / `.tar.gz` 归档或 HTTP(S) URL 时，`cjv toolchain link` 支持以下附加选项：
+`cjv toolchain import` 支持以下归档选项：
 
 | 参数 | 作用 |
 | --- | --- |
 | `--sha256 <hex>` | 解包前校验归档内容，值为预期的 64 位十六进制 SHA-256 摘要 |
-| `--force` | 替换已存在的同名自定义工具链 |
+| `--replace` | 替换已存在的同名自定义工具链 |
 | `--no-stdx` | 解包外层打包归档时跳过随包附带的 `stdx` |
 
 这三个选项仅适用于本地归档或 URL，与已解压目录参数一起使用会报错。如果未提供 `--sha256`，`cjv` 不会比对特定内容哈希，但仍会验证归档格式与 SDK 目录布局。
 
+旧版 `toolchain link` 的归档和 URL 用法仍可执行，并提示迁移到 `import`；旧替换标志 `--force` 对应 `import --replace`。
+
 ## 支持的归档
 
-`cjv toolchain link` 原生支持以下两种归档结构：
+`cjv toolchain import` 支持以下两种归档结构：
 
 1. **裸 SDK 归档**（`.tar.gz` 或 `.zip`）：直接包含一个完整的 `cangjie/` SDK 顶层目录（内含 `bin/`、`lib/`、`tools/`、`runtime/` 等内容）。
 2. **`cangjie-build` CI 外层打包 ZIP**：外层 ZIP 内部包含一个 SDK 归档和一个可选的 `stdx` 归档：
@@ -58,5 +60,5 @@ cangjie-stdx-<sdk_name>-<version>.<stdxver>.<tar.gz|zip>  # 可选
 
 ```bash
 cjv component list --toolchain archive-sdk
-cjv toolchain uninstall archive-sdk
+cjv uninstall archive-sdk
 ```

@@ -6,8 +6,8 @@ The `cjv` command line includes built-in help for every subcommand; run `cjv hel
 
 | Option | Effect |
 | --- | --- |
-| `--json` | Write structured JSON results to `stdout`; unavailable for `run`, `exec`, and `init` |
-| `--quiet`, `-q` | Hide progress output; `component list -q` prints names in a single column |
+| `--json` | Write structured JSON to stdout; unsupported by `run`, `exec`, `init`, and `completion` |
+| `--quiet`, `-q` | Hide progress in every argument position; use `component list --names-only` for one name per line |
 | `--verbose` | Enable debug logs on `stderr` when `CJV_LOG` is unset; mutually exclusive with `--quiet` |
 | `--offline` | Disable `cjv` network access and use local installations and [cached files](configuration.md#download-cache) only |
 | `--config <path>` | Select the user `settings.toml` file; system fallback settings and project selection still apply |
@@ -23,10 +23,10 @@ An explicit `--toolchain` flag on a subcommand takes precedence over a leading g
 ### install
 
 ```text
-cjv install [toolchain]... [-t target]... [-c component]... [--force | --no-update] [--allow-downgrade] [--reinstall]
+cjv install [toolchain]... [-t target]... [-c component]... [--allow-missing] [--allow-downgrade] [--reinstall]
 ```
 
-When called without a toolchain name, `cjv install` installs the currently active selection. When multiple toolchain names are given, each one is processed in order. Both `-t` (`--target`) and `-c` (`--component`) accept repeated flags or comma-separated lists:
+`install` ensures the selected toolchain exists, preserving an installed release and adding requested targets or components. Use `update` to advance an installed channel. With no name it uses the active selection; multiple names are processed in order. `-t` and `-c` accept repeated flags or comma-separated lists:
 
 ```bash
 cjv install lts sts
@@ -38,17 +38,17 @@ cjv install nightly -c stdx,docs
 | Policy | Behavior |
 | --- | --- |
 | Default | Preserve required components and cross targets; missing artifacts block updates, while `nightly` searches published history for a compatible release |
-| `--force` | Allow unavailable optional components or targets to be skipped and removed; do not reinstall an unchanged SDK |
-| `install --no-update` | Keep the installed host release and add requested targets or components only; mutually exclusive with `--force` |
+| `--allow-missing` | Allow unavailable optional components or targets to be skipped and removed, without reinstalling unchanged SDKs |
+| Default `install` | Keep the installed host release and add requested targets or components only |
 | `install --reinstall` | Reinstall the existing release and retain selected components and targets to repair a damaged SDK |
 | `--allow-downgrade` | Allow `nightly` installation or update to select an older compatible nightly build |
 
-When no new components or targets are requested, `cjv install --no-update` can complete entirely offline.
+With no new components or targets, `install` for an installed toolchain can complete entirely offline. `--force` remains a deprecated compatibility flag for `--allow-missing`; `install --no-update` is retained because preserving the installed release is now the default. `--allow-downgrade` affects release resolution, without making ordinary `install` advance or downgrade an installed channel.
 
 ### update
 
 ```text
-cjv update [toolchain]... [--force] [--allow-downgrade] [--no-self-update] [--dry-run]
+cjv update [toolchain]... [--allow-missing] [--allow-downgrade] [--no-self-update] [--dry-run]
 ```
 
 `cjv update` updates the named toolchains. When called without names, it uses the global `+name` selector if present, or otherwise updates all installed tracked channels (`lts`, `sts`, `nightly`). Pinned concrete versions remain unchanged, and custom toolchains have no official update source. Only a full `cjv update` (without names or `+name`) checks for or installs `cjv` self-updates according to [`auto_self_update`](configuration.md#automatic-updates); pass `--no-self-update` to skip that check.
@@ -62,7 +62,7 @@ cjv update --no-self-update
 
 The first command updates `lts` only; the second updates all tracked channels while skipping the `cjv` self-update check.
 
-Passing `--dry-run` resolves the update plan and reports the newest release, the compatible release, and any blockers without downloading archives, modifying installations, or writing to `cache/`. Combine `--dry-run` with `--json` for CI checks.
+`--dry-run` reports the newest release, the compatible release, and any blockers. A full update also reports the planned cjv self-check or self-update according to current policy. It never downloads archives, modifies installations, or writes caches. Use `--json` in CI. Explicitly naming a missing toolchain in `update` still installs it.
 
 ### uninstall
 
@@ -70,7 +70,7 @@ Passing `--dry-run` resolves the update plan and reports the newest release, the
 cjv uninstall <toolchain>... [-y]
 ```
 
-`cjv uninstall` (or its alias `cjv toolchain uninstall`) removes the specified SDK along with its attached components, offline documentation, and any directory overrides pointing to it. If you uninstall the current default toolchain, `cjv` attempts to select another installed host toolchain as the default, or clears the default if none remain. Interactive terminals prompt for confirmation; `-y` (`--yes`), non-interactive input, and `--json` mode proceed without prompting.
+`uninstall` removes the SDK, owned cross SDKs, components, documentation, and directory overrides. Removing the default selects another installed host or clears the default. Interactive terminals prompt; non-interactive input or `--json` requires explicit `-y` (`--yes`). Output format does not authorize deletion. `toolchain uninstall` remains a hidden compatibility command.
 
 ### check
 
@@ -78,18 +78,17 @@ cjv uninstall <toolchain>... [-y]
 cjv check
 ```
 
-`cjv check` queries upstream manifests for available SDK and `cjv` updates without installing them, applying the same component and target compatibility rules as `cjv update`. Local development builds (`dev`) skip comparing their own binary version.
+`check` queries SDK and cjv updates without installation or cache writes, using the same compatibility rules as `update`. A leading `+name` limits SDK inspection to that toolchain. Development builds skip their own version comparison. `doctor` checks local health; `pin --check` validates a concrete project selection, without checking for updates.
 
 ### Update history and rollback
 
 ```text
-cjv toolchain history [toolchain]
 cjv toolchain history list [toolchain]
 cjv toolchain history prune [toolchain] [--keep 2]
 cjv toolchain rollback <toolchain> [snapshot]
 ```
 
-Whenever a tracked channel updates to a new release or digest, `cjv` retains the previous host SDK, its tracked targets, and its components together as a snapshot group under `<CJV_HOME>/history/`, keeping the **2** most recent snapshots by default. Listing or pruning without a toolchain name operates on all history groups; `--keep 0` removes all snapshots while keeping current installations intact. `cjv toolchain rollback` selects the newest snapshot by default, verifies its contents on disk, and saves the replaced group so the rollback can itself be undone. See [Update history and rollback](automation.md#update-history-and-rollback).
+Tracked updates save hosts, targets, and components as a group, retaining **2** snapshots. Listing/pruning without a name uses a leading `+name`, or all groups if no selector is provided. Omitting `list` remains a shorthand. `--keep 0` clears snapshots without removing installations. Rollback verifies the chosen snapshot and saves the current group for undo. See [Update history and rollback](automation.md#update-history-and-rollback).
 
 ### doctor and cache
 
@@ -107,11 +106,13 @@ cjv cache prune [--max-age 720h]
 
 | Command | Purpose |
 | --- | --- |
-| `cjv show` | Show the active toolchain, default host platform, and all installed toolchains |
+| `cjv`, `cjv show` | Show the same active toolchain, default host, and installation report, with the same JSON structure |
 | `cjv show active` | Show the active toolchain and the selection rule that chose it |
-| `cjv show installed`, `cjv toolchain list` | List installed toolchains and attached cross targets |
+| `cjv toolchain list` | List hosts and cross targets, including actual releases and tracking, pinned, or custom kinds |
 | `cjv show home` | Show the effective `CJV_HOME` data directory and its configuration source |
 | `cjv which [command] [--toolchain <tc>]` | Print the resolved path to an SDK tool binary, or the SDK root directory when `[command]` is omitted |
+
+Inspection commands do not install missing SDKs or components. `show installed` remains a hidden compatibility command for `toolchain list`.
 
 ### toolchain list-remote
 
@@ -129,7 +130,7 @@ Lists releases available in the remote distribution manifests. By default, it qu
 cjv run [--install] <toolchain> <command> [args...]
 ```
 
-Runs a command with an explicitly named toolchain. `cjv` searches that SDK's tool directories first, and then searches that environment's `PATH`. Place `--install` before the `<toolchain>` argument to allow a missing toolchain to be installed automatically:
+Run any command using an explicitly named toolchain. Like `exec`, this prepares SDK paths and runtime libraries, installing missing requirements according to `auto_install`. `--install` explicitly enables installation, precedes the toolchain name, and conflicts with `--no-auto-install`:
 
 ```bash
 cjv run --install sts cjc --version
@@ -158,15 +159,16 @@ cjv envsetup [+toolchain] [--target=SUFFIX] [--shell=TYPE]
 
 Prints a shell script that exports the SDK environment into your current shell session. Supported `--shell` formats are `bash`, `fish`, `powershell`, and `cmd`. Passing `--target` loads the environment of an installed cross SDK, and `--json` returns structured environment data.
 
-Remember to evaluate the printed script in your shell (`eval "$(cjv envsetup)"` or `cjv envsetup | Invoke-Expression`) for the changes to take effect. See [Running commands and setting the environment](runtime-environment.md) for shell examples and how to return to per-project proxy selection.
+Evaluate the printed script in the current shell to apply it. `envsetup` reads installed SDKs and validates project requirements; missing requirements produce explicit installation hints, without automatic installation. See [Running commands and setting the environment](runtime-environment.md) for shell examples and project-based proxy selection.
 
 ## Custom toolchains
 
 ```text
-cjv toolchain link <name> <path|url> [--sha256 <hash>] [--force] [--no-stdx]
+cjv toolchain link <name> <directory>
+cjv toolchain import <name> <archive|url> [--sha256 <hash>] [--replace] [--no-stdx]
 ```
 
-Passing an unpacked directory creates a lightweight reference; passing a local `.zip` / `.tar.gz` archive or HTTP(S) URL extracts it into a `cjv`-managed installation. The `--sha256`, `--force`, and `--no-stdx` flags apply only to archives and URLs: they verify the expected SHA-256 digest, replace an existing custom toolchain of the same name, and skip bundled `stdx` installation respectively. See [Custom SDKs](install-from-url.md) for supported archive layouts and platform rules.
+`link` references an existing directory whose owner maintains its contents. `import` extracts a local archive or HTTP(S) URL into a managed installation. Its `--sha256`, `--replace`, and `--no-stdx` verify a digest, replace the named installation, and skip bundled stdx. Legacy archive/URL `link` forms remain compatible with a migration note and their old `--force` replacement flag. See [Custom SDKs](install-from-url.md).
 
 ## Cross-compilation targets
 
@@ -181,15 +183,15 @@ Manages cross-compilation target SDKs attached to a host toolchain. `target add`
 ## Components
 
 ```text
-cjv component add <name>... [--toolchain <tc>] [--target <suffix>] [--force]
-cjv component link <name> <path> [--toolchain <tc>] [--target <suffix>] [--force]
+cjv component add <name>... [--toolchain <tc>] [--target <suffix>] [--reinstall]
+cjv component link <name> <path> [--toolchain <tc>] [--target <suffix>] [--replace]
 cjv component remove <name>... [--toolchain <tc>] [--target <suffix>]
-cjv component list [--toolchain <tc>] [--target <suffix>] [--installed] [-q]
+cjv component list [--toolchain <tc>] [--target <suffix>] [--installed] [--names-only]
 ```
 
 Manages optional components (`stdx`, `docs`, and `stdx-docs`), which can be passed as multiple arguments or comma-separated lists. Passing `--target <suffix>` targets an already-installed cross SDK on the selected host without installing the target itself.
 
-`component add --force` reinstalls an installed component, and `component link --force` replaces an existing component link. Only `stdx` supports local directory links (`component link`), and the source directory must contain both `dynamic/` and `static/`. External SDK directories registered via `cjv toolchain link` cannot be modified through component commands. See [Components and offline documentation](concepts/components.md).
+`component add --reinstall` reinstalls a component; `component link --replace` replaces one. Old `--force` flags remain hidden compatibility options. `list --names-only` prints one name per line; `-q` always hides progress only. Only stdx supports directory links, with both `dynamic/` and `static/` present. External SDK directory links cannot be modified through component commands. See [Components and offline documentation](concepts/components.md).
 
 ## Offline documentation
 
@@ -215,7 +217,7 @@ Writes `cangjie-sdk.toml` in the current directory with a resolved concrete rele
 cjv default [toolchain]
 ```
 
-Displays the current global default toolchain when called without arguments, or clears it when passed `none`. Passing an official toolchain that is not yet installed downloads and installs it first, preserving your previous default if installation fails. A cross-compilation target SDK cannot be set as the default.
+With no argument, display the global default; `none` clears it. Selecting a missing official SDK normally installs it first; `--no-auto-install` requires it to exist already. Failure leaves the previous selection intact. Cross SDKs cannot be defaults.
 
 ### override
 
@@ -265,7 +267,7 @@ cjv self update
 cjv self uninstall [-y]
 ```
 
-`cjv self update` checks for and installs the newest release of `cjv` itself. `cjv self uninstall` removes the `<CJV_HOME>` data directory, all installed toolchains, components, caches, and snapshots, and cleans up `PATH` (`--json` mode requires `-y`).
+`self update` checks and updates cjv. `self uninstall` removes `<CJV_HOME>`, all toolchains, components, caches, snapshots, and PATH entries. Non-interactive input or `--json` requires explicit `-y`, matching SDK uninstall.
 
 ## Shell completion
 

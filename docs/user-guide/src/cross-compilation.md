@@ -48,6 +48,6 @@ cjv component list --toolchain sts --target ohos
 cjv target remove ohos --toolchain sts
 ```
 
-运行 `cjv update` 更新跟踪通道（`lts`、`sts`、`nightly`）时，`cjv` 会先一并准备好新的宿主 SDK、已跟踪目标和已选组件，全部就绪后再统一原子发布。默认情况下，如果新版本缺少所需的目标或组件制品，`cjv` 会阻止更新并保留原有可用安装（`nightly` 通道会自动在已发布历史中查找满足全部目标和组件的兼容版本）。如果希望允许跳过并移除未发布的可选目标或组件，请传入 `--force`；具体规则见[命令参考](command-reference.md#安装与更新策略)。
+运行 `cjv update` 更新跟踪通道（`lts`、`sts`、`nightly`）时，`cjv` 会先一并准备好新的宿主 SDK、已跟踪目标和已选组件，全部就绪后再统一原子发布。默认情况下，如果新版本缺少所需的目标或组件制品，`cjv` 会阻止更新并保留原有可用安装（`nightly` 通道会自动在已发布历史中查找满足全部目标和组件的兼容版本）。如果希望允许跳过并移除未发布的可选目标或组件，请传入 `--allow-missing`；具体规则见[命令参考](command-reference.md#安装与更新策略)。
 
 运行 `cjv target remove` 会移除所选交叉 SDK 及其目标组件，同时保留宿主工具链。交叉 SDK 依附于宿主工具链，不能直接设为全局默认或当前活跃工具链。

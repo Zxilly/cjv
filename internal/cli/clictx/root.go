@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/Zxilly/cjv/internal/cjverr"
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/dist"
 	"github.com/Zxilly/cjv/internal/i18n"
@@ -43,6 +44,9 @@ func (c *Context) ApplyInvocation(cmd *cobra.Command) error {
 		return errors.New(i18n.T("RootConflictingOutputFlags", nil))
 	}
 	c.Output.Quiet = c.Quiet
+	if c.Output.IsJSON() && cmd.Annotations["cjv.native-output"] == "true" {
+		return &cjverr.UnsupportedForJSONError{Command: cmd.CommandPath()}
+	}
 	if os.Getenv(config.EnvLog) == "" && c.Verbose {
 		slog.SetDefault(slog.New(slog.NewTextHandler(cmd.ErrOrStderr(), &slog.HandlerOptions{Level: slog.LevelDebug})))
 	}

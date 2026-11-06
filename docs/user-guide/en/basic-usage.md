@@ -63,13 +63,13 @@ Directory overrides are stored in your personal `~/.cjv/settings.toml` file rath
 
 ## Running a command with another version
 
-Sometimes you just want to run a single command with a specific toolchain without changing your default or directory settings. Use `cjv run`:
+Sometimes you just want to run a single command with a specific toolchain without changing your default or directory settings. Use `cjv exec`:
 
 ```bash
-cjv run --install sts cjc --version
+cjv exec +sts cjc --version
 ```
 
-`cjv run` invokes the command using the specified toolchain (`sts` here), and `--install` tells `cjv` to install that toolchain first if it is missing.
+`exec` runs SDK tools or compiled programs with SDK and runtime library paths, installing missing requirements according to `auto_install`. `cjv run sts cjc --version` remains the explicit-toolchain compatibility form.
 
 If you have compiled your own Cangjie binary and need to run it with the dynamic libraries from the SDK or `stdx`, use `cjv exec`:
 
@@ -91,7 +91,7 @@ cjv toolchain list
 
 - `cjv show active` prints the currently selected toolchain and the rule that selected it (such as a `cangjie-sdk.toml` file, a directory override, or the global default).
 - `cjv which cjc` prints the full filesystem path to the `cjc` executable inside the active SDK.
-- `cjv toolchain list` (or `cjv show installed`) lists all installed host toolchains and any cross-compilation targets attached to them.
+- `cjv toolchain list` lists hosts and cross SDKs with installation names, actual releases, and tracking/pinned/custom kinds. `show installed` remains a hidden compatibility command.
 
 ## Keeping toolchains and `cjv` up to date
 

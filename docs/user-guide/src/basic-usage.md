@@ -57,13 +57,13 @@ cjv override unset
 
 ## 临时使用其他版本运行命令
 
-使用 `cjv run` 临时选择工具链，不修改默认设置或目录配置：
+使用 `cjv exec` 临时选择工具链，不修改默认设置或目录配置：
 
 ```bash
-cjv run --install sts cjc --version
+cjv exec +sts cjc --version
 ```
 
-`cjv run` 会明确使用参数指定的工具链运行该子进程；加上 `--install` 允许在工具链缺失时自动安装。如果你需要运行自己编译出的仓颉可执行程序，并让它自动找到 SDK 或 `stdx` 的运行时动态库，请使用 `cjv exec ./my_binary`。详见[运行命令与配置环境](runtime-environment.md)。
+`cjv exec` 可运行 SDK 工具或自己的程序，并配置 SDK、运行时和 stdx 动态库路径，按 `auto_install` 补齐缺失项。`cjv run sts cjc --version` 保留为显式工具链兼容写法。详见[运行命令与配置环境](runtime-environment.md)。
 
 ## 查看工具链状态
 
@@ -77,7 +77,7 @@ cjv toolchain list
 
 - `cjv show active` — 显示当前激活的工具链名称及其选择来源（如项目文件、目录覆盖或全局默认）。
 - `cjv which cjc` — 显示当前激活 SDK 中 `cjc` 编译器的实际文件系统路径。
-- `cjv toolchain list`（或 `cjv show installed`）— 列出本机已安装的所有宿主工具链及其附加的交叉编译目标。
+- `cjv toolchain list` — 列出宿主和交叉 SDK 的安装名称、实际发行版与跟踪/固定/自定义类型。`show installed` 保留为隐藏兼容入口。
 
 ## 更新与卸载
 

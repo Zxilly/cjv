@@ -3,22 +3,23 @@ package settingscmd
 import (
 	"fmt"
 
+	"github.com/Zxilly/cjv/internal/cli/clictx"
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/i18n"
 	sdktarget "github.com/Zxilly/cjv/internal/target"
 	"github.com/spf13/cobra"
 )
 
-func newSetCommand() *cobra.Command {
+func newSetCommand(ctx *clictx.Context) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "set",
 		Short: i18n.T("SetCmdShort", nil),
 	}
-	cmd.AddCommand(newSetAutoSelfUpdateCommand(), newSetAutoInstallCommand(), newSetDefaultHostCommand(), newSetHomeCommand())
+	cmd.AddCommand(newSetAutoSelfUpdateCommand(ctx), newSetAutoInstallCommand(ctx), newSetDefaultHostCommand(ctx), newSetHomeCommand(ctx))
 	return cmd
 }
 
-func newSetAutoSelfUpdateCommand() *cobra.Command {
+func newSetAutoSelfUpdateCommand(ctx *clictx.Context) *cobra.Command {
 	return &cobra.Command{
 		Use:       "auto-self-update <enable|disable|check>",
 		Short:     i18n.T("SetAutoSelfUpdateShort", nil),
@@ -29,12 +30,12 @@ func newSetAutoSelfUpdateCommand() *cobra.Command {
 			if !config.ValidAutoSelfUpdate(val) {
 				return fmt.Errorf(i18n.T("SetInvalidAutoUpdate", nil), val)
 			}
-			return updateSetting(cmd.OutOrStdout(), "auto-self-update", val, config.SettingsUpdate{AutoSelfUpdate: &val})
+			return updateSetting(ctx, cmd.OutOrStdout(), "auto-self-update", val, val, config.SettingsUpdate{AutoSelfUpdate: &val})
 		},
 	}
 }
 
-func newSetAutoInstallCommand() *cobra.Command {
+func newSetAutoInstallCommand(ctx *clictx.Context) *cobra.Command {
 	return &cobra.Command{
 		Use:       "auto-install <true|false>",
 		Short:     i18n.T("SetAutoInstallShort", nil),
@@ -46,12 +47,12 @@ func newSetAutoInstallCommand() *cobra.Command {
 				return fmt.Errorf(i18n.T("SetInvalidBool", nil), val)
 			}
 			newVal := val == "true"
-			return updateSetting(cmd.OutOrStdout(), "auto-install", val, config.SettingsUpdate{AutoInstall: &newVal})
+			return updateSetting(ctx, cmd.OutOrStdout(), "auto-install", val, newVal, config.SettingsUpdate{AutoInstall: &newVal})
 		},
 	}
 }
 
-func newSetDefaultHostCommand() *cobra.Command {
+func newSetDefaultHostCommand(ctx *clictx.Context) *cobra.Command {
 	return &cobra.Command{
 		Use:   "default-host <goos-goarch>",
 		Short: i18n.T("SetDefaultHostShort", nil),
@@ -61,7 +62,7 @@ func newSetDefaultHostCommand() *cobra.Command {
 			if _, err := sdktarget.CurrentHostTuple(val); err != nil {
 				return fmt.Errorf(i18n.T("SetInvalidHost", nil), val, err)
 			}
-			return updateSetting(cmd.OutOrStdout(), "default-host", val, config.SettingsUpdate{DefaultHost: &val})
+			return updateSetting(ctx, cmd.OutOrStdout(), "default-host", val, val, config.SettingsUpdate{DefaultHost: &val})
 		},
 	}
 }

@@ -25,9 +25,11 @@ cjv component remove stdx-docs
 - When `--toolchain` is omitted, `cjv component` operates on the currently active toolchain.
 - Passing `--target <suffix>` selects an installed [cross-compilation](../cross-compilation.md) target SDK belonging to that host toolchain (for example, `cjv component add stdx --toolchain sts --target ohos`).
 - Component names can be passed as multiple arguments or as a comma-separated list.
-- `cjv component add` skips components that are already installed; pass `--force` if you want to reinstall them from the distribution source.
+- `cjv component add` skips components that are already installed; pass `--reinstall` if you want to reinstall them from the distribution source.
 
 Not all components are published for every channel, version, or platform. Custom toolchains have no official upstream record in the distribution manifest, so `cjv component add` cannot download components for them. In team repositories, you can also list required components in [`cangjie-sdk.toml`](../toolchain-file.md) so `cjv` installs them automatically.
+
+`component list --names-only` prints one name per line. Global `--quiet` / `-q` only hides progress, regardless of position. Old `add --force` and `link --force` remain hidden aliases for `--reinstall` and `--replace`.
 
 ### How components behave during updates
 
@@ -38,10 +40,10 @@ When you run `cjv update` on a tracked channel (`lts`, `sts`, `nightly`), `cjv` 
 If you build `stdx` from source or have a pre-extracted `stdx` directory on disk, you can attach it to a toolchain with `cjv component link`:
 
 ```bash
-cjv component link stdx /path/to/local/stdx --toolchain lts --force
+cjv component link stdx /path/to/local/stdx --toolchain lts --replace
 ```
 
-The directory you point to must contain both `dynamic/` and `static/` subdirectories. Passing `--force` replaces an existing `stdx` component on that toolchain. When you later run `cjv component remove stdx`, `cjv` removes its internal link entry while preserving your local source directory untouched. Note that `docs` and `stdx-docs` do not support local directory links.
+The directory you point to must contain both `dynamic/` and `static/` subdirectories. Passing `--replace` replaces an existing `stdx` component on that toolchain. When you later run `cjv component remove stdx`, `cjv` removes its internal link entry while preserving your local source directory untouched. Note that `docs` and `stdx-docs` do not support local directory links.
 
 ### Managing components on custom SDKs
 
@@ -50,7 +52,7 @@ Because `cjv component` commands record component manifests inside a `cjv`-manag
 If you want `cjv` to manage components (such as linking a local `stdx`) for a custom SDK, install the custom SDK from a [local archive or URL](../install-from-url.md) so that `cjv` extracts it into a managed directory first:
 
 ```bash
-cjv toolchain link my-sdk ./cangjie-sdk.zip
+cjv toolchain import my-sdk ./cangjie-sdk.zip
 cjv component link stdx /path/to/local/stdx --toolchain my-sdk
 ```
 

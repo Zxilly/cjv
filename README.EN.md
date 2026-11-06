@@ -75,10 +75,10 @@ Running `cjpm build` in that directory uses the declared toolchain. By default, 
 To run a command with another version temporarily:
 
 ```bash
-cjv run --install sts cjc --version
+cjv +sts exec cjc --version
 ```
 
-`--install` allows a missing toolchain to be installed. See [project toolchains](https://cjv.zxilly.com/book/user-guide/en/toolchain-file.html) for selection order and directory overrides.
+Like proxy commands, `exec` prepares missing requirements according to `auto_install`; `--no-auto-install` disables this. `which` and `envsetup` only query installed content. See [project toolchains](https://cjv.zxilly.com/book/user-guide/en/toolchain-file.html) for selection order and directory overrides.
 
 Inspect the current environment or preview an update:
 

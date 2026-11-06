@@ -1,7 +1,6 @@
 package settingscmd
 
 import (
-	"io"
 	"os"
 	"path/filepath"
 	"testing"
@@ -79,7 +78,8 @@ func TestUnsetNonexistentOverrides_RemovesStale(t *testing.T) {
 	require.NoError(t, config.SaveSettings(&stg, settingsPath))
 
 	sf := config.NewSettingsFile(settingsPath)
-	require.NoError(t, unsetNonexistentOverrides(io.Discard, sf))
+	_, err = removeNonexistentOverrides(sf)
+	require.NoError(t, err)
 	loaded, err := sf.Load()
 	require.NoError(t, err)
 
@@ -104,7 +104,8 @@ func TestUnsetNonexistentOverrides_NoOpWhenAllExist(t *testing.T) {
 	require.NoError(t, config.SaveSettings(&stg, settingsPath))
 
 	sf := config.NewSettingsFile(settingsPath)
-	require.NoError(t, unsetNonexistentOverrides(io.Discard, sf))
+	_, err = removeNonexistentOverrides(sf)
+	require.NoError(t, err)
 	loaded, err := sf.Load()
 	require.NoError(t, err)
 

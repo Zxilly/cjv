@@ -75,8 +75,7 @@ func (c *install) run(cmd *cobra.Command, args []string) error {
 			Toolchain:  input,
 			Targets:    c.targets,
 			Components: c.components,
-			Force:      c.force,
-			NoUpdate:   c.noUpdate,
+			NoUpdate:   !c.reinstall,
 			Reinstall:  c.reinstall,
 		}, c.lifecycleOptions())
 		if err != nil {
@@ -104,16 +103,20 @@ func (c *install) command() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "install [toolchain]...",
 		Short: i18n.T("InstallCmdShort", nil),
+		Long:  i18n.T("InstallCmdLong", nil),
 		Args:  cobra.ArbitraryArgs,
 		RunE:  c.run,
 	}
-	cmd.Flags().BoolVar(&c.force, "force", false, i18n.T("InstallFlagForce", nil))
+	cmd.Flags().BoolVar(&c.force, "allow-missing", false, i18n.T("AllowMissingFlag", nil))
+	cmd.Flags().BoolVar(&c.force, "force", false, i18n.T("AllowMissingFlag", nil))
+	_ = cmd.Flags().MarkDeprecated("force", i18n.T("LegacyAllowMissingFlag", nil))
+	cmd.MarkFlagsMutuallyExclusive("force", "allow-missing")
 	cmd.Flags().StringSliceVarP(&c.targets, "target", "t", nil, i18n.T("InstallFlagTarget", nil))
 	cmd.Flags().StringSliceVarP(&c.components, "component", "c", nil, i18n.T("InstallFlagComponent", nil))
 	cmd.Flags().BoolVar(&c.noUpdate, "no-update", false, i18n.T("InstallFlagNoUpdate", nil))
+	_ = cmd.Flags().MarkDeprecated("no-update", i18n.T("LegacyNoUpdateFlag", nil))
 	cmd.Flags().BoolVar(&c.reinstall, "reinstall", false, i18n.T("InstallFlagReinstall", nil))
 	cmd.Flags().BoolVar(&c.allowDowngrade, "allow-downgrade", false, i18n.T("InstallFlagAllowDowngrade", nil))
-	cmd.MarkFlagsMutuallyExclusive("force", "no-update")
 	cmd.MarkFlagsMutuallyExclusive("reinstall", "no-update")
 	return cmd
 }

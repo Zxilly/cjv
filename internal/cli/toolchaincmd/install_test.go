@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/Zxilly/cjv/internal/cli/clitest"
+	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/config/configtest"
 	"github.com/Zxilly/cjv/internal/toolchain"
 	"github.com/spf13/cobra"
@@ -23,6 +24,23 @@ func TestRunInstallInstallsNamedToolchain(t *testing.T) {
 	installed, err := toolchain.ListInstalled()
 	require.NoError(t, err)
 	assert.Equal(t, []string{"lts"}, installed)
+}
+
+func TestInstallPreservesTrackingReleaseWithoutNetwork(t *testing.T) {
+	home := validManifestHome(t)
+	_, err := execute(t, "install", "lts", "--json")
+	require.NoError(t, err)
+	sf, err := config.DefaultSettingsFile()
+	require.NoError(t, err)
+	unreachable := "https://example.invalid/newer-manifest.json"
+	_, err = sf.Update(config.SettingsUpdate{ManifestURL: &unreachable})
+	require.NoError(t, err)
+	t.Setenv("CJV_OFFLINE", "1")
+	out, err := execute(t, "install", "lts", "--json")
+	require.NoError(t, err, out)
+	record, err := toolchain.ReadInstallation(filepath.Join(home, "toolchains", "lts"))
+	require.NoError(t, err)
+	require.Equal(t, "lts-1.0.5", record.Release)
 }
 
 func TestRunInstallRejectsEmptyName(t *testing.T) {

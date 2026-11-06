@@ -75,10 +75,16 @@ func (c *commands) command() *cobra.Command {
 
 	component.PersistentFlags().StringVar(&c.toolchain, "toolchain", "", i18n.T("ComponentFlagToolchain", nil))
 	component.PersistentFlags().StringVar(&c.target, "target", "", i18n.T("ComponentFlagTarget", nil))
-	add.Flags().BoolVar(&c.addForce, "force", false, i18n.T("InstallFlagForce", nil))
+	add.Flags().BoolVar(&c.addForce, "reinstall", false, i18n.T("ComponentFlagReinstall", nil))
+	add.Flags().BoolVar(&c.addForce, "force", false, i18n.T("ComponentFlagReinstall", nil))
+	_ = add.Flags().MarkHidden("force")
+	add.MarkFlagsMutuallyExclusive("reinstall", "force")
 	list.Flags().BoolVar(&c.listInstalledOnly, "installed", false, i18n.T("ComponentFlagInstalled", nil))
-	list.Flags().BoolVarP(&c.listQuiet, "quiet", "q", false, i18n.T("ComponentFlagQuiet", nil))
-	link.Flags().BoolVar(&c.linkForce, "force", false, i18n.T("ComponentLinkFlagForce", nil))
+	list.Flags().BoolVar(&c.listQuiet, "names-only", false, i18n.T("ComponentFlagNamesOnly", nil))
+	link.Flags().BoolVar(&c.linkForce, "replace", false, i18n.T("ComponentFlagReplace", nil))
+	link.Flags().BoolVar(&c.linkForce, "force", false, i18n.T("ComponentFlagReplace", nil))
+	_ = link.Flags().MarkHidden("force")
+	link.MarkFlagsMutuallyExclusive("replace", "force")
 
 	component.AddCommand(add, remove, list, link)
 	return component

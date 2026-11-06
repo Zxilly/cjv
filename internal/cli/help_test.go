@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"encoding/json"
 	"testing"
 	"unicode"
 
@@ -119,5 +120,14 @@ func TestCompletionUsesCommandWriter(t *testing.T) {
 			require.NoError(t, app.execute(args))
 			assert.Contains(t, out.String(), "cjv", shell)
 		}
+	}
+}
+
+func TestCompletionRejectsJSONWithoutEmittingShellCode(t *testing.T) {
+	for _, shell := range []string{"bash", "zsh", "fish", "powershell"} {
+		out, err := executeWithOutput(t, newApplication("dev", ""), []string{"--json", "completion", shell})
+		require.Error(t, err)
+		assert.True(t, json.Valid([]byte(out)), out)
+		assert.Contains(t, out, "UNSUPPORTED_FOR_JSON")
 	}
 }

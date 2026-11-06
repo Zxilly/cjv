@@ -49,7 +49,9 @@ cjv install lts
 cjv install lts-1.0.5
 ```
 
-When you later run `cjv update lts` (or `cjv update`), `cjv` updates the tracked `lts` installation to the newest release on that channel, while leaving `lts-1.0.5` untouched. Their attached components and cross-compilation targets are also managed independently. Running proxy commands like `cjc` always uses the release currently installed on disk; upgrading an installed toolchain requires an explicit `cjv install` or `cjv update`.
+When you later run `cjv update lts` (or `cjv update`), `cjv` updates the tracked `lts` installation to the newest release on that channel, while leaving `lts-1.0.5` untouched. Their attached components and cross-compilation targets are also managed independently. Running proxy commands like `cjc` always uses the release currently installed on disk; upgrading an installed toolchain requires explicit `cjv update`, while `install` preserves the installed release.
+
+`toolchain list` displays installation identity, actual release, and kind. For example, `lts → lts-1.0.5` is tracking while an independent `lts-1.0.5` is pinned; identical releases can have different update lifecycles.
 
 Shorthand selectors—such as a minor version (`sts-1.2`) or a nightly date (`nightly-2026-10-04`)—are resolved against the manifest at installation time and installed as concrete pinned versions. When you want a team project to build with the exact same compiler across machines, write the full concrete release name in [`cangjie-sdk.toml`](../toolchain-file.md) (or run `cjv pin` to resolve and write it for you).
 
@@ -57,7 +59,7 @@ Shorthand selectors—such as a minor version (`sts-1.2`) or a nightly date (`ni
 
 Nightly builds are published frequently, and occasionally a newest nightly build may not yet include every optional component (`stdx`, `docs`) or cross-compilation target SDK.
 
-When you install or update the `nightly` channel, `cjv` checks which components and cross targets are required (either requested on the command line or already installed on your local `nightly` toolchain) and automatically searches the published history in `nightly.json` for the newest compatible release. By default, `cjv` will not downgrade an already-installed `nightly` toolchain to an older build; if you want to permit stepping back to an older compatible nightly, pass `--allow-downgrade`. See [Installation and update policies](../command-reference.md#installation-and-update-policies) in the Command reference for full details.
+When you first install or explicitly update the `nightly` channel, `cjv` checks which components and cross targets are required (either requested on the command line or already installed on your local `nightly` toolchain) and automatically searches the published history in `nightly.json` for the newest compatible release. By default, `cjv` will not downgrade an already-installed `nightly` toolchain to an older build; if you want to permit stepping back to an older compatible nightly, pass `--allow-downgrade`. See [Installation and update policies](../command-reference.md#installation-and-update-policies) in the Command reference for full details.
 
 ## Host platforms
 
@@ -76,6 +78,6 @@ cjv default my-sdk
 
 Linking a directory creates a lightweight reference to the SDK directory that you maintain yourself; running `cjv uninstall my-sdk` removes the reference in `cjv` while leaving your source directory untouched.
 
-If you want `cjv` to manage an isolated copy of a custom SDK—or if you want to attach a local `stdx` directory to it—you can pass a `.zip` / `.tar.gz` archive or HTTP(S) URL to `cjv toolchain link` instead. See [Custom SDKs](../install-from-url.md) for details. Note that custom toolchains are skipped during `cjv update` and do not have official component downloads via `cjv component add`.
+To create a managed custom SDK copy or attach local stdx, use `cjv toolchain import <name> <archive|url>`; see [Custom SDKs](../install-from-url.md). Custom toolchains are skipped by `update` and have no official downloads through `component add`.
 
 To inspect all toolchains installed on your machine, run `cjv toolchain list`. To see which toolchain is active in your current directory and why, run `cjv show active`. Next, see [Project toolchains](../toolchain-file.md) for how `cjv` selects a toolchain for each project.

@@ -3,6 +3,8 @@
 package selfcmd
 
 import (
+	"errors"
+
 	"charm.land/huh/v2"
 	"github.com/Zxilly/cjv/internal/cjverr"
 	"github.com/Zxilly/cjv/internal/cli/clictx"
@@ -62,6 +64,9 @@ func newCommand(ctx *clictx.Context) *cobra.Command {
 			// Interactive confirmation cannot be combined with JSON output.
 			if renderer.IsJSON() && !uninstallYes {
 				return &cjverr.UnsupportedForJSONError{Command: "self uninstall (without --yes)"}
+			}
+			if !uninstallYes && !clictx.StdinIsTerminal() {
+				return errors.New(i18n.T("UninstallRequiresYes", nil))
 			}
 			confirm := uninstallYes
 			if !confirm {

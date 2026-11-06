@@ -30,14 +30,14 @@ Alternatively, you can evaluate `cjv envsetup` in your current shell session so 
 Depending on your environment, you have three options:
 
 - **Pre-populated cache (`--offline`)** — Populate `<CJV_HOME>/cache/` on a connected machine with `cjv install`, copy `cache/` and `cangjie-sdk.toml` to the offline machine, and run with `--offline` (or `CJV_OFFLINE=1`). See [Automation and JSON interfaces](automation.md#configuration-and-network-access).
-- **Local SDK archive or directory (`toolchain link`)** — Register a local `.zip` / `.tar.gz` SDK archive or an unpacked SDK directory with `cjv toolchain link`. See [Custom SDKs](install-from-url.md).
+- **Local SDK archive or directory** — Import local SDK archives with `toolchain import` or reference unpacked directories with `toolchain link`. See [Custom SDKs](install-from-url.md).
 - **Internal enterprise mirror (`dist_server`)** — Host manifests and archives on an [internal distribution server](enterprise/distribution-server.md) and disable automatic installation and self-update checks in system fallback settings. See [Enterprise and offline deployment](enterprise/index.md).
 
 Keep in mind that while installed toolchains run completely locally, any external package dependencies used by `cjpm` must also be prepared in advance for offline builds.
 
 ## Why can't a custom toolchain download components with `component add`?
 
-A custom toolchain registered with `cjv toolchain link` has no official release entry in the upstream distribution manifest, so `cjv component add` cannot look up component artifacts for it. Instead:
+A custom toolchain registered by `toolchain import` or `toolchain link` has no official release entry, so `component add` cannot locate its component artifacts. Instead:
 
 - If you installed the custom toolchain from a [local archive or URL](install-from-url.md), it can automatically install a bundled `stdx` archive or have a local `stdx` directory attached via `cjv component link stdx /path/to/stdx --toolchain <name>`.
 - If you linked an unpacked external SDK directory, that directory is maintained by its owner and cannot be modified with `cjv component` commands. See [Components and offline documentation](concepts/components.md#managing-components-on-custom-sdks).

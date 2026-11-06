@@ -85,3 +85,27 @@ func TestUpdateDryRunJSONLeavesEmptyHomeAbsent(t *testing.T) {
 	require.Empty(t, value.Toolchains)
 	require.NoDirExists(t, home)
 }
+
+func TestHistorySelectorLimitsInspectionAndPruning(t *testing.T) {
+	home := t.TempDir()
+	configtest.Isolate(t, home)
+	const id = "20261026T000000.000000000Z-aabbccddeeff"
+	for _, name := range []string{"lts", "sts"} {
+		dir := filepath.Join(home, "history", name, id)
+		require.NoError(t, os.MkdirAll(dir, 0o755))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "snapshot.json"), []byte("{"), 0o644))
+	}
+	for _, tail := range [][]string{nil, {"list"}} {
+		args := append([]string{"+sts", "--json", "toolchain", "history"}, tail...)
+		out, err := execute(t, args...)
+		require.NoError(t, err)
+		var result lifecycle.HistoryReport
+		require.NoError(t, json.Unmarshal([]byte(out), &result))
+		require.Len(t, result.Invalid, 1)
+		require.Equal(t, "sts", result.Invalid[0].Toolchain)
+	}
+	_, err := execute(t, "+sts", "--json", "toolchain", "history", "prune", "--keep", "0")
+	require.NoError(t, err)
+	require.NoDirExists(t, filepath.Join(home, "history", "sts", id))
+	require.DirExists(t, filepath.Join(home, "history", "lts", id))
+}

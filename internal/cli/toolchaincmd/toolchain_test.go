@@ -103,3 +103,33 @@ func TestToolchainLinkCommandNormalizesNameInResult(t *testing.T) {
 	assert.Equal(t, "my-sdk", result.Name)
 	assert.FileExists(t, filepath.Join(home, "toolchains", "my-sdk", "bin", sdktools.PlatformBinaryName("cjc")))
 }
+
+func TestToolchainImportOwnsArchiveAndRequiresExplicitReplace(t *testing.T) {
+	home := t.TempDir()
+	configtest.Isolate(t, home)
+	sdkData, _ := testutil.MockSDKZip()
+	src := filepath.Join(t.TempDir(), "sdk.zip")
+	require.NoError(t, os.WriteFile(src, sdkData, 0o644))
+	out, err := execute(t, "toolchain", "import", "imported-sdk", src, "--json")
+	require.NoError(t, err, out)
+	var result toolchainLinkResult
+	require.NoError(t, json.Unmarshal([]byte(out), &result))
+	require.Equal(t, filepath.Join(home, "toolchains", "imported-sdk"), result.Path)
+	marker := filepath.Join(result.Path, "old-installation.txt")
+	require.NoError(t, os.WriteFile(marker, []byte("old installation"), 0o644))
+	_, err = execute(t, "toolchain", "import", "imported-sdk", src, "--json")
+	require.Error(t, err)
+	require.FileExists(t, marker)
+	_, err = execute(t, "toolchain", "import", "imported-sdk", src, "--replace", "--json")
+	require.NoError(t, err)
+	require.NoFileExists(t, marker)
+	require.FileExists(t, src)
+}
+
+func TestToolchainImportRejectsDirectoryBeforeCreatingInstallation(t *testing.T) {
+	home := t.TempDir()
+	configtest.Isolate(t, home)
+	_, err := execute(t, "toolchain", "import", "imported-sdk", sdkDirForLink(t), "--json")
+	require.Error(t, err)
+	require.NoDirExists(t, filepath.Join(home, "toolchains", "imported-sdk"))
+}

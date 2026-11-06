@@ -138,6 +138,8 @@ func installGroup(ctx context.Context, d *installationDistribution, name toolcha
 		}
 		child := name
 		child.Target = tuple
+		// NoUpdate pins the artifact release, not the installation identity.
+		// A tracking host must continue owning tracking target names.
 		if !tracking {
 			concrete, _ := toolchain.ParseToolchainName(rt.Name)
 			child.Channel, child.Version = concrete.Channel, concrete.Version
@@ -274,7 +276,7 @@ func installGroup(ctx context.Context, d *installationDistribution, name toolcha
 			return false, err
 		}
 		kind := progress.AlreadyUpToDate
-		if !tracking {
+		if !tracking || req.NoUpdate {
 			kind = progress.ToolchainAlreadyInstalled
 		}
 		opts.emit(progress.Event{Kind: kind, Toolchain: identity})

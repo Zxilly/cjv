@@ -43,7 +43,7 @@ type showHomeResult struct {
 }
 
 func (r showHomeResult) Text() string {
-	return fmt.Sprintf("%s (source: %s)", r.Home, r.Source)
+	return i18n.T("ShowHomeResult", i18n.MsgData{"Home": r.Home, "Source": localizedSource(r.Source.String())})
 }
 
 // ActiveResult describes the active toolchain and where it was selected.
@@ -56,16 +56,44 @@ type ActiveResult struct {
 func (r ActiveResult) Text() string {
 	name := r.Name
 	if !r.Installed {
-		name = name + " (not installed)"
+		name += " " + i18n.T("ToolchainNotInstalledLabel", nil)
 	}
 	return i18n.T("ActiveToolchain", i18n.MsgData{
 		"Name":   name,
-		"Source": r.Source,
+		"Source": localizedSource(r.Source),
 	})
+}
+
+// Translate display labels while retaining stable source strings in JSON.
+func localizedSource(source string) string {
+	var key string
+	switch source {
+	case "environment (CJV_TOOLCHAIN)":
+		key = "SelectionSourceEnv"
+	case "directory override":
+		key = "SelectionSourceOverride"
+	case "default toolchain":
+		key = "SelectionSourceDefault"
+	case "command line":
+		key = "SelectionSourceCommandLine"
+	case "env":
+		key = "HomeSourceEnv"
+	case "persisted":
+		key = "HomeSourcePersisted"
+	case "default":
+		key = "HomeSourceDefault"
+	case "unknown":
+		key = "SelectionSourceUnknown"
+	default:
+		return source // cangjie-sdk.toml is a filename, not a display label.
+	}
+	return i18n.T(key, nil)
 }
 
 type installedEntry struct {
 	Name       string   `json:"name"`
+	Release    string   `json:"release,omitempty"`
+	Kind       string   `json:"kind,omitempty"`
 	Components []string `json:"components"`
 }
 
@@ -84,7 +112,14 @@ func (r InstalledResult) Text() string {
 	}, len(r.Toolchains)))
 	b.WriteByte('\n')
 	for _, e := range r.Toolchains {
-		fmt.Fprintf(&b, "  %s\n", e.Name)
+		name := e.Name
+		if e.Release != "" && e.Release != e.Name {
+			name += " → " + e.Release
+		}
+		if key := map[string]string{"tracking": "ToolchainKindTracking", "pinned": "ToolchainKindPinned", "custom": "ToolchainKindCustom"}[e.Kind]; key != "" {
+			name += " (" + i18n.T(key, nil) + ")"
+		}
+		fmt.Fprintf(&b, "  %s\n", name)
 		if len(e.Components) > 0 {
 			fmt.Fprintf(&b, "    %s %s\n",
 				i18n.TP("InstalledComponents",
@@ -151,7 +186,7 @@ func GatherInstalled() (InstalledResult, error) {
 		return InstalledResult{}, err
 	}
 	if len(installed) == 0 {
-		return InstalledResult{}, nil
+		return InstalledResult{Toolchains: []installedEntry{}}, nil
 	}
 	tcRoot, err := config.ToolchainsDir()
 	if err != nil {
@@ -160,6 +195,19 @@ func GatherInstalled() (InstalledResult, error) {
 	entries := make([]installedEntry, 0, len(installed))
 	for _, name := range installed {
 		entry := installedEntry{Name: name, Components: []string{}}
+		if parsed, err := toolchain.ParseToolchainName(name); err == nil {
+			switch {
+			case parsed.IsCustom():
+				entry.Kind = "custom"
+			case parsed.Version == "":
+				entry.Kind = "tracking"
+			default:
+				entry.Kind = "pinned"
+			}
+		}
+		if record, err := toolchain.ReadInstallation(filepath.Join(tcRoot, name)); err == nil {
+			entry.Release = record.Release
+		}
 		if comps, err := componentlib.ListInstalled(filepath.Join(tcRoot, name)); err == nil && len(comps) > 0 {
 			parts := make([]string, len(comps))
 			for i, c := range comps {
@@ -223,6 +271,11 @@ func RunShowInstalled(ctx *clictx.Context, cmd *cobra.Command) error {
 	return ctx.Output.RenderTo(clictx.Out(cmd), r)
 }
 
+// RunShow is the shared status report used by both bare cjv and cjv show.
+func RunShow(ctx *clictx.Context, cmd *cobra.Command) error {
+	return newCommands(ctx).runShowDefault(cmd, nil)
+}
+
 func (c *commands) showCommand() *cobra.Command {
 	show := &cobra.Command{
 		Use:   "show",
@@ -235,8 +288,9 @@ func (c *commands) showCommand() *cobra.Command {
 		RunE:  c.runShowActive,
 	}
 	installed := &cobra.Command{
-		Use:   "installed",
-		Short: i18n.T("ShowInstalledShort", nil),
+		Use:    "installed",
+		Hidden: true,
+		Short:  i18n.T("ShowInstalledShort", nil),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return RunShowInstalled(c.ctx, cmd)
 		},

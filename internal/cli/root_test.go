@@ -10,9 +10,56 @@ import (
 
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/config/configtest"
+	"github.com/Zxilly/cjv/internal/toolchain"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func TestRootAndShowShareStatus(t *testing.T) {
+	home := t.TempDir()
+	configtest.Isolate(t, home)
+	t.Chdir(t.TempDir())
+	settings := config.DefaultSettings()
+	settings.DefaultToolchain = "lts"
+	require.NoError(t, config.SaveSettings(&settings, filepath.Join(home, ".cjv", "settings.toml")))
+	require.NoError(t, toolchain.WriteInstallation(filepath.Join(home, "toolchains", "lts"), toolchain.Installation{Release: "lts-1.0.5"}))
+	for _, format := range [][]string{nil, {"--json"}} {
+		bare, err := executeWithOutput(t, newApplication("dev", ""), format)
+		require.NoError(t, err)
+		show, err := executeWithOutput(t, newApplication("dev", ""), append([]string{"show"}, format...))
+		require.NoError(t, err)
+		assert.Equal(t, show, bare)
+		assert.Contains(t, bare, "lts-1.0.5", "the installed tracking release is visible")
+	}
+}
+
+func TestCommandsRejectUnexpectedArguments(t *testing.T) {
+	configtest.Isolate(t, t.TempDir())
+	t.Chdir(t.TempDir())
+	for _, args := range [][]string{
+		{"show", "active", "typo"}, {"show", "installed", "typo"}, {"show", "home", "typo"},
+		{"toolchain", "list", "nightly"}, {"override", "unset", "typo"}, {"override", "list", "typo"},
+		{"check", "typo"}, {"self", "update", "typo"}, {"self", "uninstall", "typo"}, {"init", "typo"},
+	} {
+		t.Run(strings.Join(args, "/"), func(t *testing.T) {
+			_, err := executeWithOutput(t, newApplication("dev", ""), args)
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), args[len(args)-1], "all rejection happens before any operation")
+		})
+	}
+}
+
+func TestCanonicalHelpKeepsCompatibilityEntrypoints(t *testing.T) {
+	configtest.Isolate(t, t.TempDir())
+	app := newApplication("dev", "")
+	for _, path := range [][]string{{"show", "installed"}, {"toolchain", "uninstall"}} {
+		cmd, rest, err := app.rootCmd.Find(path)
+		require.NoError(t, err)
+		require.Empty(t, rest)
+		assert.True(t, cmd.Hidden)
+	}
+	assert.Len(t, app.rootCmd.Groups(), 5)
+}
 
 // Test for Execute — the root command entry point.
 
@@ -44,8 +91,8 @@ func TestExecuteInvocationsDoNotShareJSONMode(t *testing.T) {
 		app.rootCmd.SetOut(&stdout)
 		app.rootCmd.SetErr(&stderr)
 		require.NoError(t, app.execute(args))
-		assert.Empty(t, stderr.String())
 		if len(args) > 0 {
+			assert.Empty(t, stderr.String())
 			assert.True(t, json.Valid(stdout.Bytes()), stdout.String())
 		} else {
 			assert.False(t, json.Valid(stdout.Bytes()), stdout.String())
@@ -99,7 +146,7 @@ func TestExecuteUnknownCommandJSONDoesNotAffectNextHelp(t *testing.T) {
 	assert.Empty(t, stderr.String())
 }
 
-func TestRootCommandRunListsInstalledAndMarksActive(t *testing.T) {
+func TestRootCommandRunListsInstalledAndActive(t *testing.T) {
 	app := newApplication("dev", "")
 	home := t.TempDir()
 	configtest.Isolate(t, home)
@@ -114,7 +161,6 @@ func TestRootCommandRunListsInstalledAndMarksActive(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, stdout, "lts-1.0.5")
 	assert.Contains(t, stdout, "sts-2.0.0")
-	assert.True(t, strings.Contains(stdout, "* lts-1.0.5") || strings.Contains(stdout, "*  lts-1.0.5"))
 }
 
 func TestRootCommandRunWithNoToolchains(t *testing.T) {
@@ -141,9 +187,13 @@ func TestGlobalSelectorAndBatchJSON(t *testing.T) {
 	require.NoError(t, err)
 	text, err := executeWithOutput(t, newApplication("dev", ""), []string{"+sts-1.0.0", "--json"})
 	require.NoError(t, err)
-	var status rootResult
+	var status struct {
+		Active struct {
+			Name string `json:"name"`
+		} `json:"active"`
+	}
 	require.NoError(t, json.Unmarshal([]byte(text), &status))
-	require.Equal(t, "sts-1.0.0", status.Active)
+	require.Equal(t, "sts-1.0.0", status.Active.Name)
 	text, err = executeWithOutput(t, newApplication("dev", ""), []string{"uninstall", "sts-1.0", "lts-1.0.5", "--yes", "--json"})
 	require.NoError(t, err)
 	var removed struct {

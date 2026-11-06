@@ -6,6 +6,8 @@ This page documents cjv usage in CI, build scripts, and editor integrations: ver
 
 In a project repository, running `cjv pin lts` writes the resolved concrete release name (such as `lts-1.0.5`) to [`cangjie-sdk.toml`](toolchain-file.md) in the current directory while preserving any existing `components`, `targets`, and custom keys (comments and formatting are rewritten). If you omit the toolchain name (`cjv pin`), `cjv` pins whichever toolchain is currently active. When pinning a tracked channel that is already installed on your machine, `cjv pin` prefers your locally installed release first and never downloads an SDK.
 
+`pin` only writes project configuration; it does not create a fixed-version installation. `lts` and `lts-1.0.5` are independent installation identities. If only `lts` is installed, the first tool invocation after pinning still installs `lts-1.0.5` according to `auto_install`; you can also run `cjv install lts-1.0.5` beforehand. Updating or uninstalling `lts` then leaves the project's fixed 1.0.5 installation available. The default [`link_mode = "hardlink"`](configuration.md#sdk-file-reuse) reuses regular SDK files when the release, platform, checksum, and file contents match, while installation metadata and components stay independent.
+
 Commit `cangjie-sdk.toml` to version control so every contributor and CI job selects the exact same SDK version:
 
 ```bash
@@ -36,7 +38,7 @@ To run `cjv` with `--offline` (or `CJV_OFFLINE=1`), the required manifests, SDK 
 
 If `cache/` contains damaged metadata records, orphaned archive files, or incomplete temporary files, `cjv cache list --json` reports them via the optional `problem` field while still listing healthy entries. Running `cjv cache clean` removes all `cjv`-owned cache files (including damaged ones), whereas `cjv cache prune --max-age <duration>` filters entries by age. Note that if an online query succeeds but saving its optional cache entry fails, `cjv` prints a warning to `stderr` and still returns the successful query result.
 
-- **`--no-auto-install`** prevents proxy commands and `cjv exec` from implicitly installing missing SDKs or components; explicit `cjv install` commands remain available.
+- **`--no-auto-install`** prevents implicit installation by proxies, `run`, `exec`, and default selection. Explicit `install` still works. Inspection commands and `envsetup` never install automatically.
 - **`--offline`** prevents `cjv` itself from making network requests, but does not restrict network access by child programs spawned via `run`, `exec`, or proxy binaries.
 
 ## Inspect and repair
@@ -50,8 +52,8 @@ cjv install lts --reinstall
 ```
 
 - **`cjv doctor`** performs a read-only check of your settings, active toolchain selection, proxy entry points in `<CJV_HOME>/bin`, installation records, and the presence of key SDK files, suggesting concrete repair commands when it detects an issue. It does not compute SHA-256 digests for every individual file inside an installed SDK, and it exits with a nonzero code (`1`) whenever a check fails.
-- **`cjv update --dry-run`** resolves compatible target releases and any update blockers without downloading archives, modifying installations, or refreshing `cache/`.
-- **`cjv install <name> --reinstall`** prepares and installs the named SDK release again while preserving your selected components and cross targets. By contrast, `--force` continues to mean skipping and removing unavailable optional components or targets—it does not reinstall an unchanged SDK.
+- **`cjv update --dry-run`** resolves compatible releases, blockers, and the self-check/update policy for full updates, without downloading archives or changing installations or caches.
+- **`cjv install <name> --reinstall`** reinstalls the current named release while retaining components and targets. Ordinary `install` preserves installed releases; `update` advances channels. `--allow-missing` permits skipping/removing unavailable optional items; old `--force` remains compatible.
 
 ## Update history and rollback
 
@@ -60,7 +62,7 @@ Whenever updating a tracked channel (`lts`, `sts`, `nightly`) changes the releas
 By default, each tracked channel retains its **2** most recent snapshots. Initial installations, `--reinstall` repairs of the same release, and standalone `target add` or `component add` operations do not create update snapshots. Fixed-version installations (such as `lts-1.0.5`) remain independent of tracking-channel history.
 
 ```bash
-cjv toolchain history lts
+cjv toolchain history list lts
 cjv toolchain rollback lts
 cjv toolchain history prune lts --keep 1
 ```
@@ -76,7 +78,11 @@ When you run `history prune` with a nonzero `--keep` value, `cjv` retains that m
 
 ## JSON compatibility
 
-Commands that support `--json` write a single structured JSON document to `stdout` and send all logs or warnings to `stderr`. The `run`, `exec`, and `init` commands do not support `--json` because their `stdout` and exit codes belong directly to the child process or interactive wizard.
+Commands supporting `--json` write one structured document to stdout and logs/warnings to stderr. `run`, `exec`, `init`, and `completion` reject JSON: execution preserves child output, initialization uses an interactive flow, and completion emits a shell script directly.
+
+Bare `cjv --json` and `cjv show --json` return the same status structure. Installation entries include `name`, actual `release`, and `kind` (`tracking`, `pinned`, `custom`). `set --json` returns `key`, `value`, and `changed`, including `changed: false` for no-ops. `override list --json` always has an `overrides` array; set returns directory/toolchain fields and unset returns a `removed` directory array. SDK and self-uninstall require explicit `--yes` in non-interactive or JSON mode.
+
+Clients of the old bare-command JSON summary must migrate the `active` string and `installed` name array to the show status structure: `active` is an object with name, source, and installation status, and entries live in `installed.toolchains`. The existing `show --json` shape is unchanged.
 
 When building automation around `--json`, follow these compatibility rules:
 

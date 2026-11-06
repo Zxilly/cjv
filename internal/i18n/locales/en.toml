@@ -1,4 +1,19 @@
 # === Toolchain management ===
+[ComponentFlagNamesOnly]
+other = "Print component names only"
+
+[ComponentFlagReinstall]
+other = "Reinstall the selected components"
+
+[ComponentFlagReplace]
+other = "Replace an existing component link or installation"
+
+[UninstallRequiresYes]
+other = "Uninstalling without an interactive terminal requires --yes"
+
+[SettingUnsetValue]
+other = "(unset)"
+
 [RunCmdLong]
 other = "Run any command in an explicitly selected toolchain environment. Missing SDKs and project requirements follow auto_install, as with exec. --install enables installation for this invocation; --no-auto-install disables it."
 
@@ -16,6 +31,63 @@ other = "Install it explicitly with 'cjv install {{.Name}}'."
 
 [QueryLinkHint]
 other = "Register the SDK with 'cjv toolchain link {{.Name}} <path>'."
+
+[InstallCmdLong]
+other = "Ensure the selected SDK is installed. Existing installations keep their release while requested targets and components are added. Use cjv update to advance a tracked channel, or --reinstall to repair its current release."
+
+[AllowMissingFlag]
+other = "Allow skipping and removing unavailable optional components or targets"
+
+[ToolchainImportShort]
+other = "Import an archive or URL as a managed custom toolchain"
+
+[ToolchainImportUseArchive]
+other = "Import requires an archive or URL; use toolchain link for a directory"
+
+[ImportFlagReplace]
+other = "Replace an existing managed custom toolchain"
+
+[LegacyLinkImport]
+other = "Archive/URL linking is deprecated; use cjv toolchain import"
+
+[ToolchainLinkDirectoryShort]
+other = "Link a custom toolchain to an existing SDK directory"
+
+[LegacyAllowMissingFlag]
+other = "use --allow-missing"
+
+[LegacyNoUpdateFlag]
+other = "install already preserves the installed release"
+
+[LegacyImportFlag]
+other = "use toolchain import for archives and URLs"
+
+[UpdatePlanSelf]
+other = "cjv (%s): %s → %s [%s]"
+
+[HelpGroupToolchains]
+other = "Toolchains and components:"
+
+[HelpGroupProject]
+other = "Toolchain selection:"
+
+[HelpGroupExecute]
+other = "Execution and environment:"
+
+[HelpGroupInspect]
+other = "Status and diagnostics:"
+
+[HelpGroupManage]
+other = "Configuration and maintenance:"
+
+[ToolchainKindTracking]
+other = "tracking"
+
+[ToolchainKindPinned]
+other = "pinned"
+
+[ToolchainKindCustom]
+other = "custom"
 
 [ToolchainInstalled]
 other = "Toolchain '{{.Name}}' installed successfully"
@@ -37,6 +109,36 @@ other = "No toolchain configured. Use 'cjv default <toolchain>' to set one, or c
 
 [ActiveToolchain]
 other = "Active toolchain: {{.Name}} (from {{.Source}})"
+
+[ToolchainNotInstalledLabel]
+other = "(not installed)"
+
+[ShowHomeResult]
+other = "{{.Home}} (source: {{.Source}})"
+
+[SelectionSourceEnv]
+other = "environment (CJV_TOOLCHAIN)"
+
+[SelectionSourceOverride]
+other = "directory override"
+
+[SelectionSourceDefault]
+other = "default toolchain"
+
+[SelectionSourceCommandLine]
+other = "command line"
+
+[SelectionSourceUnknown]
+other = "unknown"
+
+[HomeSourceEnv]
+other = "env"
+
+[HomeSourcePersisted]
+other = "persisted"
+
+[HomeSourceDefault]
+other = "default"
 
 [InstalledToolchains]
 one = "{{.Count}} toolchain installed:"
@@ -137,7 +239,7 @@ other = "Cangjie SDK manager"
 other = "cjv is an SDK manager for the Cangjie programming language."
 
 [RootFlagJSON]
-other = "output machine-readable JSON"
+other = "output machine-readable JSON (except run, exec, init, and completion)"
 
 [RootNoToolchains]
 other = "No toolchains installed. Use 'cjv install lts' to install one."

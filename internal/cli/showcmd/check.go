@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/Zxilly/cjv/internal/cli/clictx"
+	"github.com/Zxilly/cjv/internal/dist"
 	"github.com/Zxilly/cjv/internal/i18n"
 	"github.com/Zxilly/cjv/internal/lifecycle"
 	"github.com/Zxilly/cjv/internal/selfupdate"
@@ -78,8 +79,12 @@ func (r checkResult) Text() string {
 }
 
 func (c *commands) runCheck(cmd *cobra.Command, args []string) error {
-	ctx := cmd.Context()
-	planned, planErr := lifecycle.PlanUpdates(ctx, nil, c.ctx.LifecycleOptions())
+	ctx := dist.WithCacheReadOnly(cmd.Context())
+	var selected []string
+	if c.ctx.Selector != "" {
+		selected = []string{c.ctx.Selector}
+	}
+	planned, planErr := lifecycle.PlanUpdates(ctx, selected, c.ctx.LifecycleOptions())
 	if planErr != nil && len(planned.Toolchains) == 0 {
 		return planErr
 	}

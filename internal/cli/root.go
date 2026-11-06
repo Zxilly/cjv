@@ -4,14 +4,8 @@
 package cli
 
 import (
-	"errors"
-	"fmt"
-	"log/slog"
 	"os"
-	"strconv"
-	"strings"
 
-	"github.com/Zxilly/cjv/internal/cjverr"
 	"github.com/Zxilly/cjv/internal/cli/cachecmd"
 	"github.com/Zxilly/cjv/internal/cli/clictx"
 	"github.com/Zxilly/cjv/internal/cli/componentcmd"
@@ -23,36 +17,9 @@ import (
 	"github.com/Zxilly/cjv/internal/cli/showcmd"
 	"github.com/Zxilly/cjv/internal/cli/toolchaincmd"
 	"github.com/Zxilly/cjv/internal/i18n"
-	"github.com/Zxilly/cjv/internal/toolchain"
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 )
-
-type rootResult struct {
-	Active    string   `json:"active,omitempty"`
-	Installed []string `json:"installed"`
-}
-
-func (r rootResult) Text() string {
-	if len(r.Installed) == 0 {
-		return i18n.T("RootNoToolchains", nil)
-	}
-	var b strings.Builder
-	if r.Active != "" {
-		b.WriteString(i18n.T("RootActiveToolchain", i18n.MsgData{"Name": r.Active}))
-		b.WriteByte('\n')
-	}
-	b.WriteString(i18n.TP("RootInstalledCount", i18n.MsgData{"Count": strconv.Itoa(len(r.Installed))}, len(r.Installed)))
-	b.WriteByte('\n')
-	for _, name := range r.Installed {
-		marker := "  "
-		if name == r.Active {
-			marker = "* "
-		}
-		fmt.Fprintf(&b, "  %s%s\n", marker, name)
-	}
-	return b.String()
-}
 
 // application is one CLI execution: its shared context and command tree.
 type application struct {
@@ -78,6 +45,7 @@ func newApplication(ver, updURL string) *application {
 		register(root, ctx)
 	}
 	configureCobraHelp(root)
+	configureCommandContracts(root)
 	return &application{ctx: ctx, rootCmd: root}
 }
 
@@ -99,22 +67,46 @@ func newRootCommand(ctx *clictx.Context) *cobra.Command {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			active, resolveErr := showcmd.GatherActive(cmd.Context(), ctx.Selector)
-			installed, err := toolchain.ListInstalled()
-			if err != nil {
-				return err
-			}
-			activeName := ""
-			if active != nil {
-				activeName = active.Name
-			}
-			// Only ignore "no toolchain configured" — propagate real errors
-			if resolveErr != nil && !errors.As(resolveErr, new(*cjverr.NoToolchainConfiguredError)) {
-				slog.Warn("failed to resolve active toolchain", "error", resolveErr)
-			}
-			return ctx.Output.RenderTo(clictx.Out(cmd), rootResult{Active: activeName, Installed: installed})
+			return showcmd.RunShow(ctx, cmd)
 		},
 	}
 	root.SetVersionTemplate(color.CyanString("cjv {{.Version}}") + "\n")
 	return root
+}
+
+func configureCommandContracts(root *cobra.Command) {
+	// Commands with positional arguments declare their own validator. All other
+	// runnable commands reject stray tokens before any operation can take place.
+	var validate func(*cobra.Command)
+	validate = func(cmd *cobra.Command) {
+		if cmd.Args == nil && cmd.Runnable() {
+			cmd.Args = cobra.NoArgs
+		}
+		for _, child := range cmd.Commands() {
+			validate(child)
+		}
+	}
+	validate(root)
+	for _, group := range []struct{ id, key string }{
+		{"toolchains", "HelpGroupToolchains"}, {"project", "HelpGroupProject"},
+		{"execute", "HelpGroupExecute"}, {"inspect", "HelpGroupInspect"}, {"manage", "HelpGroupManage"},
+	} {
+		root.AddGroup(&cobra.Group{ID: group.id, Title: i18n.T(group.key, nil)})
+	}
+	for _, cmd := range root.Commands() {
+		switch cmd.Name() {
+		case "install", "update", "uninstall", "toolchain", "component", "target":
+			cmd.GroupID = "toolchains"
+		case "default", "override", "pin":
+			cmd.GroupID = "project"
+		case "exec", "run", "which", "envsetup":
+			cmd.GroupID = "execute"
+		case "show", "check", "doctor", "doc", "help":
+			cmd.GroupID = "inspect"
+		default:
+			cmd.GroupID = "manage"
+		}
+	}
+	root.SetHelpCommandGroupID("inspect")
+	root.SetCompletionCommandGroupID("manage")
 }

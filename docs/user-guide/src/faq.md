@@ -30,14 +30,14 @@ cjv exec ./my_binary
 可以根据实际环境选择以下三种方案之一：
 
 - **复用预填充缓存（`--offline`）** — 在联网机器上执行安装后，将 `<CJV_HOME>/cache/` 与 `cangjie-sdk.toml` 一起复制到离线环境，加上 `--offline`（或 `CJV_OFFLINE=1`）运行，见[自动化与 JSON 接口](automation.md#配置与网络)。
-- **使用本地 SDK 归档或目录（`toolchain link`）** — 通过 `cjv toolchain link` 注册本地 `.zip` / `.tar.gz` 归档或已解压目录，见[自定义 SDK](install-from-url.md)。
+- **使用本地 SDK 归档或目录** — 使用 `cjv toolchain import` 导入归档，或通过 `cjv toolchain link` 引用已解压目录，见[自定义 SDK](install-from-url.md)。
 - **部署企业内部分发源（`dist_server`）** — 受管终端配置[内部分发源](enterprise/distribution-server.md)，并在系统后备配置中关闭自动补装和自更新检查，见[企业与离线部署](enterprise/index.md)。
 
 请注意，已安装的工具链可以完全在本地运行，但离线构建项目时还需提前准备好 `cjpm` 的项目依赖包。
 
 ## 自定义工具链为什么不能用 `component add` 下载组件？
 
-通过 `cjv toolchain link` 注册的自定义 SDK 没有上游官方发行记录，因此 `cjv component add` 无法确定对应的组件制品。替代方式如下：
+通过 `toolchain import` 或 `toolchain link` 注册的自定义 SDK 没有上游官方发行记录，`component add` 无法确定其组件制品。替代方式如下：
 
 - **归档安装**可自动安装随包附带的 `stdx`，也可通过 `cjv component link stdx` 挂载本地 `stdx` 目录。
 - **外部目录链接**由源 SDK 目录的所有者自行维护，不支持通过 `cjv` 组件命令修改。详见[组件与离线文档](concepts/components.md#自定义-sdk-的组件管理)。

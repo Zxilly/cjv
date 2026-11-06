@@ -1,4 +1,19 @@
 # === 工具链管理 ===
+[ComponentFlagNamesOnly]
+other = "仅输出组件名称"
+
+[ComponentFlagReinstall]
+other = "重新安装所选组件"
+
+[ComponentFlagReplace]
+other = "替换已有的组件链接或安装"
+
+[UninstallRequiresYes]
+other = "非交互卸载需要显式传入 --yes"
+
+[SettingUnsetValue]
+other = "（未设置）"
+
 [RunCmdLong]
 other = "在显式选择的工具链环境中运行任意命令。缺失的 SDK 和项目要求与 exec 一样遵循 auto_install。--install 在本次调用启用安装，--no-auto-install 禁止安装。"
 
@@ -16,6 +31,63 @@ other = "请先运行 'cjv install {{.Name}}' 安装。"
 
 [QueryLinkHint]
 other = "请先运行 'cjv toolchain link {{.Name}} <path>' 注册 SDK。"
+
+[InstallCmdLong]
+other = "确保所选 SDK 已安装。已有安装保留当前发行版，并补齐请求的目标和组件。使用 cjv update 升级跟踪通道，或使用 --reinstall 修复当前发行版。"
+
+[AllowMissingFlag]
+other = "允许跳过并移除不可用的可选组件或目标"
+
+[ToolchainImportShort]
+other = "从归档或 URL 导入受管自定义工具链"
+
+[ToolchainImportUseArchive]
+other = "import 只接受归档或 URL；目录请使用 toolchain link"
+
+[ImportFlagReplace]
+other = "替换已有受管自定义工具链"
+
+[LegacyLinkImport]
+other = "归档和 URL 的 link 用法已弃用，请使用 cjv toolchain import"
+
+[ToolchainLinkDirectoryShort]
+other = "将自定义工具链链接到已有 SDK 目录"
+
+[LegacyAllowMissingFlag]
+other = "请使用 --allow-missing"
+
+[LegacyNoUpdateFlag]
+other = "install 已默认保留现有发行版"
+
+[LegacyImportFlag]
+other = "归档和 URL 请使用 toolchain import"
+
+[UpdatePlanSelf]
+other = "cjv（%s）：%s → %s [%s]"
+
+[HelpGroupToolchains]
+other = "工具链与组件:"
+
+[HelpGroupProject]
+other = "工具链选择:"
+
+[HelpGroupExecute]
+other = "执行与环境:"
+
+[HelpGroupInspect]
+other = "状态与诊断:"
+
+[HelpGroupManage]
+other = "配置与维护:"
+
+[ToolchainKindTracking]
+other = "跟踪通道"
+
+[ToolchainKindPinned]
+other = "固定版本"
+
+[ToolchainKindCustom]
+other = "自定义"
 
 [ToolchainInstalled]
 other = "工具链 '{{.Name}}' 安装成功"
@@ -37,6 +109,36 @@ other = "未配置工具链。使用 'cjv default <toolchain>' 设置默认工�
 
 [ActiveToolchain]
 other = "活跃工具链: {{.Name}} (来源: {{.Source}})"
+
+[ToolchainNotInstalledLabel]
+other = "(未安装)"
+
+[ShowHomeResult]
+other = "{{.Home}} (来源: {{.Source}})"
+
+[SelectionSourceEnv]
+other = "环境变量 CJV_TOOLCHAIN"
+
+[SelectionSourceOverride]
+other = "目录覆盖"
+
+[SelectionSourceDefault]
+other = "默认工具链"
+
+[SelectionSourceCommandLine]
+other = "命令行"
+
+[SelectionSourceUnknown]
+other = "未知"
+
+[HomeSourceEnv]
+other = "环境变量 CJV_HOME"
+
+[HomeSourcePersisted]
+other = "用户设置"
+
+[HomeSourceDefault]
+other = "默认目录"
 
 [InstalledToolchains]
 one = "已安装 {{.Count}} 个工具链:"
@@ -137,7 +239,7 @@ other = "仓颉 SDK 管理器"
 other = "cjv 是仓颉编程语言的 SDK 管理器。"
 
 [RootFlagJSON]
-other = "输出机器可读的 JSON"
+other = "输出机器可读的 JSON（run、exec、init 和 completion 除外）"
 
 [RootNoToolchains]
 other = "未安装任何工具链。使用 'cjv install lts' 安装。"

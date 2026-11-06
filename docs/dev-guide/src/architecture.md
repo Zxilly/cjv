@@ -56,7 +56,7 @@
 5. `publication.go` 通过 `fstx.NewToolchainGroupTransaction` 在单个持久化事务中发布各成员需要变更的目录和元数据。
 6. 完成 `<CJV_HOME>/bin` 命令入口配置等收尾工作，标记准备阶段成功，并清理本次操作拥有的下载和暂存文件。
 
-安装策略标志仅调整版本与组件解析规则：`--force` 允许跳过并移除缺失的可选组件或目标，不会强制重装未变化的 SDK；`--no-update` 保留已安装的宿主发行版；`nightly` 会根据所需的组件和目标集合在已发布历史中选择兼容版本，降级需显式传入 `--allow-downgrade`。
+CLI 的 `install` 默认传入 `NoUpdate`，确保安装或补齐附加项时保留当前发行版；`update` 显式推进通道。`--allow-missing` 允许跳过并移除不可用组件/目标（旧 `--force` 保留兼容），`--reinstall` 重装当前发行版。解析 nightly 新安装或更新时仍应用兼容性搜索及显式 `--allow-downgrade` 规则。
 
 SDK 发行版及来源未变化、只需调整组件时，安装组在锁内复查后仅复制受影响的组件目录和组件元数据，SDK 本体保留在原处。组件文件清单和安装记录与组内其他宿主、交叉目标的变更仍通过同一个事务提交；更换 SDK 或显式 `--reinstall` 时则准备并发布完整 SDK。所有待发布路径均暂存在对应 SDK、文档或 `stdx` 根旁的 `.staging` 树中，便于中断后的统一恢复与清理。
 
@@ -91,7 +91,7 @@ URL 和本地归档安装走 `resolved_install.go`：先提交 SDK 本体，再�
 
 `toolchain.SelectActive` 按顺序处理显式 CLI 选择（`+name`、`--toolchain`）、`CJV_TOOLCHAIN` 环境变量、逐层目录覆盖与 `cangjie-sdk.toml` 项目文件以及全局默认设置。`PrepareActive` 执行待定恢复并定位本地安装，只有确实缺少官方 SDK 时才调用自动安装回调；无效选择、损坏记录和文件系统错误均直接返回。
 
-`resolve.Active` 根据 `auto_install` 补齐项目声明的依赖项（`run --install` 显式允许安装，只读状态查询绝不安装）。`toolchain.ReadHostTargets` 统一绑定宿主身份、实际发行版和平台；`target` 命令、`component --target`、`resolve.ActiveTarget` 及代理目标补齐都使用它，避免错误关联到其他宿主或不同发行版的交叉 SDK。
+`run` 与 `exec` 共用 `resolve.ActiveRuntime`，按 `auto_install` 补齐需求；`run --install` 显式允许补装，与 `--no-auto-install` 冲突。`which` 只查工具路径，`envsetup` 读取运行环境并校验项目需求，二者不会自动安装。`toolchain.ReadHostTargets` 绑定宿主身份、发行版和平台，供目标命令、组件和代理使用，避免关联其他宿主或发行版的交叉 SDK。
 
 `env.Runtime` 从显式传入的基础环境变量合并 SDK 路径与组件变量，生成子进程环境或 `envsetup` 脚本（`env` 本身不负责选择工具链；`resolve.ActiveRuntime` 将当前选择与对应的 `env.Runtime` 组合，`sdktools` 统一工具路径）。Unix 代理直接替换当前进程，Windows 代理与 `cjv run`、`cjv exec` 共用 `process.Run` 处理子进程、退出码与信号。
 

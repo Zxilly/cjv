@@ -103,7 +103,7 @@ Unlike `versions.json`, `nightly.json` directly represents a single channel at t
 
 Every SDK entry contains `name`, `url`, and `sha256`. On upstream nightly builds, `sha256` may temporarily be empty while artifacts finish publishing, in which case `cjv` fetches `<url>.sha256`; on an internal enterprise mirror, you should populate `sha256` directly in the manifest. Component entries also accept an optional `sha256` field—populating it ensures clients verify component archives and retain them in the reusable offline cache.
 
-The version key under `versions` determines the toolchain version name, while `url` identifies the archive file to download. When installing or updating the tracked `nightly` channel, `cjv` starts from `latest` and searches published history in `nightly.json` if required components or cross targets are missing from the newest build (without downgrading an existing installation unless `--allow-downgrade` is passed). A full pinned nightly name selects that exact release directly.
+The version key under `versions` determines the toolchain version name, while `url` identifies the archive file to download. When first installing or explicitly updating the tracked `nightly` channel, `cjv` starts from `latest` and searches published history in `nightly.json` if required components or cross targets are missing from the newest build (without downgrading an existing installation unless `--allow-downgrade` is passed). A full pinned nightly name selects that exact release directly.
 
 ## Component format
 

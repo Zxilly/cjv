@@ -6,6 +6,7 @@ import (
 	"runtime"
 	"testing"
 
+	"github.com/Zxilly/cjv/internal/cli/clictx"
 	"github.com/Zxilly/cjv/internal/cli/clitest"
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/config/configtest"
@@ -14,6 +15,12 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func confirmedUninstall(ctx *clictx.Context) *uninstall {
+	u := newUninstall(ctx)
+	u.yes = true
+	return u
+}
 
 // Tests for the uninstall command. Settings cleanup after removal is
 // lifecycle behaviour, tested in internal/lifecycle.
@@ -34,12 +41,12 @@ func TestRunUninstallRemovesOnlyNamedToolchain(t *testing.T) {
 	clitest.InstallToolchain(t, ctx, "lts")
 	require.NoError(t, os.MkdirAll(filepath.Join(home, "toolchains", "sts-2.0.0"), 0o755))
 
-	require.NoError(t, newUninstall(ctx).run(nil, []string{"sts-2.0.0"}))
+	require.NoError(t, confirmedUninstall(ctx).run(nil, []string{"sts-2.0.0"}))
 	remaining, err := toolchain.ListInstalled()
 	require.NoError(t, err)
 	assert.Equal(t, []string{"lts"}, remaining)
 
-	require.NoError(t, newUninstall(ctx).run(nil, []string{"lts"}))
+	require.NoError(t, confirmedUninstall(ctx).run(nil, []string{"lts"}))
 	remaining, err = toolchain.ListInstalled()
 	require.NoError(t, err)
 	assert.Empty(t, remaining)
@@ -49,6 +56,35 @@ func TestRunUninstallNotInstalled(t *testing.T) {
 	emptyHome(t)
 	err := newUninstall(newTestContext()).run(nil, []string{"nonexistent-99.99"})
 	assert.Error(t, err, "uninstalling a toolchain that is not installed should error")
+}
+
+func TestUninstallJSONRequiresExplicitConfirmation(t *testing.T) {
+	home := emptyHome(t)
+	name := "lts-1.0.5"
+	dir := filepath.Join(home, "toolchains", name)
+	require.NoError(t, os.MkdirAll(dir, 0o755))
+	ctx := clitest.Root(Register)
+	out, err := clitest.Execute(t, ctx, "uninstall", name, "--json")
+	require.Error(t, err)
+	assert.Contains(t, out, "--yes")
+	assert.DirExists(t, dir)
+	_, err = clitest.Execute(t, clitest.Root(Register), "uninstall", name, "--json", "--yes")
+	require.NoError(t, err)
+	assert.NoDirExists(t, dir)
+}
+
+func TestUninstallNoninteractiveRequiresYes(t *testing.T) {
+	if clictx.StdinIsTerminal() {
+		t.Skip("test requires noninteractive input")
+	}
+	home := emptyHome(t)
+	name := "lts-1.0.5"
+	dir := filepath.Join(home, "toolchains", name)
+	require.NoError(t, os.MkdirAll(dir, 0o755))
+	_, err := clitest.Execute(t, clitest.Root(Register), "uninstall", name)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "--yes")
+	assert.DirExists(t, dir)
 }
 
 func TestRunUninstallRecoversBeforeCheckingInstallation(t *testing.T) {
@@ -63,7 +99,7 @@ func TestRunUninstallRecoversBeforeCheckingInstallation(t *testing.T) {
 	assert.NoDirExists(t, dir)
 	// The CLI must recover before its confirmation/existence check, not report
 	// "not installed" for content that is still owned by a retained journal.
-	require.NoError(t, newUninstall(newTestContext()).run(nil, []string{name}))
+	require.NoError(t, confirmedUninstall(newTestContext()).run(nil, []string{name}))
 	assert.NoDirExists(t, dir)
 	entries, err := os.ReadDir(filepath.Dir(dir))
 	require.NoError(t, err)
@@ -95,7 +131,7 @@ func TestRunUninstallPreservesSettingsWhenRemoveFails(t *testing.T) {
 		_ = os.RemoveAll(filepath.Join(home, "toolchains"))
 	})
 
-	require.Error(t, newUninstall(newTestContext()).run(nil, []string{name}))
+	require.Error(t, confirmedUninstall(newTestContext()).run(nil, []string{name}))
 	loaded, err := config.LoadSettings(settingsPath)
 	require.NoError(t, err)
 	assert.Equal(t, name, loaded.DefaultToolchain)

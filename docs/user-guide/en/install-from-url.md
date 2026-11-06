@@ -1,11 +1,11 @@
 # Custom SDKs: directories, archives, and URLs
 
-`cjv toolchain link` registers a custom toolchain from an unpacked local SDK directory, a local `.zip` or `.tar.gz` archive, or an HTTP(S) URL:
+`cjv toolchain link` references an unpacked SDK directory; `cjv toolchain import` creates a managed installation from a local archive or HTTP(S) URL:
 
 ```bash
 cjv toolchain link local-sdk /path/to/sdk
-cjv toolchain link archive-sdk ./cangjie-sdk.zip
-cjv toolchain link remote-sdk https://example.com/cangjie-sdk.tar.gz
+cjv toolchain import archive-sdk ./cangjie-sdk.zip
+cjv toolchain import remote-sdk https://example.com/cangjie-sdk.tar.gz
 ```
 
 Each of these commands registers an independent custom toolchain under the name you choose. Linking a custom toolchain does not change your global default selection; run `cjv default <name>` if you want to make it the default, or set `channel = "<name>"` in a project's [`cangjie-sdk.toml`](toolchain-file.md).
@@ -28,19 +28,21 @@ This distinction also affects [component management](concepts/components.md#mana
 
 ## Archive installation options
 
-When the source is a local `.zip` / `.tar.gz` file or an HTTP(S) URL, `cjv toolchain link` accepts three additional flags:
+`cjv toolchain import` accepts these archive installation options:
 
 | Option | Effect |
 | --- | --- |
 | `--sha256 <hex>` | Verify the archive against an expected 64-character hexadecimal SHA-256 digest before extracting |
-| `--force` | Replace an existing custom toolchain with the same name |
+| `--replace` | Replace an existing custom toolchain with the same name |
 | `--no-stdx` | Skip installing a bundled `stdx` archive when extracting an outer CI bundle |
 
 These three options apply only to archives and URLs; passing them when linking an unpacked directory produces an error. If you omit `--sha256` for an archive or URL, `cjv` skips checking an expected digest but still validates the archive format and SDK directory structure.
 
+The old archive/URL forms of `toolchain link` still work with a migration note; their `--force` replacement flag corresponds to `import --replace`.
+
 ## Supported archive layouts
 
-`cjv toolchain link` supports two archive layouts out of the box:
+`cjv toolchain import` supports two archive layouts out of the box:
 
 1. **A bare SDK archive** (`.tar.gz` or `.zip`) containing a single complete `cangjie/` SDK directory with its `bin/`, `lib/`, `tools/`, `runtime/`, and other standard subdirectories.
 2. **An outer CI bundle ZIP** (such as the artifact produced by `cangjie-build` CI workflows) that wraps an inner SDK archive and an optional inner `stdx` archive:
@@ -58,5 +60,5 @@ Once installed, you can inspect or remove an archive-based custom toolchain with
 
 ```bash
 cjv component list --toolchain archive-sdk
-cjv toolchain uninstall archive-sdk
+cjv uninstall archive-sdk
 ```

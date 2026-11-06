@@ -10,6 +10,7 @@ import (
 	"github.com/Zxilly/cjv/internal/cli/clictx"
 	"github.com/Zxilly/cjv/internal/cli/selfcmd"
 	"github.com/Zxilly/cjv/internal/config"
+	"github.com/Zxilly/cjv/internal/dist"
 	"github.com/Zxilly/cjv/internal/i18n"
 	"github.com/Zxilly/cjv/internal/lifecycle"
 	"github.com/Zxilly/cjv/internal/selfupdate"
@@ -91,7 +92,11 @@ func (c *update) run(cmd *cobra.Command, args []string) error {
 	}
 	if c.dryRun {
 		plan, err := lifecycle.PlanUpdates(ctx, args, c.lifecycleOptions())
-		return c.ctx.Output.RenderOutcome(clictx.Out(cmd), updatePlanResult{UpdatePlanReport: plan, DryRun: true}, err)
+		result := updatePlanResult{UpdatePlanReport: plan, DryRun: true}
+		if len(args) == 0 && !plan.NoneInstalled && ctx.Err() == nil {
+			result.SelfUpdate = c.planSelfUpdate(ctx)
+		}
+		return c.ctx.Output.RenderOutcome(clictx.Out(cmd), result, err)
 	}
 	if len(args) > 0 {
 		var outcomes []lifecycle.UpdateOutcome
@@ -173,14 +178,44 @@ func (c *update) command() *cobra.Command {
 	}
 	cmd.Flags().BoolVar(&c.noSelfUpdate, "no-self-update", false, i18n.T("UpdateFlagNoSelfUpdate", nil))
 	cmd.Flags().BoolVar(&c.dryRun, "dry-run", false, i18n.T("UpdateFlagDryRun", nil))
-	cmd.Flags().BoolVar(&c.force, "force", false, i18n.T("UpdateFlagForce", nil))
+	cmd.Flags().BoolVar(&c.force, "allow-missing", false, i18n.T("AllowMissingFlag", nil))
+	cmd.Flags().BoolVar(&c.force, "force", false, i18n.T("AllowMissingFlag", nil))
+	_ = cmd.Flags().MarkDeprecated("force", i18n.T("LegacyAllowMissingFlag", nil))
+	cmd.MarkFlagsMutuallyExclusive("force", "allow-missing")
 	cmd.Flags().BoolVar(&c.allowDowngrade, "allow-downgrade", false, i18n.T("UpdateFlagAllowDowngrade", nil))
 	return cmd
 }
 
 type updatePlanResult struct {
 	lifecycle.UpdatePlanReport
-	DryRun bool `json:"dry_run"`
+	DryRun     bool            `json:"dry_run"`
+	SelfUpdate *selfUpdatePlan `json:"self_update,omitempty"`
+}
+
+type selfUpdatePlan struct {
+	Action  string            `json:"action"`
+	Current string            `json:"current"`
+	Latest  string            `json:"latest,omitempty"`
+	Status  selfupdate.Status `json:"status,omitempty"`
+	Error   string            `json:"error,omitempty"`
+}
+
+func (c *update) planSelfUpdate(ctx context.Context) *selfUpdatePlan {
+	_, settings, err := config.LoadDefaultSettings()
+	if err != nil || c.noSelfUpdate || settings.AutoSelfUpdate == config.AutoSelfUpdateDisable {
+		return nil
+	}
+	plan := &selfUpdatePlan{Action: "check", Current: c.ctx.Version}
+	if settings.AutoSelfUpdate == config.AutoSelfUpdateEnable {
+		plan.Action = "update"
+	}
+	checked, err := selfupdate.Check(dist.WithCacheReadOnly(ctx), c.ctx.UpdateURL, c.ctx.Version)
+	if err != nil {
+		plan.Error = err.Error()
+	} else {
+		plan.Status, plan.Latest = checked.Status, checked.Version
+	}
+	return plan
 }
 
 func (r updatePlanResult) Text() string {
@@ -203,6 +238,14 @@ func (r updatePlanResult) Text() string {
 		}
 		if plan.Error != "" {
 			fmt.Fprintf(&b, "  %s\n", plan.Error)
+		}
+	}
+	if r.SelfUpdate != nil {
+		self := r.SelfUpdate
+		fmt.Fprintf(&b, i18n.T("UpdatePlanSelf", nil), self.Action, self.Current, self.Latest, self.Status)
+		b.WriteByte('\n')
+		if self.Error != "" {
+			fmt.Fprintf(&b, "  %s\n", self.Error)
 		}
 	}
 	return b.String()

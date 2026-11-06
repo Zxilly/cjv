@@ -2,6 +2,7 @@ package showcmd
 
 import (
 	"bytes"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -11,10 +12,34 @@ import (
 	"github.com/Zxilly/cjv/internal/config"
 	"github.com/Zxilly/cjv/internal/config/configtest"
 	"github.com/Zxilly/cjv/internal/i18n"
+	"github.com/Zxilly/cjv/internal/toolchain"
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func TestInstalledListDistinguishesIdentityAndRelease(t *testing.T) {
+	i18n.Init("en")
+	t.Cleanup(func() { i18n.Init("en") })
+	home := t.TempDir()
+	configtest.Isolate(t, home)
+	for _, name := range []string{"lts", "lts-1.0.5"} {
+		require.NoError(t, toolchain.WriteInstallation(filepath.Join(home, "toolchains", name), toolchain.Installation{Release: "lts-1.0.5"}))
+	}
+	text, err := clitest.Execute(t, clitest.Root(Register), "show", "installed")
+	require.NoError(t, err)
+	assert.Contains(t, text, "lts → lts-1.0.5 (tracking)")
+	assert.Contains(t, text, "lts-1.0.5 (pinned)")
+	text, err = clitest.Execute(t, clitest.Root(Register), "show", "installed", "--json")
+	require.NoError(t, err)
+	var result InstalledResult
+	require.NoError(t, json.Unmarshal([]byte(text), &result))
+	require.Len(t, result.Toolchains, 2)
+	assert.Equal(t, "lts", result.Toolchains[0].Name)
+	assert.Equal(t, "lts-1.0.5", result.Toolchains[0].Release)
+	assert.Equal(t, "tracking", result.Toolchains[0].Kind)
+	assert.Equal(t, "pinned", result.Toolchains[1].Kind)
+}
 
 // setDefault isolates a home whose settings select name as the default.
 func setDefault(t *testing.T, name string, installed bool) {
@@ -31,6 +56,8 @@ func setDefault(t *testing.T, name string, installed bool) {
 }
 
 func TestRunShowActive(t *testing.T) {
+	i18n.Init("en")
+	t.Cleanup(func() { i18n.Init("en") })
 	t.Run("installed", func(t *testing.T) {
 		setDefault(t, "lts-1.0.5", true)
 		out, err := clitest.CommandOutput(t, func(cmd *cobra.Command) error {
@@ -58,6 +85,49 @@ func TestRunShowActive(t *testing.T) {
 	})
 }
 
+func TestShowStatusLocalized(t *testing.T) {
+	t.Cleanup(func() { i18n.Init("en") })
+	for _, lang := range []string{"zh-CN", "en"} {
+		t.Run(lang, func(t *testing.T) {
+			i18n.Init(lang)
+			setDefault(t, "lts-1.0.5", false)
+			out, err := clitest.Execute(t, clitest.Root(Register), "show", "active")
+			require.NoError(t, err)
+			label := "not installed"
+			source := "source:"
+			if lang == "zh-CN" {
+				label, source = "未安装", "来源:"
+				assert.NotContains(t, out, "not installed")
+				assert.NotContains(t, out, "default toolchain")
+				assert.Contains(t, out, "默认工具链")
+			}
+			assert.Contains(t, out, label)
+			out, err = clitest.Execute(t, clitest.Root(Register), "show", "home")
+			require.NoError(t, err)
+			assert.Contains(t, out, source)
+			out, err = clitest.Execute(t, clitest.Root(Register), "show", "active", "--json")
+			require.NoError(t, err)
+			var result ActiveResult
+			require.NoError(t, json.Unmarshal([]byte(out), &result))
+			assert.Equal(t, "default toolchain", result.Source)
+			assert.False(t, result.Installed)
+		})
+	}
+}
+
+func TestShowSourceLabelsLocalized(t *testing.T) {
+	i18n.Init("zh-CN")
+	t.Cleanup(func() { i18n.Init("en") })
+	for source, want := range map[string]string{
+		"environment (CJV_TOOLCHAIN)": "环境变量 CJV_TOOLCHAIN",
+		"directory override":          "目录覆盖", "default toolchain": "默认工具链",
+		"command line": "命令行", "unknown": "未知", "cangjie-sdk.toml": "cangjie-sdk.toml",
+		"env": "环境变量 CJV_HOME", "persisted": "用户设置", "default": "默认目录",
+	} {
+		assert.Equal(t, want, localizedSource(source), source)
+	}
+}
+
 func TestRunShowInstalled(t *testing.T) {
 	t.Run("lists toolchains", func(t *testing.T) {
 		home := t.TempDir()
@@ -79,6 +149,12 @@ func TestRunShowInstalled(t *testing.T) {
 		})
 		require.NoError(t, err, "an empty home is reported, not an error")
 		assert.Contains(t, out, i18n.T("NoToolchainsInstalled", nil))
+		out, err = clitest.Execute(t, clitest.Root(Register), "show", "installed", "--json")
+		require.NoError(t, err)
+		var result InstalledResult
+		require.NoError(t, json.Unmarshal([]byte(out), &result))
+		assert.NotNil(t, result.Toolchains)
+		assert.Empty(t, result.Toolchains)
 	})
 }
 

@@ -170,7 +170,7 @@ func TestIntegrationInstallFlow(t *testing.T) {
 	// 5. Toolchain list should include the channel identity.
 	stdout, _, err = runCJV(t, binary, cjvHome, "toolchain", "list")
 	require.NoError(t, err)
-	assert.Contains(t, stdout, "  lts\n")
+	assert.Contains(t, stdout, "  lts → lts-1.0.5 (tracking)\n")
 
 	// 6. Which cjc — should return a path ending with bin/cjc
 	stdout, stderr, err = runCJV(t, binary, cjvHome, "which", "cjc")
@@ -184,13 +184,13 @@ func TestIntegrationInstallFlow(t *testing.T) {
 	require.NoError(t, err, "fixed install failed: stdout=%s stderr=%s", stdout, stderr)
 	fixedDir := filepath.Join(cjvHome, "toolchains", "lts-1.0.5")
 	assert.DirExists(t, fixedDir)
-	stdout, stderr, err = runCJV(t, binary, cjvHome, "uninstall", "lts-1.0.5")
+	stdout, stderr, err = runCJV(t, binary, cjvHome, "uninstall", "lts-1.0.5", "--yes")
 	require.NoError(t, err, "fixed uninstall failed: stdout=%s stderr=%s", stdout, stderr)
 	assert.NoDirExists(t, fixedDir)
 	assert.FileExists(t, cjcPath)
 
 	// 8. Uninstall the tracking installation.
-	stdout, stderr, err = runCJV(t, binary, cjvHome, "uninstall", "lts")
+	stdout, stderr, err = runCJV(t, binary, cjvHome, "uninstall", "lts", "--yes")
 	require.NoError(t, err, "uninstall failed: stdout=%s stderr=%s", stdout, stderr)
 
 	// 8. Verify toolchain directory is gone
@@ -291,10 +291,11 @@ func TestIntegrationInstallAlreadyInstalled(t *testing.T) {
 	_, _, err := runCJV(t, binary, cjvHome, "install", "lts")
 	require.NoError(t, err)
 
-	// Install again checks the channel head and reports it is up to date.
+	// Install again keeps the local channel without claiming remote freshness.
 	stdout, _, err := runCJV(t, binary, cjvHome, "install", "lts")
 	require.NoError(t, err)
-	assert.Contains(t, stdout, "Already up to date (lts)")
+	assert.Contains(t, stdout, "Toolchain 'lts' is already installed")
+	assert.NotContains(t, stdout, "up to date")
 
 	// An explicit version still reports an already installed fixed SDK.
 	_, _, err = runCJV(t, binary, cjvHome, "install", "lts-1.0.5")
@@ -320,7 +321,8 @@ func TestIntegrationShowInstalledMultiple(t *testing.T) {
 	stdout, _, err := runCJV(t, binary, cjvHome, "show", "installed")
 	require.NoError(t, err)
 	assert.Contains(t, stdout, "lts-1.0.5")
-	assert.Contains(t, stdout, "  lts\n")
+	assert.Contains(t, stdout, "  lts → lts-1.0.5 (tracking)\n")
+	assert.Contains(t, stdout, "  lts-1.0.5 (pinned)\n")
 }
 
 // TestIntegrationWhichUnknownTool tests that 'which' for an unknown tool returns an error.
@@ -350,7 +352,7 @@ func TestIntegrationUninstallClearsDefault(t *testing.T) {
 	require.NoError(t, err)
 
 	// Uninstall
-	_, _, err = runCJV(t, binary, cjvHome, "uninstall", "lts")
+	_, _, err = runCJV(t, binary, cjvHome, "uninstall", "lts", "--yes")
 	require.NoError(t, err)
 
 	// Show active should fail (no toolchain configured)

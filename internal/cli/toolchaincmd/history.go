@@ -53,6 +53,8 @@ func historyCommand(ctx *clictx.Context) *cobra.Command {
 		name := ""
 		if len(args) > 0 {
 			name = args[0]
+		} else {
+			name = ctx.Selector
 		}
 		report, err := lifecycle.InspectHistory(cmd.Context(), name)
 		if err != nil {
@@ -67,6 +69,8 @@ func historyCommand(ctx *clictx.Context) *cobra.Command {
 		name := ""
 		if len(args) > 0 {
 			name = args[0]
+		} else {
+			name = ctx.Selector
 		}
 		removed, err := lifecycle.PruneHistory(cmd.Context(), name, keep)
 		if err != nil {

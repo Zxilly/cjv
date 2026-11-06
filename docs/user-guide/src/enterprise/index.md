@@ -4,7 +4,7 @@
 
 - **允许通过代理访问上游** — 配置[网络代理](../network-proxies.md)与企业根证书即可。
 - **仅允许访问企业内网** — 将经批准的 SDK、组件和版本清单放入[内部分发源](distribution-server.md)，并将 `dist_server` 指向该内网地址。
-- **完全离线（物理隔离）** — 使用本地归档文件或预置目录，通过 `cjv toolchain link` 完成注册。
+- **完全离线（物理隔离）** — 使用 `toolchain import` 导入归档，或通过 `toolchain link` 引用已有目录。
 
 请注意，`dist_server` 仅控制仓颉 SDK 和组件的分发，不控制 `cjv` 本体升级，也不配置 `cjpm` 的项目依赖仓库；后两者需要分别安排。
 
@@ -63,7 +63,7 @@ cjc --version
 在无内网 HTTP 服务的完全离线终端上，使用本地归档或目录完成注册：
 
 ```bash
-cjv toolchain link corp-sdk ./cangjie-sdk.zip --sha256 <approved-sha256>
+cjv toolchain import corp-sdk ./cangjie-sdk.zip --sha256 <approved-sha256>
 cjv component link stdx /opt/corp/cangjie-stdx --toolchain corp-sdk
 cjv default corp-sdk
 ```

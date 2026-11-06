@@ -3,7 +3,6 @@
 package settingscmd
 
 import (
-	"fmt"
 	"io"
 
 	"github.com/Zxilly/cjv/internal/cli/clictx"
@@ -14,12 +13,26 @@ import (
 
 // Register adds default, override, and set to root.
 func Register(root *cobra.Command, ctx *clictx.Context) {
-	root.AddCommand(newSetCommand(), newDefaultCommand(ctx), newOverrideCommand())
+	root.AddCommand(newSetCommand(ctx), newDefaultCommand(ctx), newOverrideCommand(ctx))
+}
+
+type settingResult struct {
+	Key     string `json:"key"`
+	Value   any    `json:"value"`
+	Changed bool   `json:"changed"`
+	display string
+}
+
+func (r settingResult) Text() string {
+	if !r.Changed {
+		return ""
+	}
+	return i18n.T("SettingUpdated", i18n.MsgData{"Key": r.Key, "Value": r.display})
 }
 
 // updateSetting persists the user's explicit choice and prints confirmation
 // when it changes the user file, even if its effective value was inherited.
-func updateSetting(w io.Writer, key, displayValue string, update config.SettingsUpdate) error {
+func updateSetting(ctx *clictx.Context, w io.Writer, key, displayValue string, value any, update config.SettingsUpdate) error {
 	sf, err := config.DefaultSettingsFile()
 	if err != nil {
 		return err
@@ -28,12 +41,5 @@ func updateSetting(w io.Writer, key, displayValue string, update config.Settings
 	if err != nil {
 		return err
 	}
-	if !changed {
-		return nil
-	}
-	_, err = fmt.Fprintln(w, i18n.T("SettingUpdated", i18n.MsgData{
-		"Key":   key,
-		"Value": displayValue,
-	}))
-	return err
+	return ctx.Output.RenderTo(w, settingResult{Key: key, Value: value, Changed: changed, display: displayValue})
 }

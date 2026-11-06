@@ -14,6 +14,16 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestAllowMissingRejectsLegacyFlagConflictBeforeMutation(t *testing.T) {
+	for _, operation := range []string{"install", "update"} {
+		home := filepath.Join(t.TempDir(), "absent")
+		configtest.Isolate(t, home)
+		_, err := execute(t, operation, "sts", "--allow-missing", "--force=false", "--json")
+		require.Error(t, err)
+		require.NoDirExists(t, home)
+	}
+}
+
 func TestForceKeepsAlreadyInstalledSDKs(t *testing.T) {
 	for _, operation := range []string{"install", "update"} {
 		for _, identity := range []string{"sts", "sts-1.0.0"} {
@@ -65,10 +75,18 @@ func TestForceAllowsMissingTargetsForInstallAndUpdate(t *testing.T) {
 			require.NoError(t, err)
 			record, err := toolchain.ReadInstallation(filepath.Join(home, "toolchains", "sts"))
 			require.NoError(t, err)
-			require.Equal(t, "sts-2.0.0", record.Release)
+			want := "sts-2.0.0"
+			if operation == "install" {
+				want = "sts-1.0.0"
+			}
+			require.Equal(t, want, record.Release)
 			tuple, err := target.CurrentTargetTuple("", "ohos")
 			require.NoError(t, err)
-			require.NoDirExists(t, filepath.Join(home, "toolchains", "sts-"+tuple))
+			if operation == "install" {
+				require.DirExists(t, filepath.Join(home, "toolchains", "sts-"+tuple))
+			} else {
+				require.NoDirExists(t, filepath.Join(home, "toolchains", "sts-"+tuple))
+			}
 		})
 	}
 }

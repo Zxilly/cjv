@@ -6,6 +6,8 @@
 
 在项目目录中运行 `cjv pin lts`，会将解析后的完整发行版名称（例如 `lts-1.0.5`）写入当前目录的 [`cangjie-sdk.toml`](toolchain-file.md)，同时保留文件中原有的 `components`、`targets` 和其他自定义键值（注释和排版会重新生成）。省略名称直接运行 `cjv pin` 时，会固定当前激活的工具链选择；如果本机已安装对应的跟踪通道，`cjv pin` 会优先使用本机已安装的发行版，不会触发下载。
 
+`pin` 只写项目配置，不创建固定版本安装。`lts` 与 `lts-1.0.5` 是独立的安装身份：如果只装过 `lts`，固定后首次运行工具时仍会按 `auto_install` 设置安装 `lts-1.0.5`，也可以提前运行 `cjv install lts-1.0.5`。之后更新或卸载 `lts` 不会影响项目固定的 1.0.5。默认的 [`link_mode = "hardlink"`](configuration.md#sdk-文件复用) 会在发行版、平台、校验和及文件内容匹配时复用普通 SDK 文件，安装元数据和组件仍然独立。
+
 将生成的 `cangjie-sdk.toml` 提交到版本控制，即可让所有项目成员和 CI 选择完全相同的 SDK 版本：
 
 ```bash
@@ -36,7 +38,7 @@ cjv --offline --no-auto-install exec cjc --version
 
 如果缓存目录中存在损坏记录、孤立归档或未完成的临时文件，`cjv cache list --json` 会通过可选的 `problem` 字段标出问题条目，同时正常列出其余有效条目。运行 `cjv cache clean` 可以清理这些由 `cjv` 管理的缓存文件，`cjv cache prune --max-age <duration>` 则按年龄筛选清理。如果联网查询成功但无法写入可选缓存，`cjv` 会向 `stderr` 发出警告，查询结果本身仍可正常使用。
 
-- **`--no-auto-install`** — 禁止代理命令或 `cjv exec` 隐式自动补装缺失项；显式执行的 `cjv install` 仍可正常运行。
+- **`--no-auto-install`** — 禁止代理、`run`、`exec` 和默认选择操作隐式补装；显式 `cjv install` 仍正常执行。查询与 `envsetup` 本身不会自动安装。
 - **`--offline`** — 约束 `cjv` 自身的网络请求，但不会限制子进程（通过 `run`、`exec` 或代理命令启动的程序）自身的联网行为。
 
 ## 检查与修复
@@ -50,8 +52,8 @@ cjv install lts --reinstall
 ```
 
 - **`cjv doctor`** — 只读检查设置文件、当前选中的 SDK、`<CJV_HOME>/bin` 代理入口、安装记录以及关键 SDK 文件是否存在，并在发现问题时给出具体修复建议和返回非零退出码（`1`）。它不会对整个 SDK 逐文件计算哈希摘要。
-- **`cjv update --dry-run`** — 解析兼容版本与更新阻塞原因，不下载归档、不修改安装，也不刷新缓存。
-- **`cjv install <name> --reinstall`** — 重新准备并安装同名 SDK 的当前发行版，同时保留已选择的组件和交叉编译目标。与之相对，`--force` 仍表示允许跳过并移除不可用的可选组件或目标，不会代替 `--reinstall` 重装未发生变化的 SDK。
+- **`cjv update --dry-run`** — 解析兼容版本、阻塞原因和全量更新涉及的本体检查/更新策略，不下载归档、不修改安装或刷新缓存。
+- **`cjv install <name> --reinstall`** — 重装同名 SDK 的当前发行版并保留组件和目标。普通 `install` 保留已有发行版，`update` 推进通道；`--allow-missing` 允许跳过并移除不可用附加项，旧 `--force` 仍可兼容使用。
 
 ## 更新历史与回退
 
@@ -60,7 +62,7 @@ cjv install lts --reinstall
 每个跟踪通道默认自动保留最近 **2** 份快照。首次安装、同一发行版的 `--reinstall` 修复，以及单独补装目标或组件不会生成快照。固定版本安装（如 `lts-1.0.5`）独立保留，不参与通道更新历史。
 
 ```bash
-cjv toolchain history lts
+cjv toolchain history list lts
 cjv toolchain rollback lts
 cjv toolchain history prune lts --keep 1
 ```
@@ -76,7 +78,11 @@ cjv toolchain history prune lts --keep 1
 
 ## JSON 兼容规则
 
-支持 `--json` 的命令会将单个结构化 JSON 文档写入 `stdout`，并将日志与警告写入 `stderr`。`run`、`exec` 和 `init` 不支持 `--json`，因为子进程的标准输出和退出码需要按原样透传。
+支持 `--json` 的命令输出单个结构化文档，日志和警告写入 stderr。`run`、`exec`、`init` 和 `completion` 不支持 JSON：执行入口保留子进程输出，初始化使用交互流程，补全直接输出 shell 脚本。
+
+裸 `cjv --json` 与 `cjv show --json` 返回同一状态结构。安装列表条目包含 `name`、实际发行版 `release` 和类型 `kind`（`tracking`、`pinned`、`custom`）。`set --json` 返回 `key`、`value`、`changed`；未改变设置时也返回 `changed: false`。`override list --json` 的 `overrides` 始终是数组，`set` 返回目录与工具链，`unset` 返回已移除目录数组。SDK 和本体卸载在非交互或 JSON 模式下均需显式 `--yes`。
+
+迁移旧版裸命令 JSON 客户端时，请将原 `active` 字符串和 `installed` 名称数组调整为 show 状态结构：`active` 是包含名称、来源和安装状态的对象，安装列表位于 `installed.toolchains`。原 `show --json` 结构保持不变。
 
 编写解析 `--json` 输出的客户端时，请遵循以下兼容约定：
 

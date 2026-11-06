@@ -48,7 +48,7 @@ The `cangjie-sdk.toml` file uses the [TOML](https://toml.io/) format. All settin
 
 Every `cangjie-sdk.toml` file must specify either `channel` or `path`, but never both:
 
-- **`channel`** names an official release channel (`lts`, `sts`, `nightly`), a pinned version selector (`lts-1.0.5`, `1.2`, `nightly-2026-10-04`), or a custom toolchain name registered via `cjv toolchain link`.
+- **`channel`** names an official release channel (`lts`, `sts`, `nightly`), a pinned version selector (`lts-1.0.5`, `1.2`, `nightly-2026-10-04`), or a custom toolchain name registered via `toolchain import` or `toolchain link`.
 - **`path`** points directly to an unpacked SDK directory on the local filesystem using an absolute path:
 
 ```toml

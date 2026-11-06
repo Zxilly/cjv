@@ -49,7 +49,9 @@ cjv install lts
 cjv install lts-1.0.5
 ```
 
-之后运行 `cjv update lts`（或 `cjv update`）时，`cjv` 只会将跟踪通道 `lts` 更新到该通道的最新版本，而固定的 `lts-1.0.5` 保持原样不变；两者的附属组件和交叉编译目标也分别独立管理。日常运行 `cjc` 时始终使用本机已安装的版本，只有显式执行 `cjv install` 或 `cjv update` 时才会升级。
+之后运行 `cjv update lts`（或 `cjv update`）时，`cjv` 只会将跟踪通道 `lts` 更新到该通道的最新版本，而固定的 `lts-1.0.5` 保持原样不变；两者的附属组件和交叉编译目标也分别独立管理。日常运行 `cjc` 时始终使用本机已安装的版本，已有安装只有显式执行 `cjv update` 时才会升级；`install` 保留现有发行版。
+
+`toolchain list` 同时显示安装名称、实际发行版和类型。例如 `lts → lts-1.0.5` 标为跟踪通道，独立的 `lts-1.0.5` 标为固定版本；相同发行版可以有不同的更新生命周期。
 
 次版本简写（如 `sts-1.2`）和日期简写（如 `nightly-2026-10-04`）在安装时会被解析为具体的发行版并固定安装。如果需要团队成员与 CI 使用完全一致的发行版，请在 [`cangjie-sdk.toml`](../toolchain-file.md) 中写入完整版本名（或运行 `cjv pin` 自动解析写入）。
 
@@ -57,7 +59,7 @@ cjv install lts-1.0.5
 
 由于 `nightly` 构建发布频繁，有时最新一次 nightly 构建可能尚未包含某个可选组件（如 `stdx`、`docs`）或交叉编译 SDK。
 
-在安装或更新 `nightly` 通道时，`cjv` 会综合考虑你请求的（或该通道上已安装的）组件与交叉 SDK 集合，自动在 `nightly.json` 保留的历史记录中查找最新的兼容版本。默认情况下，`cjv` 不会将已安装的 `nightly` 降级到更旧的版本；如果允许选择更旧的兼容 nightly 构建，可以传入 `--allow-downgrade`。其他安装与更新策略详见[命令参考](../command-reference.md#安装与更新策略)。
+首次安装或显式更新 `nightly` 通道时，`cjv` 会综合考虑你请求的（或该通道上已安装的）组件与交叉 SDK 集合，自动在 `nightly.json` 保留的历史记录中查找最新的兼容版本。默认情况下，`cjv` 不会将已安装的 `nightly` 降级到更旧的版本；如果允许选择更旧的兼容 nightly 构建，可以传入 `--allow-downgrade`。其他安装与更新策略详见[命令参考](../command-reference.md#安装与更新策略)。
 
 ## 主机平台
 
@@ -76,6 +78,6 @@ cjv default my-sdk
 
 目录链接直接引用你自行维护的已有 SDK 目录；运行 `cjv uninstall my-sdk` 只会移除 `cjv` 中的链接记录，保留你的源目录不变。
 
-如果需要由 `cjv` 托管独立的 SDK 副本，或者为自定义 SDK 挂载本地 `stdx` 扩展库，可以改向 `cjv toolchain link` 传入本地归档（`.zip` / `.tar.gz`）或 HTTP(S) URL，详见[自定义 SDK](../install-from-url.md)。自定义工具链不会通过 `cjv update` 更新，也没有可供 `cjv component add` 下载的官方组件。
+如果需要 cjv 托管独立的 SDK 副本，或者为自定义 SDK 挂载本地 stdx，请使用 `cjv toolchain import <name> <archive|url>`，详见[自定义 SDK](../install-from-url.md)。自定义工具链不会通过 `update` 更新，也不能通过 `component add` 下载官方组件。
 
 运行 `cjv toolchain list` 可以查看本机安装的所有工具链，运行 `cjv show active` 可以查看当前激活的工具链及其选择来源。完整选择规则见[项目工具链](../toolchain-file.md)。

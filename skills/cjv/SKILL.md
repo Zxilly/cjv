@@ -11,7 +11,7 @@ requested outcome. Match the user's language.
 ## Work from current state
 
 - For an existing setup, start with the relevant subset of `cjv --version`,
-  `cjv show active`, `cjv show installed`, and `cjv show home`.
+  `cjv show active`, `cjv toolchain list`, and `cjv show home`.
 - Use `cjv doctor --json` for read-only diagnostics and suggested repairs.
   Preview an update with `cjv update --dry-run --json` before explaining its impact.
 - Treat the installed `cjv <command> --help` as authoritative. Use the
@@ -22,9 +22,11 @@ requested outcome. Match the user's language.
 
 ## Preserve these semantics
 
-- Use `cjv run <toolchain> ...` for one command with an explicit SDK. Use
-  `cjv exec [+toolchain] ...` for a compiled program that needs Cangjie runtime
-  libraries. Use `cjv envsetup` only when the current shell needs that runtime.
+- Use `cjv exec [+toolchain] ...` for commands or compiled programs in the SDK
+  runtime environment; `cjv run <toolchain> ...` retains an explicit positional
+  toolchain syntax. Both follow `auto_install`. `run --install` opts in and
+  conflicts with `--no-auto-install`. `which` and `envsetup` never install SDKs,
+  targets, or components. Use `envsetup` when the current shell needs that runtime.
 - Automatic selection first honors `CJV_TOOLCHAIN`, then walks upward from the
   current directory considering overrides and `cangjie-sdk.toml`, then falls
   back to `cjv default`. At one directory an override wins, but a nearer project
@@ -40,22 +42,27 @@ requested outcome. Match the user's language.
 - `components` and `targets` in that file apply only when it selected the active
   toolchain. Targets extend the host SDK and use suffixes such as `ohos` or
   `android` rather than full platform tuples.
-- `cjv toolchain link` preserves a linked source directory. Archive or URL
-  installs are cjv-managed copies and are removed when that toolchain is removed.
+- `cjv toolchain link` references an existing SDK directory and preserves it.
+  Use `cjv toolchain import` for archives or URLs; imported copies are managed
+  by cjv and removed when that toolchain is removed. Legacy archive/URL link
+  syntax remains accepted but is deprecated.
 
 - Install/update/uninstall accept multiple names. A leading global `+name`
   selects the SDK for management commands; explicit `--toolchain` wins.
   `which --toolchain` and `target list/add/remove` follow this selection.
-- `default` installs a missing official SDK before saving the selection.
+- `default` installs a missing official SDK before saving the selection unless
+  `--no-auto-install` is supplied.
   `check` queries SDK and cjv releases without installing updates.
-- Install/update `--force` permits skipping and removing unavailable components
-  or targets, without reinstalling unchanged SDKs. `install --no-update` keeps
-  the current release. Use `install --reinstall` to repair the same SDK while
+- Install/update `--allow-missing` permits skipping and removing unavailable
+  components or targets. `install` keeps the current release by default; use
+  `update` to advance it. Use `install --reinstall` to repair the same SDK while
   retaining selected components and targets. Nightly searches published history without downgrading
   unless `--allow-downgrade` is set. Hosts and tracking targets update together.
-  Component and custom `toolchain link` replacement flags retain their own semantics.
+  Use `component add --reinstall` and component link/import `--replace` for
+  their respective replacement operations. Legacy `--force` remains accepted.
 - Use `component --target <suffix>` for an installed matching cross SDK.
   Global `--quiet/-q` hides progress and `--verbose` enables debug logging;
+  `component list --names-only` prints only names regardless of flag position.
   honor an existing `CJV_LOG` value. Version selectors support minor patches,
   dated nightly, and host suffixes only when the manifest publishes them.
 - For CI isolation, use both an absolute `CJV_HOME` and `--config <file>` or
@@ -64,7 +71,7 @@ requested outcome. Match the user's language.
 - `--offline` uses existing metadata and verified archives from the same source;
   inspect availability with `cjv cache list --json`. `--no-auto-install` prevents
   implicit installation. Neither flag restricts networking by child programs.
-- Inspect saved updates with `cjv toolchain history <channel>`. Rollback restores
+- Inspect saved updates with `cjv toolchain history list <channel>`. Rollback restores
   a verified complete toolchain group; use `cjv toolchain rollback <channel> [snapshot]`
   when requested. History cleanup is separate from cache cleanup.
 
@@ -73,8 +80,10 @@ requested outcome. Match the user's language.
 - `cjv init` and first installation may change `PATH`; mention when a new shell
   or a no-modify option is needed. Redact proxy credentials.
 - Before `cjv uninstall`, report that its managed components and docs are also
-  removed. Treat `cjv self uninstall` as removal of cjv and all managed SDK data.
+  removed. Noninteractive and JSON uninstall require explicit `--yes`, including
+  `self uninstall`, which removes cjv and all managed SDK data.
 - Verify selection with `cjv show active`, resolution with `cjv which cjc`, and
   the SDK with `cjc --version` or `cjv run <toolchain> cjc --version`.
 - Prefer `--json` for automation where supported. `run`, `exec`, and `init`
-  emit their native output. Summarize persistent changes after execution.
+  emit their native output and reject JSON mode; `completion` likewise only
+  emits shell code and rejects JSON mode. Summarize persistent changes after execution.
