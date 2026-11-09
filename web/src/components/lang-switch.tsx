@@ -27,9 +27,14 @@ export function LangSwitch({ onSelect, transition, layoutDependency }: {
       {LANGS.map((l, idx) => (
         <Fragment key={l}>
           {idx > 0 && <span className="text-gray-300 dark:text-gray-700">/</span>}
-          <button
-            type="button"
-            onClick={() => onSelect(l)}
+          <a
+            href={l === 'en' ? '/en/' : '/'}
+            hrefLang={l === 'en' ? 'en' : 'zh-CN'}
+            onClick={event => {
+              if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey || event.button !== 0) return
+              event.preventDefault()
+              onSelect(l)
+            }}
             aria-current={l === lang}
             className={cn(
               'transition-colors duration-300 ease-in-out motion-reduce:transition-none',
@@ -39,7 +44,7 @@ export function LangSwitch({ onSelect, transition, layoutDependency }: {
             )}
           >
             {LANG_LABEL[l]}
-          </button>
+          </a>
         </Fragment>
       ))}
     </motion.div>

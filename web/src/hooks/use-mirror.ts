@@ -1,5 +1,12 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 export function useMirror() {
-  return useState(() => document.documentElement.dataset.defaultMirror === 'true')
+  const state = useState(() => typeof document !== 'undefined'
+    && document.documentElement.dataset.prerendered !== 'true'
+    && document.documentElement.dataset.defaultMirror === 'true')
+  const [, setMirror] = state
+  useEffect(() => {
+    setMirror(document.documentElement.dataset.defaultMirror === 'true')
+  }, [setMirror])
+  return state
 }

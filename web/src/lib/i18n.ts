@@ -10,6 +10,9 @@ const STORAGE_KEY = 'cjv-lang'
 const catalogs: Record<Lang, typeof zhMessages> = { zh: zhMessages, en: enMessages }
 
 export function detectLang(): Lang {
+  if (typeof document !== 'undefined' && document.documentElement.dataset.prerendered === 'true') {
+    return document.documentElement.dataset.pageLang === 'en' ? 'en' : 'zh'
+  }
   if (typeof window === 'undefined') return 'en'
   try {
     const saved = window.localStorage?.getItem(STORAGE_KEY)
@@ -28,6 +31,10 @@ export function activateLang(lang: Lang): void {
 }
 
 export function persistLang(lang: Lang): void {
+  if (document.documentElement.dataset.prerendered === 'true') {
+    const path = lang === 'en' ? '/en/' : '/'
+    if (window.location.pathname !== path) window.history.pushState(null, '', path + window.location.search + window.location.hash)
+  }
   try {
     window.localStorage?.setItem(STORAGE_KEY, lang)
   } catch {

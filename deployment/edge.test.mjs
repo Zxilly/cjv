@@ -18,6 +18,8 @@ let worker
 before(async () => {
   await mkdir(path.join(siteDir, 'assets'), { recursive: true })
   await writeFile(path.join(siteDir, 'index.html'), html)
+  await mkdir(path.join(siteDir, 'en'), { recursive: true })
+  await writeFile(path.join(siteDir, 'en/index.html'), html.replace('zh-CN', 'en'))
   await writeFile(path.join(siteDir, 'assets/app.js'), 'console.log("app")')
   await writeFile(path.join(siteDir, '404.html'), 'Missing')
   await buildEdge('edgeone', siteDir, edgeDir)
@@ -66,12 +68,22 @@ for (const provider of ['edgeone', 'cloudflare']) {
 test('EdgeOne routes the homepage to the function before static files, preserving 404s and assets', async () => {
   const routes = JSON.parse(await readFile(path.join(edgeDir, 'routes.json'), 'utf8')).routes
   assert.equal(routes[0]['server-name'], 'edge')
-  for (const pathname of ['/', '/index.html']) assert.match(pathname, new RegExp(routes[0].src))
+  for (const pathname of ['/', '/index.html', '/en/', '/en/index.html']) assert.match(pathname, new RegExp(routes[0].src))
   for (const pathname of ['/assets/app.js', '/book/', '/missing']) assert.doesNotMatch(pathname, new RegExp(routes[0].src))
   assert.equal(routes[1].handle, 'filesystem')
   assert.equal(routes[2].status, 404)
   assert.equal(await readFile(path.join(edgeDir, 'assets/assets/app.js'), 'utf8'), 'console.log("app")')
   assert.equal(await readFile(path.join(edgeDir, 'assets/404.html'), 'utf8'), 'Missing')
+})
+
+test('English edge routes return English HTML with the regional mirror default', async () => {
+  for (const pathname of ['/en/', '/en/index.html']) {
+    const request = new Request(`https://cjv.zxilly.com${pathname}`)
+    request.eo = { geo: { countryCodeAlpha2: 'CN' } }
+    let response
+    edgeHandler({ request, respondWith(value) { response = value } })
+    assert.match(await response.text(), /<html data-default-mirror="true" lang="en">/)
+  }
 })
 
 test('EdgeOne rejects upload roots that the CLI would interpret as plain static files', async () => {

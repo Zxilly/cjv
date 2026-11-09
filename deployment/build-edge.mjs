@@ -14,22 +14,23 @@ export async function buildEdge(provider, siteDir, outputDir) {
   if (provider === 'edgeone') {
     const html = await readFile(path.join(siteDir, 'index.html'), 'utf8')
     if (!html.includes('<html ')) throw new Error('Missing HTML element in the built homepage')
-    const source = `import 'hooks';\nconst html = ${JSON.stringify(html)};\n${homeResponse.toString()}\n`
+    const english = await readFile(path.join(siteDir, 'en/index.html'), 'utf8')
+    const source = `import 'hooks';\nconst html = ${JSON.stringify(html)};\nconst english = ${JSON.stringify(english)};\n${homeResponse.toString()}\n`
     await cp(siteDir, path.join(outputDir, 'assets'), { recursive: true })
     await mkdir(path.join(outputDir, 'edge-functions'), { recursive: true })
     await writeFile(path.join(outputDir, 'edge-functions/index.js'), source + `
 addEventListener('fetch', (event, hookCtx) => {
   const pathname = new URL(event.request.url).pathname;
-  if (pathname !== '/' && pathname !== '/index.html') {
+  if (!['/', '/index.html', '/en/', '/en/index.html'].includes(pathname)) {
     const forward = hookCtx?.fetch || globalThis.fetch;
     event.respondWith(forward(event.request));
     return;
   }
-  event.respondWith(homeResponse(html, event.request.eo?.geo?.countryCodeAlpha2, event.request.method));
+  event.respondWith(homeResponse(pathname.startsWith('/en/') ? english : html, event.request.eo?.geo?.countryCodeAlpha2, event.request.method));
 });
 `)
     await writeFile(path.join(outputDir, 'edge-functions/config.json'), JSON.stringify({
-      routes: [{ src: '^/(index\\.html)?$' }],
+      routes: [{ src: '^/(en/)?(index\\.html)?$' }],
     }, null, 2) + '\n')
     await cp(new URL('./edgeone/routes.json', import.meta.url), path.join(outputDir, 'routes.json'))
   } else {

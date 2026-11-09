@@ -11,7 +11,7 @@ export default {
     if (response.status !== 200 || !response.headers.get('content-type')?.includes('text/html')) {
       return response
     }
-    const injected = homeResponse(await response.text(), request.cf?.country, request.method)
+    const injected = homeResponse(await response.text(), request.cf?.country, request.method, new URL(request.url).hostname)
     const headers = new Headers(response.headers)
     for (const [key, value] of injected.headers) headers.set(key, value)
     for (const key of ['content-length', 'content-encoding', 'etag', 'last-modified']) headers.delete(key)

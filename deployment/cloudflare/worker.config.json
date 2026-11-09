@@ -4,7 +4,9 @@
   "workersDev": false,
   "triggers": [
     { "type": "fetch", "pattern": "cjv.zxilly.dev/", "zone": "zxilly.dev" },
-    { "type": "fetch", "pattern": "cjv.zxilly.dev/index.html", "zone": "zxilly.dev" }
+    { "type": "fetch", "pattern": "cjv.zxilly.dev/index.html", "zone": "zxilly.dev" },
+    { "type": "fetch", "pattern": "cjv.zxilly.dev/en/", "zone": "zxilly.dev" },
+    { "type": "fetch", "pattern": "cjv.zxilly.dev/en/index.html", "zone": "zxilly.dev" }
   ],
   "manifest": {
     "type": "complete",

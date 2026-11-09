@@ -1,9 +1,14 @@
 // This self-contained function is embedded in both providers' deployment bundles.
-export function homeResponse(html, country, method) {
+export function homeResponse(html, country, method, hostname) {
   if (method !== 'GET' && method !== 'HEAD') {
     return new Response(null, { status: 405, headers: { Allow: 'GET, HEAD' } })
   }
-  const body = html.replace('<html ', `<html data-default-mirror="${country === 'CN'}" `)
+  // Keep installer commands usable on the selected mirror domain, while canonical
+  // and hreflang URLs consistently identify the primary .com site.
+  const localized = hostname === 'cjv.zxilly.dev'
+    ? html.replaceAll('https://cjv.zxilly.com/install.', 'https://cjv.zxilly.dev/install.')
+    : html
+  const body = localized.replace('<html ', `<html data-default-mirror="${country === 'CN'}" `)
   return new Response(method === 'HEAD' ? null : body, {
     headers: {
       'Content-Type': 'text/html; charset=utf-8',

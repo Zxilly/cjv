@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import {
-  computeBrowserPlatformResult, detectBrowserPlatformResult,
+  computeBrowserPlatformResult, computePlatformResult, detectBrowserPlatformResult,
   type BrowserPlatformInput, type PlatformResult,
 } from '@/lib/platform-detection'
 
@@ -20,7 +20,9 @@ function samePlatformResult(a: PlatformResult, b: PlatformResult): boolean {
 }
 
 export function usePlatform(input?: BrowserPlatformInput) {
-  const [platform, setPlatform] = useState(() => computeBrowserPlatformResult(input))
+  const [platform, setPlatform] = useState(() => !input && (
+    typeof document === 'undefined' || document.documentElement.dataset.prerendered === 'true'
+  ) ? computePlatformResult('', '') : computeBrowserPlatformResult(input))
 
   // Depend on the primitive fields rather than the input object's identity, so
   // a caller passing a fresh object literal each render does not re-trigger the

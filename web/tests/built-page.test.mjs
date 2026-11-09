@@ -5,6 +5,7 @@ import { mkdir } from 'node:fs/promises'
 import path from 'node:path'
 import { chromium, firefox, webkit } from 'playwright'
 import { preview } from 'vite'
+import { homeResponse } from '../../deployment/home-response.mjs'
 
 let server
 let browser
@@ -39,7 +40,7 @@ test('built homepage detects the real browser and offers its installation path',
   page.on('pageerror', error => errors.push(error.message))
   page.on('console', message => { if (message.type() === 'error') errors.push(message.text()) })
   try {
-    await page.goto(origin, { waitUntil: 'networkidle' })
+    await page.goto(origin + '/en/', { waitUntil: 'networkidle' })
     const exposed = await page.evaluate(async () => {
       const info = { userAgent: navigator.userAgent, platform: navigator.platform, hints: null, hintsError: null }
       try {
@@ -111,11 +112,11 @@ test('installation content stays visible while font requests are pending', async
     await route.abort()
   })
   try {
-    await page.goto(origin, { waitUntil: 'domcontentloaded' })
+    await page.goto(origin + '/en/', { waitUntil: 'domcontentloaded' })
     await page.waitForFunction(() => document.querySelector('#app button') && document.fonts.status === 'loading')
     assert.ok(requests > 0, 'the regression must exercise pending font downloads')
     assert.equal(await page.locator('#app').evaluate(element => getComputedStyle(element).opacity), '1')
-    assert.ok(await page.locator('#app a[href*="/book/user-guide/"]').isVisible())
+    assert.ok(await page.locator('#app a[href*="/book/user-guide/"]').first().isVisible())
   } finally {
     releaseFonts()
     await page.close()
@@ -127,7 +128,7 @@ test('normal animations settle after tab, mirror, and language changes', async (
   const errors = []
   page.on('pageerror', error => errors.push(error.message))
   try {
-    await page.goto(origin, { waitUntil: 'networkidle' })
+    await page.goto(origin + '/en/', { waitUntil: 'networkidle' })
     const otherPlatforms = page.getByRole('button', { name: 'Show install methods for other platforms', exact: true })
     if (await otherPlatforms.count()) await otherPlatforms.click()
     for (const [name, panel] of [['Download', 'download'], ['Source', 'source'], ['Command', 'command']]) {
@@ -142,7 +143,7 @@ test('normal animations settle after tab, mirror, and language changes', async (
     await page.getByRole('switch').click()
     await page.getByText('GitCode · mirror', { exact: true }).waitFor()
     for (const [name, lang] of [['中文', 'zh-CN'], ['English', 'en']]) {
-      await page.getByRole('button', { name, exact: true }).click()
+      await page.getByRole('link', { name, exact: true }).click()
       await page.waitForFunction(expected => {
         const content = document.querySelector('#app > div')
         return document.documentElement.lang === expected && content && getComputedStyle(content).opacity === '1'
@@ -159,7 +160,7 @@ test('built homepage fits desktop and narrow mobile viewports', async () => {
   try {
     for (const width of [1280, 360]) {
       await page.setViewportSize({ width, height: 900 })
-      await page.goto(origin, { waitUntil: 'networkidle' })
+      await page.goto(origin + '/en/', { waitUntil: 'networkidle' })
       await page.locator('#app button').first().waitFor()
       assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), `overflow at ${width}px`)
       if (process.env.CJV_WEB_SCREENSHOTS) {
@@ -170,4 +171,51 @@ test('built homepage fits desktop and narrow mobile viewports', async () => {
   } finally {
     await page.close()
   }
+})
+
+test('both languages provide visible content, commands and crawlable links without JavaScript', async () => {
+  const page = await openPage({ javaScriptEnabled: false })
+  try {
+    for (const [route, language, heading] of [['/', 'zh-CN', '仓颉 SDK 版本管理器'], ['/en/', 'en', 'Cangjie SDK version manager']]) {
+      await page.goto(origin + route)
+      assert.equal(await page.locator('html').getAttribute('lang'), language)
+      assert.ok((await page.getByRole('heading', { level: 1 }).innerText()).includes(heading))
+      assert.ok(await page.getByRole('heading', { level: 2 }).isVisible())
+      for (const command of await page.locator('code').all()) assert.ok(await command.isVisible())
+      assert.ok((await page.locator('code').allTextContents()).some(value => value.includes('install.ps1')))
+      assert.equal(await page.locator('link[rel="canonical"]').getAttribute('href'), 'https://cjv.zxilly.com' + route)
+      assert.equal(await page.locator('a[href="/en/"]').count(), 1)
+      assert.ok(await page.locator('a[href*="toolchain-file.html"]').isVisible())
+    }
+  } finally { await page.close() }
+})
+
+test('regional .dev HTML hydrates without errors and keeps domain-specific installer commands', async () => {
+  const page = await openPage()
+  const errors = []
+  page.on('pageerror', error => errors.push(error.message))
+  page.on('console', message => { if (message.type() === 'error') errors.push(message.text()) })
+  await page.route('https://cjv.zxilly.dev/**', async route => {
+    const pathname = new URL(route.request().url()).pathname
+    const response = await route.fetch({ url: origin + pathname })
+    if (pathname === '/' || pathname === '/en/') {
+      const injected = homeResponse(await response.text(), 'CN', 'GET', 'cjv.zxilly.dev')
+      await route.fulfill({ response, body: await injected.text() })
+    } else await route.fulfill({ response })
+  })
+  try {
+    // Saved and browser languages must not override the explicit page URL.
+    await page.addInitScript(() => localStorage.setItem('cjv-lang', 'zh'))
+    await page.goto('https://cjv.zxilly.dev/en/', { waitUntil: 'networkidle' })
+    await page.getByText('GitCode · mirror', { exact: true }).waitFor()
+    assert.equal(await page.locator('html').getAttribute('lang'), 'en')
+    assert.ok((await page.locator('code').allTextContents()).some(value => value.includes('https://cjv.zxilly.dev/install.')))
+    await page.getByRole('link', { name: '中文', exact: true }).click()
+    await page.waitForFunction(() => document.documentElement.lang === 'zh-CN')
+    assert.equal(new URL(page.url()).pathname, '/')
+    await page.goBack()
+    await page.waitForFunction(() => document.documentElement.lang === 'en')
+    assert.equal(await page.locator('link[rel="canonical"]').getAttribute('href'), 'https://cjv.zxilly.com/en/')
+    assert.deepEqual(errors, [])
+  } finally { await page.close() }
 })

@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react'
 import { useAnimationControls, useReducedMotion, type Transition } from 'framer-motion'
 import { useLingui } from '@lingui/react/macro'
 import { i18n, activateLang, persistLang, type Lang } from '@/lib/i18n'
+import { updatePageMetadata } from '@/lib/seo'
 
 // Fade the whole page through opacity 0 so the locale swap lands while invisible —
 // i18n is context-driven, so any copy left mounted would otherwise flip to the new
@@ -31,8 +32,21 @@ export function useLanguageSwitch() {
 
   // Keep the document language attribute in sync for a11y and correct font selection.
   useEffect(() => {
-    document.documentElement.lang = active.locale === 'en' ? 'en' : 'zh-CN'
+    updatePageMetadata(active.locale === 'en' ? 'en' : 'zh')
   }, [active.locale])
+
+  useEffect(() => {
+    const onPopState = () => {
+      if (document.documentElement.dataset.prerendered === 'true') {
+        generation.current++
+        fadeControls.stop()
+        fadeControls.set({ opacity: 1 })
+        activateLang(window.location.pathname.startsWith('/en/') ? 'en' : 'zh')
+      }
+    }
+    window.addEventListener('popstate', onPopState)
+    return () => window.removeEventListener('popstate', onPopState)
+  }, [fadeControls])
 
   // Every choice invalidates pending work, including choosing the current locale.
   async function switchLang(next: Lang) {

@@ -17,6 +17,8 @@ import { useLanguageSwitch } from '@/hooks/use-language-switch'
 import { useMirror } from '@/hooks/use-mirror'
 import { INSTALL_TABS, getInstallTabDirection, type InstallTab } from '@/lib/tab-motion'
 import { i18n } from '@/lib/i18n'
+import { PAGE_META } from '@/lib/seo'
+import { ProjectGuide } from '@/components/project-guide'
 
 function MethodsList({ items, mirror }: { items: InstallMethod[]; mirror: boolean }) {
   return (
@@ -66,6 +68,7 @@ export default function App() {
 
 function AppContent() {
   const { t } = useLingui()
+  const copy = PAGE_META[i18n.locale === 'en' ? 'en' : 'zh']
   const platform = usePlatform()
   const { methods, otherMethods, sourceMethod } = platform
   const prefersReducedMotion = useReducedMotion()
@@ -230,12 +233,9 @@ function AppContent() {
         <motion.header layout="position" layoutDependency={tab} transition={heightTransition}>
           <h1 className="text-6xl sm:text-7xl md:text-8xl" style={{ fontFamily: '"Patua One", serif', fontWeight: 400 }}>
             <span className="cj-gradient" style={{ paddingBottom: '0.15em', display: 'inline-block' }}>cjv</span>
+            <span className="mt-4 block font-sans text-xl sm:text-2xl text-gray-700 dark:text-gray-300">{copy.heading}</span>
           </h1>
-          <p className="mt-6 text-lg md:text-2xl text-gray-500 dark:text-gray-400">
-            <Trans>
-              <a href="https://cangjie-lang.cn/" target="_blank" rel="noopener noreferrer" className="text-cj dark:text-cj-light hover:underline mr-1">仓颉</a>编程语言 SDK 工具链管理器
-            </Trans>
-          </p>
+          <p className="mt-5 text-base leading-relaxed text-gray-500 dark:text-gray-400">{copy.intro}</p>
         </motion.header>
 
         <motion.div
@@ -314,6 +314,7 @@ function AppContent() {
           <span>·</span>
           <a href="https://cangjie-lang.cn/" target="_blank" rel="noopener noreferrer" className="hover:text-cj dark:hover:text-cj-light"><Trans>仓颉官网</Trans></a>
         </motion.nav>
+        <ProjectGuide />
       </motion.div>
     </LayoutGroup>
   )

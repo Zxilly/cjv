@@ -86,11 +86,11 @@ describe('App (ready / Windows)', () => {
     render(<App />)
     expect(screen.getByText(/检测到你的平台：Windows x86_64/)).toBeInTheDocument()
 
-    await user.click(screen.getByRole('button', { name: 'English' }))
+    await user.click(screen.getByRole('link', { name: 'English' }))
     expect(await screen.findByText(/Detected platform: Windows x86_64/)).toBeInTheDocument()
     expect(screen.queryByText(/检测到你的平台/)).not.toBeInTheDocument()
 
-    await user.click(screen.getByRole('button', { name: '中文' }))
+    await user.click(screen.getByRole('link', { name: '中文' }))
     expect(await screen.findByText(/检测到你的平台：Windows x86_64/)).toBeInTheDocument()
   })
 })
