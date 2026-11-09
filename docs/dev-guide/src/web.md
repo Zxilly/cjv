@@ -1,6 +1,6 @@
 # 落地页
 
-`web/` 是部署在 [cjv.zxilly.com](https://cjv.zxilly.com) 和 [cjv.zxilly.dev](https://cjv.zxilly.dev) 的静态落地页，提供安装命令和各平台二进制下载。前端使用 React、Vite、TypeScript、Tailwind CSS 和 Lingui；`web/package.json` 声明依赖范围及 pnpm 版本，`web/pnpm-lock.yaml` 锁定依赖版本。
+`web/` 是部署在 [cjv.zxilly.com](https://cjv.zxilly.com) 和 [cjv.zxilly.dev](https://cjv.zxilly.dev) 的静态落地页，提供安装命令和各平台二进制下载。前端使用 React Router Framework Mode、Vite、TypeScript、Tailwind CSS 和 Lingui；`web/package.json` 声明依赖范围及 pnpm 版本，`web/pnpm-lock.yaml` 锁定依赖版本。
 
 ## 开发与文件位置
 
@@ -12,7 +12,7 @@ pnpm install --frozen-lockfile
 pnpm dev
 ```
 
-`pnpm build` 会运行 TypeScript 类型检查、Vite 客户端构建，再用 `scripts/prerender.mjs` 和 `src/entry-server.tsx` 在构建时渲染 React，生成中文 `/` 与英文 `/en/` 的完整 HTML。`pnpm preview` 用于预览这些生产产物。线上无需运行 React SSR 服务。
+`pnpm build` 会生成路由类型、执行 TypeScript 检查，再由 React Router 官方构建流程生成中文 `/` 与英文 `/en/` 的完整 HTML。`react-router.config.ts` 使用 `ssr: false` 和 `prerender: ['/', '/en/']`，静态产物位于 `web/dist/client/`。`pnpm preview` 用于预览这些生产产物。需要 Node.js 22.22.0 或更新版本，线上无需运行 React SSR 服务。
 
 预渲染与首次 hydration 都使用通用安装方式，接管后再识别浏览器平台、启用边缘节点给出的镜像默认值。不要在首次渲染时读取浏览器平台或用户偏好，否则会产生 hydration 不匹配。页面正文、命令和文档链接在禁用 JavaScript 时也可读取。
 
@@ -20,6 +20,8 @@ pnpm dev
 
 | 文件或目录 | 内容 |
 | --- | --- |
+| `react-router.config.ts`、`src/routes.ts` | 官方预渲染配置与路由表 |
+| `src/root.tsx` | HTML 文档、SEO 元信息与 hydration 入口组件 |
 | `src/App.tsx` | 安装页面布局、镜像源切换与下载交互 |
 | `src/hooks/use-platform.ts` | 浏览器平台识别与下载建议 |
 | `src/generated/platforms.ts` | 由 Go 平台清单（`internal/target/catalog.go`）生成的前端数据 |
@@ -55,10 +57,10 @@ pnpm dev
 pnpm i18n:extract
 ```
 
-随后补齐 `src/locales/en/messages.po` 中的新英文译文。生产页面的语言由 URL 确定，语言链接同时更新 URL、正文和元信息，并支持浏览器前进与后退。未预渲染的开发页面仍优先使用本地保存的 `cjv-lang`，再根据浏览器语言选择。生产构建由 Lingui Vite 插件自动编译词条目录。
+随后补齐 `src/locales/en/messages.po` 中的新英文译文。生产页面的语言由 URL 确定，语言链接同时更新 URL、正文和元信息，并支持浏览器前进与后退。开发与生产均以路由为准，保存的语言偏好不会覆盖显式 URL。每个页面渲染树使用独立的 Lingui 实例，避免预渲染时串语言。生产构建由 Lingui Vite 插件自动编译词条目录。
 
 视觉主题在 `src/style.css` 中定义，深色模式跟随系统设置，字体由本地依赖打包。界面动效需继续遵循 `useReducedMotion` 的无障碍偏好。
 
 ## 部署内容
 
-在 CI 部署中，`.github/workflows/pages.yml` 会先构建 `web/` 前端，再向 `web/dist/` 中放入各平台的 `/dl/` `cjv-init` 安装器和两本双语手册。本地单独执行 Vite 构建不会生成这些额外目录。下载安装器来源见[发布流程](releasing.md#网页安装器)，文档构建输出见[文档站](documentation.md)。
+在 CI 部署中，`.github/workflows/pages.yml` 会先构建 `web/` 前端，再向 `web/dist/client/` 中放入各平台的 `/dl/` `cjv-init` 安装器和两本双语手册。本地单独执行 Vite 构建不会生成这些额外目录。下载安装器来源见[发布流程](releasing.md#网页安装器)，文档构建输出见[文档站](documentation.md)。

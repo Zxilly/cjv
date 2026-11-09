@@ -15,6 +15,9 @@ const browserName = process.env.PLAYWRIGHT_BROWSER || 'chromium'
 before(async () => {
   server = await preview({
     root: fileURLToPath(new URL('..', import.meta.url)),
+    configFile: false,
+    appType: 'mpa',
+    build: { outDir: 'dist/client' },
     logLevel: 'error',
     preview: { host: '127.0.0.1', port: 0 },
   })
@@ -216,6 +219,23 @@ test('regional .dev HTML hydrates without errors and keeps domain-specific insta
     await page.goBack()
     await page.waitForFunction(() => document.documentElement.lang === 'en')
     assert.equal(await page.locator('link[rel="canonical"]').getAttribute('href'), 'https://cjv.zxilly.com/en/')
+    assert.deepEqual(errors, [])
+  } finally { await page.close() }
+})
+
+test('explicit index.html URLs hydrate their matching route and retain canonical URLs', async () => {
+  const page = await openPage()
+  const errors = []
+  page.on('pageerror', error => errors.push(error.message))
+  page.on('console', message => { if (message.type() === 'error') errors.push(message.text()) })
+  try {
+    for (const [pathname, language, canonical] of [['/index.html', 'zh-CN', '/'], ['/en/index.html', 'en', '/en/']]) {
+      await page.goto(origin + pathname, { waitUntil: 'networkidle' })
+      assert.equal(await page.locator('html').getAttribute('lang'), language)
+      assert.equal(await page.locator('link[rel="canonical"]').getAttribute('href'), 'https://cjv.zxilly.com' + canonical)
+      await page.getByRole('switch').click()
+      assert.equal(await page.getByRole('switch').getAttribute('aria-checked'), 'true')
+    }
     assert.deepEqual(errors, [])
   } finally { await page.close() }
 })

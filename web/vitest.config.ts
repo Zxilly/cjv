@@ -33,7 +33,10 @@ export default defineConfig({
         'src/test-utils.tsx',
         'src/components/ui/**',
         'src/locales/**',
-        'src/main.tsx',
+        // Framework document and route wiring are exercised by test:built.
+        'src/root.tsx',
+        'src/routes.ts',
+        'src/routes/**',
         'src/vite-env.d.ts',
       ],
       thresholds: {

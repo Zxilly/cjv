@@ -39,10 +39,10 @@ Before running a local GoReleaser snapshot, set `HMOS_GO` and `HMOS_SIGN` and bu
 The release workflow passes its current tag to Pages; ordinary website deployments resolve the latest stable release tag once before downloading (and manual Pages runs may supply an explicit `release_tag` input). `scripts/download-release-archives.sh` downloads all 14 archives and `checksums.txt` from that single release tag, and then runs:
 
 ```bash
-ARCHIVES_DIR=archives OUT_DIR=web/dist/dl bash scripts/extract-init-binaries.sh
+ARCHIVES_DIR=archives OUT_DIR=web/dist/client/dl bash scripts/extract-init-binaries.sh
 ```
 
-`extract-init-binaries.sh` verifies the SHA-256 checksum of all 14 archives against `checksums.txt` first—any missing, duplicate, malformed, or mismatched checksum aborts the script before extraction. Next, it extracts and renames each executable to `cjv-init` (`cjv-init.exe` on Windows) under `web/dist/dl/{official,mirror}/{os}_{arch}/`. When a user runs that downloaded executable, `cmd/cjv/main.go` recognizes the `cjv-init` prefix (including browser-added duplicate suffixes such as `cjv-init (1).exe`) and launches the `cjv init` wizard directly.
+`extract-init-binaries.sh` verifies the SHA-256 checksum of all 14 archives against `checksums.txt` first—any missing, duplicate, malformed, or mismatched checksum aborts the script before extraction. Next, it extracts and renames each executable to `cjv-init` (`cjv-init.exe` on Windows) under `web/dist/client/dl/{official,mirror}/{os}_{arch}/`. When a user runs that downloaded executable, `cmd/cjv/main.go` recognizes the `cjv-init` prefix (including browser-added duplicate suffixes such as `cjv-init (1).exe`) and launches the `cjv init` wizard directly.
 
 `install.sh` and `install.ps1` download release archives directly and verify them against `checksums.txt`. The scripts select the latest stable release by default or accept an explicit version; website installers come from the release tag selected by the most recent website deployment. To compare the two installation methods, use the same tag and confirm that its website deployment has completed.
 

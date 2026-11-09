@@ -16,7 +16,7 @@ async function verify(site) {
       const page = pathname === '/' ? html : await (await get(new URL(pathname, site))).text()
       assert.match(page, new RegExp(`<html[^>]*lang="${language}"`), `${site}${pathname}: language`)
       assert.ok(page.includes('data-prerendered="true"'), `${site}${pathname}: missing prerender`)
-      assert.ok(page.includes(`<link rel="canonical" href="${canonical}">`), `${site}${pathname}: canonical`)
+      assert.ok(page.includes(`<link rel="canonical" href="${canonical}"`), `${site}${pathname}: canonical`)
       assert.match(page, /<h1\b/, `${site}${pathname}: missing static heading`)
       assert.ok(page.includes('toolchain-file.html'), `${site}${pathname}: missing static document links`)
       if (new URL(site).hostname === 'cjv.zxilly.dev') assert.ok(page.includes('https://cjv.zxilly.dev/install.sh'), `${site}${pathname}: installer domain`)
@@ -30,11 +30,14 @@ async function verify(site) {
   }
   assert.match(html, /<html\b[^>]*data-default-mirror="(?:true|false)"/, `${site}: missing edge injection`)
   assert.match(response.headers.get('cache-control') || '', /no-store/, `${site}: homepage cache policy`)
-  const asset = html.match(/src="(\/assets\/[^"\s]+\.js)"/)?.[1]
-  assert.ok(asset, `${site}: missing application bundle`)
-  const bundleResponse = await get(new URL(asset, site))
-  assert.equal(bundleResponse.status, 200, `${site}: application bundle status`)
-  const bundle = await bundleResponse.text()
+  // Framework builds load split modules via modulepreload and an inline entry.
+  const assets = [...new Set([...html.matchAll(/(?:src|href)="(\/assets\/[^"\s]+\.js)"/g)].map(match => match[1]))]
+  assert.ok(assets.length, `${site}: missing application bundles`)
+  const bundle = (await Promise.all(assets.map(async asset => {
+    const response = await get(new URL(asset, site))
+    assert.equal(response.status, 200, `${site}: application bundle ${asset} status`)
+    return response.text()
+  }))).join('\n')
   assert.ok(bundle.includes('dataset.defaultMirror'), `${site}: application does not read injected default`)
   assert.ok(!bundle.includes('get.geojs.io'), `${site}: obsolete GeoJS request`)
   for (const route of ['install.sh', 'book/user-guide/zh-CN/', 'dl/mirror/linux_amd64/cjv-init']) {

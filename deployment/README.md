@@ -22,10 +22,10 @@ Because the homepage HTML varies by visitor location, personalized responses car
 
 During the website deployment workflow (`.github/workflows/pages.yml`), `deployment/build-edge.mjs` transforms the shared `github-pages` artifact into a prebuilt EdgeOne output directory. This bundle includes an edge function bound to `/` and `/index.html` that reads `request.eo.geo.countryCodeAlpha2`. The homepage route is ordered ahead of static-file lookup so that the edge function executes even though a static `index.html` file is present in the bundle.
 
-To build and deploy the EdgeOne bundle manually from a built `web/dist` directory:
+To build and deploy the EdgeOne bundle manually from a built `web/dist/client` directory:
 
 ```sh
-node deployment/build-edge.mjs edgeone web/dist /path/to/edgeone-output/.edgeone
+node deployment/build-edge.mjs edgeone web/dist/client /path/to/edgeone-output/.edgeone
 edgeone makers deploy /path/to/edgeone-output/.edgeone --name cjv-web-global --env production
 ```
 

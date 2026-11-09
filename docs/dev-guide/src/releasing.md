@@ -39,10 +39,10 @@
 发布工作流向 Pages 传入当前发布标签；普通网站部署则在下载前解析一次最新稳定标签（手动运行 Pages 也可指定 `release_tag`）。随后 `scripts/download-release-archives.sh` 从同一标签下载全部 14 个归档和 `checksums.txt`，并运行：
 
 ```bash
-ARCHIVES_DIR=archives OUT_DIR=web/dist/dl bash scripts/extract-init-binaries.sh
+ARCHIVES_DIR=archives OUT_DIR=web/dist/client/dl bash scripts/extract-init-binaries.sh
 ```
 
-该脚本会先对照 `checksums.txt` 校验全部 14 个归档的 SHA-256——任何缺失、重复、无效的校验项或内容不匹配都会在解包前直接报错失败。校验通过后，脚本提取二进制并重命名为 `cjv-init`（Windows 为 `cjv-init.exe`），输出到 `web/dist/dl/{official,mirror}/{os}_{arch}/`。程序启动时识别到 `cjv-init` 前缀后会自动进入 `init` 安装向导（名称前缀匹配同样兼容浏览器重复下载时自动添加的后缀，如 `cjv-init (1).exe`）。
+该脚本会先对照 `checksums.txt` 校验全部 14 个归档的 SHA-256——任何缺失、重复、无效的校验项或内容不匹配都会在解包前直接报错失败。校验通过后，脚本提取二进制并重命名为 `cjv-init`（Windows 为 `cjv-init.exe`），输出到 `web/dist/client/dl/{official,mirror}/{os}_{arch}/`。程序启动时识别到 `cjv-init` 前缀后会自动进入 `init` 安装向导（名称前缀匹配同样兼容浏览器重复下载时自动添加的后缀，如 `cjv-init (1).exe`）。
 
 `install.sh` 和 `install.ps1` 直接下载发布归档并核对 `checksums.txt`。脚本默认选择最新稳定版，也可显式指定版本；网页安装器则来自最近一次网站部署所选的发布标签。核对两种安装方式时应使用同一标签，并确认对应的网站部署已完成。
 

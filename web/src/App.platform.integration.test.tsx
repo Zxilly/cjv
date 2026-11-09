@@ -1,9 +1,10 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen } from './test-utils'
 import userEvent from '@testing-library/user-event'
 import App from './App'
 import { HARMONY_SAMPLES } from './test-fixtures/harmony'
-import { activateLang, type Lang } from './lib/i18n'
+import { activateLang } from './test-utils'
+import type { Lang } from './lib/i18n'
 
 const MAC_DESKTOP_UA =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Safari/605.1.15'

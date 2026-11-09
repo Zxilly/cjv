@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# Extract release archives into web/dist/dl/{official,mirror}/{platform}/cjv-init[.exe].
+# Extract release archives into web/dist/client/dl/{official,mirror}/{platform}/cjv-init[.exe].
 # Used by the Pages workflow and as a local-test helper.
 #
 # Inputs:
 #   ARCHIVES_DIR  Directory containing archives and checksums.txt (default: ./archives)
-#   OUT_DIR       Output base directory (default: web/dist/dl)
+#   OUT_DIR       Output base directory (default: web/dist/client/dl)
 #
 # Archive naming follows goreleaser:
 #   cjv_<os>_<arch>.zip|tar.gz         -> official/<os>_<arch>/cjv-init[.exe]
@@ -13,7 +13,7 @@
 set -euo pipefail
 
 ARCHIVES_DIR="${ARCHIVES_DIR:-./archives}"
-OUT_DIR="${OUT_DIR:-web/dist/dl}"
+OUT_DIR="${OUT_DIR:-web/dist/client/dl}"
 
 PLATFORMS=(
   "windows_amd64 zip"

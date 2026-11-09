@@ -16,25 +16,3 @@ export const PAGE_META = {
     intro: 'Install and switch Cangjie SDKs. Pin a toolchain for each project and keep local development and CI on the same version.',
   },
 } as const
-
-export function updatePageMetadata(lang: keyof typeof PAGE_META) {
-  const meta = PAGE_META[lang]
-  document.documentElement.lang = meta.language
-  document.title = meta.title
-  document.querySelector('link[rel="canonical"]')?.setAttribute('href', SITE_URL + meta.path)
-  const values: Record<string, string> = {
-    description: meta.description,
-    'og:title': meta.title, 'og:description': meta.description,
-    'og:url': SITE_URL + meta.path, 'og:locale': meta.locale,
-    'twitter:title': meta.title, 'twitter:description': meta.description,
-  }
-  for (const [name, content] of Object.entries(values)) {
-    document.querySelector(`meta[name="${name}"], meta[property="${name}"]`)?.setAttribute('content', content)
-  }
-  const structured = document.querySelector('script[type="application/ld+json"]')
-  if (structured?.textContent) {
-    const data = JSON.parse(structured.textContent)
-    data.description = meta.description
-    structured.textContent = JSON.stringify(data)
-  }
-}

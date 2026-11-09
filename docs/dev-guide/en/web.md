@@ -1,6 +1,6 @@
 # Landing page
 
-`web/` contains the static landing page at [cjv.zxilly.com](https://cjv.zxilly.com) and [cjv.zxilly.dev](https://cjv.zxilly.dev), with installer commands and platform-specific downloads. It uses React, Vite, TypeScript, Tailwind CSS, and Lingui. `web/package.json` declares dependency ranges and the pnpm version; `web/pnpm-lock.yaml` locks dependency versions.
+`web/` contains the static landing page at [cjv.zxilly.com](https://cjv.zxilly.com) and [cjv.zxilly.dev](https://cjv.zxilly.dev), with installer commands and platform-specific downloads. It uses React Router Framework Mode, Vite, TypeScript, Tailwind CSS, and Lingui. `web/package.json` declares dependency ranges and the pnpm version; `web/pnpm-lock.yaml` locks dependency versions.
 
 ## Development and files
 
@@ -12,10 +12,12 @@ pnpm install --frozen-lockfile
 pnpm dev
 ```
 
-`pnpm build` runs TypeScript type-checking before generating the production bundle in `web/dist/`, and `pnpm preview` serves the built output locally.
+`pnpm build` generates route types, checks TypeScript, and runs the official React Router build. `react-router.config.ts` sets `ssr: false` and `prerender: ['/', '/en/']`, producing static files in `web/dist/client/`. `pnpm preview` serves that output locally. Development requires Node.js 22.22.0 or newer; production needs no React SSR server.
 
 | File or directory | Contents |
 | --- | --- |
+| `react-router.config.ts`, `src/routes.ts` | Official prerender configuration and route table |
+| `src/root.tsx` | HTML document, SEO metadata, and framework hydration components |
 | `src/App.tsx` | Installation landing page layout, mirror toggle, and download interactions |
 | `src/hooks/use-platform.ts` | Browser platform detection and download recommendations |
 | `src/generated/platforms.ts` | Frontend platform catalog generated from Go (`internal/target/catalog.go`) |
@@ -27,7 +29,7 @@ To change the set of supported release platforms, update `internal/target/catalo
 
 ## Platform detection
 
-Production builds prerender React into Chinese `/` and English `/en/` HTML through `scripts/prerender.mjs` and `src/entry-server.tsx`. No React SSR server runs in production. The initial hydration uses the same generic installation methods as the build; platform detection and regional mirror defaults apply afterwards. Content, commands and documentation links remain readable without JavaScript.
+Production builds prerender React into Chinese `/` and English `/en/` HTML through React Router Framework Mode. No React SSR server runs in production. The initial hydration uses the same generic installation methods as the build; platform detection and regional mirror defaults apply afterwards. Content, commands and documentation links remain readable without JavaScript.
 
 `src/lib/seo.ts` defines localized page metadata and `src/components/project-guide.tsx` contains the bilingual getting-started links. Both domains use canonical and hreflang URLs on `.com`, while `.dev` retains its installer commands and downloads. The documentation build uses `scripts/site_seo.py` to add page metadata and a complete sitemap, excluding redirects, print copies and table-of-contents frames.
 
@@ -55,10 +57,10 @@ After adding or updating UI copy in `web/src/`, extract the message catalogs:
 pnpm i18n:extract
 ```
 
-Then fill in the new English translations in `src/locales/en/messages.po`. Production page URLs determine the language. Language links update the URL, content and metadata, including browser back/forward navigation. Unrendered development pages still prefer saved `cjv-lang`, then the browser language. During production builds, the Lingui Vite plugin compiles the catalogs automatically.
+Then fill in the new English translations in `src/locales/en/messages.po`. Production page URLs determine the language. Language links update the URL, content and metadata, including browser back/forward navigation. Both development and production use the route language; saved preferences never override an explicit URL. Each render tree owns its Lingui instance so concurrent prerenders cannot mix languages. During production builds, the Lingui Vite plugin compiles the catalogs automatically.
 
 The visual theme is defined in `src/style.css`, dark mode follows the operating system preference, and web fonts are bundled from local dependencies. Animations should continue to respect `useReducedMotion`.
 
 ## Deployment contents
 
-During CI deployment, `.github/workflows/pages.yml` builds `web/` first, and then adds platform-specific `cjv-init` binaries under `web/dist/dl/` and both bilingual mdBook manuals under `web/dist/book/`. A local `pnpm build` in `web/` does not generate those extra directories on its own. See [Releases](releasing.md#website-installers) for `/dl/` installer artifacts and [Documentation site](documentation.md) for the mdBook build.
+During CI deployment, `.github/workflows/pages.yml` builds `web/` first, and then adds platform-specific `cjv-init` binaries under `web/dist/client/dl/` and both bilingual mdBook manuals under `web/dist/client/book/`. A local `pnpm build` in `web/` does not generate those extra directories on its own. See [Releases](releasing.md#website-installers) for `/dl/` installer artifacts and [Documentation site](documentation.md) for the mdBook build.

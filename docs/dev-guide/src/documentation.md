@@ -21,7 +21,7 @@
 
 ```bash
 python3 scripts/build-docs.py
-python3 -m http.server --directory web/dist 8000
+python3 -m http.server --directory web/dist/client 8000
 ```
 
 在浏览器中访问 `http://localhost:8000/book/user-guide/zh-CN/`（或 `/en/`），即可预览与线上发布完全一致的主题和语言切换器。在 Windows 上如果未配置 `python3`，可将其换为 `python`。
@@ -55,19 +55,19 @@ mdbook serve --open
 
 ## Pages 部署
 
-`.github/workflows/pages.yml` 在相关前端、文档或部署文件推送到 `master`、手动运行或被发布流程调用时部署。它先构建 `web/` 前端，再向 `web/dist/` 中放入安装器和四份手册输出：
+`.github/workflows/pages.yml` 在相关前端、文档或部署文件推送到 `master`、手动运行或被发布流程调用时部署。它先构建 `web/` 前端，再向 `web/dist/client/` 中放入安装器和四份手册输出：
 
 ```text
-web/dist/
+web/dist/client/
   dl/{official,mirror}/{os}_{arch}/cjv-init[.exe]
   book/user-guide/{zh-CN,en}/
   book/dev-guide/{zh-CN,en}/
 ```
 
-请保持这一构建顺序：在 `web/` 中执行 `pnpm build` 会清空 `web/dist/`。PR 检查和发布工作流使用完全相同的 mdBook 版本与构建入口：
+请保持这一构建顺序：在 `web/` 中执行 `pnpm build` 会清空 `web/dist/client/`。PR 检查和发布工作流使用完全相同的 mdBook 版本与构建入口：
 
 ```bash
 python3 scripts/build-docs.py
 ```
 
-整个 `web/dist` 作为一个 `github-pages` artifact 部署到 GitHub Pages 与腾讯云 EdgeOne。安装器来源与发布顺序见[发布流程](releasing.md)。
+整个 `web/dist/client` 作为一个 `github-pages` artifact 部署到 GitHub Pages 与腾讯云 EdgeOne。安装器来源与发布顺序见[发布流程](releasing.md)。

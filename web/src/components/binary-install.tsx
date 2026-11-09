@@ -1,7 +1,6 @@
 import { Apple, Cpu, Download, type LucideIcon } from 'lucide-react'
 import { Trans, useLingui } from '@lingui/react/macro'
 import { CollapsibleSection } from './collapsible-section'
-import { i18n } from '@/lib/i18n'
 import type { ArchitectureDownload, BinaryInfo, DownloadSelection } from '@/lib/platform-catalog'
 
 interface BinaryInstallProps {
@@ -97,7 +96,7 @@ function MacOSDownloadChoices({
   selection: ArchitectureDownload
   mirror: boolean
 }) {
-  const { t } = useLingui()
+  const { t, i18n } = useLingui()
   const { binaries: choices, alternatives: otherBinaries } = selection
   const warning = choices.find(b => b.warning)?.warning
 
@@ -162,7 +161,7 @@ function MacOSDownloadChoices({
 }
 
 export function BinaryInstall({ selection, mirror }: BinaryInstallProps) {
-  const { t } = useLingui()
+  const { t, i18n } = useLingui()
 
   if (selection.kind === 'choose-architecture' && selection.goos === 'openharmony') {
     return (

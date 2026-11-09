@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { i18n } from '@/lib/i18n'
+import { i18n } from '@/test-utils'
 import { HARMONY_SAMPLES } from '../test-fixtures/harmony'
 import {
   computeBrowserPlatformResult,

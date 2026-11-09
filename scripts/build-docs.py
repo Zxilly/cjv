@@ -116,7 +116,7 @@ def build(output):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--output", type=Path, default=ROOT / "web" / "dist" / "book")
+    parser.add_argument("--output", type=Path, default=ROOT / "web" / "dist" / "client" / "book")
     parser.add_argument("--check-only", action="store_true", help="check an existing documentation build")
     args = parser.parse_args()
     output = args.output.resolve()

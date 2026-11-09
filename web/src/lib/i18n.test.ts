@@ -1,43 +1,25 @@
-import { afterEach, describe, expect, it } from 'vitest'
-import { activateLang, detectLang, i18n, persistLang } from './i18n'
+import { expect, it } from 'vitest'
+import { createI18n, languageForPath, persistLang } from './i18n'
 
-const STORAGE_KEY = 'cjv-lang'
+it('keeps concurrent language render trees independent', () => {
+  const zh = createI18n('zh')
+  const en = createI18n('en')
+  expect(zh.locale).toBe('zh')
+  expect(en.locale).toBe('en')
+  en.activate('zh')
+  zh.activate('en')
+  expect(en.locale).toBe('zh')
+  expect(zh.locale).toBe('en')
+})
 
-describe('i18n', () => {
-  afterEach(() => {
-    localStorage.removeItem(STORAGE_KEY)
-    activateLang('zh')
-  })
+it('uses the explicit route regardless of a saved language', () => {
+  localStorage.setItem('cjv-lang', 'en')
+  expect(languageForPath('/')).toBe('zh')
+  expect(languageForPath('/en/')).toBe('en')
+  expect(languageForPath('/en')).toBe('en')
+})
 
-  it('detectLang prefers a saved language', () => {
-    localStorage.setItem(STORAGE_KEY, 'en')
-    expect(detectLang()).toBe('en')
-    localStorage.setItem(STORAGE_KEY, 'zh')
-    expect(detectLang()).toBe('zh')
-  })
-
-  it('detectLang falls back to the navigator language', () => {
-    localStorage.removeItem(STORAGE_KEY)
-    const original = navigator.language
-    try {
-      Object.defineProperty(navigator, 'language', { value: 'zh-CN', configurable: true })
-      expect(detectLang()).toBe('zh')
-      Object.defineProperty(navigator, 'language', { value: 'en-US', configurable: true })
-      expect(detectLang()).toBe('en')
-    } finally {
-      Object.defineProperty(navigator, 'language', { value: original, configurable: true })
-    }
-  })
-
-  it('activateLang switches the active locale', () => {
-    activateLang('en')
-    expect(i18n.locale).toBe('en')
-    activateLang('zh')
-    expect(i18n.locale).toBe('zh')
-  })
-
-  it('persistLang stores the choice', () => {
-    persistLang('en')
-    expect(localStorage.getItem(STORAGE_KEY)).toBe('en')
-  })
+it('stores the chosen language', () => {
+  persistLang('en')
+  expect(localStorage.getItem('cjv-lang')).toBe('en')
 })

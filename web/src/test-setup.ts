@@ -1,7 +1,7 @@
 import '@testing-library/jest-dom/vitest'
 import { afterEach, beforeEach, vi } from 'vitest'
 import { cleanup } from '@testing-library/react'
-import { activateLang } from './lib/i18n'
+import { activateLang } from './test-utils'
 
 Object.defineProperty(navigator, 'clipboard', {
   configurable: true,

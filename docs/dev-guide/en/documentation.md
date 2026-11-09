@@ -21,7 +21,7 @@ Install **mdBook 0.5.3** and **Python 3.9 or later**, then run from the reposito
 
 ```bash
 python3 scripts/build-docs.py
-python3 -m http.server --directory web/dist 8000
+python3 -m http.server --directory web/dist/client 8000
 ```
 
 Open `http://localhost:8000/book/user-guide/en/` (or `/zh-CN/`) in your browser to preview the published theme and language switcher. On Windows, use `python` if `python3` is not on your `PATH`.
@@ -55,19 +55,19 @@ Use `"cjv Developer Guide"` when previewing the developer guide. Remember to uns
 
 ## Pages deployment
 
-`.github/workflows/pages.yml` deploys the site when relevant frontend, documentation, or deployment files are pushed to `master`, on manual `workflow_dispatch` runs, or when called by the release workflow. It builds `web/` first, and then populates installers and all four book outputs under `web/dist/`:
+`.github/workflows/pages.yml` deploys the site when relevant frontend, documentation, or deployment files are pushed to `master`, on manual `workflow_dispatch` runs, or when called by the release workflow. It builds `web/` first, and then populates installers and all four book outputs under `web/dist/client/`:
 
 ```text
-web/dist/
+web/dist/client/
   dl/{official,mirror}/{os}_{arch}/cjv-init[.exe]
   book/user-guide/{zh-CN,en}/
   book/dev-guide/{zh-CN,en}/
 ```
 
-Always keep this build order: running `pnpm build` in `web/` clears `web/dist/`. Pull request checks and production deployments use the exact same mdBook version and build script entry point:
+Always keep this build order: running `pnpm build` in `web/` clears `web/dist/client/`. Pull request checks and production deployments use the exact same mdBook version and build script entry point:
 
 ```bash
 python3 scripts/build-docs.py
 ```
 
-The assembled `web/dist` directory is uploaded as a single `github-pages` artifact and deployed to both GitHub Pages and Tencent Cloud EdgeOne. See [Releases](releasing.md) for installer artifacts and release ordering.
+The assembled `web/dist/client` directory is uploaded as a single `github-pages` artifact and deployed to both GitHub Pages and Tencent Cloud EdgeOne. See [Releases](releasing.md) for installer artifacts and release ordering.

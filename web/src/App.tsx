@@ -1,7 +1,6 @@
 import { useState, type ReactElement } from 'react'
 import { AnimatePresence, LayoutGroup, motion, useReducedMotion, type Transition, type Variants } from 'framer-motion'
 import { ChevronRight } from 'lucide-react'
-import { I18nProvider } from '@lingui/react'
 import { Trans, useLingui } from '@lingui/react/macro'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Switch } from '@/components/ui/switch'
@@ -16,7 +15,6 @@ import type { InstallMethod } from '@/lib/platform-catalog'
 import { useLanguageSwitch } from '@/hooks/use-language-switch'
 import { useMirror } from '@/hooks/use-mirror'
 import { INSTALL_TABS, getInstallTabDirection, type InstallTab } from '@/lib/tab-motion'
-import { i18n } from '@/lib/i18n'
 import { PAGE_META } from '@/lib/seo'
 import { ProjectGuide } from '@/components/project-guide'
 
@@ -59,15 +57,7 @@ const LABEL_ANIMATE = { opacity: 1, y: 0 }
 const LABEL_EXIT = { opacity: 0, y: -4 }
 
 export default function App() {
-  return (
-    <I18nProvider i18n={i18n}>
-      <AppContent />
-    </I18nProvider>
-  )
-}
-
-function AppContent() {
-  const { t } = useLingui()
+  const { t, i18n } = useLingui()
   const copy = PAGE_META[i18n.locale === 'en' ? 'en' : 'zh']
   const platform = usePlatform()
   const { methods, otherMethods, sourceMethod } = platform

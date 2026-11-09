@@ -1,8 +1,8 @@
 import { useEffect, useRef } from 'react'
 import { useAnimationControls, useReducedMotion, type Transition } from 'framer-motion'
 import { useLingui } from '@lingui/react/macro'
-import { i18n, activateLang, persistLang, type Lang } from '@/lib/i18n'
-import { updatePageMetadata } from '@/lib/seo'
+import { persistLang, type Lang } from '@/lib/i18n'
+import { useLocation, useNavigate, useNavigationType } from 'react-router'
 
 // Fade the whole page through opacity 0 so the locale swap lands while invisible —
 // i18n is context-driven, so any copy left mounted would otherwise flip to the new
@@ -16,7 +16,10 @@ const PAGE_FADE_IN: Transition = { duration: 0.22, ease: 'easeOut' }
  * container and the handler to wire onto the switcher buttons.
  */
 export function useLanguageSwitch() {
-  const { i18n: active } = useLingui()
+  const { i18n } = useLingui()
+  const navigate = useNavigate()
+  const location = useLocation()
+  const navigationType = useNavigationType()
   const fadeControls = useAnimationControls()
   const prefersReducedMotion = useReducedMotion()
   const generation = useRef(0)
@@ -30,23 +33,18 @@ export function useLanguageSwitch() {
     }
   }, [])
 
-  // Keep the document language attribute in sync for a11y and correct font selection.
+  // Back/forward navigation also cancels any pending fade or language choice.
   useEffect(() => {
-    updatePageMetadata(active.locale === 'en' ? 'en' : 'zh')
-  }, [active.locale])
+    if (navigationType !== 'POP') return
+    generation.current++
+    fadeControls.stop()
+    fadeControls.set({ opacity: 1 })
+  }, [location.key, navigationType, fadeControls])
 
-  useEffect(() => {
-    const onPopState = () => {
-      if (document.documentElement.dataset.prerendered === 'true') {
-        generation.current++
-        fadeControls.stop()
-        fadeControls.set({ opacity: 1 })
-        activateLang(window.location.pathname.startsWith('/en/') ? 'en' : 'zh')
-      }
-    }
-    window.addEventListener('popstate', onPopState)
-    return () => window.removeEventListener('popstate', onPopState)
-  }, [fadeControls])
+  async function changeLanguage(next: Lang) {
+    persistLang(next)
+    await navigate({ pathname: next === 'en' ? '/en/' : '/', search: location.search, hash: location.hash }, { preventScrollReset: true })
+  }
 
   // Every choice invalidates pending work, including choosing the current locale.
   async function switchLang(next: Lang) {
@@ -56,8 +54,7 @@ export function useLanguageSwitch() {
       fadeControls.stop()
       fadeControls.set({ opacity: 1 })
       if (next !== i18n.locale) {
-        activateLang(next)
-        persistLang(next)
+        await changeLanguage(next)
       }
       return
     }
@@ -66,8 +63,7 @@ export function useLanguageSwitch() {
     // Always fade back in, even if the locale swap throws — otherwise the page would be
     // stranded invisible at opacity 0 with no recovery path.
     try {
-      activateLang(next)
-      persistLang(next)
+      await changeLanguage(next)
     } finally {
       if (mounted.current && request === generation.current) {
         await fadeControls.start({ opacity: 1, transition: PAGE_FADE_IN })
