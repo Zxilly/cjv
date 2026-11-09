@@ -11,6 +11,7 @@ on:
       - docs/dev-guide/**
       - docs/theme/**
       - scripts/build-docs.py
+      - scripts/site_seo.py
       - scripts/extract-init-binaries.sh
       - scripts/download-release-archives.sh
       - deployment/build-edge.mjs
@@ -135,4 +136,4 @@ jobs:
           npx --yes edgeone@1.6.44 makers deploy "$RUNNER_TEMP/edgeone-output/.edgeone"
           --name "$EDGEONE_PROJECT_NAME" --env production --skip-ai-gateway-sync
       - name: Verify production websites
-        run: node deployment/verify-site.mjs https://cjv.zxilly.dev/ https://cjv.zxilly.com/
+        run: node deployment/verify-site.mjs --seo https://cjv.zxilly.dev/ https://cjv.zxilly.com/

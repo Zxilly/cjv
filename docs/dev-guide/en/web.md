@@ -27,6 +27,10 @@ To change the set of supported release platforms, update `internal/target/catalo
 
 ## Platform detection
 
+Production builds prerender React into Chinese `/` and English `/en/` HTML through `scripts/prerender.mjs` and `src/entry-server.tsx`. No React SSR server runs in production. The initial hydration uses the same generic installation methods as the build; platform detection and regional mirror defaults apply afterwards. Content, commands and documentation links remain readable without JavaScript.
+
+`src/lib/seo.ts` defines localized page metadata and `src/components/project-guide.tsx` contains the bilingual getting-started links. Both domains use canonical and hreflang URLs on `.com`, while `.dev` retains its installer commands and downloads. The documentation build uses `scripts/site_seo.py` to add page metadata and a complete sitemap, excluding redirects, print copies and table-of-contents frames.
+
 `use-platform.ts` computes an initial platform match synchronously from standard browser properties (`navigator.userAgent` and `navigator.platform`), and then queries User-Agent Client Hints (`navigator.userAgentData`) for additional CPU architecture metadata. Detection resolves to one of three states: `ready`, `unknown`, or `unsupported`.
 
 - **macOS architecture ambiguity** — Many macOS browsers report an Intel (`x86_64`) User-Agent even on Apple Silicon (`arm64`) Macs. When a browser cannot reliably confirm the Mac's CPU architecture, the `install.sh` script command remains available (since the shell script detects the native architecture locally), while manual downloads present both Apple Silicon and Intel options side by side.
@@ -51,7 +55,7 @@ After adding or updating UI copy in `web/src/`, extract the message catalogs:
 pnpm i18n:extract
 ```
 
-Then fill in the new English translations in `src/locales/en/messages.po`. At runtime, language selection checks the saved `cjv-lang` preference first, and otherwise picks Chinese or English from the browser's preferred language. During production builds, the Lingui Vite plugin compiles the catalogs automatically.
+Then fill in the new English translations in `src/locales/en/messages.po`. Production page URLs determine the language. Language links update the URL, content and metadata, including browser back/forward navigation. Unrendered development pages still prefer saved `cjv-lang`, then the browser language. During production builds, the Lingui Vite plugin compiles the catalogs automatically.
 
 The visual theme is defined in `src/style.css`, dark mode follows the operating system preference, and web fonts are bundled from local dependencies. Animations should continue to respect `useReducedMotion`.
 

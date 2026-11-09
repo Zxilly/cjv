@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict'
 import { setTimeout } from 'node:timers/promises'
 
+const verifySEO = process.argv.includes('--seo')
+
 async function get(url, method = 'GET') {
   return fetch(url, { method, cache: 'no-store', signal: AbortSignal.timeout(15000) })
 }
@@ -9,6 +11,23 @@ async function verify(site) {
   const response = await get(site)
   assert.equal(response.status, 200, `${site}: homepage status`)
   const html = await response.text()
+  if (verifySEO) {
+    for (const [pathname, language, canonical] of [['/', 'zh-CN', 'https://cjv.zxilly.com/'], ['/en/', 'en', 'https://cjv.zxilly.com/en/']]) {
+      const page = pathname === '/' ? html : await (await get(new URL(pathname, site))).text()
+      assert.match(page, new RegExp(`<html[^>]*lang="${language}"`), `${site}${pathname}: language`)
+      assert.ok(page.includes('data-prerendered="true"'), `${site}${pathname}: missing prerender`)
+      assert.ok(page.includes(`<link rel="canonical" href="${canonical}">`), `${site}${pathname}: canonical`)
+      assert.match(page, /<h1\b/, `${site}${pathname}: missing static heading`)
+      assert.ok(page.includes('toolchain-file.html'), `${site}${pathname}: missing static document links`)
+      if (new URL(site).hostname === 'cjv.zxilly.dev') assert.ok(page.includes('https://cjv.zxilly.dev/install.sh'), `${site}${pathname}: installer domain`)
+    }
+    const sitemap = await get(new URL('/sitemap.xml', site))
+    assert.equal(sitemap.status, 200, `${site}: sitemap status`)
+    assert.ok((await sitemap.text()).includes('/book/user-guide/zh-CN/installation/'), `${site}: missing documentation sitemap entry`)
+    const robots = await get(new URL('/robots.txt', site))
+    assert.equal(robots.status, 200, `${site}: robots status`)
+    assert.ok((await robots.text()).includes('Sitemap: https://cjv.zxilly.com/sitemap.xml'), `${site}: sitemap discovery`)
+  }
   assert.match(html, /<html\b[^>]*data-default-mirror="(?:true|false)"/, `${site}: missing edge injection`)
   assert.match(response.headers.get('cache-control') || '', /no-store/, `${site}: homepage cache policy`)
   const asset = html.match(/src="(\/assets\/[^"\s]+\.js)"/)?.[1]
@@ -40,6 +59,6 @@ async function verifyWithRetry(site) {
   }
 }
 
-const sites = process.argv.slice(2)
+const sites = process.argv.slice(2).filter(value => value !== '--seo')
 if (!sites.length) throw new Error('Usage: node deployment/verify-site.mjs <site URL> [...]')
 await Promise.all(sites.map(verifyWithRetry))

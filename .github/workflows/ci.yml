@@ -134,7 +134,9 @@ jobs:
             | tar -xz -C "${RUNNER_TEMP}/mdbook-bin"
           echo "${RUNNER_TEMP}/mdbook-bin" >> "$GITHUB_PATH"
       - name: Build and check the bilingual documentation
-        run: python3 scripts/build-docs.py
+        run: |
+          python3 scripts/test_site_seo.py
+          python3 scripts/build-docs.py
 
   cross-build:
     needs: changes

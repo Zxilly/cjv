@@ -12,7 +12,11 @@ pnpm install --frozen-lockfile
 pnpm dev
 ```
 
-`pnpm build` 会先运行 TypeScript 类型检查，再生成 `web/dist/` 生产产物；`pnpm preview` 用于在本地预览构建结果。
+`pnpm build` 会运行 TypeScript 类型检查、Vite 客户端构建，再用 `scripts/prerender.mjs` 和 `src/entry-server.tsx` 在构建时渲染 React，生成中文 `/` 与英文 `/en/` 的完整 HTML。`pnpm preview` 用于预览这些生产产物。线上无需运行 React SSR 服务。
+
+预渲染与首次 hydration 都使用通用安装方式，接管后再识别浏览器平台、启用边缘节点给出的镜像默认值。不要在首次渲染时读取浏览器平台或用户偏好，否则会产生 hydration 不匹配。页面正文、命令和文档链接在禁用 JavaScript 时也可读取。
+
+`src/lib/seo.ts` 定义两种语言的页面元信息，`src/components/project-guide.tsx` 提供双语入门链接。两域名的 canonical 与 hreflang 统一指向 `.com` 对应页面；`.dev` 继续提供安装与下载。文档构建通过 `scripts/site_seo.py` 补充逐页元信息并生成全站 sitemap，排除跳转、打印和目录副本。
 
 | 文件或目录 | 内容 |
 | --- | --- |
@@ -51,7 +55,7 @@ pnpm dev
 pnpm i18n:extract
 ```
 
-随后补齐 `src/locales/en/messages.po` 中的新英文译文。页面在运行时优先使用本地保存的 `cjv-lang`，未保存时根据浏览器语言选择中文或英文；生产构建由 Lingui Vite 插件自动编译词条目录。
+随后补齐 `src/locales/en/messages.po` 中的新英文译文。生产页面的语言由 URL 确定，语言链接同时更新 URL、正文和元信息，并支持浏览器前进与后退。未预渲染的开发页面仍优先使用本地保存的 `cjv-lang`，再根据浏览器语言选择。生产构建由 Lingui Vite 插件自动编译词条目录。
 
 视觉主题在 `src/style.css` 中定义，深色模式跟随系统设置，字体由本地依赖打包。界面动效需继续遵循 `useReducedMotion` 的无障碍偏好。
 

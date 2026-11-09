@@ -11,6 +11,7 @@ import subprocess
 import sys
 import tempfile
 from urllib.parse import unquote, urlsplit
+from site_seo import add_site_metadata
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -121,6 +122,7 @@ def main():
     output = args.output.resolve()
     if not args.check_only:
         build(output)
+        add_site_metadata(output)
     check_links(output)
 
 
