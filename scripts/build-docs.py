@@ -11,7 +11,7 @@ import subprocess
 import sys
 import tempfile
 from urllib.parse import unquote, urlsplit
-from site_seo import add_site_metadata
+from site_seo import SITE_URL, add_site_metadata
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -104,14 +104,24 @@ def build(output):
                     "MDBOOK_BOOK__LANGUAGE": language,
                     "MDBOOK_BOOK__TITLE": title,
                     "MDBOOK_OUTPUT__HTML__SITE_URL": f"/book/{book}/{language}/",
+                    "MDBOOK_OUTPUT__SITEMAP__BASE_URL": f"{SITE_URL}/book/{book}/{language}/",
                     "MDBOOK_OUTPUT__HTML__ADDITIONAL_JS": json.dumps(["theme/cjv-i18n.js"]),
                     "MDBOOK_OUTPUT__HTML__ADDITIONAL_CSS": json.dumps(["theme/cjv-i18n.css"]),
                 })
+                built = staging / "output" / book / language
                 subprocess.run(
-                    ["mdbook", "build", str(staged), "--dest-dir", str(output / book / language)],
+                    ["mdbook", "build", str(staged), "--dest-dir", str(built)],
                     env=env,
                     check=True,
                 )
+                # Multiple backends write html/ and sitemap/. Keep public URLs
+                # unchanged and publish the plugin's sitemap with each book.
+                destination = (output / book / language).resolve()
+                destination.relative_to(output.resolve())
+                if destination.exists():
+                    shutil.rmtree(destination)
+                shutil.copytree(built / "html", destination)
+                shutil.copy2(built / "sitemap" / "sitemap.xml", destination / "sitemap.xml")
 
 
 def main():

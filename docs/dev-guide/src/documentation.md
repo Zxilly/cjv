@@ -17,9 +17,10 @@
 
 ### 完整站点构建与检查（推荐）
 
-安装 **mdBook 0.5.3** 和 **Python 3.9 以上版本**，在仓库根目录执行：
+安装 **mdBook 0.5.3**、**mdbook-sitemap 0.1.1** 和 **Python 3.9 以上版本**，在仓库根目录执行：
 
 ```bash
+cargo install mdbook-sitemap --version 0.1.1 --locked
 python3 scripts/build-docs.py
 python3 -m http.server --directory web/dist/client 8000
 ```
@@ -27,6 +28,8 @@ python3 -m http.server --directory web/dist/client 8000
 在浏览器中访问 `http://localhost:8000/book/user-guide/zh-CN/`（或 `/en/`），即可预览与线上发布完全一致的主题和语言切换器。在 Windows 上如果未配置 `python3`，可将其换为 `python`。
 
 `scripts/build-docs.py` 会为四份书（用户手册与开发指南的中英文版）设置源语言、标题和站点路径，在临时目录中加入共享主题，并自动检查所有生成的 HTML 页面中的内部链接、跨书 `/book/` 链接、静态资源和 `#anchor` 锚点。传入 `--output <dir>` 可指定其他输出目录，`--check-only` 只检查已有产物而不重新调用 `mdbook`。Markdown 格式检查命令见[测试与检查](testing.md#文档工作流和依赖)。
+
+每本书通过 `[output.sitemap]` 使用现成的 `mdbook-sitemap` 后端生成章节 URL。完整站点构建会将 `html/` 产物复制到原有公开路径，规范化 sitemap 地址，并合并四本书与中英文首页；发布地址不包含后端目录名。插件关闭 `include-lastmod`，避免将每次构建日期写成页面修改日期。
 
 ### 预览单本书（`mdbook serve`）
 

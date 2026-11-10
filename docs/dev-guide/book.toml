@@ -6,6 +6,10 @@ authors = ["Zxilly"]
 language = "zh-CN"
 src = "src"
 
+[output.sitemap]
+base-url = "https://cjv.zxilly.com/book/dev-guide/zh-CN/"
+include-lastmod = false
+
 [output.html]
 # site-url 由 CI 逐语言覆盖(/book/dev-guide/zh-CN/、/book/dev-guide/en/)。
 site-url = "/"

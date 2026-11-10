@@ -23,8 +23,17 @@ class SiteSEOTest(unittest.TestCase):
                 for name in ("index.html", "introduction.html", "toolchain-file.html", "print.html", "toc.html"):
                     (base / name).write_text(page, encoding="utf-8")
                 (base / "old.html").write_text('<html><head><meta http-equiv="refresh" content="0; URL=index.html"></head></html>', encoding="utf-8")
+                # Chapter discovery belongs to mdbook-sitemap, not the HTML scan.
+                names = ["introduction.html", "toolchain-file.html"]
+                if language == "zh-CN":
+                    names.append("only.html")
+                sitemap = ET.Element("urlset", xmlns="http://www.sitemaps.org/schemas/sitemap/0.9")
+                for name in names:
+                    ET.SubElement(ET.SubElement(sitemap, "url"), "loc").text = f"https://cjv.zxilly.com/book/user-guide/{language}/{name}"
+                ET.ElementTree(sitemap).write(base / "sitemap.xml", encoding="utf-8")
             # A page without a translation must not advertise a missing alternate.
             (output / "user-guide/zh-CN/only.html").write_text(page, encoding="utf-8")
+            (output / "user-guide/zh-CN/unlisted.html").write_text(page, encoding="utf-8")
             with contextlib.redirect_stdout(io.StringIO()):
                 add_site_metadata(output)
             html = (output / "user-guide/zh-CN/toolchain-file.html").read_text(encoding="utf-8")
@@ -38,9 +47,15 @@ class SiteSEOTest(unittest.TestCase):
             urls = [node.text for node in sitemap.findall('.//{*}loc')]
             self.assertEqual(len(urls), len(set(urls)))
             self.assertIn('https://cjv.zxilly.com/book/user-guide/zh-CN/', urls)
+            self.assertFalse(any('unlisted.html' in url for url in urls))
             self.assertFalse(any(name in url for name in ('introduction.html', 'index.html', 'print.html', 'toc.html', 'old.html') for url in urls))
             for name in ('print.html', 'toc.html', 'old.html'):
                 self.assertIn('noindex,follow', (output / 'user-guide/en' / name).read_text(encoding='utf-8'))
+
+    def test_missing_plugin_output_fails_instead_of_scanning_html(self):
+        with tempfile.TemporaryDirectory() as directory:
+            with self.assertRaisesRegex(ValueError, 'Missing mdbook-sitemap output'):
+                add_site_metadata(Path(directory))
 
 
 if __name__ == '__main__':

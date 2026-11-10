@@ -1,9 +1,11 @@
-"""Add per-page search metadata to mdBook output and generate the site map."""
+"""Add page metadata and merge mdbook-sitemap output with the landing pages."""
 
 from html import escape, unescape
 from html.parser import HTMLParser
 from pathlib import Path
 import re
+import xml.etree.ElementTree as ET
+from urllib.parse import urlsplit
 
 SITE_URL = "https://cjv.zxilly.com"
 ANALYTICS = '<script defer src="https://trail.learningman.top/script.js" data-website-id="0e5c6fa1-6dd8-452d-acf3-70917b9fb499" data-domains="cjv.zxilly.com,cjv.zxilly.dev" data-exclude-search="true" data-exclude-hash="true"></script>'
@@ -60,7 +62,6 @@ def canonical_path(relative):
 
 
 def add_site_metadata(output):
-    urls = {SITE_URL + "/", SITE_URL + "/en/"}
     pages = sorted(output.rglob("*.html"))
     for page in pages:
         text = page.read_text(encoding="utf-8")
@@ -88,7 +89,6 @@ def add_site_metadata(output):
                  "Install the Cangjie SDK with cjv and set up cjc and cjpm. Includes platform-specific commands, GitCode mirrors and unattended installation options.")
             )
         canonical = SITE_URL + canonical_path(relative)
-        urls.add(canonical)
         alternate_lang = "en" if parts[1] == "zh-CN" else "zh-CN"
         alternate = Path(parts[0], alternate_lang, *parts[2:])
         metadata = [f'<link rel="canonical" href="{escape(canonical, quote=True)}">']
@@ -109,8 +109,32 @@ def add_site_metadata(output):
             metadata.append(ANALYTICS)
         text = text.replace("</head>", "\n".join(metadata) + "\n</head>")
         page.write_text(text, encoding="utf-8")
-    sitemap = '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
-    sitemap += "".join(f"  <url><loc>{escape(url)}</loc></url>\n" for url in sorted(urls))
-    (output.parent / "sitemap.xml").write_text(sitemap + "</urlset>\n", encoding="utf-8")
+    count = merge_sitemaps(output)
     (output.parent / "robots.txt").write_text(f"User-agent: *\nAllow: /\n\nSitemap: {SITE_URL}/sitemap.xml\n", encoding="utf-8")
-    print(f"Added documentation metadata and {len(urls)} canonical sitemap URLs.")
+    print(f"Added documentation metadata and merged {count} canonical sitemap URLs.")
+
+
+def merge_sitemaps(output):
+    """Keep plugin chapter discovery; only normalize paths and add homepages."""
+    namespace = "http://www.sitemaps.org/schemas/sitemap/0.9"
+    ET.register_namespace("", namespace)
+    root = ET.Element(f"{{{namespace}}}urlset")
+    urls = set()
+    files = sorted(output.glob("*/*/sitemap.xml"))
+    if not files:
+        raise ValueError("Missing mdbook-sitemap output; build with the sitemap backend enabled")
+    for file in files:
+        tree = ET.parse(file)
+        for entry in tree.getroot():
+            location = entry.find(f"{{{namespace}}}loc")
+            path = urlsplit(location.text).path
+            location.text = SITE_URL + canonical_path(Path(path.removeprefix("/book/")))
+            if location.text not in urls:
+                root.append(entry)
+                urls.add(location.text)
+        tree.write(file, encoding="utf-8", xml_declaration=True)
+    for url in (SITE_URL + "/", SITE_URL + "/en/"):
+        ET.SubElement(ET.SubElement(root, f"{{{namespace}}}url"), f"{{{namespace}}}loc").text = url
+        urls.add(url)
+    ET.ElementTree(root).write(output.parent / "sitemap.xml", encoding="utf-8", xml_declaration=True)
+    return len(urls)

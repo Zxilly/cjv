@@ -81,6 +81,8 @@ jobs:
             | tar -xz -C "${RUNNER_TEMP}/mdbook-bin"
           echo "${RUNNER_TEMP}/mdbook-bin" >> "$GITHUB_PATH"
 
+      - name: Install mdBook sitemap backend
+        run: cargo install mdbook-sitemap --version 0.1.1 --locked
       - name: Build and check the bilingual documentation
         run: python3 scripts/build-docs.py
 

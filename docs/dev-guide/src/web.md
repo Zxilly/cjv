@@ -16,7 +16,7 @@ pnpm dev
 
 预渲染与首次 hydration 都使用通用安装方式，接管后再识别浏览器平台、启用边缘节点给出的镜像默认值。不要在首次渲染时读取浏览器平台或用户偏好，否则会产生 hydration 不匹配。页面正文、命令和文档链接在禁用 JavaScript 时也可读取。
 
-`src/lib/seo.ts` 定义两种语言的页面元信息，`src/components/project-guide.tsx` 提供双语入门链接。两域名的 canonical 与 hreflang 统一指向 `.com` 对应页面；`.dev` 继续提供安装与下载。文档构建通过 `scripts/site_seo.py` 补充逐页元信息并生成全站 sitemap，排除跳转、打印和目录副本。
+`src/lib/seo.ts` 定义两种语言的页面元信息，`src/components/project-guide.tsx` 提供双语入门链接。两域名的 canonical 与 hreflang 统一指向 `.com` 对应页面；`.dev` 继续提供安装与下载。文档由 `mdbook-sitemap` 后端生成章节 sitemap，`scripts/site_seo.py` 补充逐页元信息、规范化地址，并将插件产物与中英文首页合并为全站 sitemap。
 
 | 文件或目录 | 内容 |
 | --- | --- |

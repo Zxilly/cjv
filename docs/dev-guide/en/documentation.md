@@ -17,9 +17,10 @@ The Chinese and English chapter sources are maintained side by side—synchroniz
 
 ### Full site build and link check (recommended)
 
-Install **mdBook 0.5.3** and **Python 3.9 or later**, then run from the repository root:
+Install **mdBook 0.5.3**, **mdbook-sitemap 0.1.1** and **Python 3.9 or later**, then run from the repository root:
 
 ```bash
+cargo install mdbook-sitemap --version 0.1.1 --locked
 python3 scripts/build-docs.py
 python3 -m http.server --directory web/dist/client 8000
 ```
@@ -27,6 +28,8 @@ python3 -m http.server --directory web/dist/client 8000
 Open `http://localhost:8000/book/user-guide/en/` (or `/zh-CN/`) in your browser to preview the published theme and language switcher. On Windows, use `python` if `python3` is not on your `PATH`.
 
 `scripts/build-docs.py` configures the source directory, language code, book title, and site URL for all four books (`user-guide` and `dev-guide` in `zh-CN` and `en`), stages the shared theme in a temporary directory so mdBook can fingerprint assets cleanly, and then parses all generated HTML files to verify internal page links, cross-book `/book/` links, static assets, and `#anchor` fragments. Pass `--output <dir>` to write to another output directory, or `--check-only` to check an existing build without running `mdbook`. Markdown lint checks are listed in [Testing and checks](testing.md#documentation-workflows-and-dependencies).
+
+Each book uses the `mdbook-sitemap` backend through `[output.sitemap]` to discover chapter URLs. The full build copies the `html/` output to the existing public paths, normalizes sitemap URLs, and merges the four books with the two landing pages. Backend directory names do not appear in published URLs. `include-lastmod` is disabled so build dates are not reported as page modification dates.
 
 ### Previewing a single book with `mdbook serve`
 

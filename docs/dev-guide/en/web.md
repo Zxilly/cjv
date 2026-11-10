@@ -31,7 +31,7 @@ To change the set of supported release platforms, update `internal/target/catalo
 
 Production builds prerender React into Chinese `/` and English `/en/` HTML through React Router Framework Mode. No React SSR server runs in production. The initial hydration uses the same generic installation methods as the build; platform detection and regional mirror defaults apply afterwards. Content, commands and documentation links remain readable without JavaScript.
 
-`src/lib/seo.ts` defines localized page metadata and `src/components/project-guide.tsx` contains the bilingual getting-started links. Both domains use canonical and hreflang URLs on `.com`, while `.dev` retains its installer commands and downloads. The documentation build uses `scripts/site_seo.py` to add page metadata and a complete sitemap, excluding redirects, print copies and table-of-contents frames.
+`src/lib/seo.ts` defines localized page metadata and `src/components/project-guide.tsx` contains the bilingual getting-started links. Both domains use canonical and hreflang URLs on `.com`, while `.dev` retains its installer commands and downloads. The `mdbook-sitemap` backend generates chapter sitemaps. `scripts/site_seo.py` adds page metadata, normalizes canonical paths and merges the plugin output with the two landing pages into the site sitemap.
 
 `use-platform.ts` computes an initial platform match synchronously from standard browser properties (`navigator.userAgent` and `navigator.platform`), and then queries User-Agent Client Hints (`navigator.userAgentData`) for additional CPU architecture metadata. Detection resolves to one of three states: `ready`, `unknown`, or `unsupported`.
 
