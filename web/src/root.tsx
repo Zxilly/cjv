@@ -41,7 +41,7 @@ export function Layout({ children }: { children: ReactNode }) {
           sameAs: ['https://github.com/Zxilly/cjv', 'https://gitcode.com/Zxilly/cjv'],
         }).replaceAll('<', '\\u003c') }} />
         <Links />
-        <script defer src="https://trail.learningman.top/script.js" data-website-id="0e5c6fa1-6dd8-452d-acf3-70917b9fb499" />
+        <script defer src="https://trail.learningman.top/script.js" data-website-id="0e5c6fa1-6dd8-452d-acf3-70917b9fb499" data-domains="cjv.zxilly.com,cjv.zxilly.dev" data-exclude-search="true" data-exclude-hash="true" />
       </head>
       <body className="bg-white dark:bg-gray-950 text-gray-800 dark:text-gray-200 antialiased min-h-screen flex items-center-safe">
         <div id="app" className="w-full">{children}</div>

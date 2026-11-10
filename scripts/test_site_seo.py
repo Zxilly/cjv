@@ -5,10 +5,14 @@ import tempfile
 import unittest
 import xml.etree.ElementTree as ET
 
-from site_seo import add_site_metadata
+from site_seo import add_site_metadata, summarize
 
 
 class SiteSEOTest(unittest.TestCase):
+    def test_summary_preserves_sentence_or_word_boundary(self):
+        self.assertEqual(summarize('A useful sentence. ' + 'additional ' * 30, 40), 'A useful sentence.')
+        self.assertEqual(summarize('word ' * 20, 18), 'word word word…')
+
     def test_metadata_and_sitemap_match_real_content_and_language_pairs(self):
         with tempfile.TemporaryDirectory() as directory:
             output = Path(directory) / "book"
@@ -27,6 +31,8 @@ class SiteSEOTest(unittest.TestCase):
             self.assertIn('content="Use &lt;SDK&gt; &amp; &quot;tools&quot;."', html)
             self.assertIn('hreflang="en" href="https://cjv.zxilly.com/book/user-guide/en/toolchain-file.html"', html)
             self.assertEqual(html.count('name="description"'), 1)
+            self.assertEqual(html.count('trail.learningman.top/script.js'), 1)
+            self.assertIn('data-domains="cjv.zxilly.com,cjv.zxilly.dev"', html)
             self.assertNotIn('hreflang=', (output / "user-guide/zh-CN/only.html").read_text(encoding="utf-8"))
             sitemap = ET.parse(output.parent / "sitemap.xml")
             urls = [node.text for node in sitemap.findall('.//{*}loc')]

@@ -36,14 +36,14 @@ export function ProjectGuide() {
       <ul className="mt-5 space-y-5">
         {copy.links.map(([title, description, path]) => (
           <li key={path}>
-            <a href={base + path} className="text-cj dark:text-cj-light hover:underline font-medium">{title}</a>
+            <a href={base + path} data-umami-event="open-guide" data-umami-event-guide={path} className="text-cj dark:text-cj-light hover:underline font-medium">{title}</a>
             <p className="mt-1 text-sm leading-relaxed text-gray-500 dark:text-gray-400">{description}</p>
           </li>
         ))}
       </ul>
       <p className="mt-6 text-sm leading-relaxed text-gray-500 dark:text-gray-400">{copy.note}</p>
       <p className="mt-5 text-sm"><a href="https://learningman.top/archives/462" className="text-cj dark:text-cj-light hover:underline">{copy.story}</a></p>
-      <p className="mt-3 text-sm"><a href="https://github.com/Zxilly/cjv" className="text-cj dark:text-cj-light hover:underline">{copy.support}</a></p>
+      <p className="mt-3 text-sm"><a href="https://github.com/Zxilly/cjv" data-umami-event="github-repository" className="text-cj dark:text-cj-light hover:underline">{copy.support}</a></p>
     </section>
   )
 }

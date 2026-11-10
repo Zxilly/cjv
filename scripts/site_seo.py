@@ -6,6 +6,20 @@ from pathlib import Path
 import re
 
 SITE_URL = "https://cjv.zxilly.com"
+ANALYTICS = '<script defer src="https://trail.learningman.top/script.js" data-website-id="0e5c6fa1-6dd8-452d-acf3-70917b9fb499" data-domains="cjv.zxilly.com,cjv.zxilly.dev" data-exclude-search="true" data-exclude-hash="true"></script>'
+
+
+def summarize(value, limit=200):
+    """Prefer complete sentences, then word boundaries, over cut-off words."""
+    if len(value) <= limit:
+        return value
+    prefix = value[:limit - 1]
+    endings = list(re.finditer(r'[。！？]|[.!?](?=\s|$)', prefix))
+    if endings and endings[-1].end() >= limit // 3:
+        return prefix[:endings[-1].end()]
+    if re.search(r'[A-Za-z]$', prefix) and re.match(r'[A-Za-z]', value[limit - 1:]):
+        prefix = prefix.rsplit(' ', 1)[0]
+    return prefix.rstrip(' ,，;；:：') + '…'
 
 
 class Summary(HTMLParser):
@@ -64,7 +78,7 @@ def add_site_metadata(output):
             raise ValueError(f"Missing page title: {page}")
         title = unescape(title_match[1])
         paragraphs = Summary(text).paragraphs
-        description = (paragraphs[0] if paragraphs else title)[:200]
+        description = summarize(paragraphs[0] if paragraphs else title)
         if parts[0] == "user-guide" and relative.as_posix().endswith("/installation/index.html"):
             title, description = (
                 ("安装仓颉 SDK：Windows、macOS、Linux 与鸿蒙 - cjv",
@@ -91,6 +105,8 @@ def add_site_metadata(output):
         text = re.sub(r"<title>.*?</title>", lambda _: f"<title>{escape(title)}</title>", text, count=1, flags=re.S)
         text = re.sub(r'<meta name="description"[^>]*>', '', text)
         metadata.append(f'<meta name="description" content="{escape(description, quote=True)}">')
+        if 'trail.learningman.top/script.js' not in text:
+            metadata.append(ANALYTICS)
         text = text.replace("</head>", "\n".join(metadata) + "\n</head>")
         page.write_text(text, encoding="utf-8")
     sitemap = '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
