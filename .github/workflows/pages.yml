@@ -144,3 +144,10 @@ jobs:
           --name "$EDGEONE_PROJECT_NAME" --env production --skip-ai-gateway-sync
       - name: Verify production websites
         run: node deployment/verify-site.mjs --seo https://cjv.zxilly.dev/ https://cjv.zxilly.com/
+
+  indexnow:
+    name: Notify search engines
+    needs: edgeone
+    permissions:
+      contents: read
+    uses: ./.github/workflows/indexnow.yml
