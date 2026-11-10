@@ -14,7 +14,8 @@ concurrency:
 jobs:
   submit:
     if: >-
-      github.ref == 'refs/heads/master'
+      github.ref == 'refs/heads/master' ||
+      (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v'))
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
