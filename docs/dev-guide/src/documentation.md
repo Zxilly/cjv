@@ -9,7 +9,7 @@
 - 新增、移动或删除章节时，请同时修改 `src/SUMMARY.md` 和 `en/SUMMARY.md`，保持两种语言的页面文件路径完全一致。
 - 代码块中的命令、路径、配置键和标识符保持一致，正文与注释可以按语言翻译。
 - 同一本书内部使用相对 `.md` 链接；跨书（用户手册与开发指南之间）使用站点绝对 URL（`https://cjv.zxilly.com/book/...`），因为两本书分别构建。
-- 移动或重命名已发布页面时，请在 `book.toml` 的 `[output.html.redirect]` 中保留旧地址重定向。
+- 移动或重命名已发布页面时，请在 `book.toml` 的 `[output.seo.html.redirect]` 中保留旧地址重定向。
 
 `docs/theme/cjv-i18n.js` 和 `cjv-i18n.css` 提供顶栏语言切换器。它通过替换当前 URL 中的 `/zh-CN/` 与 `/en/` 路径段来切换语言，因此两种语言必须具有相同的页面路径。由于中英文标题生成的 HTML 锚点 ID 不同，切换语言会打开对应章节顶部，并去掉原语言的 `#anchor` 标题锚点。
 
@@ -17,10 +17,11 @@
 
 ### 完整站点构建与检查（推荐）
 
-安装 **mdBook 0.5.3**、**mdbook-sitemap 0.1.1** 和 **Python 3.9 以上版本**，在仓库根目录执行：
+安装 **mdBook 0.5.3**、**mdbook-sitemap 0.1.1**、**mdbook-seo** 和 **Python 3.9 以上版本**，在仓库根目录执行：
 
 ```bash
 cargo install mdbook-sitemap --version 0.1.1 --locked
+cargo install --git https://github.com/Zxilly/mdbook-seo --rev de97785a384305e149dc52ac24f9f1d8f827bb9c --locked
 python3 scripts/build-docs.py
 python3 -m http.server --directory web/dist/client 8000
 ```
@@ -29,32 +30,13 @@ python3 -m http.server --directory web/dist/client 8000
 
 `scripts/build-docs.py` 会为四份书（用户手册与开发指南的中英文版）设置源语言、标题和站点路径，在临时目录中加入共享主题，并自动检查所有生成的 HTML 页面中的内部链接、跨书 `/book/` 链接、静态资源和 `#anchor` 锚点。传入 `--output <dir>` 可指定其他输出目录，`--check-only` 只检查已有产物而不重新调用 `mdbook`。Markdown 格式检查命令见[测试与检查](testing.md#文档工作流和依赖)。
 
-每本书通过 `[output.sitemap]` 使用现成的 `mdbook-sitemap` 后端生成章节 URL。完整站点构建会将 `html/` 产物复制到原有公开路径，规范化 sitemap 地址，并合并四本书与中英文首页；发布地址不包含后端目录名。插件关闭 `include-lastmod`，避免将每次构建日期写成页面修改日期。
+每本书通过 `[output.seo]` 使用 [mdbook-seo](https://github.com/Zxilly/mdbook-seo) 渲染 HTML，同时生成 canonical、description、hreflang、Open Graph 和 Twitter 元数据。HTML 渲染选项位于 `[output.seo.html]`。共享的 `docs/theme/head.hbs` 提供统计代码，`docs/user-guide/seo-pages.json` 保存安装页的中英文元数据覆盖；构建时分别设置语言的规范域名路径和 locale。
 
-### 预览单本书（`mdbook serve`）
+`mdbook-sitemap` 通过 `[output.sitemap]` 发现章节，完整构建将 `seo/` 产物复制到原有公开路径。`scripts/site_map.py` 读取生成页面中的 canonical，排除 noindex 页面，并合并四份文档与实际已构建的首页、Blog 页面，不再修改 HTML。发布地址不包含后端目录名。继续关闭 `include-lastmod`，避免将构建日期写成页面修改日期。
 
-如果只想在编辑时实时预览单本书的内容，可在 `docs/user-guide/` 或 `docs/dev-guide/` 目录下直接执行（注意此入口使用 mdBook 默认主题，不含共享语言切换器）：
+### 编辑时重新构建
 
-```bash
-mdbook serve --open
-```
-
-在 Bash 中预览英文版：
-
-```bash
-MDBOOK_BOOK__SRC=en MDBOOK_BOOK__LANGUAGE=en MDBOOK_BOOK__TITLE="cjv User Guide" mdbook serve --open
-```
-
-在 Windows PowerShell 中预览英文版：
-
-```powershell
-$env:MDBOOK_BOOK__SRC = "en"
-$env:MDBOOK_BOOK__LANGUAGE = "en"
-$env:MDBOOK_BOOK__TITLE = "cjv User Guide"
-mdbook serve --open
-```
-
-预览开发指南英文版时使用标题 `"cjv Developer Guide"`。结束英文预览后请移除这三个环境变量以恢复默认中文配置；如果只需构建而不启动预览服务，将 `serve --open` 换成 `build` 即可。
+修改 Markdown 或 SEO 配置后，重新执行 `python3 scripts/build-docs.py` 并刷新静态预览。这是完整中英文站点的预览入口，与生产使用相同的临时构建目录、主题和元数据。直接运行 `mdbook serve` 不在 SEO 后端当前验证的兼容范围内。
 
 ## Pages 部署
 
