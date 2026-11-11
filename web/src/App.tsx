@@ -15,7 +15,7 @@ import type { InstallMethod } from '@/lib/platform-catalog'
 import { useLanguageSwitch } from '@/hooks/use-language-switch'
 import { useMirror } from '@/hooks/use-mirror'
 import { INSTALL_TABS, getInstallTabDirection, type InstallTab } from '@/lib/tab-motion'
-import { PAGE_META, SITE_URL } from '@/lib/seo'
+import { SITE_URL } from '@/lib/seo'
 import { Link } from 'react-router'
 import { blogPath } from '@/lib/blog'
 
@@ -59,7 +59,6 @@ const LABEL_EXIT = { opacity: 0, y: -4 }
 
 export default function App() {
   const { t, i18n } = useLingui()
-  const copy = PAGE_META[i18n.locale === 'en' ? 'en' : 'zh']
   const platform = usePlatform()
   const { methods, otherMethods, sourceMethod } = platform
   const prefersReducedMotion = useReducedMotion()
@@ -224,9 +223,12 @@ export default function App() {
         <motion.header layout="position" layoutDependency={tab} transition={heightTransition}>
           <h1 className="text-6xl sm:text-7xl md:text-8xl" style={{ fontFamily: '"Patua One", serif', fontWeight: 400 }}>
             <span className="cj-gradient" style={{ paddingBottom: '0.15em', display: 'inline-block' }}>cjv</span>
-            <span className="mt-4 block font-sans text-xl sm:text-2xl text-gray-700 dark:text-gray-300">{copy.heading}</span>
           </h1>
-          <p className="mt-5 text-base leading-relaxed text-gray-500 dark:text-gray-400">{copy.intro}</p>
+          <p className="mt-6 text-lg md:text-2xl text-gray-500 dark:text-gray-400">
+            <Trans>
+              <a href="https://cangjie-lang.cn/" target="_blank" rel="noopener noreferrer" className="text-cj dark:text-cj-light hover:underline mr-1">仓颉</a>编程语言 SDK 工具链管理器
+            </Trans>
+          </p>
         </motion.header>
 
         <motion.div
@@ -296,11 +298,16 @@ export default function App() {
           )}
         </motion.div>
 
-        <motion.nav aria-label={i18n.locale === 'en' ? 'Resources' : '相关资源'} layout="position" layoutDependency={tab} transition={heightTransition} className="mt-8 flex flex-wrap justify-center gap-x-6 gap-y-2 text-sm text-gray-600 dark:text-gray-400">
+        <motion.nav aria-label={i18n.locale === 'en' ? 'Resources' : '相关资源'} layout="position" layoutDependency={tab} transition={heightTransition} className="mt-12 text-center text-base text-gray-400 dark:text-gray-600 space-x-3 max-sm:flex max-sm:flex-wrap max-sm:justify-center max-sm:gap-x-3 max-sm:gap-y-2 max-sm:space-x-0">
           <a href={`${SITE_URL}/book/user-guide/${i18n.locale === 'en' ? 'en' : 'zh-CN'}/`} className="hover:text-cj dark:hover:text-cj-light"><Trans>文档</Trans></a>
+          <span aria-hidden="true">·</span>
           <Link to={blogPath(i18n.locale === 'en' ? 'en' : 'zh')} className="hover:text-cj dark:hover:text-cj-light">Blog</Link>
+          <span aria-hidden="true">·</span>
           <a href="https://github.com/Zxilly/cjv" target="_blank" rel="noopener noreferrer" className="hover:text-cj dark:hover:text-cj-light">GitHub</a>
+          <span aria-hidden="true">·</span>
           <a href="https://github.com/Zxilly/cjv/releases" target="_blank" rel="noopener noreferrer" className="hover:text-cj dark:hover:text-cj-light">Releases</a>
+          <span aria-hidden="true">·</span>
+          <a href="https://cangjie-lang.cn/" target="_blank" rel="noopener noreferrer" className="hover:text-cj dark:hover:text-cj-light"><Trans>仓颉官网</Trans></a>
         </motion.nav>
       </motion.div>
     </LayoutGroup>

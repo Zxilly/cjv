@@ -61,7 +61,7 @@ Then fill in the new English translations in `src/locales/en/messages.po`. Produ
 
 The visual theme is defined in `src/style.css`, dark mode follows the operating system preference, and web fonts are bundled from local dependencies. Animations should continue to respect `useReducedMotion`.
 
-The homepage focuses on installation and downloads, with four footer links: documentation, Blog, GitHub and Releases. Tutorial navigation, team-workflow explanations and article recommendations belong in the manuals or Blog rather than extending the installation page.
+The homepage retains its original wordmark, short introduction, installation panel and footer styling, adding only a Blog link beside the existing documentation, GitHub, Releases and Cangjie site links. Tutorial navigation, team-workflow explanations and article recommendations belong in the manuals or Blog rather than extending the installation page.
 
 ## Publishing Blog content
 

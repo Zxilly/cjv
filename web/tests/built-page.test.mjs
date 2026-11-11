@@ -86,7 +86,7 @@ test('Blog navigation loads static article data and preserves the article across
     const homeRequest = page.waitForRequest(request => request.isNavigationRequest() && request.url() === origin + '/en/')
     await page.getByRole('link', { name: 'Install cjv', exact: true }).click()
     await homeRequest
-    await page.getByRole('heading', { level: 1, name: /Cangjie SDK version manager/ }).waitFor()
+    await page.getByRole('heading', { level: 1, name: 'cjv', exact: true }).waitFor()
     assert.deepEqual(errors, [])
   } finally { await page.close() }
 })
@@ -240,10 +240,11 @@ test('built homepage fits desktop and narrow mobile viewports', async () => {
 test('both languages provide visible content, commands and crawlable links without JavaScript', async () => {
   const page = await openPage({ javaScriptEnabled: false })
   try {
-    for (const [route, language, heading] of [['/', 'zh-CN', '仓颉 SDK 版本管理器'], ['/en/', 'en', 'Cangjie SDK version manager']]) {
+    for (const [route, language, subtitle] of [['/', 'zh-CN', '编程语言 SDK 工具链管理器'], ['/en/', 'en', 'A toolchain manager for the']]) {
       await page.goto(origin + route)
       assert.equal(await page.locator('html').getAttribute('lang'), language)
-      assert.ok((await page.getByRole('heading', { level: 1 }).innerText()).includes(heading))
+      assert.equal(await page.getByRole('heading', { level: 1 }).innerText(), 'cjv')
+      assert.ok((await page.locator('header').innerText()).includes(subtitle))
       for (const command of await page.locator('code').all()) assert.ok(await command.isVisible())
       assert.ok((await page.locator('code').allTextContents()).some(value => value.includes('install.ps1')))
       assert.equal(await page.locator('link[rel="canonical"]').getAttribute('href'), 'https://cjv.zxilly.com' + route)
