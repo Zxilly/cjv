@@ -282,7 +282,11 @@ test('regional .dev HTML hydrates without errors and keeps domain-specific insta
     await page.waitForFunction(() => document.documentElement.lang === 'en')
     assert.equal(await page.locator('link[rel="canonical"]').getAttribute('href'), 'https://cjv.zxilly.com/en/')
     assert.deepEqual(errors, [])
-  } finally { await page.close() }
+  } finally {
+    // Finish proxied font requests before disposing their request context.
+    await page.unrouteAll({ behavior: 'wait' })
+    await page.close()
+  }
 })
 
 test('explicit index.html URLs hydrate their matching route and retain canonical URLs', async () => {
