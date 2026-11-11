@@ -11,7 +11,7 @@ import subprocess
 import sys
 import tempfile
 from urllib.parse import unquote, urlsplit
-from site_seo import SITE_URL, add_site_metadata
+from site_map import SITE_URL, write_site_map
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -97,16 +97,21 @@ def build(output):
             for language_dir in ("src", "en"):
                 shutil.copytree(source / language_dir, staged / language_dir)
             shutil.copytree(ROOT / "docs" / "theme", staged / "theme")
+            overrides_path = source / "seo-pages.json"
+            overrides = json.loads(overrides_path.read_text(encoding="utf-8")) if overrides_path.exists() else {}
             for language, title in titles.items():
                 env = os.environ.copy()
                 env.update({
                     "MDBOOK_BOOK__SRC": "src" if language == "zh-CN" else "en",
                     "MDBOOK_BOOK__LANGUAGE": language,
                     "MDBOOK_BOOK__TITLE": title,
-                    "MDBOOK_OUTPUT__HTML__SITE_URL": f"/book/{book}/{language}/",
+                    "MDBOOK_OUTPUT__SEO__BASE_URL": f"{SITE_URL}/book/{book}/{language}/",
+                    "MDBOOK_OUTPUT__SEO__LOCALE": "zh_CN" if language == "zh-CN" else "en_US",
+                    "MDBOOK_OUTPUT__SEO__PAGES": json.dumps(overrides.get(language, {})),
+                    "MDBOOK_OUTPUT__SEO__HTML__SITE_URL": f"/book/{book}/{language}/",
                     "MDBOOK_OUTPUT__SITEMAP__BASE_URL": f"{SITE_URL}/book/{book}/{language}/",
-                    "MDBOOK_OUTPUT__HTML__ADDITIONAL_JS": json.dumps(["theme/cjv-i18n.js"]),
-                    "MDBOOK_OUTPUT__HTML__ADDITIONAL_CSS": json.dumps(["theme/cjv-i18n.css"]),
+                    "MDBOOK_OUTPUT__SEO__HTML__ADDITIONAL_JS": json.dumps(["theme/cjv-i18n.js"]),
+                    "MDBOOK_OUTPUT__SEO__HTML__ADDITIONAL_CSS": json.dumps(["theme/cjv-i18n.css"]),
                 })
                 built = staging / "output" / book / language
                 subprocess.run(
@@ -114,13 +119,13 @@ def build(output):
                     env=env,
                     check=True,
                 )
-                # Multiple backends write html/ and sitemap/. Keep public URLs
+                # Multiple backends write seo/ and sitemap/. Keep public URLs
                 # unchanged and publish the plugin's sitemap with each book.
                 destination = (output / book / language).resolve()
                 destination.relative_to(output.resolve())
                 if destination.exists():
                     shutil.rmtree(destination)
-                shutil.copytree(built / "html", destination)
+                shutil.copytree(built / "seo", destination)
                 shutil.copy2(built / "sitemap" / "sitemap.xml", destination / "sitemap.xml")
 
 
@@ -132,7 +137,7 @@ def main():
     output = args.output.resolve()
     if not args.check_only:
         build(output)
-        add_site_metadata(output)
+        write_site_map(output)
     check_links(output)
 
 

@@ -10,7 +10,27 @@ src = "src"
 base-url = "https://cjv.zxilly.com/book/dev-guide/zh-CN/"
 include-lastmod = false
 
-[output.html]
+[output.seo]
+base-url = "https://cjv.zxilly.com/book/dev-guide/zh-CN/"
+site-name = "cjv"
+locale = "zh_CN"
+
+[output.seo.image]
+url = "https://cjv.zxilly.com/og/cjv.png"
+alt = "cjv — 仓颉 SDK 版本管理器 / Cangjie SDK version manager"
+width = 1734
+height = 907
+mime-type = "image/png"
+
+[output.seo.translations.zh-CN]
+base-url = "https://cjv.zxilly.com/book/dev-guide/zh-CN/"
+source-dir = "src"
+
+[output.seo.translations.en]
+base-url = "https://cjv.zxilly.com/book/dev-guide/en/"
+source-dir = "en"
+
+[output.seo.html]
 # site-url 由 CI 逐语言覆盖(/book/dev-guide/zh-CN/、/book/dev-guide/en/)。
 site-url = "/"
 git-repository-url = "https://github.com/Zxilly/cjv"
@@ -19,6 +39,6 @@ default-theme = "light"
 preferred-dark-theme = "navy"
 # scripts/build-docs.py adds the shared docs/theme assets for site builds.
 
-[output.html.redirect]
+[output.seo.html.redirect]
 "linting.html" = "testing.html"
 "ci.html" = "testing.html"

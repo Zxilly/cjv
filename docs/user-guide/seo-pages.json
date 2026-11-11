@@ -1,0 +1,14 @@
+{
+  "zh-CN": {
+    "installation/index.md": {
+      "title": "安装仓颉 SDK：Windows、macOS、Linux 与鸿蒙 - cjv",
+      "description": "使用 cjv 安装仓颉 SDK，配置 cjc 与 cjpm 命令入口。包含 Windows PowerShell、macOS、Linux 和鸿蒙安装步骤、GitCode 镜像及自动化安装参数。"
+    }
+  },
+  "en": {
+    "installation/index.md": {
+      "title": "Install the Cangjie SDK on Windows, macOS, Linux and HarmonyOS - cjv",
+      "description": "Install the Cangjie SDK with cjv and set up cjc and cjpm. Includes platform-specific commands, GitCode mirrors and unattended installation options."
+    }
+  }
+}

@@ -14,7 +14,8 @@ spec.loader.exec_module(scope)
 
 class ScopeTest(unittest.TestCase):
     def test_docs_do_not_start_native_runners(self):
-        self.assertEqual(scope.scopes_for(["docs/user-guide/src/basic-usage.md"]), {"docs"})
+        for path in ("docs/user-guide/src/basic-usage.md", "scripts/site_map.py", "scripts/test_site_map.py"):
+            self.assertEqual(scope.scopes_for([path]), {"docs"})
 
     def test_go_includes_installers_and_harmony(self):
         for path in ["internal/config/config.go", "internal/config/testdata/settings.toml", "cmd/cjv/completion.txt"]:

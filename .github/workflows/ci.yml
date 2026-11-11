@@ -125,19 +125,11 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Install mdbook
-        env:
-          MDBOOK_VERSION: "0.5.3"
-        run: |
-          mkdir -p "${RUNNER_TEMP}/mdbook-bin"
-          curl -fsSL "https://github.com/rust-lang/mdBook/releases/download/v${MDBOOK_VERSION}/mdbook-v${MDBOOK_VERSION}-x86_64-unknown-linux-gnu.tar.gz" \
-            | tar -xz -C "${RUNNER_TEMP}/mdbook-bin"
-          echo "${RUNNER_TEMP}/mdbook-bin" >> "$GITHUB_PATH"
-      - name: Install mdBook sitemap backend
-        run: cargo install mdbook-sitemap --version 0.1.1 --locked
+      - name: Set up documentation tools
+        uses: ./.github/actions/setup-docs
       - name: Build and check the bilingual documentation
         run: |
-          python3 scripts/test_site_seo.py
+          python3 scripts/test_site_map.py
           python3 scripts/build-docs.py
 
   cross-build:

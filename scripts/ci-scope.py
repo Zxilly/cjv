@@ -18,7 +18,7 @@ def scopes_for(paths):
             scopes.update(("go", "installers", "hmos"))
         if path.startswith(("web/", "deployment/", "internal/target/")) or path in ("scripts/gen-platform-surfaces.go", ".goreleaser.yml"):
             scopes.add("web")
-        if path.startswith("docs/") or path in ("scripts/build-docs.py", "scripts/site_seo.py", "scripts/test_site_seo.py"):
+        if path.startswith("docs/") or path in ("scripts/build-docs.py", "scripts/site_map.py", "scripts/test_site_map.py"):
             scopes.add("docs")
         if path.startswith(("tests/install-scripts/", "tests/release-scripts/")) or path in (
             "web/public/install.sh", "web/public/install.ps1", "scripts/extract-init-binaries.sh", "scripts/download-release-archives.sh",

@@ -1,0 +1,19 @@
+name: Set up documentation tools
+description: Install pinned mdBook, SEO and sitemap backends
+runs:
+  using: composite
+  steps:
+    - name: Install mdBook
+      shell: bash
+      env:
+        MDBOOK_VERSION: "0.5.3"
+      run: |
+        mkdir -p "${RUNNER_TEMP}/mdbook-bin"
+        curl -fsSL "https://github.com/rust-lang/mdBook/releases/download/v${MDBOOK_VERSION}/mdbook-v${MDBOOK_VERSION}-x86_64-unknown-linux-gnu.tar.gz" \
+          | tar -xz -C "${RUNNER_TEMP}/mdbook-bin"
+        echo "${RUNNER_TEMP}/mdbook-bin" >> "$GITHUB_PATH"
+    - name: Install SEO and sitemap backends
+      shell: bash
+      run: |
+        cargo install --git https://github.com/Zxilly/mdbook-seo --rev de97785a384305e149dc52ac24f9f1d8f827bb9c --locked
+        cargo install mdbook-sitemap --version 0.1.1 --locked
