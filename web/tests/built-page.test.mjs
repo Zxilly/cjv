@@ -82,6 +82,11 @@ test('Blog navigation loads static article data and preserves the article across
     await page.getByRole('heading', { level: 1, name: blogPosts[0].zh.title, exact: true }).waitFor()
     await page.goto(origin + `/en/blog/${blogPosts[0].slug}/index.html`, { waitUntil: 'networkidle' })
     assert.equal(await page.locator('h1').innerText(), blogPosts[0].en.title)
+    // The installation homepage needs a fresh edge response for regional defaults.
+    const homeRequest = page.waitForRequest(request => request.isNavigationRequest() && request.url() === origin + '/en/')
+    await page.getByRole('link', { name: 'Install cjv', exact: true }).click()
+    await homeRequest
+    await page.getByRole('heading', { level: 1, name: /Cangjie SDK version manager/ }).waitFor()
     assert.deepEqual(errors, [])
   } finally { await page.close() }
 })

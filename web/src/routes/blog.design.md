@@ -57,7 +57,7 @@ Article rows and the contents section use straight separators. Inline code has s
 
 ## Components
 
-- **Shared navigation:** cjv links to the current language's home; the navigation links to the blog, user guide, and paired language page. `aria-current="page"` is set on the blog navigation link only on the index. Switching language retains the article slug.
+- **Shared navigation:** cjv links to the current language's home with a full document request so edge-provided installation defaults are refreshed; the navigation links to the blog, user guide, and paired language page. `aria-current="page"` is set on the blog navigation link only on the index. Switching language retains the article slug.
 - **Article row:** category and date precede a linked title and description. Rows use top dividers and 2rem vertical padding.
 - **Contents navigation:** a labeled navigation region contains numbered heading anchors between horizontal dividers. Article headings reserve 2rem of scroll margin.
 - **Reading links:** prose, contents, and related links remain underlined at rest. Other shell links gain an underline on hover. Focus-visible links receive a green outline (2px) with a 5px offset. A skip link appears on keyboard focus and targets the main content.

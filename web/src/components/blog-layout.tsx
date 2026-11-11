@@ -12,7 +12,7 @@ export function BlogLayout({ children }: { children: ReactNode }) {
     <div className="blog-shell">
       <a className="blog-skip" href="#main">{lang === 'zh' ? '跳至正文' : 'Skip to content'}</a>
       <header className="blog-header">
-        <Link className="blog-brand" to={lang === 'en' ? '/en/' : '/'} aria-label={copy.home}>cjv</Link>
+        <Link className="blog-brand" to={lang === 'en' ? '/en/' : '/'} reloadDocument aria-label={copy.home}>cjv</Link>
         <nav aria-label={lang === 'zh' ? '主导航' : 'Main navigation'}>
           <Link to={blogPath(lang)} aria-current={translatedPath(pathname, lang) === blogPath(lang) ? 'page' : undefined}>{copy.blog}</Link>
           <a href={`${SITE_URL}/book/user-guide/${lang === 'en' ? 'en' : 'zh-CN'}/`}>{copy.docs}</a>
