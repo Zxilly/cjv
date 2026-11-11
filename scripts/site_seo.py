@@ -115,7 +115,7 @@ def add_site_metadata(output):
 
 
 def merge_sitemaps(output):
-    """Keep plugin chapter discovery; only normalize paths and add homepages."""
+    """Merge mdBook chapters with the prerendered website's canonical URLs."""
     namespace = "http://www.sitemaps.org/schemas/sitemap/0.9"
     ET.register_namespace("", namespace)
     root = ET.Element(f"{{{namespace}}}urlset")
@@ -136,5 +136,17 @@ def merge_sitemaps(output):
     for url in (SITE_URL + "/", SITE_URL + "/en/"):
         ET.SubElement(ET.SubElement(root, f"{{{namespace}}}url"), f"{{{namespace}}}loc").text = url
         urls.add(url)
+    # Discover only built Blog pages, so the sitemap never advertises a draft or
+    # missing translation. The React Router prerender is the source of truth.
+    for prefix in ("blog", "en/blog"):
+        for page in sorted((output.parent / prefix).rglob("index.html")):
+            text = page.read_text(encoding="utf-8")
+            expected = SITE_URL + "/" + page.parent.relative_to(output.parent).as_posix() + "/"
+            match = re.search(r'<link\s+rel="canonical"\s+href="([^"]+)"', text)
+            if not match or match.group(1) != expected:
+                raise ValueError(f"Missing or inconsistent Blog canonical: {page}")
+            if expected not in urls:
+                ET.SubElement(ET.SubElement(root, f"{{{namespace}}}url"), f"{{{namespace}}}loc").text = expected
+                urls.add(expected)
     ET.ElementTree(root).write(output.parent / "sitemap.xml", encoding="utf-8", xml_declaration=True)
     return len(urls)

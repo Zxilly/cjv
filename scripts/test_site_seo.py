@@ -34,6 +34,10 @@ class SiteSEOTest(unittest.TestCase):
             # A page without a translation must not advertise a missing alternate.
             (output / "user-guide/zh-CN/only.html").write_text(page, encoding="utf-8")
             (output / "user-guide/zh-CN/unlisted.html").write_text(page, encoding="utf-8")
+            for path in ('blog', 'en/blog', 'blog/example', 'en/blog/example'):
+                blog = output.parent / path / 'index.html'
+                blog.parent.mkdir(parents=True, exist_ok=True)
+                blog.write_text(f'<link rel="canonical" href="https://cjv.zxilly.com/{path}/"/>', encoding='utf-8')
             with contextlib.redirect_stdout(io.StringIO()):
                 add_site_metadata(output)
             html = (output / "user-guide/zh-CN/toolchain-file.html").read_text(encoding="utf-8")
@@ -47,6 +51,8 @@ class SiteSEOTest(unittest.TestCase):
             urls = [node.text for node in sitemap.findall('.//{*}loc')]
             self.assertEqual(len(urls), len(set(urls)))
             self.assertIn('https://cjv.zxilly.com/book/user-guide/zh-CN/', urls)
+            self.assertIn('https://cjv.zxilly.com/blog/example/', urls)
+            self.assertIn('https://cjv.zxilly.com/en/blog/example/', urls)
             self.assertFalse(any('unlisted.html' in url for url in urls))
             self.assertFalse(any(name in url for name in ('introduction.html', 'index.html', 'print.html', 'toc.html', 'old.html') for url in urls))
             for name in ('print.html', 'toc.html', 'old.html'):

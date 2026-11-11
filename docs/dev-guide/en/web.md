@@ -12,7 +12,7 @@ pnpm install --frozen-lockfile
 pnpm dev
 ```
 
-`pnpm build` generates route types, checks TypeScript, and runs the official React Router build. `react-router.config.ts` sets `ssr: false` and `prerender: ['/', '/en/']`, producing static files in `web/dist/client/`. `pnpm preview` serves that output locally. Development requires Node.js 22.22.0 or newer; production needs no React SSR server.
+`pnpm build` generates route types, checks TypeScript, and runs the official React Router build. `react-router.config.ts` sets `ssr: false` and prerender paths derived from the Blog manifest, producing static files in `web/dist/client/`. `pnpm preview` serves that output locally. Development requires Node.js 22.22.0 or newer; production needs no React SSR server.
 
 | File or directory | Contents |
 | --- | --- |
@@ -31,7 +31,7 @@ To change the set of supported release platforms, update `internal/target/catalo
 
 Production builds prerender React into Chinese `/` and English `/en/` HTML through React Router Framework Mode. No React SSR server runs in production. The initial hydration uses the same generic installation methods as the build; platform detection and regional mirror defaults apply afterwards. Content, commands and documentation links remain readable without JavaScript.
 
-`src/lib/seo.ts` defines localized page metadata and `src/components/project-guide.tsx` contains the bilingual getting-started links. Both domains use canonical and hreflang URLs on `.com`, while `.dev` retains its installer commands and downloads. The `mdbook-sitemap` backend generates chapter sitemaps. `scripts/site_seo.py` adds page metadata, normalizes canonical paths and merges the plugin output with the two landing pages into the site sitemap.
+`src/lib/seo.ts` defines localized page metadata and `src/components/project-guide.tsx` contains the bilingual getting-started links. Both domains use canonical and hreflang URLs on `.com`, while `.dev` retains its installer commands and downloads. The `mdbook-sitemap` backend generates chapter sitemaps. `scripts/site_seo.py` adds page metadata, normalizes canonical paths and merges the plugin output with the two landing pages and Blog pages into the site sitemap.
 
 `use-platform.ts` computes an initial platform match synchronously from standard browser properties (`navigator.userAgent` and `navigator.platform`), and then queries User-Agent Client Hints (`navigator.userAgentData`) for additional CPU architecture metadata. Detection resolves to one of three states: `ready`, `unknown`, or `unsupported`.
 
@@ -60,6 +60,14 @@ pnpm i18n:extract
 Then fill in the new English translations in `src/locales/en/messages.po`. Production page URLs determine the language. Language links update the URL, content and metadata, including browser back/forward navigation. Both development and production use the route language; saved preferences never override an explicit URL. Each render tree owns its Lingui instance so concurrent prerenders cannot mix languages. During production builds, the Lingui Vite plugin compiles the catalogs automatically.
 
 The visual theme is defined in `src/style.css`, dark mode follows the operating system preference, and web fonts are bundled from local dependencies. Animations should continue to respect `useReducedMotion`.
+
+## Publishing Blog content
+
+The Blog lives at `/blog/` and `/en/blog/`, with paired Chinese and English article URLs. `src/content/blog/posts.json` defines each slug, publication date and localized title, description and category. Matching Markdown files live under `src/content/blog/zh/` and `en/`. Blog interface strings are kept in `src/lib/blog.ts`, separately from the landing page's Lingui catalogs.
+
+Provide both languages when adding an article. Start body headings at H2 without repeating the page H1, keep slugs stable, and link to the matching language of the `.com` manuals. `react-router.config.ts` derives all Blog prerender paths from the manifest. Markdown is parsed during the build and does not need a production API. Each article has its own canonical URL, hreflang links, description and BlogPosting data. The documentation build adds the generated Blog pages to the site sitemap.
+
+The Blog inherits the green brand, fonts and system dark mode, using a single reading column, a table of contents and horizontally scrollable code blocks. Run `pnpm test`, `pnpm build` and `pnpm test:built` after changes, and inspect desktop and mobile layouts. SDK and CI commands still need validation in the documented environment; website tests do not establish that those SDK workflows ran successfully.
 
 ## Deployment contents
 

@@ -39,6 +39,9 @@ cjv manages LTS, STS, and nightly toolchains. SDK availability depends on the di
 
 ## Optional
 
+- [Cangjie in practice](https://cjv.zxilly.com/en/blog/): Task-based guides for PATH troubleshooting, project SDK versions and GitHub Actions.
+- [仓颉开发实践](https://cjv.zxilly.com/blog/): PATH 排查、项目版本管理与 GitHub Actions 实践。
+
 - [Developer guide](https://raw.githubusercontent.com/Zxilly/cjv/master/docs/dev-guide/en/SUMMARY.md): Build, architecture, testing, contribution, and release documentation; resolve relative links against this file's directory.
 - [开发指南](https://raw.githubusercontent.com/Zxilly/cjv/master/docs/dev-guide/src/SUMMARY.md): 构建、架构、测试与发布文档；相对链接基于此文件所在目录。
 - [Coding agent skill](https://raw.githubusercontent.com/Zxilly/cjv/master/skills/cjv/SKILL.md): Command workflows and project toolchain rules for coding agents.

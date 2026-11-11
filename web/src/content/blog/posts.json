@@ -1,0 +1,44 @@
+[
+  {
+    "slug": "windows-cangjie-path",
+    "date": "2026-11-11",
+    "zh": {
+      "title": "Windows 安装仓颉后找不到 cjc？检查 PATH 与 SDK 环境",
+      "description": "从 PowerShell 的命令查找开始，区分 cjv 代理入口缺失、终端环境未刷新和 SDK 尚未安装，逐步恢复 cjc 与 cjpm。",
+      "category": "环境排查"
+    },
+    "en": {
+      "title": "Cangjie cjc not found on Windows: check PATH and the SDK",
+      "description": "Diagnose missing cjv shims, a stale PowerShell environment and an uninstalled SDK. Find which compiler runs and restore cjc and cjpm step by step.",
+      "category": "Troubleshooting"
+    }
+  },
+  {
+    "slug": "pin-cangjie-project-versions",
+    "date": "2026-11-11",
+    "zh": {
+      "title": "两个项目使用不同的仓颉 SDK：用 cjv 固定和切换版本",
+      "description": "用 cangjie-sdk.toml 为两个项目固定不同的仓颉 SDK，检查版本来源，并在不修改团队配置的情况下临时测试另一套工具链。",
+      "category": "项目协作"
+    },
+    "en": {
+      "title": "Use different Cangjie SDK versions in two projects with cjv",
+      "description": "Pin a Cangjie SDK per project with cangjie-sdk.toml, inspect the selected version and try another toolchain without changing your team's configuration.",
+      "category": "Team workflows"
+    }
+  },
+  {
+    "slug": "cangjie-github-actions",
+    "date": "2026-11-11",
+    "zh": {
+      "title": "在 GitHub Actions 中固定仓颉 SDK 版本并运行测试",
+      "description": "将项目工具链文件接入 GitHub Actions，在 Ubuntu 作业中安装 cjv、校验版本、构建和测试仓颉项目，并按平台隔离缓存。",
+      "category": "持续集成"
+    },
+    "en": {
+      "title": "Pin the Cangjie SDK and run tests in GitHub Actions",
+      "description": "Install cjv in an Ubuntu GitHub Actions job, validate the project's pinned SDK, build and test Cangjie code, and separate caches by platform.",
+      "category": "Continuous integration"
+    }
+  }
+]

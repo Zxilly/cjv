@@ -17,6 +17,8 @@ import { useMirror } from '@/hooks/use-mirror'
 import { INSTALL_TABS, getInstallTabDirection, type InstallTab } from '@/lib/tab-motion'
 import { PAGE_META } from '@/lib/seo'
 import { ProjectGuide } from '@/components/project-guide'
+import { Link } from 'react-router'
+import { BLOG_COPY, blogPath } from '@/lib/blog'
 
 function MethodsList({ items, mirror }: { items: InstallMethod[]; mirror: boolean }) {
   return (
@@ -220,6 +222,7 @@ export default function App() {
     <LayoutGroup id="install-layout">
       <motion.div animate={fadeControls} className="relative max-w-2xl mx-auto px-4 md:px-6 py-12 md:py-24 w-full">
         <LangSwitch onSelect={switchLang} transition={heightTransition} layoutDependency={tab} />
+        <Link to={blogPath(i18n.locale === 'en' ? 'en' : 'zh')} className="absolute left-4 top-4 md:left-6 md:top-6 text-sm text-gray-600 dark:text-gray-300 hover:underline">{BLOG_COPY[i18n.locale === 'en' ? 'en' : 'zh'].blog}</Link>
         <motion.header layout="position" layoutDependency={tab} transition={heightTransition}>
           <h1 className="text-6xl sm:text-7xl md:text-8xl" style={{ fontFamily: '"Patua One", serif', fontWeight: 400 }}>
             <span className="cj-gradient" style={{ paddingBottom: '0.15em', display: 'inline-block' }}>cjv</span>

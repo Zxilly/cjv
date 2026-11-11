@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { after, before, test } from 'node:test'
 import { fileURLToPath } from 'node:url'
-import { mkdir } from 'node:fs/promises'
+import { mkdir, readFile } from 'node:fs/promises'
 import path from 'node:path'
 import { chromium, firefox, webkit } from 'playwright'
 import { preview } from 'vite'
@@ -11,6 +11,7 @@ let server
 let browser
 let origin
 const browserName = process.env.PLAYWRIGHT_BROWSER || 'chromium'
+const blogPosts = JSON.parse(await readFile(new URL('../src/content/blog/posts.json', import.meta.url), 'utf8'))
 
 before(async () => {
   server = await preview({
@@ -28,6 +29,61 @@ before(async () => {
 after(async () => {
   await browser?.close()
   if (server) await new Promise((resolve, reject) => server.httpServer.close(error => error ? reject(error) : resolve()))
+})
+
+test('every translated Blog article is readable without JavaScript and has matching SEO and anchors', async () => {
+  const page = await openPage({ javaScriptEnabled: false })
+  try {
+    for (const lang of ['zh', 'en']) {
+      const prefix = lang === 'en' ? '/en' : ''
+      await page.goto(origin + `${prefix}/blog/`)
+      assert.equal(await page.locator('.blog-post-list li').count(), blogPosts.length)
+      for (const post of blogPosts) {
+        const route = `${prefix}/blog/${post.slug}/`
+        const response = await page.goto(origin + route)
+        assert.equal(response.status(), 200)
+        assert.equal(await page.locator('html').getAttribute('lang'), lang === 'en' ? 'en' : 'zh-CN')
+        assert.equal(await page.locator('h1').innerText(), post[lang].title)
+        assert.equal(await page.title(), `${post[lang].title} | cjv`)
+        assert.equal(await page.locator('meta[name="description"]').getAttribute('content'), post[lang].description)
+        assert.equal(await page.locator('link[rel="canonical"]').getAttribute('href'), `https://cjv.zxilly.com${route}`)
+        for (const [code, target] of [['zh-CN', ''], ['en', '/en'], ['x-default', '']]) {
+          assert.equal(await page.locator(`link[hreflang="${code}"]`).getAttribute('href'), `https://cjv.zxilly.com${target}/blog/${post.slug}/`)
+        }
+        const schema = JSON.parse(await page.locator('script[type="application/ld+json"]').textContent())
+        assert.equal(schema['@type'], 'BlogPosting')
+        assert.equal(schema.headline, post[lang].title)
+        assert.equal(schema.url, `https://cjv.zxilly.com${route}`)
+        assert.ok(await page.locator('.blog-prose pre').count() > 0)
+        for (const href of await page.locator('.blog-contents a').evaluateAll(links => links.map(link => link.getAttribute('href')))) {
+          assert.equal(await page.locator(href).count(), 1)
+        }
+        const links = await page.locator('.blog-prose a').evaluateAll(links => links.map(link => link.href))
+        assert.ok(links.every(link => !link.includes('cjv.zxilly.dev')))
+      }
+    }
+  } finally { await page.close() }
+})
+
+test('Blog navigation loads static article data and preserves the article across languages and history', async () => {
+  const page = await openPage()
+  const errors = []
+  page.on('pageerror', error => errors.push(error.message))
+  page.on('console', message => { if (message.type() === 'error') errors.push(message.text()) })
+  try {
+    await page.goto(origin + '/', { waitUntil: 'networkidle' })
+    await page.getByRole('link', { name: '开发实践', exact: true }).click()
+    await page.getByRole('link', { name: blogPosts[0].zh.title, exact: true }).click()
+    await page.locator('.blog-prose').waitFor()
+    await page.getByRole('link', { name: 'English', exact: true }).click()
+    await page.getByRole('heading', { level: 1, name: blogPosts[0].en.title, exact: true }).waitFor()
+    assert.equal(await page.locator('link[rel="canonical"]').getAttribute('href'), `https://cjv.zxilly.com/en/blog/${blogPosts[0].slug}/`)
+    await page.goBack()
+    await page.getByRole('heading', { level: 1, name: blogPosts[0].zh.title, exact: true }).waitFor()
+    await page.goto(origin + `/en/blog/${blogPosts[0].slug}/index.html`, { waitUntil: 'networkidle' })
+    assert.equal(await page.locator('h1').innerText(), blogPosts[0].en.title)
+    assert.deepEqual(errors, [])
+  } finally { await page.close() }
 })
 
 async function openPage(options = {}) {

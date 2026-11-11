@@ -1,4 +1,7 @@
 import { useLingui } from '@lingui/react/macro'
+import { Link } from 'react-router'
+import { BLOG_COPY, blogPath } from '../lib/blog'
+import { SITE_URL } from '../lib/seo'
 
 const content = {
   zh: {
@@ -29,7 +32,7 @@ export function ProjectGuide() {
   const { i18n } = useLingui()
   const lang = i18n.locale === 'en' ? 'en' : 'zh'
   const copy = content[lang]
-  const base = `/book/user-guide/${lang === 'en' ? 'en' : 'zh-CN'}/`
+  const base = `${SITE_URL}/book/user-guide/${lang === 'en' ? 'en' : 'zh-CN'}/`
   return (
     <section aria-labelledby="project-guide" className="mt-12 border-t border-gray-200 dark:border-gray-800 pt-8">
       <h2 id="project-guide" className="text-lg font-medium text-gray-800 dark:text-gray-200">{copy.title}</h2>
@@ -42,6 +45,7 @@ export function ProjectGuide() {
         ))}
       </ul>
       <p className="mt-6 text-sm leading-relaxed text-gray-500 dark:text-gray-400">{copy.note}</p>
+      <p className="mt-5 text-sm"><Link to={blogPath(lang)} className="text-cj dark:text-cj-light hover:underline">{BLOG_COPY[lang].title}</Link></p>
       <p className="mt-5 text-sm"><a href="https://learningman.top/archives/462" className="text-cj dark:text-cj-light hover:underline">{copy.story}</a></p>
       <p className="mt-3 text-sm"><a href="https://github.com/Zxilly/cjv" data-umami-event="github-repository" className="text-cj dark:text-cj-light hover:underline">{copy.support}</a></p>
     </section>

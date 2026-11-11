@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import { setTimeout } from 'node:timers/promises'
+import posts from '../web/src/content/blog/posts.json' with { type: 'json' }
 
 const verifySEO = process.argv.includes('--seo')
 
@@ -23,7 +24,25 @@ async function verify(site) {
     }
     const sitemap = await get(new URL('/sitemap.xml', site))
     assert.equal(sitemap.status, 200, `${site}: sitemap status`)
-    assert.ok((await sitemap.text()).includes('/book/user-guide/zh-CN/installation/'), `${site}: missing documentation sitemap entry`)
+    const sitemapXML = await sitemap.text()
+    assert.ok(sitemapXML.includes('/book/user-guide/zh-CN/installation/'), `${site}: missing documentation sitemap entry`)
+    for (const prefix of ['', '/en']) {
+      for (const slug of ['', ...posts.map(post => `${post.slug}/`)]) {
+        const path = `${prefix}/blog/${slug}`
+        const pageResponse = await get(new URL(path, site))
+        assert.equal(pageResponse.status, 200, `${site}${path}: Blog status`)
+        const page = await pageResponse.text()
+        assert.ok(page.includes(`<link rel="canonical" href="https://cjv.zxilly.com${path}"`), `${site}${path}: Blog canonical`)
+        assert.match(page, /<h1\b/, `${site}${path}: static Blog content`)
+        assert.ok(sitemapXML.includes(`https://cjv.zxilly.com${path}</loc>`), `${site}${path}: Blog sitemap entry`)
+        if (slug) {
+          assert.ok(page.includes('"@type":"BlogPosting"'), `${site}${path}: article schema`)
+          const data = await get(new URL(`${path}_.data`, site))
+          assert.equal(data.status, 200, `${site}${path}: navigation data`)
+          assert.ok(!(await data.text()).trimStart().startsWith('<'), `${site}${path}: navigation data must not be HTML`)
+        }
+      }
+    }
     const robots = await get(new URL('/robots.txt', site))
     assert.equal(robots.status, 200, `${site}: robots status`)
     assert.ok((await robots.text()).includes('Sitemap: https://cjv.zxilly.com/sitemap.xml'), `${site}: sitemap discovery`)

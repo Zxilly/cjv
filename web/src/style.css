@@ -5,6 +5,61 @@
 @import "@fontsource-variable/jetbrains-mono";
 @import "@fontsource/patua-one";
 
+.blog-shell { --blog-link: #087b4b; max-width: 70rem; margin-inline: auto; padding: 0 2rem; }
+.blog-header { display: flex; align-items: center; justify-content: space-between; gap: 1.5rem; padding-block: 1.5rem; border-bottom: 1px solid var(--border); }
+.blog-brand { font-family: 'Patua One', serif; font-size: 2.5rem; color: var(--color-cj); line-height: 1; }
+.blog-header nav { display: flex; align-items: center; gap: 1.75rem; font-size: .9375rem; }
+.blog-shell a { text-underline-offset: .22em; }
+.blog-shell a:hover { text-decoration: underline; }
+.blog-shell a:focus-visible { outline: 2px solid var(--color-cj); outline-offset: 5px; border-radius: 2px; }
+.blog-shell ::selection { background: #d3eadb; color: #183d2a; }
+.blog-skip { position: absolute; top: -5rem; background: var(--background); padding: .75rem; z-index: 10; }
+.blog-skip:focus { top: .5rem; }
+.blog-index { max-width: 50rem; margin: 4.5rem auto 6rem; }
+.blog-index > h1, .blog-article h1 { font-size: clamp(2rem, 4vw, 3rem); line-height: 1.3; font-weight: 650; letter-spacing: -.025em; text-wrap: balance; }
+.blog-intro { margin-top: 1.5rem; font-size: 1.125rem; line-height: 1.85; color: var(--muted-foreground); }
+.blog-post-list { margin-top: 3rem; list-style: none; padding: 0; }
+.blog-post-list > li { border-top: 1px solid var(--border); padding-block: 2rem; }
+.blog-meta { display: flex; flex-wrap: wrap; gap: .5rem 1.5rem; color: var(--muted-foreground); font-size: .875rem; line-height: 1.6; }
+.blog-meta time { font-variant-numeric: tabular-nums; }
+.blog-post-list h2 { margin-block: .75rem; font-size: 1.5rem; line-height: 1.5; font-weight: 600; text-wrap: balance; }
+.blog-post-list p { line-height: 1.8; color: var(--muted-foreground); }
+.blog-article { max-width: 46rem; margin: 3rem auto 5rem; }
+.blog-back { color: var(--blog-link); font-size: .9375rem; }
+.blog-article-header { margin-block: 2rem; }
+.blog-article-header .blog-meta { margin-top: 1.75rem; }
+.blog-contents { border-block: 1px solid var(--border); padding-block: 1.5rem; margin-block: 2.5rem; }
+.blog-contents h2 { font-weight: 600; margin-bottom: .75rem; }
+.blog-contents ol { list-style: decimal; padding-left: 1.5rem; line-height: 1.8; }
+.blog-contents li + li { margin-top: .35rem; }
+.blog-prose { font-size: 1.0625rem; line-height: 1.9; overflow-wrap: anywhere; }
+.blog-prose h2 { margin: 3rem 0 1rem; font-size: 1.65rem; font-weight: 600; line-height: 1.45; scroll-margin-top: 2rem; text-wrap: balance; }
+.blog-prose h3 { margin: 2rem 0 .75rem; font-size: 1.25rem; font-weight: 600; scroll-margin-top: 2rem; }
+.blog-prose p, .blog-prose ul, .blog-prose ol { margin-block: 1.25rem; }
+.blog-prose ul { list-style: disc; padding-left: 1.5rem; }
+.blog-prose ol { list-style: decimal; padding-left: 1.5rem; }
+.blog-prose li + li { margin-top: .5rem; }
+.blog-prose a, .blog-contents a, .blog-related a { color: var(--blog-link); text-decoration: underline; }
+.blog-prose code { font-family: 'JetBrains Mono Variable', monospace; font-size: .875em; }
+.blog-prose :not(pre) > code { background: var(--muted); padding: .12em .3em; border-radius: .2rem; }
+.blog-prose pre { background: var(--muted); border: 1px solid var(--border); border-radius: .75rem; padding: 1.25rem; margin-block: 1.5rem; overflow-x: auto; line-height: 1.75; overflow-wrap: normal; }
+.blog-prose pre code { font-size: .875rem; white-space: pre; }
+.blog-related { margin-top: 3rem; padding-top: 2rem; border-top: 1px solid var(--border); }
+.blog-related h2 { font-weight: 600; margin-bottom: 1rem; }
+.blog-related li + li { margin-top: 1rem; }
+.blog-footer { padding-block: 2rem; display: flex; justify-content: space-between; gap: 1rem; border-top: 1px solid var(--border); font-size: .875rem; color: var(--muted-foreground); }
+@media (prefers-color-scheme: dark) {
+  .blog-brand, .blog-back, .blog-prose a, .blog-contents a, .blog-related a { color: var(--color-cj-light); }
+}
+@media (max-width: 600px) {
+  .blog-shell { padding-inline: 1.25rem; }
+  .blog-header nav { gap: 1rem; font-size: .875rem; }
+  .blog-index { margin-top: 3rem; }
+  .blog-article { margin-top: 2rem; }
+  .blog-post-list h2 { font-size: 1.3rem; }
+  .blog-prose pre { padding: 1rem; }
+}
+
 @custom-variant dark (&:is(.dark *), &:where(.dark, .dark *));
 @custom-variant data-horizontal (&:where([data-orientation=horizontal], [data-orientation=horizontal] *));
 @custom-variant data-vertical (&:where([data-orientation=vertical], [data-orientation=vertical] *));
