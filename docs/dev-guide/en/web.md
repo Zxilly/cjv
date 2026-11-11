@@ -31,7 +31,7 @@ To change the set of supported release platforms, update `internal/target/catalo
 
 Production builds prerender React into Chinese `/` and English `/en/` HTML through React Router Framework Mode. No React SSR server runs in production. The initial hydration uses the same generic installation methods as the build; platform detection and regional mirror defaults apply afterwards. Content, commands and documentation links remain readable without JavaScript.
 
-`src/lib/seo.ts` defines localized page metadata and `src/components/project-guide.tsx` contains the bilingual getting-started links. Both domains use canonical and hreflang URLs on `.com`, while `.dev` retains its installer commands and downloads. The `mdbook-sitemap` backend generates chapter sitemaps. `scripts/site_seo.py` adds page metadata, normalizes canonical paths and merges the plugin output with the two landing pages and Blog pages into the site sitemap.
+`src/lib/seo.ts` defines localized page metadata and the homepage footer links to the matching documentation and Blog language. Both domains use canonical and hreflang URLs on `.com`, while `.dev` retains its installer commands and downloads. The `mdbook-sitemap` backend generates chapter sitemaps. `scripts/site_seo.py` adds page metadata, normalizes canonical paths and merges the plugin output with the two landing pages and Blog pages into the site sitemap.
 
 `use-platform.ts` computes an initial platform match synchronously from standard browser properties (`navigator.userAgent` and `navigator.platform`), and then queries User-Agent Client Hints (`navigator.userAgentData`) for additional CPU architecture metadata. Detection resolves to one of three states: `ready`, `unknown`, or `unsupported`.
 
@@ -60,6 +60,8 @@ pnpm i18n:extract
 Then fill in the new English translations in `src/locales/en/messages.po`. Production page URLs determine the language. Language links update the URL, content and metadata, including browser back/forward navigation. Both development and production use the route language; saved preferences never override an explicit URL. Each render tree owns its Lingui instance so concurrent prerenders cannot mix languages. During production builds, the Lingui Vite plugin compiles the catalogs automatically.
 
 The visual theme is defined in `src/style.css`, dark mode follows the operating system preference, and web fonts are bundled from local dependencies. Animations should continue to respect `useReducedMotion`.
+
+The homepage focuses on installation and downloads, with four footer links: documentation, Blog, GitHub and Releases. Tutorial navigation, team-workflow explanations and article recommendations belong in the manuals or Blog rather than extending the installation page.
 
 ## Publishing Blog content
 

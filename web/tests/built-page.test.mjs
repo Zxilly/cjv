@@ -72,7 +72,7 @@ test('Blog navigation loads static article data and preserves the article across
   page.on('console', message => { if (message.type() === 'error') errors.push(message.text()) })
   try {
     await page.goto(origin + '/', { waitUntil: 'networkidle' })
-    await page.getByRole('link', { name: '开发实践', exact: true }).click()
+    await page.getByRole('link', { name: 'Blog', exact: true }).click()
     await page.getByRole('link', { name: blogPosts[0].zh.title, exact: true }).click()
     await page.locator('.blog-prose').waitFor()
     await page.getByRole('link', { name: 'English', exact: true }).click()
@@ -244,12 +244,12 @@ test('both languages provide visible content, commands and crawlable links witho
       await page.goto(origin + route)
       assert.equal(await page.locator('html').getAttribute('lang'), language)
       assert.ok((await page.getByRole('heading', { level: 1 }).innerText()).includes(heading))
-      assert.ok(await page.getByRole('heading', { level: 2 }).isVisible())
       for (const command of await page.locator('code').all()) assert.ok(await command.isVisible())
       assert.ok((await page.locator('code').allTextContents()).some(value => value.includes('install.ps1')))
       assert.equal(await page.locator('link[rel="canonical"]').getAttribute('href'), 'https://cjv.zxilly.com' + route)
       assert.equal(await page.locator('a[href="/en/"]').count(), 1)
-      assert.ok(await page.locator('a[href*="toolchain-file.html"]').isVisible())
+      assert.ok(await page.locator(`a[href="https://cjv.zxilly.com/book/user-guide/${language === 'en' ? 'en' : 'zh-CN'}/"]`).isVisible())
+      assert.ok(await page.getByRole('link', { name: 'Blog', exact: true }).isVisible())
     }
   } finally { await page.close() }
 })

@@ -19,7 +19,7 @@ async function verify(site) {
       assert.ok(page.includes('data-prerendered="true"'), `${site}${pathname}: missing prerender`)
       assert.ok(page.includes(`<link rel="canonical" href="${canonical}"`), `${site}${pathname}: canonical`)
       assert.match(page, /<h1\b/, `${site}${pathname}: missing static heading`)
-      assert.ok(page.includes('toolchain-file.html'), `${site}${pathname}: missing static document links`)
+      assert.ok(page.includes(`href="https://cjv.zxilly.com/book/user-guide/${language === 'en' ? 'en' : 'zh-CN'}/"`), `${site}${pathname}: missing static document link`)
       if (new URL(site).hostname === 'cjv.zxilly.dev') assert.ok(page.includes('https://cjv.zxilly.dev/install.sh'), `${site}${pathname}: installer domain`)
     }
     const sitemap = await get(new URL('/sitemap.xml', site))

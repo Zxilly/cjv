@@ -15,10 +15,9 @@ import type { InstallMethod } from '@/lib/platform-catalog'
 import { useLanguageSwitch } from '@/hooks/use-language-switch'
 import { useMirror } from '@/hooks/use-mirror'
 import { INSTALL_TABS, getInstallTabDirection, type InstallTab } from '@/lib/tab-motion'
-import { PAGE_META } from '@/lib/seo'
-import { ProjectGuide } from '@/components/project-guide'
+import { PAGE_META, SITE_URL } from '@/lib/seo'
 import { Link } from 'react-router'
-import { BLOG_COPY, blogPath } from '@/lib/blog'
+import { blogPath } from '@/lib/blog'
 
 function MethodsList({ items, mirror }: { items: InstallMethod[]; mirror: boolean }) {
   return (
@@ -222,7 +221,6 @@ export default function App() {
     <LayoutGroup id="install-layout">
       <motion.div animate={fadeControls} className="relative max-w-2xl mx-auto px-4 md:px-6 py-12 md:py-24 w-full">
         <LangSwitch onSelect={switchLang} transition={heightTransition} layoutDependency={tab} />
-        <Link to={blogPath(i18n.locale === 'en' ? 'en' : 'zh')} className="absolute left-4 top-4 md:left-6 md:top-6 text-sm text-gray-600 dark:text-gray-300 hover:underline">{BLOG_COPY[i18n.locale === 'en' ? 'en' : 'zh'].blog}</Link>
         <motion.header layout="position" layoutDependency={tab} transition={heightTransition}>
           <h1 className="text-6xl sm:text-7xl md:text-8xl" style={{ fontFamily: '"Patua One", serif', fontWeight: 400 }}>
             <span className="cj-gradient" style={{ paddingBottom: '0.15em', display: 'inline-block' }}>cjv</span>
@@ -298,16 +296,12 @@ export default function App() {
           )}
         </motion.div>
 
-        <motion.nav layout="position" layoutDependency={tab} transition={heightTransition} className="mt-12 text-center text-base text-gray-400 dark:text-gray-600 space-x-3">
-          <a href={`/book/user-guide/${i18n.locale === 'en' ? 'en' : 'zh-CN'}/`} className="hover:text-cj dark:hover:text-cj-light"><Trans>文档</Trans></a>
-          <span>·</span>
+        <motion.nav aria-label={i18n.locale === 'en' ? 'Resources' : '相关资源'} layout="position" layoutDependency={tab} transition={heightTransition} className="mt-8 flex flex-wrap justify-center gap-x-6 gap-y-2 text-sm text-gray-600 dark:text-gray-400">
+          <a href={`${SITE_URL}/book/user-guide/${i18n.locale === 'en' ? 'en' : 'zh-CN'}/`} className="hover:text-cj dark:hover:text-cj-light"><Trans>文档</Trans></a>
+          <Link to={blogPath(i18n.locale === 'en' ? 'en' : 'zh')} className="hover:text-cj dark:hover:text-cj-light">Blog</Link>
           <a href="https://github.com/Zxilly/cjv" target="_blank" rel="noopener noreferrer" className="hover:text-cj dark:hover:text-cj-light">GitHub</a>
-          <span>·</span>
           <a href="https://github.com/Zxilly/cjv/releases" target="_blank" rel="noopener noreferrer" className="hover:text-cj dark:hover:text-cj-light">Releases</a>
-          <span>·</span>
-          <a href="https://cangjie-lang.cn/" target="_blank" rel="noopener noreferrer" className="hover:text-cj dark:hover:text-cj-light"><Trans>仓颉官网</Trans></a>
         </motion.nav>
-        <ProjectGuide />
       </motion.div>
     </LayoutGroup>
   )
