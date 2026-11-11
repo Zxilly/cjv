@@ -30,8 +30,16 @@ export function Layout({ children }: { children: ReactNode }) {
         <meta property="og:title" content={meta.title} />
         <meta property="og:description" content={meta.description} />
         <meta property="og:url" content={SITE_URL + meta.path} />
+        <meta property="og:image" content={SITE_URL + '/og/cjv.png'} />
+        <meta property="og:image:type" content="image/png" />
+        <meta property="og:image:width" content="1734" />
+        <meta property="og:image:height" content="907" />
+        <meta property="og:image:alt" content="cjv — 仓颉 SDK 版本管理器 / Cangjie SDK version manager" />
         <meta property="og:locale" content={meta.locale} />
-        <meta name="twitter:card" content="summary" />
+        <meta property="og:locale:alternate" content={lang === 'zh' ? 'en_US' : 'zh_CN'} />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:image" content={SITE_URL + '/og/cjv.png'} />
+        <meta name="twitter:image:alt" content="cjv — 仓颉 SDK 版本管理器 / Cangjie SDK version manager" />
         <meta name="twitter:title" content={meta.title} />
         <meta name="twitter:description" content={meta.description} />
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(meta.structuredData).replaceAll('<', '\\u003c') }} />
