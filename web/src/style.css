@@ -5,6 +5,15 @@
 @import "@fontsource-variable/jetbrains-mono";
 @import "@fontsource/patua-one";
 
+/* Only the visitor-specific installation card waits for detection. The rest
+   of the pre-rendered page paints normally, including when JS never loads. */
+.install-placeholder { display: none; }
+html[data-install-booting] .install-pending .install-static { display: none; }
+html[data-install-booting] .install-pending .install-placeholder {
+  display: block;
+  height: 20.75rem;
+}
+
 .blog-shell { --blog-link: #087b4b; max-width: 70rem; margin-inline: auto; padding: 0 2rem; }
 .blog-header { display: flex; align-items: center; justify-content: space-between; gap: 1.5rem; padding-block: 1.5rem; border-bottom: 1px solid var(--border); }
 .blog-brand { font-family: 'Patua One', serif; font-size: 2.5rem; color: var(--color-cj); line-height: 1; }

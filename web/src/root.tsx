@@ -11,12 +11,17 @@ export function Layout({ children }: { children: ReactNode }) {
   const meta = pageSEO(pathname)
   // Edge workers add this per-request attribute to the static document.
   const defaultMirror = typeof document === 'undefined' ? undefined : document.documentElement.dataset.defaultMirror
+  const installBooting = typeof document === 'undefined' ? undefined : document.documentElement.dataset.installBooting
 
   return (
-    <html lang={meta.language} data-prerendered="true" data-page-lang={lang} data-default-mirror={defaultMirror}>
+    <html lang={meta.language} data-prerendered="true" data-page-lang={lang} data-default-mirror={defaultMirror} data-install-booting={installBooting}>
       <head>
         <meta charSet="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        {/* Run before the body can paint. If the app bundle fails to load,
+            restore the static installation instructions instead of stranding
+            visitors on a placeholder. With JS disabled they stay visible. */}
+        <script dangerouslySetInnerHTML={{ __html: "document.documentElement.dataset.installBooting='true';setTimeout(function(){delete document.documentElement.dataset.installBooting},8000)" }} />
         <title>{meta.title}</title>
         <meta name="description" content={meta.description} />
         <link rel="canonical" href={SITE_URL + meta.path} />

@@ -66,6 +66,8 @@ export default function App() {
   const [slideDirection, setSlideDirection] = useState(0)
   const [mirror, setMirror] = useMirror()
   const [otherMethodsOpen, setOtherMethodsOpen] = useState(false)
+  const pageLayoutDependency = `${platform.state}:${tab}`
+  const cardLayoutDependency = `${platform.state}:${platform.state === 'unsupported' ? otherMethodsOpen : tab}`
 
   const slideTransition = prefersReducedMotion ? NO_MOTION : SLIDE_SPRING
   const heightTransition = prefersReducedMotion ? NO_MOTION : HEIGHT_EASE
@@ -219,8 +221,8 @@ export default function App() {
   return (
     <LayoutGroup id="install-layout">
       <motion.div animate={fadeControls} className="relative max-w-2xl mx-auto px-4 md:px-6 py-12 md:py-24 w-full">
-        <LangSwitch onSelect={switchLang} transition={heightTransition} layoutDependency={tab} />
-        <motion.header layout="position" layoutDependency={tab} transition={heightTransition}>
+        <LangSwitch onSelect={switchLang} transition={heightTransition} layoutDependency={pageLayoutDependency} />
+        <motion.header layout="position" layoutDependency={pageLayoutDependency} transition={heightTransition}>
           <h1 className="text-6xl sm:text-7xl md:text-8xl" style={{ fontFamily: '"Patua One", serif', fontWeight: 400 }}>
             <span className="cj-gradient" style={{ paddingBottom: '0.15em', display: 'inline-block' }}>cjv</span>
           </h1>
@@ -233,72 +235,97 @@ export default function App() {
 
         <motion.div
           layout
-          layoutDependency={platform.state === 'unsupported' ? otherMethodsOpen : tab}
-          className="mt-10 rounded-lg border border-gray-200 dark:border-gray-800 overflow-hidden"
+          layoutDependency={cardLayoutDependency}
+          className="install-card mt-10 rounded-lg border border-gray-200 dark:border-gray-800 overflow-hidden"
+          data-detecting={platform.state === 'detecting' ? '' : undefined}
           transition={heightTransition}
         >
-          {platform.state === 'unsupported' ? (
-            <>
-              <div className="p-6 text-center">
-                <p className="text-base text-gray-500 dark:text-gray-400">
-                  <Trans>cjv 暂不支持 <strong className="text-gray-700 dark:text-gray-300">{platform.info.label}</strong> 平台。</Trans>
-                </p>
-                {platform.info.reason === 'harmony' ? (
-                  <>
-                    <p className="mt-2 text-sm text-gray-400 dark:text-gray-500">
-                      {platform.info.harmony?.device === 'tablet' ? (
-                        <Trans>你正在使用鸿蒙平板。</Trans>
-                      ) : platform.info.harmony?.device === 'phone' ? (
-                        <Trans>你正在使用鸿蒙手机。</Trans>
-                      ) : (
-                        <Trans>你正在使用鸿蒙设备。</Trans>
-                      )}
+          <AnimatePresence initial={false} mode="popLayout">
+            <motion.div
+              key={platform.state === 'detecting' ? 'detecting' : 'resolved'}
+              className={platform.state === 'detecting' ? 'install-transition install-pending' : 'install-transition'}
+              layout="position"
+              initial={prefersReducedMotion ? false : { opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0 }}
+              transition={heightTransition}
+            >
+              {platform.state === 'detecting' ? (
+                <>
+                  <div className="install-placeholder" aria-hidden="true">
+                    <div className="h-11 border-b border-gray-200 dark:border-gray-800" />
+                    <div className="p-6 space-y-4">
+                      <div className="h-6 w-40 mx-auto rounded bg-gray-100 dark:bg-gray-800" />
+                      <div className="h-14 rounded-lg bg-gray-100 dark:bg-gray-800" />
+                      <div className="h-5 w-52 mx-auto rounded bg-gray-100 dark:bg-gray-800" />
+                    </div>
+                  </div>
+                  <div className="install-static p-6"><MethodsList items={methods} mirror={mirror} /></div>
+                </>
+              ) : platform.state === 'unsupported' ? (
+                <>
+                  <div className="p-6 text-center">
+                    <p className="text-base text-gray-500 dark:text-gray-400">
+                      <Trans>cjv 暂不支持 <strong className="text-gray-700 dark:text-gray-300">{platform.info.label}</strong> 平台。</Trans>
                     </p>
-                  </>
-                ) : platform.info.reason === 'arch' ? (
-                  <>
-                    <p className="mt-2 text-sm text-gray-400 dark:text-gray-500"><Trans>该架构暂无预编译版本。</Trans></p>
-                    <p className="mt-3 text-sm text-gray-400 dark:text-gray-500">
-                      <Trans>
-                        你可以尝试 x86_64（amd64）版本（多数情况下可通过系统模拟运行），或从{' '}
-                        <a href="https://github.com/Zxilly/cjv/releases" target="_blank" rel="noopener noreferrer" className="text-cj dark:text-cj-light hover:underline">Releases</a>{' '}
-                        手动下载。
-                      </Trans>
-                    </p>
-                  </>
-                ) : (
-                  <>
-                    <p className="mt-2 text-sm text-gray-400 dark:text-gray-500"><Trans>cjv 支持 Linux、macOS、Windows，以及鸿蒙电脑和二合一设备。</Trans></p>
-                    <p className="mt-3 text-sm text-gray-400 dark:text-gray-500">
-                      <Trans>
-                        请在桌面设备上访问此页面，或查看{' '}
-                        <a href="https://github.com/Zxilly/cjv" target="_blank" rel="noopener noreferrer" className="text-cj dark:text-cj-light hover:underline">GitHub</a>{' '}
-                        了解更多。
-                      </Trans>
-                    </p>
-                  </>
-                )}
-              </div>
-              <Collapsible
-                open={otherMethodsOpen}
-                onOpenChange={setOtherMethodsOpen}
-                className="border-t border-gray-200 dark:border-gray-800"
-              >
-                <CollapsibleTrigger className="group cursor-pointer px-6 py-4 w-full text-left text-sm text-gray-500 dark:text-gray-400 hover:text-cj dark:hover:text-cj-light flex items-center gap-1.5">
-                  <ChevronRight className="size-4 transition-transform duration-200 group-data-[state=open]:rotate-90" />
-                  <span className="group-hover:underline"><Trans>查看其他平台的安装方式</Trans></span>
-                </CollapsibleTrigger>
-                <CollapsibleContent className="overflow-hidden data-[state=open]:animate-collapsible-down data-[state=closed]:animate-collapsible-up">
-                  <div className="border-t border-gray-200 dark:border-gray-800">{installCard}</div>
-                </CollapsibleContent>
-              </Collapsible>
-            </>
-          ) : (
-            installCard
-          )}
+                    {platform.info.reason === 'harmony' ? (
+                      <>
+                        <p className="mt-2 text-sm text-gray-400 dark:text-gray-500">
+                          {platform.info.harmony?.device === 'tablet' ? (
+                            <Trans>你正在使用鸿蒙平板。</Trans>
+                          ) : platform.info.harmony?.device === 'phone' ? (
+                            <Trans>你正在使用鸿蒙手机。</Trans>
+                          ) : (
+                            <Trans>你正在使用鸿蒙设备。</Trans>
+                          )}
+                        </p>
+                      </>
+                    ) : platform.info.reason === 'arch' ? (
+                      <>
+                        <p className="mt-2 text-sm text-gray-400 dark:text-gray-500"><Trans>该架构暂无预编译版本。</Trans></p>
+                        <p className="mt-3 text-sm text-gray-400 dark:text-gray-500">
+                          <Trans>
+                            你可以尝试 x86_64（amd64）版本（多数情况下可通过系统模拟运行），或从{' '}
+                            <a href="https://github.com/Zxilly/cjv/releases" target="_blank" rel="noopener noreferrer" className="text-cj dark:text-cj-light hover:underline">Releases</a>{' '}
+                            手动下载。
+                          </Trans>
+                        </p>
+                      </>
+                    ) : (
+                      <>
+                        <p className="mt-2 text-sm text-gray-400 dark:text-gray-500"><Trans>cjv 支持 Linux、macOS、Windows，以及鸿蒙电脑和二合一设备。</Trans></p>
+                        <p className="mt-3 text-sm text-gray-400 dark:text-gray-500">
+                          <Trans>
+                            请在桌面设备上访问此页面，或查看{' '}
+                            <a href="https://github.com/Zxilly/cjv" target="_blank" rel="noopener noreferrer" className="text-cj dark:text-cj-light hover:underline">GitHub</a>{' '}
+                            了解更多。
+                          </Trans>
+                        </p>
+                      </>
+                    )}
+                  </div>
+                  <Collapsible
+                    open={otherMethodsOpen}
+                    onOpenChange={setOtherMethodsOpen}
+                    className="border-t border-gray-200 dark:border-gray-800"
+                  >
+                    <CollapsibleTrigger className="group cursor-pointer px-6 py-4 w-full text-left text-sm text-gray-500 dark:text-gray-400 hover:text-cj dark:hover:text-cj-light flex items-center gap-1.5">
+                      <ChevronRight className="size-4 transition-transform duration-200 group-data-[state=open]:rotate-90" />
+                      <span className="group-hover:underline"><Trans>查看其他平台的安装方式</Trans></span>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent className="overflow-hidden data-[state=open]:animate-collapsible-down data-[state=closed]:animate-collapsible-up">
+                      <div className="border-t border-gray-200 dark:border-gray-800">{installCard}</div>
+                    </CollapsibleContent>
+                  </Collapsible>
+                </>
+              ) : (
+                installCard
+              )}
+            </motion.div>
+          </AnimatePresence>
         </motion.div>
 
-        <motion.nav aria-label={i18n.locale === 'en' ? 'Resources' : '相关资源'} layout="position" layoutDependency={tab} transition={heightTransition} className="mt-12 text-center text-base text-gray-400 dark:text-gray-600 space-x-3 max-sm:flex max-sm:flex-wrap max-sm:justify-center max-sm:gap-x-3 max-sm:gap-y-2 max-sm:space-x-0">
+        <motion.nav aria-label={i18n.locale === 'en' ? 'Resources' : '相关资源'} layout="position" layoutDependency={pageLayoutDependency} transition={heightTransition} className="mt-12 text-center text-base text-gray-400 dark:text-gray-600 space-x-3 max-sm:flex max-sm:flex-wrap max-sm:justify-center max-sm:gap-x-3 max-sm:gap-y-2 max-sm:space-x-0">
           <a href={`${SITE_URL}/book/user-guide/${i18n.locale === 'en' ? 'en' : 'zh-CN'}/`} className="hover:text-cj dark:hover:text-cj-light"><Trans>文档</Trans></a>
           <span aria-hidden="true">·</span>
           <Link to={blogPath(i18n.locale === 'en' ? 'en' : 'zh')} className="hover:text-cj dark:hover:text-cj-light">Blog</Link>
