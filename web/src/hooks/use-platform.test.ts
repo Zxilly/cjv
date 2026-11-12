@@ -9,6 +9,22 @@ const WINDOWS_DESKTOP_UA =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
 
 describe('usePlatform', () => {
+  it('distinguishes the hydration snapshot from completed browser detection', () => {
+    document.documentElement.dataset.prerendered = 'true'
+    try {
+      const states: string[] = []
+      const { result } = renderHook(() => {
+        const platform = usePlatform()
+        states.push(platform.state)
+        return platform
+      })
+      expect(states[0]).toBe('detecting')
+      expect(result.current.state).not.toBe('detecting')
+    } finally {
+      delete document.documentElement.dataset.prerendered
+    }
+  })
+
   it('updates the device hint when a HarmonyOS device changes mode at the same version', async () => {
     const userAgent = HARMONY_SAMPLES[1].userAgent
     const { result, rerender } = renderHook(({ ua }) => usePlatform({ userAgent: ua }), {

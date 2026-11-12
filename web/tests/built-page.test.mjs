@@ -98,6 +98,82 @@ async function openPage(options = {}) {
   return page
 }
 
+test('slow hydration shows only an installation placeholder and mounts regional commands without flashing defaults', async () => {
+  for (const [pathname, width, reducedMotion] of [['/en/', 1280, 'no-preference'], ['/', 360, 'no-preference'], ['/en/', 1280, 'reduce']]) {
+    const page = await openPage({ reducedMotion, viewport: { width, height: 900 } })
+    const errors = []
+    page.on('pageerror', error => errors.push(error.message))
+    page.on('console', message => { if (message.type() === 'error') errors.push(message.text()) })
+    let releaseScripts
+    const scripts = new Promise(resolve => { releaseScripts = resolve })
+    await page.route(/\/assets\/.*\.js$/, async route => { await scripts; await route.continue() })
+    await page.route(origin + pathname, async route => {
+      const response = await route.fetch()
+      const regional = homeResponse(await response.text(), 'CN', 'GET', 'cjv.zxilly.com')
+      await route.fulfill({ response, body: await regional.text() })
+    })
+    try {
+      await page.goto(origin + pathname, { waitUntil: 'commit' })
+      await page.locator('.install-placeholder').waitFor({ state: 'visible' })
+      assert.ok(await page.locator('header').isVisible())
+      assert.ok(await page.getByRole('link', { name: 'Blog', exact: true }).isVisible())
+      assert.equal(await page.locator('.install-static').isVisible(), false)
+      assert.equal(await page.getByRole('tablist').count(), 0)
+      // Observe every painted frame, not just the final settled UI. Default
+      // commands/mirror labels must never be presented before the CN settings.
+      await page.evaluate(() => {
+        window.initialHeader = document.querySelector('header')
+        window.installFrames = []
+        function sample() {
+          const card = document.querySelector('.install-card')
+          window.installFrames.push({
+            text: card.innerText,
+            headerOpacity: getComputedStyle(document.querySelector('#app > div')).opacity,
+            contentOpacity: card.querySelector('.install-transition:not(.install-pending)')
+              ? Number(getComputedStyle(card.querySelector('.install-transition:not(.install-pending)')).opacity) : null,
+          })
+          window.installFrame = requestAnimationFrame(sample)
+        }
+        sample()
+      })
+      releaseScripts()
+      await page.waitForFunction(() => !document.querySelector('.install-card').hasAttribute('data-detecting'))
+      await page.waitForLoadState('networkidle')
+      const { frames, sameHeader } = await page.evaluate(() => {
+        cancelAnimationFrame(window.installFrame)
+        return { frames: window.installFrames, sameHeader: window.initialHeader === document.querySelector('header') }
+      })
+      assert.ok(sameHeader, 'hydration must preserve the pre-rendered page')
+      assert.ok(frames.length > 1)
+      assert.ok(frames.every(frame => frame.headerOpacity === '1'), 'initial hydration must not fade the page')
+      const hasAnimation = frames.some(frame => frame.contentOpacity > 0 && frame.contentOpacity < 1)
+      assert.equal(hasAnimation, reducedMotion !== 'reduce', 'the entrance easing must respect reduced motion')
+      assert.equal(frames.at(-1).contentOpacity, 1, 'the entrance animation must settle')
+      assert.ok(frames.every(frame => !/Could not detect|无法识别|GitHub ·/.test(frame.text)), 'no unknown-platform or default-source flash')
+      assert.equal(await page.getByRole('switch').getAttribute('aria-checked'), 'true')
+      assert.deepEqual(errors, [])
+    } finally {
+      releaseScripts()
+      await page.unrouteAll({ behavior: 'wait' })
+      await page.close()
+    }
+  }
+})
+
+test('failed application scripts restore the static installation instructions', async () => {
+  const page = await openPage()
+  await page.clock.install()
+  await page.route(/\/assets\/.*\.js$/, route => route.abort())
+  try {
+    await page.goto(origin + '/en/', { waitUntil: 'domcontentloaded' })
+    assert.ok(await page.locator('.install-placeholder').isVisible())
+    await page.clock.fastForward(8000)
+    assert.ok(await page.locator('.install-static').isVisible())
+    assert.equal(await page.locator('.install-placeholder').isVisible(), false)
+    assert.ok((await page.locator('code').allTextContents()).some(value => value.includes('install.ps1')))
+  } finally { await page.close() }
+})
+
 test('built homepage detects the real browser and offers its installation path', async t => {
   const page = await openPage()
   const errors = []
