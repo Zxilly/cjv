@@ -6,6 +6,10 @@
 
 English | [中文](README.md)
 
+> cjv is now in maintenance mode. No new features will be developed; future changes will be limited to security fixes.
+>
+> You can continue using cjv, but it may or may not work as expected.
+
 cjv is a version manager for the [Cangjie](https://cangjie-lang.cn/) SDK. It installs multiple toolchains, selects an SDK for each project, and routes commands such as `cjc` and `cjpm` to that SDK's tools.
 
 - Install and update LTS, STS, and nightly toolchains.

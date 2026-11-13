@@ -6,6 +6,10 @@
 
 [English](README.EN.md) | 中文
 
+> cjv 已转入维护模式，不再开发新功能，后续仅处理安全修复。
+>
+> 你仍可继续使用 cjv，但不保证其能正常工作。
+
 cjv 是 [仓颉](https://cangjie-lang.cn/) SDK 的版本管理器。它可以安装多套工具链，为项目选择 SDK 版本，并通过 `cjc`、`cjpm` 等命令入口调用对应的工具。
 
 - 安装、更新 LTS、STS 和 nightly 工具链。
