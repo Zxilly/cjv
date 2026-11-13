@@ -2,6 +2,8 @@
 
 > cjv is a version manager for the Cangjie SDK. It installs multiple toolchains, selects an SDK for each project, and routes commands such as cjc and cjpm to that SDK's tools.
 
+cjv is now in maintenance mode. No new features will be developed; future changes will be limited to security fixes.
+
 The website provides installers and bilingual user and developer guides. Documentation links below point to the Markdown sources on the repository's master branch.
 
 cjv manages LTS, STS, and nightly toolchains. SDK availability depends on the distribution source and platform. Projects declare toolchain versions, components such as stdx, and cross-compilation targets in cangjie-sdk.toml. `cjv pin` records a resolved version without installing an SDK; `cjv default` installs a missing toolchain before selecting it. Consult the command reference for options and defaults.

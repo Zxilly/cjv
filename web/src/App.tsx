@@ -233,6 +233,10 @@ export default function App() {
           </p>
         </motion.header>
 
+        <motion.p layout="position" layoutDependency={pageLayoutDependency} transition={heightTransition} className="mt-8 rounded-lg border border-amber-300 bg-amber-50 p-5 text-sm leading-relaxed text-amber-950 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100">
+          <Trans>cjv 已转入维护模式，不再开发新功能，后续仅处理安全修复。</Trans>
+        </motion.p>
+
         <motion.div
           layout
           layoutDependency={cardLayoutDependency}

@@ -13,20 +13,24 @@ msgstr ""
 "Language-Team: \n"
 "Plural-Forms: \n"
 
-#: src/App.tsx:235
+#: src/App.tsx:230
 msgid "<0>仓颉</0>编程语言 SDK 工具链管理器"
 msgstr "A toolchain manager for the <0>Cangjie</0> programming language SDK"
 
-#: src/components/binary-install.tsx:115
+#: src/components/binary-install.tsx:114
 msgid "2020 年前的 Intel 机型"
 msgstr "Intel models before 2020"
 
-#: src/App.tsx:278
+#: src/App.tsx:237
+msgid "cjv 已转入维护模式，不再开发新功能，后续仅处理安全修复。"
+msgstr "cjv is now in maintenance mode. No new features will be developed; future changes will be limited to security fixes."
+
+#: src/App.tsx:300
 msgid "cjv 支持 Linux、macOS、Windows，以及鸿蒙电脑和二合一设备。"
 msgstr "cjv supports Linux, macOS, Windows, and HarmonyOS PCs and 2-in-1 devices."
 
 #. placeholder {0}: platform.info.label
-#: src/App.tsx:251
+#: src/App.tsx:273
 msgid "cjv 暂不支持 <0>{0}</0> 平台。"
 msgstr "cjv does not support the <0>{0}</0> platform yet."
 
@@ -34,39 +38,39 @@ msgstr "cjv does not support the <0>{0}</0> platform yet."
 #~ msgid "cjv 目前仅在 Linux、macOS 和 Windows 桌面系统上提供。"
 #~ msgstr "cjv is currently available only on Linux, macOS, and Windows desktops."
 
-#: src/App.tsx:218
+#: src/App.tsx:213
 msgid "GitCode · 镜像源"
 msgstr "GitCode · mirror"
 
-#: src/App.tsx:218
+#: src/App.tsx:213
 msgid "GitHub · 默认源"
 msgstr "GitHub · default"
 
-#: src/components/binary-install.tsx:115
+#: src/components/binary-install.tsx:114
 msgid "M1 / M2 / M3 及更新机型"
 msgstr "M1 / M2 / M3 and newer"
 
-#: src/components/binary-install.tsx:174
+#: src/components/binary-install.tsx:173
 msgid "下载后在终端运行 chmod +x cjv-init && ./cjv-init，按提示完成安装。"
 msgstr "After downloading, run chmod +x cjv-init && ./cjv-init in the terminal and follow the installer."
 
-#: src/App.tsx:139
+#: src/App.tsx:134
 msgid "下载安装"
 msgstr "Download"
 
-#: src/components/binary-install.tsx:109
+#: src/components/binary-install.tsx:108
 msgid "不确定？打开 Apple 菜单 →「关于本机」查看芯片型号"
 msgstr "Not sure? Open the Apple menu → \"About This Mac\" to see your chip."
 
-#: src/components/binary-install.tsx:171
+#: src/components/binary-install.tsx:170
 msgid "为鸿蒙电脑或二合一设备下载 cjv 安装器"
 msgstr "Download cjv for your HarmonyOS PC or 2-in-1"
 
-#: src/App.tsx:315
+#: src/App.tsx:341
 msgid "仓颉官网"
 msgstr "Cangjie site"
 
-#: src/App.tsx:269
+#: src/App.tsx:291
 msgid "你可以尝试 x86_64（amd64）版本（多数情况下可通过系统模拟运行），或从 <0>Releases</0> 手动下载。"
 msgstr "You can try the x86_64 (amd64) build, which usually runs through the system's emulation layer, or download it manually from <0>Releases</0>."
 
@@ -74,34 +78,34 @@ msgstr "You can try the x86_64 (amd64) build, which usually runs through the sys
 #~ msgid "你正在使用鸿蒙二合一设备的平板模式，Windows 安装包不适用于此系统。"
 #~ msgstr "You are using a HarmonyOS 2-in-1 in tablet mode. The Windows installer is not compatible with this system."
 
-#: src/App.tsx:257
+#: src/App.tsx:279
 msgid "你正在使用鸿蒙平板。"
 msgstr "You are using a HarmonyOS tablet."
 
-#: src/App.tsx:259
+#: src/App.tsx:281
 msgid "你正在使用鸿蒙手机。"
 msgstr "You are using a HarmonyOS phone."
 
-#: src/App.tsx:261
+#: src/App.tsx:283
 msgid "你正在使用鸿蒙设备。"
 msgstr "You are using a HarmonyOS device."
 
-#: src/App.tsx:128
+#: src/App.tsx:123
 msgid "使用 Go 从源码编译安装："
 msgstr "Build and install from source with Go:"
 
-#: src/App.tsx:207
+#: src/App.tsx:202
 msgid "使用镜像源"
 msgstr "Use mirror"
 
-#: src/App.tsx:81
-#: src/components/binary-install.tsx:155
-#: src/components/binary-install.tsx:176
-#: src/components/binary-install.tsx:227
+#: src/App.tsx:76
+#: src/components/binary-install.tsx:154
+#: src/components/binary-install.tsx:175
+#: src/components/binary-install.tsx:226
 msgid "其他平台"
 msgstr "Other platforms"
 
-#: src/App.tsx:138
+#: src/App.tsx:133
 msgid "命令安装"
 msgstr "Command"
 
@@ -113,7 +117,7 @@ msgstr "Run in PowerShell:"
 msgid "在终端中运行："
 msgstr "Run in a terminal:"
 
-#: src/components/binary-install.tsx:172
+#: src/components/binary-install.tsx:171
 msgid "在终端运行 uname -m：aarch64 对应 ARM64，x86_64 对应 x86_64。"
 msgstr "Run uname -m in the terminal: choose ARM64 for aarch64, or x86_64 for x86_64."
 
@@ -121,75 +125,75 @@ msgstr "Run uname -m in the terminal: choose ARM64 for aarch64, or x86_64 for x8
 msgid "在鸿蒙电脑或二合一设备的终端中运行："
 msgstr "Run in the terminal on your HarmonyOS PC or 2-in-1:"
 
-#: src/components/code-block.tsx:103
+#: src/components/code-block.tsx:111
 msgid "复制"
 msgstr "Copy"
 
-#: src/components/code-block.tsx:102
+#: src/components/code-block.tsx:110
 msgid "复制命令"
 msgstr "Copy command"
 
-#: src/components/code-block.tsx:132
+#: src/components/code-block.tsx:140
 msgid "复制失败，请手动复制"
 msgstr "Copy failed, please copy manually"
 
-#: src/components/code-block.tsx:132
+#: src/components/code-block.tsx:140
 msgid "已复制"
 msgstr "Copied"
 
-#: src/components/binary-install.tsx:116
+#: src/components/binary-install.tsx:115
 msgid "常见"
 msgstr "Common"
 
 #. placeholder {0}: mirror ? 'GitCode Releases' : 'GitHub Releases'
-#: src/components/binary-install.tsx:75
+#: src/components/binary-install.tsx:74
 msgid "或 <0>{0}</0> 下载完整发布包。"
 msgstr "Or download the full release from <0>{0}</0>."
 
-#: src/App.tsx:309
+#: src/App.tsx:333
 msgid "文档"
 msgstr "Docs"
 
-#: src/App.tsx:114
+#: src/App.tsx:109
 msgid "无法识别你的平台，以下是所有支持的安装方式。"
 msgstr "Could not detect your platform. Here are all supported install methods."
 
-#: src/App.tsx:296
+#: src/App.tsx:318
 msgid "查看其他平台的安装方式"
 msgstr "Show install methods for other platforms"
 
 #. placeholder {0}: binary.label
 #. placeholder {0}: platform.info.label
-#: src/App.tsx:98
-#: src/components/binary-install.tsx:221
+#: src/App.tsx:93
+#: src/components/binary-install.tsx:220
 msgid "检测到你的平台：{0}"
 msgstr "Detected platform: {0}"
 
-#: src/components/binary-install.tsx:220
+#: src/components/binary-install.tsx:219
 msgid "然后按屏幕提示完成安装。"
 msgstr "Then follow the on-screen prompts to finish."
 
-#: src/App.tsx:140
+#: src/App.tsx:135
 msgid "编译安装"
 msgstr "Source"
 
-#: src/components/binary-install.tsx:209
+#: src/components/binary-install.tsx:208
 msgid "要安装 cjv，下载并运行"
 msgstr "To install cjv, download and run"
 
-#: src/App.tsx:267
+#: src/App.tsx:289
 msgid "该架构暂无预编译版本。"
 msgstr "There is no prebuilt binary for this architecture yet."
 
-#: src/App.tsx:280
+#: src/App.tsx:302
 msgid "请在桌面设备上访问此页面，或查看 <0>GitHub</0> 了解更多。"
 msgstr "Please open this page on a desktop device, or see <0>GitHub</0> for more."
 
-#: src/components/binary-install.tsx:193
+#: src/components/binary-install.tsx:192
 msgid "请手动选择对应平台的二进制："
 msgstr "Pick the binary for your platform manually:"
 
-#: src/components/binary-install.tsx:108
+#: src/components/binary-install.tsx:107
 msgid "选择你的 Mac 芯片，下载 cjv 安装器"
 msgstr "Choose your Mac chip to download the cjv installer"
 
@@ -197,6 +201,6 @@ msgstr "Choose your Mac chip to download the cjv installer"
 msgid "部分 LTS 和 STS 版本可能不包含 macOS x86_64 的预编译 SDK。"
 msgstr "Some LTS and STS releases may not ship a prebuilt SDK for macOS x86_64."
 
-#: src/App.tsx:130
+#: src/App.tsx:125
 msgid "需要本机已安装 Go 环境。"
 msgstr "Requires Go to be installed locally."

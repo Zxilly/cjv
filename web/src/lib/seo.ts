@@ -7,12 +7,12 @@ export const PAGE_META = {
   zh: {
     path: '/', language: 'zh-CN', locale: 'zh_CN',
     title: 'cjv：仓颉 SDK 安装与版本管理器',
-    description: '使用 cjv 安装和切换仓颉编程语言 SDK，为项目固定工具链版本，管理 stdx 组件，让本地开发与 CI 使用一致的环境。支持 Windows、macOS、Linux 和鸿蒙。',
+    description: 'cjv 已转入维护模式，不再开发新功能，后续仅处理安全修复。',
   },
   en: {
     path: '/en/', language: 'en', locale: 'en_US',
     title: 'cjv — Cangjie SDK installer and version manager',
-    description: 'Install and switch Cangjie SDKs, pin toolchain versions per project, and manage stdx components with cjv. Keep local development and CI consistent on Windows, macOS, Linux and HarmonyOS.',
+    description: 'cjv is now in maintenance mode. No new features will be developed; future changes will be limited to security fixes.',
   },
 } as const
 
