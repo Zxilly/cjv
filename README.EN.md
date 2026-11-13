@@ -6,6 +6,7 @@
 
 English | [中文](README.md)
 
+> [!WARNING]
 > cjv is now in maintenance mode. No new features will be developed; future changes will be limited to security fixes.
 >
 > You can continue using cjv, but it may or may not work as expected.
